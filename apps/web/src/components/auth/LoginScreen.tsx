@@ -1,0 +1,228 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { api, type AuthBackdrop, type AuthUser } from '../../lib/api';
+import QuickConnectSignIn from './QuickConnectSignIn';
+
+type AuthState = { enabled: boolean; setupRequired: boolean; signupOpen?: boolean; authenticated: boolean; user?: AuthUser | null };
+
+interface LoginScreenProps {
+  auth: AuthState;
+  onAuthenticated: (auth: AuthState) => void;
+  onRetry: () => void;
+  loading: boolean;
+  retryError?: string;
+}
+
+type Mode = 'signin' | 'signup';
+
+/**
+ * The setup / sign-in / sign-up screen. A cinematic backdrop video plays behind
+ * the form, layered with cover art from the user's own library, and the card
+ * carries the dashboard's visual language instead of a bare form. The
+ * "stay signed in" toggle extends the session cookie to 30 days so the device
+ * keeps the login even after the browser closes.
+ */
+export default function LoginScreen({ auth, onAuthenticated, onRetry, loading, retryError }: LoginScreenProps) {
+  const [mode, setMode] = useState<Mode>(auth.setupRequired ? 'signup' : 'signin');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [stay, setStay] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [backdrop, setBackdrop] = useState<AuthBackdrop | null>(null);
+  const [videoOk, setVideoOk] = useState(true);
+
+  const creating = auth.setupRequired || (auth.signupOpen === true && mode === 'signup');
+
+  // Public endpoint: a random backdrop from the library personalises the screen
+  // even before anyone signs in. Failure just leaves the gradient + video.
+  useEffect(() => {
+    let cancelled = false;
+    api.authBackdrop()
+      .then(result => { if (!cancelled) setBackdrop(result.backdrop); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (loading) return;
+    setError('');
+    try {
+      if (creating && password !== confirmPassword) throw new Error('Passwords do not match.');
+      if (username.trim().length < 3) throw new Error('Username must be at least 3 characters.');
+      if (creating && password.length < 4) throw new Error('Password must be at least 4 characters.');
+      const result = creating
+        ? await api.signup(username, password, stay)
+        : await api.login(username, password, stay);
+      onAuthenticated({ ...auth, ...result, setupRequired: false });
+      setPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <div className="login-screen">
+      <div className="login-screen-bg" aria-hidden="true" />
+      {videoOk && (
+        <video
+          className="login-bg-video"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          poster={backdrop?.backdrop}
+          onError={() => setVideoOk(false)}
+        >
+          <source src="/auth-backdrop.mp4" type="video/mp4" />
+        </video>
+      )}
+      {backdrop?.backdrop && (
+        <div className="login-bg-art" style={{ backgroundImage: `url(${backdrop.backdrop})` }} aria-hidden="true" />
+      )}
+      <div className="login-bg-scrim" aria-hidden="true" />
+
+      <aside className="login-brand">
+        <div className="login-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" width="72" height="72" fill="none">
+            <rect x="4" y="4" width="40" height="40" rx="10" fill="currentColor" opacity="0.92" />
+            <path d="M18 14v20l16-10L18 14Z" fill="#0b0d12" />
+            <circle cx="36" cy="12" r="3" fill="currentColor" />
+          </svg>
+        </div>
+        <h1>{auth.setupRequired ? 'Welcome to VirtuallyView' : creating ? 'Create your account' : 'Welcome back'}</h1>
+        <p className="login-brand-sub">
+          {auth.setupRequired
+            ? 'Create the administrator account for this server.'
+            : creating
+              ? 'Sign up to browse and request from this server.'
+              : 'Sign in to your library.'}
+        </p>
+        <ul className="login-facts">
+          <li>Movies, series and music in one place</li>
+          <li>Your server, your data, no third-party cloud</li>
+          <li>AI that helps you manage your library</li>
+        </ul>
+        {backdrop?.title && (
+          <p className="login-brand-from">
+            Tonight from your library<span>{backdrop.title}</span>
+          </p>
+        )}
+      </aside>
+
+      <section className="login-card">
+        {!auth.setupRequired && auth.signupOpen && (
+          <div className="login-tabs" role="tablist" aria-label="Authentication">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'signin'}
+              className={`login-tab${mode === 'signin' ? ' login-tab--active' : ''}`}
+              onClick={() => { setMode('signin'); setError(''); }}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'signup'}
+              className={`login-tab${mode === 'signup' ? ' login-tab--active' : ''}`}
+              onClick={() => { setMode('signup'); setError(''); }}
+            >
+              Sign up
+            </button>
+          </div>
+        )}
+
+        <form onSubmit={submit} className="login-form">
+          <h2>{auth.setupRequired ? 'Set up your server' : creating ? 'Sign up' : 'Sign in'}</h2>
+          <label className="login-field">
+            <span>Username</span>
+            <input
+              className="settings-input"
+              value={username}
+              onChange={event => setUsername(event.target.value)}
+              placeholder="Username"
+              autoComplete="username"
+              autoFocus
+              required
+            />
+          </label>
+          <label className="login-field">
+            <span>Password</span>
+            <div className="password-field">
+              <input
+                className="settings-input"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                placeholder={creating ? 'At least 4 characters' : 'Password'}
+                autoComplete={creating ? 'new-password' : 'current-password'}
+                required
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(v => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </label>
+          {creating && (
+            <label className="login-field">
+              <span>Confirm password</span>
+              <div className="password-field">
+                <input
+                  className="settings-input"
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={event => setConfirmPassword(event.target.value)}
+                  placeholder="Repeat the password"
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+            </label>
+          )}
+
+          <label className="login-stay">
+            <input
+              type="checkbox"
+              checked={stay}
+              onChange={event => setStay(event.target.checked)}
+            />
+            <span>
+              Stay signed in on this device
+              <small>Keeps your login for 30 days using a saved cookie.</small>
+            </span>
+          </label>
+
+          {error && <div className="notice notice--err" role="alert">{error}</div>}
+          {retryError && !error && (
+            <div className="notice notice--err" role="alert">
+              {retryError}
+              <div>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={onRetry} style={{ marginTop: '0.5rem' }}>
+                  Retry connection
+                </button>
+              </div>
+            </div>
+          )}
+
+          <button className="btn btn-primary login-submit" type="submit" disabled={loading}>
+            {loading ? 'Please wait...' : auth.setupRequired ? 'Create administrator' : creating ? 'Create account' : 'Sign in'}
+          </button>
+        </form>
+        {!creating && !auth.setupRequired && (
+          <QuickConnectSignIn onSignedIn={user => onAuthenticated({ ...auth, enabled: true, authenticated: true, setupRequired: false, user })} />
+        )}
+      </section>
+    </div>
+  );
+}

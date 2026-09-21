@@ -1,0 +1,13 @@
+{
+  "name": "Mono",
+  "id": "mono",
+  "version": "2.0.0",
+  "author": "VirtuallyView",
+  "description": "A green phosphor terminal: monospaced everywhere, square corners, dim scanlines and a soft screen glow.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "dark",
+    "terminal"
+  ]
+}

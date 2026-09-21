@@ -1,0 +1,13 @@
+{
+  "name": "Light",
+  "id": "light",
+  "version": "2.0.0",
+  "author": "VirtuallyView",
+  "description": "Bright and clean: white cards on a soft grey canvas, crisp shadows and a warm amber accent.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "light",
+    "clean"
+  ]
+}

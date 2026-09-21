@@ -1,0 +1,13 @@
+{
+  "name": "Default",
+  "id": "default",
+  "version": "1.0.0",
+  "author": "VirtuallyView",
+  "description": "Dark cinematic theme with warm gold accents. The reference look the interface was designed around.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "dark",
+    "cinematic"
+  ]
+}

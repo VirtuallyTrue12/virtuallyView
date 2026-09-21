@@ -1,0 +1,13 @@
+{
+  "name": "Cosmic",
+  "id": "cosmic",
+  "version": "2.0.0",
+  "author": "VirtuallyView",
+  "description": "Deep-space violet with a scattering of stars, nebula light and a luminous purple glow.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "dark",
+    "space"
+  ]
+}

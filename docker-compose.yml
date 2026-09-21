@@ -1,0 +1,333 @@
+services:
+  # --- One-time config seeding (see docker/seed/README.md) ---
+  # Each *-init container copies a pre-built config into that service's
+  # volume only if it isn't there yet, so first boot needs no manual setup.
+
+  radarr-init:
+    image: alpine:3.20
+    volumes:
+      - ./docker/seed/radarr/config.xml:/seed/config.xml:ro
+      - radarr-config:/config
+    entrypoint: ["sh", "-c", "test -f /config/config.xml || cp /seed/config.xml /config/config.xml"]
+
+  sonarr-init:
+    image: alpine:3.20
+    volumes:
+      - ./docker/seed/sonarr/config.xml:/seed/config.xml:ro
+      - sonarr-config:/config
+    entrypoint: ["sh", "-c", "test -f /config/config.xml || cp /seed/config.xml /config/config.xml"]
+
+  prowlarr-init:
+    image: alpine:3.20
+    volumes:
+      - ./docker/seed/prowlarr/config.xml:/seed/config.xml:ro
+      - prowlarr-config:/config
+    entrypoint: ["sh", "-c", "test -f /config/config.xml || cp /seed/config.xml /config/config.xml"]
+
+  lidarr-init:
+    image: alpine:3.20
+    volumes:
+      - ./docker/seed/lidarr/config.xml:/seed/config.xml:ro
+      - lidarr-config:/config
+    entrypoint: ["sh", "-c", "test -f /config/config.xml || cp /seed/config.xml /config/config.xml"]
+
+  bazarr-init:
+    image: alpine:3.20
+    volumes:
+      - ./docker/seed/bazarr/config.yaml:/seed/config.yaml:ro
+      - bazarr-config:/config
+    entrypoint: ["sh", "-c", "mkdir -p /config/config && test -f /config/config/config.yaml || cp /seed/config.yaml /config/config/config.yaml"]
+
+  qbittorrent-init:
+    image: alpine:3.20
+    volumes:
+      - ./docker/seed/qbittorrent/qBittorrent.conf:/seed/qBittorrent.conf:ro
+      - qbittorrent-config:/config
+    entrypoint: ["sh", "-c", "mkdir -p /config/qBittorrent && test -f /config/qBittorrent/qBittorrent.conf || cp /seed/qBittorrent.conf /config/qBittorrent/qBittorrent.conf"]
+
+  # --- The *arr stack, a download client, and a media server ---
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    depends_on:
+      radarr-init:
+        condition: service_completed_successfully
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Etc/UTC
+    volumes:
+      - radarr-config:/config
+      - media-movies:/media/movies
+      - downloads:/downloads
+    ports:
+      - "127.0.0.1:7878:7878"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--header=X-Api-Key: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", "http://localhost:7878/api/v3/system/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    depends_on:
+      sonarr-init:
+        condition: service_completed_successfully
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Etc/UTC
+    volumes:
+      - sonarr-config:/config
+      - media-tv:/media/tv
+      - downloads:/downloads
+    ports:
+      - "127.0.0.1:8989:8989"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--header=X-Api-Key: b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5", "http://localhost:8989/api/v3/system/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    depends_on:
+      prowlarr-init:
+        condition: service_completed_successfully
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Etc/UTC
+    volumes:
+      - prowlarr-config:/config
+    ports:
+      - "127.0.0.1:9696:9696"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--header=X-Api-Key: c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6", "http://localhost:9696/api/v1/system/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    depends_on:
+      lidarr-init:
+        condition: service_completed_successfully
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Etc/UTC
+    volumes:
+      - lidarr-config:/config
+      - media-music:/media/music
+      - downloads:/downloads
+    ports:
+      - "127.0.0.1:8686:8686"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--header=X-Api-Key: d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1", "http://localhost:8686/api/v1/system/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    depends_on:
+      bazarr-init:
+        condition: service_completed_successfully
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Etc/UTC
+    volumes:
+      - bazarr-config:/config
+      - media-movies:/media/movies
+      - media-tv:/media/tv
+    ports:
+      - "127.0.0.1:6767:6767"
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    depends_on:
+      qbittorrent-init:
+        condition: service_completed_successfully
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Etc/UTC
+      - WEBUI_PORT=8080
+    volumes:
+      - qbittorrent-config:/config
+      - downloads:/downloads
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:6881:6881"
+      - "127.0.0.1:6881:6881/udp"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/v2/app/webapiVersion"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  nzbget:
+    image: lscr.io/linuxserver/nzbget:latest
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Etc/UTC
+      - NZBGET_USER=${NZBGET_USERNAME:-nzbget}
+      - NZBGET_PASS=${NZBGET_PASSWORD:-nzbget}
+    volumes:
+      - nzbget-config:/config
+      - downloads:/downloads
+    ports:
+      - "127.0.0.1:6789:6789"
+    restart: unless-stopped
+
+  # One-shot: wires Radarr/Sonarr/Lidarr to qBittorrent and to Prowlarr.
+  provision:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "scripts/provision-stack.mjs"]
+    environment:
+      - RADARR_URL=http://radarr:7878
+      - RADARR_API_KEY=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+      - SONARR_URL=http://sonarr:8989
+      - SONARR_API_KEY=b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5
+      - PROWLARR_URL=http://prowlarr:9696
+      - PROWLARR_API_KEY=c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6
+      - PROWLARR_AUTO_INDEXER=${PROWLARR_AUTO_INDEXER:-internetarchive}
+      - LIDARR_URL=http://lidarr:8686
+      - LIDARR_API_KEY=d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1
+      - BAZARR_URL=http://bazarr:6767
+      - BAZARR_API_KEY=${BAZARR_API_KEY:-e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2}
+      - SUBTITLE_LANGUAGES=${SUBTITLE_LANGUAGES:-en}
+      - QBITTORRENT_HOST=qbittorrent
+      - QBITTORRENT_USERNAME=admin
+      - QBITTORRENT_PASSWORD=adminadmin
+      - NZBGET_URL=http://nzbget:6789
+      - NZBGET_USERNAME=${NZBGET_USERNAME:-nzbget}
+      - NZBGET_PASSWORD=${NZBGET_PASSWORD:-nzbget}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:0.5b}
+      - DASHBOARD_AUTH_PASSWORD=${DASHBOARD_AUTH_PASSWORD:-}
+      - DASHBOARD_AUTH_USERNAME=${DASHBOARD_AUTH_USERNAME:-root}
+      - API_RATE_LIMIT=${API_RATE_LIMIT:-120}
+    depends_on:
+      radarr:
+        condition: service_healthy
+      sonarr:
+        condition: service_healthy
+      lidarr:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+      qbittorrent:
+        condition: service_healthy
+      nzbget:
+        condition: service_started
+      bazarr:
+        condition: service_started
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # 0.0.0.0 exposes the dashboard on every host interface so other devices on
+    # the local network can reach it at http://<host-ip>:3000. The *arr stack,
+    # download clients and Ollama stay bound to 127.0.0.1 (host-only).
+    ports:
+      - "0.0.0.0:3000:3000"
+    # Public resolvers, like the other services: without this the app cannot
+    # resolve TMDB/YouTube/MusicBrainz, so trailers, cast and covers all fail.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - RADARR_URL=http://radarr:7878
+      - RADARR_API_KEY=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+      - SONARR_URL=http://sonarr:8989
+      - SONARR_API_KEY=b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5
+      - PROWLARR_URL=http://prowlarr:9696
+      - PROWLARR_API_KEY=c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6
+      - LIDARR_URL=http://lidarr:8686
+      - LIDARR_API_KEY=d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1
+      - BAZARR_URL=http://bazarr:6767
+      - BAZARR_API_KEY=${BAZARR_API_KEY:-e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2}
+      - QBITTORRENT_URL=http://qbittorrent:8080
+      - QBITTORRENT_USERNAME=admin
+      - QBITTORRENT_PASSWORD=adminadmin
+      - NZBGET_URL=http://nzbget:6789
+      - NZBGET_USERNAME=${NZBGET_USERNAME:-nzbget}
+      - NZBGET_PASSWORD=${NZBGET_PASSWORD:-nzbget}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:0.5b}
+    volumes:
+      - app-data:/app/apps/server/data
+      - media-movies:/media/movies:ro
+      - media-tv:/media/tv:ro
+      - media-music:/media/music:ro
+      - media-photos:/media/photos:ro
+      - media-books:/media/books:ro
+    depends_on:
+      - radarr
+      - sonarr
+      - prowlarr
+      - lidarr
+      - qbittorrent
+      - nzbget
+      - bazarr
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  radarr-config:
+  sonarr-config:
+  prowlarr-config:
+  lidarr-config:
+  bazarr-config:
+  qbittorrent-config:
+  nzbget-config:
+  media-movies:
+  media-tv:
+  media-music:
+  media-photos:
+  media-books:
+  downloads:
+  app-data:
+  ollama-data:

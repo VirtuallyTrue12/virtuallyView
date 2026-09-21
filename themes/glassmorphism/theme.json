@@ -1,0 +1,13 @@
+{
+  "name": "Glassmorphism",
+  "id": "glassmorphism",
+  "version": "2.0.0",
+  "author": "VirtuallyView",
+  "description": "Frosted glass panels floating over a bright aurora gradient, pill buttons and generous rounding.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "light",
+    "glass"
+  ]
+}

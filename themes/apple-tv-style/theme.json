@@ -1,0 +1,12 @@
+{
+  "name": "Apple TV style",
+  "id": "apple-tv-style",
+  "version": "1.0.0",
+  "author": "virtuallyView",
+  "description": "Pure black with frosted glass, a floating pill navigation, white pill buttons and soft parallax hover. An unofficial look-alike, not affiliated with any company.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "dark"
+  ]
+}

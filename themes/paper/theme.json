@@ -1,0 +1,13 @@
+{
+  "name": "Paper",
+  "id": "paper",
+  "version": "2.0.0",
+  "author": "VirtuallyView",
+  "description": "Warm sepia paper, serif type, thin ink borders and letterpress shadows - like a printed programme.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "light",
+    "serif"
+  ]
+}

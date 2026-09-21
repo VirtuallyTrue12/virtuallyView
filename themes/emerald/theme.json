@@ -1,0 +1,13 @@
+{
+  "name": "Emerald",
+  "id": "emerald",
+  "version": "2.0.0",
+  "author": "VirtuallyView",
+  "description": "Deep forest greens with mint highlights, softly tinted shadows and calm, rounded cards.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "dark",
+    "nature"
+  ]
+}

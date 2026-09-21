@@ -1,0 +1,13 @@
+{
+  "name": "Sunset",
+  "id": "sunset",
+  "version": "2.0.0",
+  "author": "VirtuallyView",
+  "description": "Dusk oranges and rose over deep brown, pill buttons, big rounded cards and a warm glow.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "dark",
+    "warm"
+  ]
+}
