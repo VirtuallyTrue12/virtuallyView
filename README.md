@@ -115,6 +115,10 @@ docker compose up -d app
 
 Then connect them under Settings > Integrations.
 
+New to Docker? Follow the [install guide for beginners](docs/install-for-beginners.md).
+
+It worked? Tell one friend still renting, and if it saved you a subscription, the [keep](#feed-the-keep) is fed by people like you.
+
 A prebuilt image is published for each release at `ghcr.io/<owner>/virtuallyview` if you would rather not build it yourself.
 
 The bundled stack keeps its library and downloads in named volumes, not in this folder. To use an existing library, change the `media-movies`, `media-tv`, `media-music` and `downloads` volumes in `docker-compose.yml` to bind mounts. The *arr containers run as `PUID=0`/`PGID=0` to avoid volume permission trouble; see [the seed guide](docker/seed/README.md) for how to run unprivileged.
@@ -173,6 +177,7 @@ scripts/                Setup and provisioning
 ## Documentation
 
 - [Architecture](ARCHITECTURE.md)
+- [Install for beginners](docs/install-for-beginners.md)
 - [Getting started](docs/getting-started.md)
 - [API](docs/api.md)
 - [Requests](docs/requests.md)
