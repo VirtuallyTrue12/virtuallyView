@@ -1,0 +1,12 @@
+{
+  "name": "Prime Video style",
+  "id": "prime-video-style",
+  "version": "1.0.0",
+  "author": "virtuallyView",
+  "description": "Deep navy-black with a bright blue accent, square corners and a blue Watch button. An unofficial look-alike, not affiliated with any service.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "dark"
+  ]
+}

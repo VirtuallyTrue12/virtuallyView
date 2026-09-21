@@ -1,0 +1,13 @@
+{
+  "name": "Midnight",
+  "id": "midnight",
+  "version": "2.0.0",
+  "author": "VirtuallyView",
+  "description": "Deep navy with frosted glass panels, a cool blue glow and soft aurora light at the top.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "dark",
+    "glass"
+  ]
+}

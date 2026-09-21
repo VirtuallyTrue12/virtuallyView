@@ -1,0 +1,12 @@
+{
+  "name": "Netflix style",
+  "id": "netflix-style",
+  "version": "1.0.0",
+  "author": "virtuallyView",
+  "description": "Near-black with a red accent, sharp corners, a white Play button and big hover zoom. An unofficial look-alike, not affiliated with any service.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "dark"
+  ]
+}

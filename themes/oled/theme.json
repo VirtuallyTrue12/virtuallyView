@@ -1,0 +1,13 @@
+{
+  "name": "OLED",
+  "id": "oled",
+  "version": "2.0.0",
+  "author": "VirtuallyView",
+  "description": "True black that switches pixels off, with thin light borders and a warm amber accent.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "dark",
+    "oled"
+  ]
+}

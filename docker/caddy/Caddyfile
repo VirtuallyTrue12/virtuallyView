@@ -1,0 +1,9 @@
+# Set VV_DOMAIN to a real domain for a Let's Encrypt certificate, or leave it as
+# "localhost" to get a locally trusted one.
+{$VV_DOMAIN:localhost} {
+	encode gzip
+	reverse_proxy app:3000 {
+		# Streaming should not be buffered.
+		flush_interval -1
+	}
+}

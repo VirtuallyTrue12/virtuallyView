@@ -1,0 +1,41 @@
+{
+  "name": "virtuallyview",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "npm@10.9.0",
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/server --workspace=apps/web",
+    "start": "npm run start --workspace=apps/server",
+    "test": "vitest run",
+    "lint": "npm run lint --workspace=apps/server --workspace=apps/web",
+    "typecheck": "npm run typecheck --workspace=apps/server --workspace=apps/web",
+    "admin": "tsx apps/server/src/cli.ts",
+    "test:browser": "vitest run --config vitest.browser.config.ts"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "playwright": "^1.50.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.70.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "license": "MIT",
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true
+  },
+  "dependencies": {
+    "plyr": "^3.8.4"
+  }
+}

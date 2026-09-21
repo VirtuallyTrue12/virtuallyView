@@ -1,0 +1,13 @@
+{
+  "name": "Minimalism",
+  "id": "minimalism",
+  "version": "2.0.0",
+  "author": "VirtuallyView",
+  "description": "Flat, quiet and typographic: hairline borders, no shadows or blur, square-ish corners, black accent.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "light",
+    "flat"
+  ]
+}

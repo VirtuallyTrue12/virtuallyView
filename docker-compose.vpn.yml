@@ -1,0 +1,49 @@
+# VirtuallyView docker-compose VPN override.
+#
+# Routes qBittorrent's traffic through a VPN tunnel (gluetun) so your ISP
+# cannot see torrent traffic. ACTIVATION (do this once):
+#   1. Copy .env.example to .env and fill VPN_* values (ProtonVPN WireGuard).
+#   2. Run:  docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
+#   3. Verify:  docker exec appletvopensourcce-qbittorrent-1 wget -qO- ifconfig.me
+#      It must print a VPN exit IP, NOT your home IP. scripts/doctor.sh does
+#      this check for you.
+# To go back to no-VPN: docker compose up -d --force-recreate qbittorrent
+#
+# Why Tor is not offered for downloads: BitTorrent over Tor leaks your real
+# IP via peer exchange, is blocked by most trackers, and violates Tor exit
+# policy. Tor stays on the v2 roadmap for web traffic only.
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: appletvopensourcce-vpn-1
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-protonvpn}
+      - VPN_TYPE=${VPN_TYPE:-wireguard}
+      - WIREGUARD_PRIVATE_KEY=${VPN_WIREGUARD_PRIVATE_KEY:?Set VPN_WIREGUARD_PRIVATE_KEY in .env first}
+      - SERVER_COUNTRIES=${VPN_SERVER_COUNTRIES:-Netherlands}
+      - FIREWALL_OUTBOUND_SUBNETS=10.89.0.0/16,172.16.0.0/12
+    # qBittorrent's WebUI and BitTorrent ports must be published here,
+    # because qBittorrent shares gluetun's network stack when VPN is on.
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:6881:6881"
+      - "127.0.0.1:6881:6881/udp"
+    volumes:
+      - gluetun-config:/gluetun
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- --timeout=5 https://ipinfo.io/ip || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  qbittorrent:
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    ports: !reset []

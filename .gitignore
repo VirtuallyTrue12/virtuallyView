@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+database.sqlite
+*.sqlite3
+
+# Integration credentials (URL + API keys for Radarr/Sonarr/Prowlarr etc)
+apps/server/data/integrations.json
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test results
+coverage/
+
+# Vite
+.vite/
+
+# Temp
+/tmp/
+*.tmp
+
+# Ollama models (users pull their own via the built-in model manager)
+ollama-models/
+models/
+# Local server state: accounts, sessions, credentials, databases
+apps/server/data/
+/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.tsbuildinfo
+
+# Private working notes
+.dev/

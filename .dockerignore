@@ -1,0 +1,15 @@
+# Allowlist: only what the image needs. Anything not listed here (notes, prompts,
+# tests, docs, local data, logs, editor files) never enters the build context.
+*
+!package.json
+!package-lock.json
+!tsconfig.json
+!apps
+!packages
+!themes
+!scripts
+**/node_modules
+**/dist
+**/data
+**/*.log
+**/*.tsbuildinfo

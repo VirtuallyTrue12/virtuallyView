@@ -1,0 +1,29 @@
+# HTTPS in front of virtuallyView with Caddy.
+#
+#   VV_DOMAIN=media.example.com docker compose -f docker-compose.yml -f docker-compose.https.yml up -d
+#
+# See docs/https.md. Ports 80 and 443 must reach this machine for a public certificate.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - VV_DOMAIN=${VV_DOMAIN:-localhost}
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+  # Only Caddy is reachable from outside now; the app answers on the private network.
+  app:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  caddy-data:
+  caddy-config:
