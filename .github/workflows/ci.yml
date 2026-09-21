@@ -17,8 +17,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      # The server tests check that the built web app is served, so build first.
       - run: npm run build
+      - run: npm test
       - uses: actions/upload-artifact@v4
         with:
           name: web-dist
