@@ -131,7 +131,7 @@ On Podman, a few things behave differently after a reboot. See [troubleshooting]
 
 ### Other devices
 
-Anyone on your network can open `http://<this-computer's-ip>:3000`. Add their accounts under Settings > Users, or switch on sign-up under Settings > Server. Settings > Server also has the address to share and a note about the firewall.
+Anyone on your network can open `http://<this-computer's-ip>:3000`. Add their accounts under Settings > Users, or switch on sign-up under Settings > Server. Settings > Server also has the address to share and a note about the firewall. To watch on a TV, follow [watching on your TV](docs/tv.md): the TV's browser, casting, or a TV the server finds by itself.
 
 ### From source
 
@@ -195,6 +195,7 @@ scripts/                Setup and provisioning
 - [Assistant](docs/ai.md) and [tools](docs/ai-tools.md)
 - [Features](docs/features.md)
 - [Administration](docs/administration.md): indexers, approvals, notifications, backup, locked-out recovery
+- [Watching on your TV](docs/tv.md)
 - [Casting](docs/casting.md)
 - [Roadmap](docs/roadmap.md)
 - [HTTPS](docs/https.md) and [reaching it from outside your home](docs/remote-access.md)

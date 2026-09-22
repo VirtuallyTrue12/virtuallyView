@@ -48,7 +48,7 @@ Search for a title, request it, and watch it move from search to download to imp
 
 ## Other devices
 
-On your phone or TV browser, open `http://<your server's address>:3000` (Settings > Server shows it) and sign in with an account you create under Settings > Users. To reach it away from home, see [remote access](remote-access.md).
+On your phone or TV browser, open `http://<your server's address>:3000` (Settings > Server shows it) and sign in with an account you create under Settings > Users. For a TV, follow [watching on your TV](tv.md). To reach it away from home, see [remote access](remote-access.md).
 
 ## If something is wrong
 
