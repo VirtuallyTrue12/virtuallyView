@@ -53,7 +53,7 @@ export async function answerDiagnose(subject?: string): Promise<AgentReply> {
   await Promise.all(Object.entries(managed).map(async ([key, adapter]) => {
     const health = await within(adapter.healthCheck().catch(() => ({ healthy: false, status: 'unreachable' })), 4000, { healthy: false, status: 'timed out' });
     if (!health.healthy && health.status !== 'disabled') {
-      issues.push(`${NAMES[key] ?? key} is not responding (${health.status}). Fix: open Settings > Integrations, check the address and key, or run "docker compose up -d".`);
+      issues.push(`${NAMES[key] ?? key} is not responding (${health.status}). Fix: open Settings > Services, check the address and key, or run "docker compose up -d".`);
     }
   }));
 
@@ -80,7 +80,7 @@ export async function answerDiagnose(subject?: string): Promise<AgentReply> {
   try {
     const bazarr = getAdapter<BazarrAdapter>('bazarr');
     const health = await within(bazarr.healthCheck(), 3000, { healthy: false, status: 'timed out' });
-    if (!health.healthy && health.status === 'setup_required') issues.push('Bazarr is not connected, so no subtitles are downloaded. Fix: Settings > Integrations > Bazarr.');
+    if (!health.healthy && health.status === 'setup_required') issues.push('Bazarr is not connected, so no subtitles are downloaded. Fix: Settings > Services > Bazarr.');
   } catch { /* not configured */ }
 
   let about = '';
@@ -182,7 +182,7 @@ export async function answerSubtitles(subject?: string): Promise<AgentReply> {
     if (!list.length) return say(subject ? `No missing subtitles found for "${subject}".` : 'Nothing is missing subtitles.');
     return say([`Missing subtitles (${list.length}):`, ...list.slice(0, 15).map(i => `- ${i.title}: ${i.missingLanguages.join(', ') || 'unknown language'}`), 'Open the title and use Subtitles > Search, or upload a file yourself.'].join('\n'));
   } catch {
-    return say('Subtitles are handled by Bazarr and it is not connected. Open Settings > Integrations > Bazarr to connect it.');
+    return say('Subtitles are handled by Bazarr and it is not connected. Open Settings > Services > Bazarr to connect it.');
   }
 }
 

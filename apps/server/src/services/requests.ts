@@ -296,7 +296,7 @@ async function tryLibraryFallback(
 function friendlyServiceError(error: unknown, service: string): string {
   const raw = error instanceof Error ? error.message : 'The media service request failed.';
   if (/Unexpected token '<'|is not valid JSON|<!doctype/i.test(raw)) {
-    return `${service} answered with a web page instead of data, so it is most likely down, restarting, or its URL/API key is wrong. Check Settings > Integrations, then retry.`;
+    return `${service} answered with a web page instead of data, so it is most likely down, restarting, or its URL/API key is wrong. Check Settings > Services, then retry.`;
   }
   if (/fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|timed out|aborted/i.test(raw)) {
     return `${service} could not be reached (${raw}). Check that it is running, then retry.`;

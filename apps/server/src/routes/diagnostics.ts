@@ -58,7 +58,7 @@ function validEntry(value: unknown): value is ServiceConfig {
   } catch { return false; }
 }
 
-const configRecovery = ['Open Settings > Integrations and save a valid service URL and credential.',
+const configRecovery = ['Open Settings > Services and save a valid service URL and credential.',
   'For qBittorrent and NZBGet, use username:password in the credential field.'];
 const connectionRecovery = ['Confirm the service is running and reachable from the dashboard server.',
   'Check its URL, API credential, and any reverse-proxy authentication in Settings, then retry.'];

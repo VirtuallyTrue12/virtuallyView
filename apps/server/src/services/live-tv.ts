@@ -80,7 +80,22 @@ export async function channelsFor(playlist: Playlist): Promise<Channel[]> {
   return channels;
 }
 
-export const channelById = (id: string): Channel | undefined => known.get(id);
+/**
+ * The channel behind an id. Addresses live in memory, so after a restart (an
+ * update, a backup restore) the page may still show channels the server has
+ * not loaded yet: read the playlists again before giving up.
+ */
+export async function channelById(id: string): Promise<Channel | undefined> {
+  const hit = known.get(id);
+  if (hit) return hit;
+  for (const playlist of listPlaylists()) {
+    try {
+      const found = (await channelsFor(playlist)).find(channel => channel.id === id);
+      if (found) return found;
+    } catch { /* that playlist is unreachable: try the next */ }
+  }
+  return undefined;
+}
 
 // Playlist rewriting: every address inside a stream playlist goes back through
 // this server, signed, so the browser needs no CORS and the relay only ever

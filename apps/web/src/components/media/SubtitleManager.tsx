@@ -76,7 +76,7 @@ export default function SubtitleManager({ target, onChanged }: { target: Target;
       {open && (
         <div className="subtitle-manager-body">
           {!connected ? (
-            <p className="settings-help">Subtitles are handled by Bazarr and it is not connected. An administrator can connect it under Settings &gt; Integrations. You can still switch on subtitles that are inside the file from the player.</p>
+            <p className="settings-help">Subtitles are handled by Bazarr and it is not connected. An administrator can connect it under Settings &gt; Services. You can still switch on subtitles that are inside the file from the player.</p>
           ) : (
             <>
               <label className="subtitle-manager-field">

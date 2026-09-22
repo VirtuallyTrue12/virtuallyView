@@ -8,7 +8,7 @@ npm run dev --workspace=apps/server   # API on :3000
 npm run dev --workspace=apps/web      # web app on :3001, proxies /api to :3000
 ```
 
-The server needs Radarr, Sonarr and friends to show anything. The quickest way is to run the bundled stack (`docker compose up -d`) and stop the `app` container, then run the API from source; it finds the other services on their published localhost ports once you enter their URLs and keys under Settings > Integrations.
+The server needs Radarr, Sonarr and friends to show anything. The quickest way is to run the bundled stack (`docker compose up -d`) and stop the `app` container, then run the API from source; it finds the other services on their published localhost ports once you enter their URLs and keys under Settings > Services.
 
 ## Tests
 

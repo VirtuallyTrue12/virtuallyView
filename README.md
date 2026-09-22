@@ -103,7 +103,7 @@ The seeded API keys and qBittorrent login are public defaults, listed in [docker
 Open http://localhost:3000 and create the first account. It becomes the administrator. Then:
 
 - **Indexers.** Without one, requests find nothing. Add public indexers in one click under Settings > Indexers in virtuallyView (private trackers are added in Prowlarr, http://localhost:9696, with your own login). Choose sources you are entitled to use; none are added for you. The Home page checklist tells you when this is missing.
-- **Bazarr.** Open http://localhost:6767, finish its setup, copy the API key and enter the URL and key under Settings > Integrations. Use an address the app container can reach, not `localhost`.
+- **Bazarr.** Open http://localhost:6767, finish its setup, copy the API key and enter the URL and key under Settings > Services. Use an address the app container can reach, not `localhost`.
 
 If a root folder or download client is missing after first boot:
 
@@ -117,7 +117,7 @@ To run only the app against services you already have:
 docker compose up -d app
 ```
 
-Then connect them under Settings > Integrations.
+Then connect them under Settings > Services.
 
 New to Docker? Follow the [install guide for beginners](docs/install-for-beginners.md).
 

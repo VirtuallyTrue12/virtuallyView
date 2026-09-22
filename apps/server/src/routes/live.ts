@@ -35,8 +35,8 @@ export default async function liveRoutes(server: FastifyInstance) {
 
   // The stream itself: playlists are relayed (HLS), anything else is converted to MP4 by ffmpeg.
   server.get<{ Params: { id: string } }>('/api/live/stream/:id', async (request, reply) => {
-    const channel = channelById(request.params.id);
-    if (!channel) return reply.code(404).send({ message: 'Open the channel list first, then pick a channel.' });
+    const channel = await channelById(request.params.id);
+    if (!channel) return reply.code(404).send({ message: 'That channel is no longer in your playlists. Reload the page to refresh the channel list.' });
     try {
       const head = await outboundFetch(channel.url, { timeoutMs: 15_000 });
       if (!head.ok) return reply.code(502).send({ message: `The channel answered ${head.status}.` });

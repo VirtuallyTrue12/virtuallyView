@@ -71,7 +71,13 @@ export default function LiveTV() {
       }
       void el.play().catch(() => undefined);
     }).catch(err => setError((err as Error).message));
-    return () => { hls?.destroy(); el.removeAttribute('src'); el.load(); };
+    // Free public channels go offline often. Say so instead of sitting at 0:00.
+    const watchdog = window.setTimeout(() => {
+      if (el.currentTime === 0) setError('This channel is not answering. Free public channels often go offline or only broadcast at certain hours: try another one.');
+    }, 15000);
+    const clear = () => { window.clearTimeout(watchdog); setError(''); };
+    el.addEventListener('playing', clear, { once: true });
+    return () => { window.clearTimeout(watchdog); el.removeEventListener('playing', clear); hls?.destroy(); el.removeAttribute('src'); el.load(); };
   }, [current]);
 
   const groups = useMemo(() => [...new Set(channels.map(c => c.group).filter((g): g is string => !!g))].sort(), [channels]);
@@ -139,6 +145,7 @@ export default function LiveTV() {
 
       <section className="settings-section">
         <h3>Playlists</h3>
+        <p className="settings-help">Channels marked Geo-blocked only play in their own country, and Not 24/7 ones only at certain hours.</p>
         <p className="settings-help">An M3U or M3U8 address from your TV tuner box (such as TVHeadend), your provider, or a free public list. Only an administrator can add or remove them.</p>
         <ul className="users-list">
           {playlists?.map(p => (

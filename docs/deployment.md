@@ -16,7 +16,7 @@ If you already run some of these services elsewhere, start only the dashboard:
 docker compose up -d app
 ```
 
-and connect your existing instances by hand in Settings > Integrations.
+and connect your existing instances by hand in Settings > Services.
 
 To re-run the one-time wiring step (root folders, download clients, Prowlarr applications) if it didn't fully complete on first boot:
 
@@ -32,7 +32,7 @@ npm run build
 npm start --workspace=apps/server
 ```
 
-`npm start` runs the server via `tsx` directly from source (not a separate compiled artifact) and serves the built `apps/web/dist` if it exists, so this single command is enough for a non-Docker production deployment too. Configure Radarr/Sonarr/Prowlarr/Lidarr/qBittorrent/Bazarr by hand in Settings > Integrations, or by setting the same `RADARR_URL`/`RADARR_API_KEY`-style environment variables the Docker Compose file uses (see `apps/server/src/services/registry.ts`).
+`npm start` runs the server via `tsx` directly from source (not a separate compiled artifact) and serves the built `apps/web/dist` if it exists, so this single command is enough for a non-Docker production deployment too. Configure Radarr/Sonarr/Prowlarr/Lidarr/qBittorrent/Bazarr by hand in Settings > Services, or by setting the same `RADARR_URL`/`RADARR_API_KEY`-style environment variables the Docker Compose file uses (see `apps/server/src/services/registry.ts`).
 
 ## Data and backups
 

@@ -11,7 +11,7 @@ let running: Promise<{ ok: boolean; partial: boolean; log: string[] }> | null = 
 
 /**
  * The address and key for each service, as this server knows them: what was
- * saved under Settings > Integrations first, then the environment. The setup
+ * saved under Settings > Services first, then the environment. The setup
  * script uses the same variable names as the bundled Docker stack.
  */
 function setupEnv(): NodeJS.ProcessEnv {

@@ -26,7 +26,7 @@ export default async function subtitleRoutes(server: FastifyInstance) {
     } catch (error) {
       reply.code(503);
       const text = error instanceof Error ? error.message : '';
-      return { success: false, message: /not connected|not configured|setup/i.test(text) || !text ? 'Subtitles are handled by Bazarr and it is not connected. An administrator can connect it under Settings > Integrations.' : text };
+      return { success: false, message: /not connected|not configured|setup/i.test(text) || !text ? 'Subtitles are handled by Bazarr and it is not connected. An administrator can connect it under Settings > Services.' : text };
     }
   };
   const decode = (body: UploadBody | undefined): { language: string; filename: string; data: Buffer } | string => {
