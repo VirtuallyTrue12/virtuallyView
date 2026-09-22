@@ -8,7 +8,7 @@ import { QualitySelect } from '../requests/QualitySelect';
 import { SvgIcon } from '../ui/SvgIcon';
 
 const ROTATE_MS = 5000;
-const HOVER_PREVIEW_MS = 5000;
+const HOVER_PREVIEW_MS = 2500;
 const PREVIEW_WINDOW_SECONDS = 60;
 
 type SourceMode = 'preview' | 'trailer';
@@ -64,7 +64,7 @@ export function Hero({ items }: { items: HeroCandidate[] }) {
 
   // Play the local file (muted), from a random one-minute window so the hero
   // previews the movie without spoiling its opening scenes. Runs from a user
-  // gesture (clicking the Preview source) or the 5-second hover timer.
+  // gesture or the 2.5-second hover timer.
   const startLocalPreview = () => {
     const media = mediaRef.current;
     if (!media) {
@@ -145,7 +145,7 @@ export function Hero({ items }: { items: HeroCandidate[] }) {
     if (!trailerFor.current) fetchTrailer(current.id, true);
   };
 
-  // The 5-second hover timer fires the freshest possible preview logic.
+  // The 2.5-second hover timer fires the freshest possible preview logic.
   const previewStarterRef = useRef<() => void>(() => {});
   previewStarterRef.current = () => {
     const current = itemRef.current;
@@ -205,7 +205,7 @@ export function Hero({ items }: { items: HeroCandidate[] }) {
 
   // "Pointer focus" covers a mouse, a touchscreen, or a TV remote's focus
   // ring. Any of them counts as entering the hero, and the preview only ever
-  // starts after a continuous 5 seconds of focus, never on page load.
+  // starts after a continuous 2.5 seconds of focus, never on page load.
   const enterHero = () => {
     interactedRef.current = true;
     setHovered(true);
