@@ -8,6 +8,20 @@ Four ways, from easiest to most hands-on. None of them needs an account with any
 2. The TV and that computer must be on the same Wi-Fi or home network.
 3. Find your server's address. On the computer running virtuallyView, open it, go to **Settings > Server > Connect other devices**, and copy the address shown. It looks like `http://192.168.1.20:3000`. Do not use `localhost`: that only works on the server computer itself.
 
+## Let other devices in (firewall)
+
+Most often, when the app opens on the server computer but not on a phone or TV, the server's firewall is blocking it. Allow the port for your home network, and for Tailscale if you use it:
+
+- **Linux with ufw** (Ubuntu, Mint, CachyOS and others):
+  `sudo ufw allow from 192.168.0.0/24 to any port 3000 proto tcp`
+  `sudo ufw allow in on tailscale0 to any port 3000 proto tcp`
+  Replace `192.168.0.0/24` with your network: the first three numbers of the server's address, then `.0/24`.
+- **Linux with firewalld** (Fedora and others): `sudo firewall-cmd --add-port=3000/tcp --permanent && sudo firewall-cmd --reload`
+- **Windows:** allow Docker Desktop through Windows Defender Firewall when it asks, or add an inbound rule for TCP port 3000 on private networks.
+- **macOS:** allow Docker when macOS asks for incoming connections.
+
+Always use `http://`, not `https://`, with port 3000.
+
 ## Option 1: The TV's own web browser
 
 Works on most smart TVs.

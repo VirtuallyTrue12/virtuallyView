@@ -58,3 +58,7 @@ The server answers on your own network but not from outside. See [reaching your 
 ## Albums or episodes downloaded but nothing shows
 
 Open Downloads. An item that finished but could not be imported says why, in plain words, and has a Retry button. The usual causes are file renaming being off (fixed in new installs; on an old one, turn on Rename Tracks in Lidarr under Settings > Media Management) and a release that does not match the wanted album closely enough.
+
+## Other devices on my network cannot open it
+
+It opens on the server computer but not on a phone or TV: the server's firewall is blocking port 3000. See [let other devices in](tv.md#let-other-devices-in-firewall). Also check the device is on the same Wi-Fi (not mobile data, not a guest network) and that the address starts with `http://`, not `https://`.
