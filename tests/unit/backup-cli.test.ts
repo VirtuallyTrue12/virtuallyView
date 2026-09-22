@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -48,7 +48,9 @@ describe('backup and restore', () => {
     writeFileSync(bad, Buffer.alloc(300, 1));
     await expect(backup.restoreBackup(bad)).rejects.toThrow();
     const escape = join(dir, 'escape.tar.gz');
-    execFileSync('tar', ['-czf', escape, '--transform', 's,^,../,', '-C', dir, 'users.json']);
+    // An entry named ../users.json. -P keeps the leading ../ and works with GNU and BSD (macOS) tar alike.
+    mkdirSync(join(dir, 'inner'), { recursive: true });
+    execFileSync('tar', ['-czPf', escape, '-C', join(dir, 'inner'), '../users.json']);
     await expect(backup.restoreBackup(escape)).rejects.toThrow(/should not|not a virtuallyView/i);
   });
 });
