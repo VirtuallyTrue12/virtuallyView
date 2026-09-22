@@ -299,11 +299,13 @@ services:
       - qbittorrent
       - nzbget
       - bazarr
-      - ollama
     restart: unless-stopped
 
+  # Optional AI assistant (about 5 GB). Not started by default so the first
+  # install is quick. Turn it on with: docker compose --profile ai up -d
   ollama:
     image: ollama/ollama:latest
+    profiles: ["ai"]
     volumes:
       - ollama-data:/root/.ollama
     ports:

@@ -6,7 +6,7 @@
 docker compose up -d
 ```
 
-This is the fully supported path. It builds one image (`Dockerfile`) that serves both the API and the built web app on port 3000, and brings up a complete bundled media stack alongside it: Radarr, Sonarr, Prowlarr, Lidarr, Bazarr, qBittorrent, NZBGet and Ollama.
+This is the fully supported path. It builds one image (`Dockerfile`) that serves both the API and the built web app on port 3000, and brings up a complete bundled media stack alongside it: Radarr, Sonarr, Prowlarr, Lidarr, Bazarr, qBittorrent and NZBGet. The optional AI assistant (Ollama, about 5 GB) is left out unless you start it with `docker compose --profile ai up -d`.
 
 Radarr, Sonarr, Prowlarr, Lidarr, and qBittorrent connect to the dashboard and to each other automatically on first boot - see `docker/seed/README.md` for exactly how and what the default credentials are. Bazarr needs one quick manual step (see the main [README](../README.md#docker-recommended)), and adding indexers to Prowlarr is always manual by design.
 

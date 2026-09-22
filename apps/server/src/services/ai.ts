@@ -516,7 +516,7 @@ export class Agent {
     if (!(await this.provider.healthCheck())) {
       return {
         kind: 'error',
-        message: 'No AI provider is reachable. Start Ollama (ollama serve) and pull a model such as qwen2.5:0.5b.'
+        message: 'That question needs the AI model, which is not installed. An administrator can add it with "docker compose --profile ai up -d". Everyday questions still work: try "what is downloading?" or type "help".'
       };
     }
 

@@ -96,7 +96,7 @@ docker compose up -d
 
 One command. Nothing else to install, register or configure. This starts virtuallyView and everything it needs underneath, already wired together and talking to each other, no setup required from you. If you have never touched Docker before, [install for beginners](docs/install-for-beginners.md) walks through every step, screenshots included.
 
-Under the hood it brings up a small stack of open-source engines that do the actual finding and downloading (Radarr, Sonarr, Prowlarr, Lidarr, Bazarr, qBittorrent, NZBGet and Ollama) and connects them to each other and to virtuallyView automatically: root folders, the download client, the indexer connections, all of it. You never need to open their pages or know what they are. They share a private network, but the ports published on your computer are reachable by anything that can reach it, so read [deployment](docs/deployment.md) before exposing them.
+Under the hood it brings up a small stack of open-source engines that do the actual finding and downloading (Radarr, Sonarr, Prowlarr, Lidarr, Bazarr, qBittorrent and NZBGet) and connects them to each other and to virtuallyView automatically: root folders, the download client, the indexer connections, all of it. You never need to open their pages or know what they are. They share a private network, but the ports published on your computer are reachable by anything that can reach it, so read [deployment](docs/deployment.md) before exposing them.
 
 The seeded API keys and qBittorrent login are public defaults, listed in [docker/seed/README.md](docker/seed/README.md). Change them before anyone else can reach the ports.
 
@@ -145,10 +145,15 @@ npm run dev --workspace=apps/web      # web app on :3001, proxies /api
 
 ### Assistant (optional)
 
-1. Install Ollama from https://ollama.com and start it with `ollama serve`.
-2. Pull a model from Settings > AI Assistant, or run `ollama pull qwen2.5:0.5b`.
+The assistant is not installed by default, because it adds a download of about 5 GB. To add it to the Docker stack:
 
-The server looks for Ollama at `127.0.0.1:11434`. Inside Docker that address is the container itself, so point it at a reachable host if Ollama runs elsewhere. Small models make mistakes: read what the assistant proposes before you confirm it.
+```bash
+docker compose --profile ai up -d
+```
+
+A small model (`qwen2.5:0.5b`) is pulled on first use, or pick one under Settings > AI Assistant. Everyday questions (downloads, problems, retries) are answered without the model, so a small one is enough. Small models make mistakes: read what the assistant proposes before you confirm it.
+
+Running from source instead: install Ollama from https://ollama.com, start it with `ollama serve`, and the server finds it at `127.0.0.1:11434`.
 
 ## Commands
 
