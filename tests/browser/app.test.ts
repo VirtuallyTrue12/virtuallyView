@@ -84,7 +84,8 @@ describe('first run and accounts', () => {
   it('shows the setup checklist while nothing is connected', async () => {
     await page.goto(base + '/');
     await page.getByText('Finish setting up').waitFor();
-    expect(await page.getByText('At least one indexer').isVisible()).toBe(true);
+    expect(await page.getByText('Places to search').isVisible()).toBe(true);
+    expect(await page.getByRole('button', { name: 'Set up for me' }).isVisible()).toBe(true);
   });
 
   it('explains a too-short username in plain words', async () => {

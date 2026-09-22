@@ -33,6 +33,7 @@ import castRoutes from './routes/cast.js';
 import liveRoutes from './routes/live.js';
 import libraryFolderRoutes from './routes/library-folders.js';
 import artRoutes from './routes/art.js';
+import setupRoutes from './routes/setup.js';
 import { startAutoBackup } from './services/backup.js';
 import { startRequestSync } from './services/requests.js';
 import { getAuthBackdrop } from './services/backdrop.js';
@@ -272,7 +273,7 @@ server.addHook('onRequest', (request, _reply, done) => {
 // reconfigures the server or its services is administrator-only.
 const ADMIN_ONLY_WRITE = [
   '/api/server-settings', '/api/integrations', '/api/services', '/api/onboarding', '/api/downloads/',
-  '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists'
+  '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists', '/api/setup/'
 ];
 server.addHook('preHandler', async (request, reply) => {
   if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') return;
@@ -350,6 +351,7 @@ const start = async () => {
   await server.register(liveRoutes);
   await server.register(libraryFolderRoutes);
   await server.register(artRoutes);
+  await server.register(setupRoutes);
   await server.register(playlistRoutes);
   await server.register(artistCoversRoutes);
   await server.register(searchRoutes);

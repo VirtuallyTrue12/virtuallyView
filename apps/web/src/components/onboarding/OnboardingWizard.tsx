@@ -45,9 +45,29 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
   }, []);
 
   const alreadyConnected = useMemo(
-    () => new Set(integrations.filter(i => i.enabled).map(i => i.adapter)),
+    // Connected means it answers with a working key, not merely switched on.
+    () => new Set(integrations.filter(i => i.enabled && i.healthStatus === 'online').map(i => i.adapter)),
     [integrations]
   );
+
+  const [repairing, setRepairing] = useState(false);
+  const allConnected = ONBOARDING_SERVICES.every(service => states[service.adapter]?.status === 'connected' || alreadyConnected.has(service.adapter));
+
+  // Runs the automatic setup again, then refreshes what is connected.
+  const setUpEverything = async () => {
+    setRepairing(true);
+    setDetectMsg(null);
+    try {
+      const result = await api.setupRepair();
+      setIntegrations(await api.integrations());
+      await runDetect();
+      if (!result.ok) setDetectMsg(result.log[result.log.length - 1] ?? 'Some services could not be set up. If one is not running, start it on the server computer with docker compose up -d.');
+    } catch (err) {
+      setDetectMsg((err as Error).message);
+    } finally {
+      setRepairing(false);
+    }
+  };
 
   const runDetect = async () => {
     setDetecting(true);
@@ -130,14 +150,30 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
         {step === 'services' && (
           <>
             <h1>Connect your services</h1>
-            <p className="onboarding-copy">
-              These services power your library. We look for them on this computer first. For each one, enter the key (or login) it shows in its own settings and press Connect. You can skip any you do not use.
-            </p>
-            <div className="onboarding-actions">
-              <button className="btn btn-secondary btn-sm" type="button" onClick={() => void runDetect()} disabled={detecting}>
-                {detecting ? 'Searching…' : 'Find services on this computer'}
-              </button>
-            </div>
+            {allConnected ? (
+              <p className="onboarding-copy onboarding-copy--ok">
+                All set. Every service is already running and connected to each other. There is nothing to do here: press Continue.
+              </p>
+            ) : (
+              <>
+                <p className="onboarding-copy">
+                  These services find, download and organise what you watch. Press Set everything up for me and they are connected automatically.
+                  If one is not running at all, start it on the server computer with <code>docker compose up -d</code>, then press the button again.
+                </p>
+                <div className="onboarding-actions">
+                  <button className="btn btn-primary btn-sm" type="button" onClick={() => void setUpEverything()} disabled={repairing || detecting}>
+                    {repairing ? 'Setting everything up…' : 'Set everything up for me'}
+                  </button>
+                  <button className="btn btn-secondary btn-sm" type="button" onClick={() => void runDetect()} disabled={detecting || repairing}>
+                    {detecting ? 'Searching…' : 'Check again'}
+                  </button>
+                </div>
+                <details className="onboarding-manual">
+                  <summary>Connect one by hand</summary>
+                  <p className="onboarding-copy">For a service you run yourself somewhere else, enter its address and the key (or login) from its own settings, then press Connect.</p>
+                </details>
+              </>
+            )}
             {detectMsg && <p className="onboarding-detect-msg">{detectMsg}</p>}
             <div className="onboarding-services">
               {ONBOARDING_SERVICES.map(service => {

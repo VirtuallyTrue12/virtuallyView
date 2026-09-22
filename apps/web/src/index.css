@@ -5264,5 +5264,9 @@ html[data-theme='apple-tv-style'] .nav-link { padding: 0.35rem 0.55rem; font-siz
 
   .setup-card li { flex-wrap: wrap; }
   .setup-card li .setup-text { flex: 1 1 calc(100% - 40px); }
-  .setup-card li .btn { margin-left: 34px; }
+  .setup-card li > .btn, .setup-card li > .setup-actions { margin-left: 34px; }
 }
+.setup-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.onboarding-copy--ok { color: var(--color-success); font-weight: 600; }
+.onboarding-manual { margin: 0.5rem 0 1rem; font-size: 0.9rem; }
+.onboarding-manual summary { cursor: pointer; color: var(--color-text-secondary); }

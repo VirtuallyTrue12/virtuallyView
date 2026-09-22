@@ -57,15 +57,22 @@ export default async function serviceLaunchRoutes(server: FastifyInstance) {
 
   server.get('/api/services/check-update', async () => {
     try {
-      const res = await outboundFetch('https://api.github.com/repos/anomalyco/opencode/releases/latest', {
+      const res = await outboundFetch('https://api.github.com/repos/VirtuallyTrue12/virtuallyView/releases/latest', {
         timeoutMs: 5000,
         headers: { 'User-Agent': 'virtuallyView/1.0.0' }
       });
       if (!res.ok) return { available: false, message: 'Could not check for updates.' };
       const data = await res.json() as { tag_name?: string; name?: string; published_at?: string; html_url?: string; body?: string };
+      const current = '0.1.0';
+      const latest = (data.tag_name ?? '').replace(/^v/, '');
+      const newer = (a: string, b: string) => {
+        const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+        for (let i = 0; i < 3; i++) { if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0); }
+        return false;
+      };
       return {
-        available: true,
-        currentVersion: '1.0.0',
+        available: latest ? newer(latest, current) : false,
+        currentVersion: current,
         latestVersion: data.tag_name ?? 'unknown',
         releaseName: data.name ?? 'unknown',
         publishedAt: data.published_at ?? 'unknown',

@@ -72,9 +72,9 @@ export default async function indexerRoutes(server: FastifyInstance) {
     let indexers = -1;
     if (prowlarrUp) { try { indexers = (await prowlarr().listIndexers()).filter(i => i.enabled).length; } catch { indexers = -1; } }
     const items = [
-      { id: 'services', label: 'Media services connected', ok: radarr && sonarr && lidarr, detail: [!radarr && 'Radarr', !sonarr && 'Sonarr', !lidarr && 'Lidarr'].filter(Boolean).join(', ') ? `Not reachable: ${[!radarr && 'Radarr', !sonarr && 'Sonarr', !lidarr && 'Lidarr'].filter(Boolean).join(', ')}` : 'Radarr, Sonarr and Lidarr answer', href: '/settings' },
-      { id: 'downloader', label: 'Download client connected', ok: qbit, detail: qbit ? 'qBittorrent answers' : 'qBittorrent is not reachable', href: '/settings' },
-      { id: 'indexers', label: 'At least one indexer', ok: indexers > 0, detail: !prowlarrUp ? 'Prowlarr is not reachable' : indexers > 0 ? `${indexers} indexer${indexers === 1 ? '' : 's'} active` : 'Nothing can be downloaded until Prowlarr has an indexer', href: '/settings?cat=indexers' },
+      { id: 'services', label: 'Movies, TV and music services running', ok: radarr && sonarr && lidarr, detail: [!radarr && 'Movies', !sonarr && 'TV', !lidarr && 'Music'].filter(Boolean).length ? `Not running yet: ${[!radarr && 'Movies', !sonarr && 'TV', !lidarr && 'Music'].filter(Boolean).join(', ')}. On the server computer run: docker compose up -d` : 'All running', href: '/settings' },
+      { id: 'downloader', label: 'Downloader running', ok: qbit, detail: qbit ? 'Ready to download' : 'Not running yet. On the server computer run: docker compose up -d', href: '/settings' },
+      { id: 'indexers', label: 'Places to search', ok: indexers > 0, detail: !prowlarrUp ? 'The search service is not running yet. On the server computer run: docker compose up -d' : indexers > 0 ? `${indexers} place${indexers === 1 ? '' : 's'} to search` : 'Where the app looks for what you request. Press Set up for me and one is added.', href: '/settings?cat=indexers' },
       { id: 'request', label: 'Make your first request', ok: getRequests().length > 0, detail: 'Search for a title and request it', href: '/search' }
     ];
     return { items, complete: items.every(i => i.ok) };

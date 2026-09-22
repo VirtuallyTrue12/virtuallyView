@@ -455,6 +455,7 @@ export const api = {
   authStatus: () => getJSON<AuthStatus>('/api/auth/status'),
   login: (username: string, password: string, stayLoggedIn?: boolean) => postJSON<AuthStatus>('/api/auth/login', { username, password, stayLoggedIn }),
   signup: (username: string, password: string, stayLoggedIn?: boolean) => postJSON<AuthStatus>('/api/auth/signup', { username, password, stayLoggedIn }),
+  setupRepair: () => postJSON<{ ok: boolean; partial: boolean; log: string[] }>('/api/setup/repair'),
   searchMovie: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/movies/${encodeURIComponent(id)}/search`),
   searchSeries: (id: string, episodeId?: string) => postJSON<{ success: boolean; message: string }>(`/api/series/${encodeURIComponent(id)}/search`, episodeId ? { episodeId } : {}),
   searchArtist: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/artists/${encodeURIComponent(id)}/search`),

@@ -142,7 +142,8 @@ async function ensureMusicPreferences(app) {
   try {
     const list = await fetch(`${app.url}/api/v1/releaseprofile`, { headers });
     if (!list.ok) return;
-    if ((await list.json()).some(p => p.name === name)) return;
+    // Lidarr's release profiles have no name, so recognise ours by what it ignores.
+    if ((await list.json()).some(p => p.name === name || (Array.isArray(p.ignored) && p.ignored.includes('mono') && p.ignored.includes('128kbps')))) return;
     const body = {
       name, enabled: true, indexerId: 0, tags: [],
       required: [],
@@ -327,7 +328,9 @@ async function ensureProwlarrIndexer() {
     const value = field.name === 'baseUrl' ? baseUrl : field.value;
     return value === undefined ? { name: field.name } : { name: field.name, value };
   });
-  const create = await fetch(`${PROWLARR.url}/api/v1/indexer`, {
+  // forceSave: Prowlarr test-connects to the site before saving. A slow answer
+  // from the site must not block setup; Prowlarr retries it on its own later.
+  const create = await fetch(`${PROWLARR.url}/api/v1/indexer?forceSave=true`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -386,19 +389,30 @@ async function main() {
     return;
   }
 
+  // Each step runs on its own: one failure (a slow website, a service that is
+  // still starting) is reported and the rest of the setup carries on.
+  const failed = [];
+  const step = async (label, run) => {
+    try { await run(); } catch (err) { failed.push(label); log(`${label}: ${err instanceof Error ? err.message : err}`); }
+  };
   for (const app of APPS) {
-    await ensureRootFolder(app);
-    await ensureNaming(app);
-    if (app === LIDARR) await ensureMusicPreferences(app);
-    for (const client of DOWNLOAD_CLIENTS) await ensureDownloadClient(app, client);
+    await step(`${app.name} root folder`, () => ensureRootFolder(app));
+    await step(`${app.name} file renaming`, () => ensureNaming(app));
+    if (app === LIDARR) await step('Lidarr audio preferences', () => ensureMusicPreferences(app));
+    for (const client of DOWNLOAD_CLIENTS) await step(`${app.name} download client`, () => ensureDownloadClient(app, client));
   }
-  await ensureProwlarrIndexer();
-  await ensureProwlarrApplication(RADARR, 'Radarr');
-  await ensureProwlarrApplication(SONARR, 'Sonarr');
-  await ensureProwlarrApplication(LIDARR, 'Lidarr');
-  await syncProwlarrApplications();
-  await ensureBazarr();
+  await step('Prowlarr search source', () => ensureProwlarrIndexer());
+  await step('Prowlarr link to Radarr', () => ensureProwlarrApplication(RADARR, 'Radarr'));
+  await step('Prowlarr link to Sonarr', () => ensureProwlarrApplication(SONARR, 'Sonarr'));
+  await step('Prowlarr link to Lidarr', () => ensureProwlarrApplication(LIDARR, 'Lidarr'));
+  await step('Prowlarr sync', () => syncProwlarrApplications());
+  await step('Bazarr subtitles', () => ensureBazarr());
 
+  if (failed.length) {
+    log(`Finished with ${failed.length} step${failed.length === 1 ? '' : 's'} left to retry: ${failed.join(', ')}. Run the setup again from virtuallyView (Home or Settings) once the services are up.`);
+    process.exitCode = 3;
+    return;
+  }
   log('Done. Radarr, Sonarr, and Lidarr are wired to qBittorrent and registered with Prowlarr.');
   log('Additional indexers can be added in Prowlarr under Settings -> Indexers.');
 }

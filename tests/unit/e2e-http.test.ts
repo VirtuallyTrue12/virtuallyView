@@ -885,6 +885,26 @@ describe('e2e: cast links, live tv, photos, books', () => {
   }, 30_000);
 });
 
+describe('e2e: set it up for me', () => {
+  it('only administrators can run the automatic setup, and it explains itself', async () => {
+    const made = await req('POST', '/api/auth/users', { body: { username: 'setupuser', password: 'setuppass', role: 'user' }, cookieOverride: cookieAdmin });
+    expect(made.status).toBe(200);
+    const login = await req('POST', '/api/auth/login', { body: { username: 'setupuser', password: 'setuppass' } });
+    const userCookie = /vv_session=[^;]+/.exec(login.setCookie!)![0];
+    expect((await req('POST', '/api/setup/repair', { cookieOverride: userCookie })).status).toBe(403);
+
+    const run = await req('POST', '/api/setup/repair', { cookieOverride: cookieAdmin });
+    expect(run.status).toBe(200);
+    expect(Array.isArray(run.json.log)).toBe(true);
+    // No services are configured in the test, so the setup says so instead of hanging.
+    expect(run.json.log.join(' ')).toMatch(/Missing|Skipping|did not come online/i);
+
+    const status = await req('GET', '/api/setup/status', { cookieOverride: cookieAdmin });
+    const search = status.json.items.find((i: any) => i.id === 'indexers');
+    expect(search.label).toBe('Places to search');
+  }, 60_000);
+});
+
 describe('e2e: static SPA + route fallback', () => {
   it('serves index.html for the app and JSON for unknown API routes', async () => {
     const home = await req('GET', '/');
