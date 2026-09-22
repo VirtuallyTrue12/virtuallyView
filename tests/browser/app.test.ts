@@ -88,6 +88,28 @@ describe('first run and accounts', () => {
     expect(await page.getByRole('button', { name: 'Set up for me' }).isVisible()).toBe(true);
   });
 
+  it('the More menu closes on outside click, Escape and on choosing a page', async () => {
+    await page.goto(base + '/movies');
+    const more = page.getByRole('button', { name: /^More/ });
+    const menu = page.getByRole('menu');
+
+    await more.click();
+    await menu.waitFor();
+    await page.mouse.click(640, 600);
+    await menu.waitFor({ state: 'detached' });
+
+    await more.click();
+    await menu.waitFor();
+    await page.keyboard.press('Escape');
+    await menu.waitFor({ state: 'detached' });
+
+    await more.click();
+    await page.getByRole('menuitem', { name: 'Themes' }).click();
+    await page.waitForURL(/\/themes$/);
+    expect(await menu.count()).toBe(0);
+    await page.locator('.nav-more-button.active').waitFor({ timeout: 3000 });
+  });
+
   it('explains a too-short username in plain words', async () => {
     await page.goto(base + '/settings?cat=users');
     await page.getByText('Add an account').waitFor();

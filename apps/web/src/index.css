@@ -5236,8 +5236,11 @@ html[data-theme='apple-tv-style'] .nav-link { padding: 0.35rem 0.55rem; font-siz
 .lightbox-bar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; color: #fff; }
 
 .nav-more { position: relative; }
-.nav-more summary { list-style: none; cursor: pointer; }
-.nav-more summary::-webkit-details-marker { display: none; }
+.nav-more-button { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; font: inherit; cursor: pointer; }
+.nav-more-button svg { transition: transform var(--duration-fast) var(--easing-default); }
+.nav-more-button[aria-expanded='true'] svg { transform: rotate(180deg); }
+/* Invisible bridge over the gap, so moving the pointer down to the panel does not close it. */
+.nav-more-panel::before { content: ''; position: absolute; left: 0; right: 0; top: -10px; height: 10px; }
 .nav-more-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 80; min-width: 150px; padding: 6px; display: flex; flex-direction: column; gap: 2px; background: var(--color-background); background-image: linear-gradient(var(--color-surface), var(--color-surface)); border: 1px solid var(--color-border); border-radius: var(--radius-medium); box-shadow: 0 16px 40px rgba(0,0,0,0.3); }
 .nav-more-panel .nav-link { padding: 8px 12px; }
 
