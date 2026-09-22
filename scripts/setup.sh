@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Step-by-step guided setup for VirtuallyView. Written for every skill level:
+# Step-by-step guided setup for virtuallyView. Written for every skill level:
 # each step prints what it is doing, why, and the exact fix when something is
 # missing. Never sends data anywhere. Safe to re-run.
 set -uo pipefail
@@ -9,7 +9,7 @@ ok()   { printf '  \033[0;32mok\033[0m %s\n' "$*"; }
 warn() { printf '  \033[0;33m!\033[0m %s\n' "$*"; }
 fail() { printf '  \033[0;31mfail\033[0m %s\n' "$*"; }
 
-step "Welcome to VirtuallyView setup"
+step "Welcome to virtuallyView setup"
 echo "This wizard installs and checks everything the dashboard needs."
 echo "Nothing is sent to any server. You can re-run this script anytime."
 

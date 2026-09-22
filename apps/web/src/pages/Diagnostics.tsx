@@ -39,7 +39,7 @@ const time = (value: string) => new Date(value).toLocaleString();
 function safeReport(report: DiagnosticsReport) {
   // Explicit fields only: never copy arbitrary server objects or error bodies.
   return [
-    'VirtuallyView Diagnostics · read-only observations',
+    'virtuallyView Diagnostics · read-only observations',
     `Started: ${report.startedAt}`, `Completed: ${report.completedAt}`,
     `Report duration: ${report.durationMs} ms; adapter check deadline: ${report.timeoutMs} ms`,
     `Summary: ${label(report.status)}`,

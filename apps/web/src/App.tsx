@@ -126,7 +126,7 @@ export default function App() {
   if (auth.authenticated && onboarding.loading) {
     return (
       <div className="boot-screen">
-        <div className="boot-brand">VirtuallyView</div>
+        <div className="boot-brand">virtuallyView</div>
         <div className="boot-spinner" aria-label="Loading" />
       </div>
     );
@@ -174,7 +174,7 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       <footer className="app-footer">
-        <span>VirtuallyView</span>
+        <span>virtuallyView</span>
         <span><Link to="/requests">Requests</Link> · <Link to="/downloads">Downloads</Link> · <Link to="/settings">Settings</Link></span>
       </footer>
       <ChatWidget />

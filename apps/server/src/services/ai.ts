@@ -360,7 +360,7 @@ function buildSystemPrompt(registry: ToolRegistry): string {
     .map(t => toolDescription(t.name, t))
     .join('\n');
   return [
-    'You are the VirtuallyView assistant for a home media server (movies, TV, music, downloads, subtitles, themes).',
+    'You are the virtuallyView assistant for a home media server (movies, TV, music, downloads, subtitles, themes).',
     'You only answer questions about this server. For anything else reply {"type": "message", "text": "I can only help with your library and its services."}',
     'Respond ONLY with a single JSON object. No prose, no code fences.',
     '',

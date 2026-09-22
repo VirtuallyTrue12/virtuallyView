@@ -113,9 +113,9 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
 
         {step === 'welcome' && (
           <>
-            <h1>Welcome to VirtuallyView</h1>
+            <h1>Welcome to virtuallyView</h1>
             <p className="onboarding-copy">
-              One dashboard for your movies, TV shows and music. Connect the media services you already run and VirtuallyView brings the whole library together in one place, with nothing to configure by hand.
+              One dashboard for your movies, TV shows and music. Connect the media services you already run and virtuallyView brings the whole library together in one place, with nothing to configure by hand.
             </p>
             <p className="onboarding-copy">
               This short setup finds your services for you, then you are done.

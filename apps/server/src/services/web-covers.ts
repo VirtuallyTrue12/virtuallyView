@@ -51,7 +51,7 @@ async function searxngCover(query: string): Promise<string | null> {
   if (!base) return null;
   const url = `${base.replace(/\/$/, '')}/search?q=${encodeURIComponent(query)}&format=json&categories=images`;
   const res = await outboundFetch(url, {
-    headers: { 'User-Agent': 'VirtuallyView/1.0' },
+    headers: { 'User-Agent': 'virtuallyView/1.0' },
     timeoutMs: 6000
   });
   if (!res.ok) return null;

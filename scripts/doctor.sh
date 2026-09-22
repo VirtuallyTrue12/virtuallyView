@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Diagnose VirtuallyView step by step. Written for every skill level: prints
+# Diagnose virtuallyView step by step. Written for every skill level: prints
 # what each check means and the exact fix. Read-only; changes nothing.
 set -uo pipefail
 

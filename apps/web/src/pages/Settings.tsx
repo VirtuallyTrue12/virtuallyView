@@ -858,7 +858,7 @@ export default function Settings() {
         <section className="settings-section">
           <h3 className="section-title">About & support</h3>
           <p className="model-suggest-meta">
-            VirtuallyView v2.0.0. Open source and self-hosted, MIT licensed. Connects to the open source media services you already run, Radarr, Sonarr, Lidarr and friends, for real library data. Movies and TV previews use open, freely licensed footage and open-source sample streams.
+            virtuallyView 0.1.0. MIT licensed. It runs on your own server and sits on top of Radarr, Sonarr, Lidarr and the other services it sets up for you. Previews play your own files, and trailers come from YouTube.
           </p>
           <p className="model-suggest-meta">See the README for docs, API refs, and donation options. No tracking, no cloud, no middlemen.</p>
         </section>

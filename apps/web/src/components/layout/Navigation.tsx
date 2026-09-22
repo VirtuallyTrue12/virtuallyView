@@ -30,7 +30,7 @@ export function Navigation({ user, onSignOut }: { user?: AuthUser | null; onSign
     <nav className="nav" aria-label="Primary">
       <NavLink to="/" className="nav-brand">
         <VvLogo variant="tile" size={32} />
-        <span>VirtuallyView</span>
+        <span>virtuallyView</span>
       </NavLink>
       <div className="nav-links">
         {LINKS.map(link => (
@@ -43,6 +43,8 @@ export function Navigation({ user, onSignOut }: { user?: AuthUser | null; onSign
             {link.label}
           </NavLink>
         ))}
+        {/* On phones the links scroll sideways in one row, so the extra pages sit inline instead of in a menu. */}
+        {MORE.map(link => <NavLink key={`m-${link.to}`} to={link.to} className={({ isActive }) => `nav-link nav-link--extra${isActive ? ' active' : ''}`}>{link.label}</NavLink>)}
         <details className="nav-more">
           <summary className="nav-link">More</summary>
           <div className="nav-more-panel">

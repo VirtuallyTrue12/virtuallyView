@@ -82,7 +82,7 @@ async function detectTrack(query: string, localArtists: ReadonlySet<string>): Pr
     try {
       const res = await outboundFetch(
         `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(`recording:"${prime}"`)}&fmt=json&limit=20`,
-        { headers: { 'User-Agent': 'VirtuallyView/1.0' }, timeoutMs: 8000 }
+        { headers: { 'User-Agent': 'virtuallyView/1.0' }, timeoutMs: 8000 }
       );
       if (!res.ok) {
         if (attempt === 0) {
@@ -332,7 +332,7 @@ async function searchTracks(query: string): Promise<SearchTrackHit[]> {
   try {
     const res = await outboundFetch(
       `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(`recording:"${prime}"`)}&fmt=json&limit=25`,
-      { headers: { 'User-Agent': 'VirtuallyView/1.0' }, timeoutMs: 8000 }
+      { headers: { 'User-Agent': 'virtuallyView/1.0' }, timeoutMs: 8000 }
     );
     if (!res.ok) return [];
     const data = await res.json() as { recordings?: Array<Record<string, unknown> & { title?: string }> };

@@ -59,7 +59,7 @@ export default async function serviceLaunchRoutes(server: FastifyInstance) {
     try {
       const res = await outboundFetch('https://api.github.com/repos/anomalyco/opencode/releases/latest', {
         timeoutMs: 5000,
-        headers: { 'User-Agent': 'VirtuallyView/1.0.0' }
+        headers: { 'User-Agent': 'virtuallyView/1.0.0' }
       });
       if (!res.ok) return { available: false, message: 'Could not check for updates.' };
       const data = await res.json() as { tag_name?: string; name?: string; published_at?: string; html_url?: string; body?: string };

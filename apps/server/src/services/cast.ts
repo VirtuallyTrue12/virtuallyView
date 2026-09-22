@@ -23,7 +23,7 @@ const TMDB_SEARCH_PAGE = 'https://www.themoviedb.org/search?query=';
 // into the viewer's local script (e.g. Devanagari), which is what made the cast
 // list show Hindi names on an English dashboard.
 const TMDB_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) VirtuallyView/1.0',
+  'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) virtuallyView/1.0',
   'Accept-Language': 'en-US,en;q=0.9'
 };
 

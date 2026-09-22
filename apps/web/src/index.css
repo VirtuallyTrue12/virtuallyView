@@ -3468,26 +3468,48 @@ button:focus-visible {
   mask-image: radial-gradient(70% 70% at 50% 40%, #000 30%, transparent 100%);
 }
 
-/* Cinematic sign-in backdrop: a looping gradient clip plus a still from the
-   user's own library, with a scrim so the form stays readable. All layers sit
-   behind the content (z-index -1) but above the base gradient (-2). */
-.login-bg-video {
+/* Sign-in backdrop: rows of film strips drifting sideways, alternating
+   direction. Each track holds four copies of a seamless tile and moves by
+   exactly one copy, so the loop has no visible seam at any screen size. */
+.login-strips {
   position: absolute;
   inset: 0;
   z-index: -1;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.55;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(8px, 1.6vh, 18px);
+  overflow: hidden;
+  opacity: 0.72;
 }
 
-.login-bg-art {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background-size: cover;
-  background-position: center;
-  opacity: 0.25;
+.login-strip {
+  flex: 0 0 auto;
+  height: clamp(84px, 15.5vh, 190px);
+  overflow: hidden;
+}
+
+.login-strip-track {
+  height: 100%;
+  aspect-ratio: 16384 / 400;
+  background-size: 25% 100%;
+  background-repeat: repeat-x;
+  animation: vv-strip-left 160s linear infinite;
+  will-change: transform;
+}
+
+.login-strip:nth-child(even) .login-strip-track {
+  animation-name: vv-strip-right;
+  animation-duration: 200s;
+}
+
+.login-strip:nth-child(3n) .login-strip-track { animation-duration: 180s; }
+
+@keyframes vv-strip-left { from { transform: translateX(0); } to { transform: translateX(-25%); } }
+@keyframes vv-strip-right { from { transform: translateX(-25%); } to { transform: translateX(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-strip-track { animation: none; }
 }
 
 .login-bg-scrim {
@@ -3500,8 +3522,7 @@ button:focus-visible {
     radial-gradient(70% 70% at 50% 42%, transparent 0%, rgba(5, 6, 10, 0.5) 100%);
 }
 
-html[data-mode='light'] .login-bg-video { opacity: 0.32; }
-html[data-mode='light'] .login-bg-art { opacity: 0.16; }
+html[data-mode='light'] .login-strips { opacity: 0.4; }
 html[data-mode='light'] .login-bg-scrim {
   background:
     linear-gradient(90deg, rgba(247, 245, 240, 0.9) 0%, rgba(247, 245, 240, 0.62) 46%, rgba(247, 245, 240, 0.86) 100%);
@@ -3660,8 +3681,9 @@ html[data-mode='light'] .login-bg-scrim {
 .login-submit { width: 100%; justify-content: center; }
 
 @media (max-width: 860px) {
-  .login-screen { grid-template-columns: 1fr; }
-  .login-brand { padding: 2rem 1.5rem 0; }
+  .login-screen { grid-template-columns: 1fr; justify-items: center; align-content: center; }
+  .login-brand { padding: 2rem 1.5rem 0; width: 100%; max-width: 480px; }
+  .login-card { width: 100%; max-width: 480px; }
   .login-facts { display: none; }
   .login-card { padding: 1.5rem; }
 }
@@ -5218,3 +5240,29 @@ html[data-theme='apple-tv-style'] .nav-link { padding: 0.35rem 0.55rem; font-siz
 .nav-more summary::-webkit-details-marker { display: none; }
 .nav-more-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 80; min-width: 150px; padding: 6px; display: flex; flex-direction: column; gap: 2px; background: var(--color-background); background-image: linear-gradient(var(--color-surface), var(--color-surface)); border: 1px solid var(--color-border); border-radius: var(--radius-medium); box-shadow: 0 16px 40px rgba(0,0,0,0.3); }
 .nav-more-panel .nav-link { padding: 8px 12px; }
+
+/* ===== Phones ===== */
+.nav-link--extra { display: none; }
+.users-row { flex-wrap: wrap; }
+.users-list { grid-template-columns: minmax(0, 1fr); }
+.users-name { min-width: 0; flex: 1 1 220px; overflow-wrap: anywhere; white-space: normal; flex-wrap: wrap; }
+
+@media (max-width: 720px) {
+  /* Brand, bell and account on the first line; every page link on one swipeable line below. */
+  .nav { flex-wrap: wrap; gap: 8px 12px; padding: 0.6rem 16px; }
+  .nav-brand { margin-right: auto; }
+  .nav-links { order: 3; flex: 1 0 100%; margin-left: 0; gap: 18px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 2px 0 4px; mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .nav-links::-webkit-scrollbar { display: none; }
+  .nav-link { white-space: nowrap; flex: 0 0 auto; }
+  .nav-more { display: none; }
+  .nav-link--extra { display: inline-block; }
+  html[data-theme='apple-tv-style'] .nav { border-radius: 22px; margin-top: 8px; width: calc(100% - 16px); }
+
+  /* Leave room so the floating assistant button never covers the last button on a page. */
+  main.page { padding-bottom: 96px; }
+  .chat-fab { right: 16px; bottom: 16px; width: 46px; height: 46px; }
+
+  .setup-card li { flex-wrap: wrap; }
+  .setup-card li .setup-text { flex: 1 1 calc(100% - 40px); }
+  .setup-card li .btn { margin-left: 34px; }
+}

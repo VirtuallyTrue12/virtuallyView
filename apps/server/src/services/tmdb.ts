@@ -48,7 +48,7 @@ export async function scrapeMovie(tmdbId?: number | string, title?: string, year
 
   try {
     const res = await outboundFetch(`${TMDB_PAGE}${pageId}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) VirtuallyView/1.0' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) virtuallyView/1.0' },
       timeoutMs: 12000
     });
     if (!res.ok) return {};

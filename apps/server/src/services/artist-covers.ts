@@ -90,7 +90,7 @@ export async function gatherCoverCandidates(
   if (musicBrainzId) {
     try {
       const res = await outboundFetch(`https://coverartarchive.org/release-group/${encodeURIComponent(musicBrainzId)}`, {
-        headers: { 'User-Agent': 'VirtuallyView/1.0' },
+        headers: { 'User-Agent': 'virtuallyView/1.0' },
         timeoutMs: 8000
       });
       if (res.ok) {

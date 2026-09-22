@@ -39,7 +39,7 @@ export interface NotificationChannel {
 }
 
 const DEFAULTS: ServerSettings = {
-  serverName: 'VirtuallyView',
+  serverName: 'virtuallyView',
   mediaRoots: { movies: '/media/movies', tv: '/media/tv', music: '/media/music', staging: '/downloads' },
   logLevel: 'info',
   bindAddress: '0.0.0.0',
