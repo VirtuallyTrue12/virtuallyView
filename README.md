@@ -10,9 +10,11 @@
   <a href="LICENSE">MIT</a> &middot; <a href="docs/getting-started.md">Getting started</a> &middot; <a href="CONTRIBUTING.md">Contributing</a> &middot; <a href="#feed-the-keep">Feed the keep</a>
 </p>
 
-A self-hosted home for your movies, TV shows and music. It puts Radarr, Sonarr, Lidarr, Prowlarr, Bazarr, qBittorrent and NZBGet behind one interface, gives everyone in the house their own account, plays files that browsers normally refuse, and needs no account with anyone outside your network.
+A self-hosted home for your movies, TV shows and music. One command, one page, and it sets itself up: no technical knowledge needed, and nothing to install or configure by hand. Everything underneath (the search engines, the download manager, the subtitle finder) wires itself together automatically on first start. You never touch them unless you want to.
 
 **Host it. Change it. Keep the keys.**
+
+**If you can copy-paste one command, you can run this.** No server experience required. See it done start to finish in [install for beginners](docs/install-for-beginners.md).
 
 <p align="center">
   <img src="docs/screenshots/home.jpg" alt="Home" width="880">
@@ -92,9 +94,11 @@ Read your service settings before pointing this at anything sensitive.
 docker compose up -d
 ```
 
-This starts virtuallyView and a bundled stack: Radarr, Sonarr, Prowlarr, Lidarr, Bazarr, qBittorrent, NZBGet and Ollama. They share a private network, but the ports published on your computer are reachable by anything that can reach it, so read [deployment](docs/deployment.md) before exposing them.
+One command. Nothing else to install, register or configure. This starts virtuallyView and everything it needs underneath, already wired together and talking to each other, no setup required from you. If you have never touched Docker before, [install for beginners](docs/install-for-beginners.md) walks through every step, screenshots included.
 
-The stack is wired together on first start: root folders and qBittorrent are added to Radarr, Sonarr and Lidarr, and Prowlarr gets the three as applications. The seeded API keys and qBittorrent login are public defaults, listed in [docker/seed/README.md](docker/seed/README.md). Change them before anyone else can reach the ports.
+Under the hood it brings up a small stack of open-source engines that do the actual finding and downloading (Radarr, Sonarr, Prowlarr, Lidarr, Bazarr, qBittorrent, NZBGet and Ollama) and connects them to each other and to virtuallyView automatically: root folders, the download client, the indexer connections, all of it. You never need to open their pages or know what they are. They share a private network, but the ports published on your computer are reachable by anything that can reach it, so read [deployment](docs/deployment.md) before exposing them.
+
+The seeded API keys and qBittorrent login are public defaults, listed in [docker/seed/README.md](docker/seed/README.md). Change them before anyone else can reach the ports.
 
 Open http://localhost:3000 and create the first account. It becomes the administrator. Then:
 
