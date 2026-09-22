@@ -42,14 +42,16 @@ export default function IndexersPanel() {
           Indexers are the sources Radarr, Sonarr and Lidarr search when you request something. Add only sources you are entitled to use.
           Prowlarr shares them with the media services automatically.
         </p>
-        {error && <div className="notice notice--err">{error}. Check that Prowlarr is connected under Integrations.</div>}
+        {error && <div className="notice notice--err">{error}. Check that Prowlarr is connected under Settings &gt; Services.</div>}
         {configured && configured.length === 0 && <div className="notice notice--err">No indexers yet. Requests will find nothing until you add one below.</div>}
         <ul className="users-list">
           {(configured ?? []).map(i => (
             <li className="users-row" key={i.id}>
-              <span className="users-name">{i.name}<small style={{ display: 'block', opacity: 0.7 }}>{i.protocol}, {i.privacy}{i.enabled ? '' : ', disabled'}</small></span>
+              <span className="users-name">{i.name}<small style={{ display: 'block', opacity: 0.7 }}>{i.protocol}, {i.privacy}{i.enabled ? '' : ', disabled'}</small>
+                {i.failingUntil && <small className="indexer-failing">Not answering. Prowlarr skips it until {new Date(i.failingUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} and then tries again.</small>}
+              </span>
               <span className="users-actions">
-                <button className="btn btn-secondary btn-sm" type="button" disabled={busy === `t${i.id}`} onClick={() => void act(`t${i.id}`, () => api.testIndexer(i.id))}>{busy === `t${i.id}` ? 'Testing...' : 'Test'}</button>
+                <button className="btn btn-secondary btn-sm" type="button" disabled={busy === `t${i.id}`} onClick={() => void act(`t${i.id}`, () => api.testIndexer(i.id))}>{busy === `t${i.id}` ? 'Testing, up to 2 min...' : 'Test'}</button>
                 <button className="btn btn-secondary btn-sm" type="button" disabled={busy === `r${i.id}`} onClick={() => void act(`r${i.id}`, () => api.removeIndexer(i.id))}>Remove</button>
               </span>
             </li>

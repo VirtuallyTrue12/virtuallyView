@@ -400,7 +400,7 @@ export interface SearchAll {
   tracks: Array<{ title: string; artist: string; year?: number }>;
 }
 
-export interface Indexer { id: number; name: string; protocol: string; privacy: string; enabled: boolean; definitionName: string }
+export interface Indexer { id: number; name: string; protocol: string; privacy: string; enabled: boolean; definitionName: string; failingUntil?: string }
 export interface IndexerDefinition { definitionName: string; name: string; protocol: string; privacy: string; language: string; description: string }
 export interface SetupStatus { items: Array<{ id: string; label: string; ok: boolean; detail: string; href: string }>; complete: boolean }
 export interface AppNotification { id: number; type: string; title: string; body: string; link: string; createdAt: string; read: boolean }

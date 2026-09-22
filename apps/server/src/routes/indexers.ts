@@ -70,11 +70,21 @@ export default async function indexerRoutes(server: FastifyInstance) {
     const up = async (key: string) => { try { return (await (getAdapter(key) as unknown as Health).healthCheck()).healthy; } catch { return false; } };
     const [radarr, sonarr, lidarr, prowlarrUp, qbit] = await Promise.all(['radarr', 'sonarr', 'lidarr', 'prowlarr', 'qbittorrent'].map(up));
     let indexers = -1;
-    if (prowlarrUp) { try { indexers = (await prowlarr().listIndexers()).filter(i => i.enabled).length; } catch { indexers = -1; } }
+    let failingNames: string[] = [];
+    if (prowlarrUp) {
+      try {
+        const list = (await prowlarr().listIndexers()).filter(i => i.enabled);
+        failingNames = list.filter(i => i.failingUntil).map(i => i.name);
+        indexers = list.length - failingNames.length;
+      } catch { indexers = -1; }
+    }
     const items = [
       { id: 'services', label: 'Movies, TV and music services running', ok: radarr && sonarr && lidarr, detail: [!radarr && 'Movies', !sonarr && 'TV', !lidarr && 'Music'].filter(Boolean).length ? `Not running yet: ${[!radarr && 'Movies', !sonarr && 'TV', !lidarr && 'Music'].filter(Boolean).join(', ')}. On the server computer run: docker compose up -d` : 'All running', href: '/settings' },
       { id: 'downloader', label: 'Downloader running', ok: qbit, detail: qbit ? 'Ready to download' : 'Not running yet. On the server computer run: docker compose up -d', href: '/settings' },
-      { id: 'indexers', label: 'Places to search', ok: indexers > 0, detail: !prowlarrUp ? 'The search service is not running yet. On the server computer run: docker compose up -d' : indexers > 0 ? `${indexers} place${indexers === 1 ? '' : 's'} to search` : 'Where the app looks for what you request. Press Set up for me and one is added.', href: '/settings?cat=indexers' },
+      { id: 'indexers', label: 'Places to search', ok: indexers > 0, detail: !prowlarrUp ? 'The search service is not running yet. On the server computer run: docker compose up -d'
+          : indexers > 0 ? `${indexers} place${indexers === 1 ? '' : 's'} to search`
+          : failingNames.length ? `${failingNames.join(', ')} ${failingNames.length === 1 ? 'is' : 'are'} not answering right now. Press Choose more to add another place to search.`
+          : 'Where the app looks for what you request. Press Set up for me and one is added.', href: '/settings?cat=indexers' },
       { id: 'request', label: 'Make your first request', ok: getRequests().length > 0, detail: 'Search for a title and request it', href: '/search' }
     ];
     return { items, complete: items.every(i => i.ok) };

@@ -1,7 +1,11 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media } from '@virtuallyview/types';
 
-export interface ProwlarrIndexer { id: number; name: string; protocol: string; privacy: string; enabled: boolean; definitionName: string }
+export interface ProwlarrIndexer {
+  id: number; name: string; protocol: string; privacy: string; enabled: boolean; definitionName: string;
+  /** Set while Prowlarr is skipping it after repeated failures. */
+  failingUntil?: string;
+}
 export interface ProwlarrIndexerDefinition { definitionName: string; name: string; protocol: string; privacy: string; language: string; description: string }
 
 export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey: string }> {
@@ -54,9 +58,20 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
     const res = await fetch(`${url}/api/v1/indexer`, { headers: this.headers(), signal: AbortSignal.timeout(6000) });
     if (!res.ok) throw new Error(`Prowlarr returned ${res.status} while listing indexers.`);
     const rows = (await res.json()) as Array<Record<string, unknown>>;
+    // Prowlarr stops using an indexer for a while after repeated failures; say which.
+    const failing = new Map<number, string>();
+    try {
+      const status = await fetch(`${url}/api/v1/indexerstatus`, { headers: this.headers(), signal: AbortSignal.timeout(6000) });
+      if (status.ok) {
+        for (const s of (await status.json()) as Array<{ indexerId?: number; disabledTill?: string }>) {
+          if (s.indexerId && s.disabledTill && Date.parse(s.disabledTill) > Date.now()) failing.set(s.indexerId, s.disabledTill);
+        }
+      }
+    } catch { /* status is optional: list without it */ }
     return rows.map(r => ({
       id: Number(r.id), name: String(r.name ?? ''), protocol: String(r.protocol ?? ''), privacy: String(r.privacy ?? ''),
-      enabled: r.enable !== false, definitionName: String(r.definitionName ?? '')
+      enabled: r.enable !== false, definitionName: String(r.definitionName ?? ''),
+      ...(failing.has(Number(r.id)) ? { failingUntil: failing.get(Number(r.id)) } : {})
     }));
   }
 
@@ -95,11 +110,21 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
     const { url } = this.requireConfig();
     const getRes = await fetch(`${url}/api/v1/indexer/${id}`, { headers: this.headers(), signal: AbortSignal.timeout(6000) });
     if (!getRes.ok) return { success: false, message: 'Prowlarr could not find that indexer.' };
-    const res = await fetch(`${url}/api/v1/indexer/test`, { method: 'POST', headers: this.headers(), body: JSON.stringify(await getRes.json()), signal: AbortSignal.timeout(30000) });
-    if (res.ok) return { success: true, message: 'The indexer answered.' };
+    const notAnswering = 'This source is not answering Prowlarr right now. It may be busy, down, or blocking Prowlarr. Try again later, or add another source.';
+    let res: Response;
+    try {
+      // Prowlarr gives a site up to 100 seconds before it calls the test failed: wait for its verdict.
+      res = await fetch(`${url}/api/v1/indexer/test`, { method: 'POST', headers: this.headers(), body: JSON.stringify(await getRes.json()), signal: AbortSignal.timeout(115000) });
+    } catch {
+      return { success: false, message: notAnswering };
+    }
+    if (res.ok) return { success: true, message: 'The source answered. Requests can search it now.' };
     const detail = await res.text().catch(() => '');
-    const first = /"errorMessage"\s*:\s*"([^"]+)"/.exec(detail)?.[1];
-    return { success: false, message: first ?? `The test failed (status ${res.status}).` };
+    const first = /"errorMessage"\s*:\s*"([^"]+)"/.exec(detail)?.[1] ?? '';
+    if (/timed out|unavailable|unable to connect/i.test(first)) return { success: false, message: notAnswering };
+    if (/captcha|cloudflare/i.test(first)) return { success: false, message: 'This source asks for a captcha, which Prowlarr cannot solve. Choose another source.' };
+    if (/unauthori[sz]ed|login|credentials|api key/i.test(first)) return { success: false, message: 'This source needs a login or key. Add it in Prowlarr with your account details.' };
+    return { success: false, message: first || `The test failed (status ${res.status}).` };
   }
 
   async removeIndexer(id: number): Promise<{ success: boolean; message: string }> {
