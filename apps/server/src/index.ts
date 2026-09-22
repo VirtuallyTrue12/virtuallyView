@@ -367,7 +367,20 @@ const start = async () => {
   // local dev, apps/web/dist won't exist yet - Vite serves the UI on :3001
   // instead and proxies /api here, so this is skipped without side effects.
   if (existsSync(WEB_DIST_DIR)) {
-    await server.register(fastifyStatic, { root: WEB_DIST_DIR });
+    await server.register(fastifyStatic, {
+      root: WEB_DIST_DIR,
+      // Sends the .br or .gz copy written at build time when the browser accepts it.
+      preCompressed: true,
+      cacheControl: false,
+      setHeaders: (res, filePath) => {
+        // Files under /assets carry a content hash in their name, so they never
+        // change: cache them for a year. The page itself is always re-checked so
+        // a new release shows up on the next load.
+        if (/[\\/]assets[\\/]/.test(filePath)) res.header('Cache-Control', 'public, max-age=31536000, immutable');
+        else if (filePath.endsWith('.html')) res.header('Cache-Control', 'no-cache');
+        else res.header('Cache-Control', 'public, max-age=86400');
+      }
+    });
     server.setNotFoundHandler((request, reply) => {
       if (request.raw.url?.startsWith('/api')) {
         return reply.code(404).send({ error: 'not_found', message: `No route matches ${request.raw.url}.` });

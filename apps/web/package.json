@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node ../../scripts/compress-dist.mjs dist",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
