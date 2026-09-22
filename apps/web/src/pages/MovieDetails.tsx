@@ -1,3 +1,4 @@
+import { DownloadPanel } from '../components/media/DownloadPanel';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { MediaCard } from '../components/media/MediaCard';
@@ -180,6 +181,7 @@ export default function MovieDetails() {
               )}
 
               {movie.overview && <p className="detail-overview">{movie.overview}</p>}
+              {/^radarr-/.test(movie.id) && <DownloadPanel mediaId={movie.id} />}
 
               <div className="hero-actions">
                 {movie.status === 'available' && (

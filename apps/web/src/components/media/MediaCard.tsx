@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StatusPill } from './StatusPill';
 import type { MediaItem } from '../../lib/api';
 import { SvgIcon } from '../ui/SvgIcon';
+import { downloadLabel, useTitleDownload } from '../../lib/useDownloadProgress';
 
 type Props = {
   item: MediaItem;
@@ -27,6 +28,7 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const download = useTitleDownload(/^(radarr|sonarr|lidarr)-/.test(item.id) ? item.id : undefined);
   const showImage = !!item.artwork?.poster && !broken;
   const percent = typeof progress === 'number' && progress > 0 ? Math.max(0, Math.min(100, progress)) : 0;
 
@@ -91,7 +93,7 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
             }}
           />
         )}
-        {showStatus && item.status && (
+        {showStatus && item.status && !download && (
           <div className="media-card-badge"><StatusPill status={item.status} /></div>
         )}
         {(item.favorite || item.watched) && (
@@ -100,7 +102,18 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
             {item.watched && <span title="Watched"><SvgIcon name="check" size={12} /></span>}
           </div>
         )}
-        {percent > 0 && (
+        {download && (
+          <div className={`media-card-dl media-card-dl--${download.state}`} role="status" aria-label={`${item.title}: ${downloadLabel(download)}`}>
+            <span className="media-card-dl-label">
+              {download.state === 'failed' ? <SvgIcon name="close" size={11} /> : <span className="media-card-dl-dot" aria-hidden="true" />}
+              {downloadLabel(download)}
+            </span>
+            {download.state !== 'failed' && (
+              <div className="media-card-dl-track"><div className="media-card-dl-fill" style={{ width: `${download.state === 'importing' ? 100 : Math.max(2, download.progress)}%` }} /></div>
+            )}
+          </div>
+        )}
+        {percent > 0 && !download && (
           <div
             className="media-card-progress-track"
             role="progressbar"

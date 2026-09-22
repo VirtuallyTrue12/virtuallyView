@@ -315,14 +315,17 @@ export function Hero({ items }: { items: HeroCandidate[] }) {
         />
       )}
       {sourceMode === 'trailer' && showTrailer && youtubeId && (
-        <iframe
-          key={`${youtubeId}-${muted ? 'm' : 'u'}`}
-          className="hero-trailer"
-          src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&mute=${muted ? 1 : 0}&loop=1&playlist=${youtubeId}&controls=0&playsinline=1&modestbranding=1&rel=0`}
-          title="Trailer preview"
-          allow="autoplay; encrypted-media; picture-in-picture"
-          allowFullScreen
-        />
+        // The frame is sized larger than the hero and centred, so YouTube's own
+        // letterboxing falls outside the visible area: the trailer fills edge to edge.
+        <div className="hero-trailer hero-trailer-cover">
+          <iframe
+            key={`${youtubeId}-${muted ? 'm' : 'u'}`}
+            src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&mute=${muted ? 1 : 0}&loop=1&playlist=${youtubeId}&controls=0&playsinline=1&modestbranding=1&rel=0`}
+            title="Trailer preview"
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
       )}
       <div className="hero-overlay" aria-hidden="true" />
       <div className="hero-content">

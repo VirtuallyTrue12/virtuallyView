@@ -1,3 +1,4 @@
+import { DownloadPanel } from '../components/media/DownloadPanel';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { BackButton } from '../components/layout/BackButton';
@@ -103,6 +104,7 @@ export default function ArtistDetails() {
               <h1 className="detail-title">{artist.title}</h1>
               {artist.genres?.length ? <p className="artist-hero-genres">{artist.genres.slice(0, 4).join(' · ')}</p> : null}
               <p className="detail-overview">{artist.overview || 'Artist details are not available yet. Connect your Music service for the full library.'}</p>
+              {/^lidarr-/.test(artist.id) && <DownloadPanel mediaId={artist.id} />}
               <div className="hero-actions">
                 <FavoriteButton mediaType="artist" mediaId={artist.id} initial={artist.favorite} />
                 <RemoveTitle kind="artist" id={artist.id} title={artist.title} />

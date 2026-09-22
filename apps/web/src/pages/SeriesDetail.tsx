@@ -1,3 +1,4 @@
+import { DownloadPanel } from '../components/media/DownloadPanel';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { SearchAgain } from '../components/media/SearchAgain';
@@ -133,6 +134,7 @@ export default function SeriesDetail() {
               )}
 
               {series.overview && <p className="detail-overview">{series.overview}</p>}
+              {/^sonarr-/.test(series.id) && <DownloadPanel mediaId={series.id} />}
 
               <div className="hero-actions">
                 {nextEpisode ? (
