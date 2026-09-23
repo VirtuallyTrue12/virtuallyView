@@ -71,6 +71,8 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
@@ -96,6 +98,8 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
@@ -119,6 +123,8 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
   lidarr:
     image: lscr.io/linuxserver/lidarr:latest
@@ -144,6 +150,8 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
   bazarr:
     image: lscr.io/linuxserver/bazarr:latest
@@ -161,6 +169,8 @@ services:
     ports:
       - "127.0.0.1:6767:6767"
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
@@ -188,6 +198,8 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
   nzbget:
     image: lscr.io/linuxserver/nzbget:latest
@@ -203,6 +215,8 @@ services:
     ports:
       - "127.0.0.1:6789:6789"
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
   # One-shot: wires Radarr/Sonarr/Lidarr to qBittorrent and to Prowlarr.
   provision:
@@ -300,6 +314,8 @@ services:
       - nzbget
       - bazarr
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
   # Optional AI assistant (about 5 GB). Not started by default so the first
   # install is quick. Turn it on with: docker compose --profile ai up -d
@@ -316,6 +332,8 @@ services:
       timeout: 5s
       retries: 12
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
 
   # Optional Tor SOCKS5 proxy. No account or setup needed, unlike a VPN. Turn
   # it on with: docker compose --profile tor up -d
@@ -334,6 +352,27 @@ services:
       interval: 15s
       timeout: 5s
       retries: 6
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # Optional automatic updates for the containers above (only the ones
+  # labeled com.centurylinklabs.watchtower.enable=true, so it never touches
+  # anything else on this Docker host). Fully automatic: no confirmation
+  # prompt, and no rollback if a new image misbehaves - if you want to review
+  # updates first, don't turn this on and instead run
+  # "docker compose pull && docker compose up -d" yourself when you choose.
+  # Turn it on with: docker compose --profile auto-update up -d
+  # See docs/updates.md, including the extra step rootless Podman needs.
+  watchtower:
+    image: containrrr/watchtower:latest
+    profiles: ["auto-update"]
+    volumes:
+      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_INTERVAL_SECONDS:-86400}
+    restart: unless-stopped
 
 volumes:
   radarr-config:

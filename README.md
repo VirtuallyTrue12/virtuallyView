@@ -198,6 +198,7 @@ scripts/                Setup and provisioning
 - [Watching on your TV](docs/tv.md)
 - [Casting](docs/casting.md)
 - [Privacy: anonymous search and downloads (Tor, VPN)](docs/privacy.md)
+- [Automatic updates](docs/updates.md)
 - [Roadmap](docs/roadmap.md)
 - [HTTPS](docs/https.md) and [reaching it from outside your home](docs/remote-access.md)
 - [Development](docs/development.md)
