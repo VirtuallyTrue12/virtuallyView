@@ -5323,3 +5323,4 @@ html[data-theme='apple-tv-style'] .nav-link { padding: 0.35rem 0.55rem; font-siz
 .download-panel--failed { border-color: var(--color-danger); }
 .download-panel-msg { margin: 0; font-size: 0.85rem; color: var(--color-danger); }
 .indexer-failing { display: block; color: var(--color-warning); font-weight: 500; margin-top: 2px; }
+.request-detail--warn { color: var(--color-warning); }

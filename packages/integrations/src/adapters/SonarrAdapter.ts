@@ -317,7 +317,14 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     const now = Date.now();
     const missing = (await this.getEpisodes(seriesId)).filter(e => e.monitored !== false && !e.hasFile && e.seasonNumber > 0 && (!e.airDate || Date.parse(e.airDate) <= now));
     if (!missing.length) return { success: true, message: 'Nothing is missing.', count: 0 };
-    const result = await this.searchEpisodes(missing.map(e => e.id));
+    // A few missing episodes: search those. Many: one show-wide search, which
+    // tries whole-season packs first instead of hundreds of single searches.
+    if (missing.length <= 10) {
+      const result = await this.searchEpisodes(missing.map(e => e.id));
+      return { ...result, count: missing.length };
+    }
+    const numeric = Number(seriesId.replace(/^sonarr-/, ''));
+    const result = await runArrCommand(this.requireConfig(), 'v3', { name: 'SeriesSearch', seriesId: numeric }, `a search for ${missing.length} missing episodes`);
     return { ...result, count: missing.length };
   }
 

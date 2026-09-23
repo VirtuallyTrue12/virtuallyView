@@ -2,6 +2,8 @@ import { getServerSettings } from './server-settings.js';
 import { notify } from './notifications.js';
 import { currentActor } from './user-context.js';
 import { cinemaNotice, isStillInCinemas, type ReleaseDates } from './release-check.js';
+import { retryTitle } from './retry.js';
+import type { ProwlarrAdapter } from '@virtuallyview/integrations';
 import type { RadarrAdapter, SonarrAdapter, LidarrAdapter } from '@virtuallyview/integrations';
 type RequestCandidate = Awaited<ReturnType<RadarrAdapter['lookupCandidates']>>[number];
 import { getAdapter } from './registry.js';
@@ -39,6 +41,9 @@ export interface RequestItem {
   metadataProvider?: RequestCandidate['provider'];
   /** Added without a search; a proper release is downloaded when one appears. */
   waitForRelease?: boolean;
+  /** When the media service was last asked to look for it, and how many times. */
+  searchedAt?: string;
+  searches?: number;
   events?: RequestEvent[];
   createdAt: string;
   updatedAt: string;
@@ -601,15 +606,61 @@ export async function syncRequestsWithServices(): Promise<void> {
         logStatusChange(req.id, before, status);
         const progress = queued.progress ?? req.progress ?? 0;
         logProgress(req.id, progress);
-        patch(req.id, { status, progress });
+        patch(req.id, { status, progress, ...(getRequest(req.id)?.message?.startsWith(NOTHING_FOUND_PREFIX) ? { message: undefined } : {}) });
         await syncDownload(getRequest(req.id)!);
       }
     }
   }
 }
 
+// A request can sit in "searching" for ever when no source has the title: the
+// media services search once when a title is added and afterwards only watch
+// for new uploads. Say so after a while, and search again now and then, so a
+// request succeeds by itself once a better source is added.
+const NOTHING_YET_MS = 15 * 60 * 1000;
+const FIRST_RETRY_MS = 30 * 60 * 1000;
+const RETRY_MS = 6 * 60 * 60 * 1000;
+export const NOTHING_FOUND_PREFIX = 'Nothing found yet';
+
+async function workingSources(): Promise<number | null> {
+  try {
+    const list = (await getAdapter<ProwlarrAdapter>('prowlarr').listIndexers()).filter(i => i.enabled);
+    return list.filter(i => !i.failingUntil).length;
+  } catch {
+    return null;
+  }
+}
+
+export async function reviewStuckSearches(now = Date.now()): Promise<void> {
+  const stuck = requests.filter(r => r.status === 'searching' && r.providerId && !r.waitForRelease);
+  if (!stuck.length) return;
+  let sources: number | null | undefined;
+  for (const req of stuck) {
+    const since = Date.parse(req.searchedAt ?? req.createdAt);
+    if (!Number.isFinite(since)) continue;
+    const waited = now - since;
+    if (waited >= NOTHING_YET_MS && !req.message?.startsWith(NOTHING_FOUND_PREFIX)) {
+      sources ??= await workingSources();
+      const message = sources === 0
+        ? `${NOTHING_FOUND_PREFIX}: none of your places to search is answering. Add one under Settings > Indexers. It is searched again automatically.`
+        : `${NOTHING_FOUND_PREFIX}: none of your places to search has it. Add more under Settings > Indexers. It is searched again automatically every 6 hours.`;
+      patch(req.id, { message });
+      logEvent(req.id, 'No source has it yet');
+    }
+    if (waited >= ((req.searches ?? 0) === 0 ? FIRST_RETRY_MS : RETRY_MS)) {
+      const result = await retryTitle(req.providerId!).catch(() => ({ success: false, message: '' }));
+      patch(req.id, { searchedAt: new Date(now).toISOString(), searches: (req.searches ?? 0) + 1 });
+      if (result.success) logEvent(req.id, 'Searched again automatically');
+    }
+  }
+}
+
 export function startRequestSync(intervalMs = 15000): NodeJS.Timeout {
+  let reviewing = false;
   return setInterval(() => {
     void syncRequestsWithServices();
+    if (reviewing) return;
+    reviewing = true;
+    void reviewStuckSearches().finally(() => { reviewing = false; });
   }, intervalMs);
 }

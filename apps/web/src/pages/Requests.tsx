@@ -283,7 +283,9 @@ export default function Requests() {
                     )}
                     <RequestActivityFeed events={item.events} status={item.status} />
                     {item.status === 'searching' && (
-                      <p className="request-detail">Looking for the best available download. This can take a minute.</p>
+                      item.message?.startsWith('Nothing found yet')
+                        ? <p className="request-detail request-detail--warn">{item.message}</p>
+                        : <p className="request-detail">Looking for the best available download. This can take a minute.</p>
                     )}
                     {item.status === 'downloading' && (
                       <p className="request-detail">

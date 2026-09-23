@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeAll, afterEach } from 'vitest';
-import { createRequest, cancelRequest, deleteRequest, getRequests, syncRequestsWithServices } from '../../apps/server/src/services/requests.js';
+import { createRequest, cancelRequest, deleteRequest, getRequests, getRequest, reviewStuckSearches, syncRequestsWithServices } from '../../apps/server/src/services/requests.js';
 import { getAdapter } from '../../apps/server/src/services/registry.js';
 import type { RadarrAdapter, SonarrAdapter, LidarrAdapter } from '@virtuallyview/integrations';
 
@@ -82,6 +82,38 @@ describe('request pipeline', () => {
     expect(result.request?.rootFolder).toBe('/media/movies');
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(JSON.parse(post![1]!.body as string)).toMatchObject({ tmdbId: 1, qualityProfileId: 4, rootFolderPath: '/media/movies' });
+  });
+
+  test('a request nobody can find says so after a while and is searched again on its own', async () => {
+    const fetchMock = vi.fn(async (url: unknown, init?: RequestInit) => {
+      const instance = instanceFixture(url);
+      if (instance) return instance;
+      if (init?.method === 'POST') return json({ id: 42 });
+      return json(String(url).includes('/movie/lookup')
+        ? [{ tmdbId: 77, title: 'Nowhere Film', year: 2020, status: 'released' }]
+        : []);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const made = await createRequest({ title: 'Nowhere Film', year: 2020, selectedProviderId: '77' });
+    expect(made.request?.status).toBe('searching');
+    const id = made.request!.id;
+
+    // Ten minutes in: still looking, no message yet, no extra search.
+    fetchMock.mockClear();
+    await reviewStuckSearches(Date.now() + 10 * 60 * 1000);
+    expect(getRequest(id)?.message ?? '').not.toMatch(/Nothing found yet/);
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/command'))).toBe(false);
+
+    // Forty minutes in: the viewer is told, and the service is asked to search again.
+    await reviewStuckSearches(Date.now() + 40 * 60 * 1000);
+    expect(getRequest(id)?.message).toMatch(/Nothing found yet/);
+    expect(getRequest(id)?.searches).toBe(1);
+    expect(fetchMock.mock.calls.some(([u, i]) => String(u).includes('/command') && (i as RequestInit)?.method === 'POST')).toBe(true);
+
+    // Right after that search, no second one: the next is hours away.
+    fetchMock.mockClear();
+    await reviewStuckSearches(Date.now() + 45 * 60 * 1000);
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/command'))).toBe(false);
   });
 
   test('ambiguous lookup with different provider IDs refuses with candidates instead of posting', async () => {
