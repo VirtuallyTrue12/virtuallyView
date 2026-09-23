@@ -769,6 +769,7 @@ export default function Settings() {
               <h3 className="section-title">Outbound proxy</h3>
               <p className="model-suggest-meta">
                 Routes the server's public internet calls - Wikipedia, MusicBrainz, web covers - through a Tor, SOCKS5 or HTTP proxy. Your local media services (Radarr, Sonarr, Lidarr) never go through it.
+                For Tor, the bundled proxy (<code>docker compose --profile tor up -d</code>) is reachable at host <code>tor</code>, port 9050 - not 127.0.0.1, which inside this container means the app itself. See docs/privacy.md for Tor and VPN options.
               </p>
               {proxyDraft && (
                 <>
@@ -785,10 +786,14 @@ export default function Settings() {
                     <select
                       className="settings-input"
                       value={proxyDraft.kind}
-                      onChange={e => setProxyDraft(prev => prev ? { ...prev, kind: e.target.value as 'tor' | 'socks5' | 'http' } : prev)}
+                      onChange={e => {
+                        const kind = e.target.value as 'tor' | 'socks5' | 'http';
+                        // Fill in the bundled Tor proxy's address the first time someone picks Tor with nothing entered yet.
+                        setProxyDraft(prev => prev ? { ...prev, kind, ...(kind === 'tor' && !prev.host && !prev.port ? { host: 'tor', port: '9050' } : {}) } : prev);
+                      }}
                       aria-label="Proxy kind"
                     >
-                      <option value="tor">Tor (SOCKS5 on 127.0.0.1:9050)</option>
+                      <option value="tor">Tor (bundled proxy: host "tor", port 9050)</option>
                       <option value="socks5">SOCKS5</option>
                       <option value="http">HTTP</option>
                     </select>

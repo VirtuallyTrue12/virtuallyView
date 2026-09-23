@@ -23,7 +23,11 @@ export function loadAppearance(): Appearance {
     const legacy = localStorage.getItem('vv-light-mode');
     if (legacy === 'light' || legacy === 'dark') return { mode: legacy, dark: 'default', light: 'light' };
   } catch { /* storage blocked */ }
-  return { mode: 'system', dark: 'default', light: 'light' };
+  // A new device starts in dark: most people's browsers report a light OS
+  // preference by default even when they'd rather have a dark media app,
+  // and every screenshot in this project is dark. Anyone can switch to
+  // Light or System under Appearance; this only picks the first look.
+  return { mode: 'dark', dark: 'default', light: 'light' };
 }
 
 export function saveAppearance(a: Appearance): void {
@@ -68,7 +72,7 @@ export async function syncTheme(): Promise<void> {
     try {
       const server = await api.activeTheme();
       const a = loadAppearance();
-      saveAppearance({ mode: 'system', dark: server.mode === 'dark' ? server.id : a.dark, light: server.mode === 'light' ? server.id : a.light });
+      saveAppearance({ mode: a.mode, dark: server.mode === 'dark' ? server.id : a.dark, light: server.mode === 'light' ? server.id : a.light });
     } catch { /* keep defaults */ }
   }
   const a = loadAppearance();

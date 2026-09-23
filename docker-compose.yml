@@ -317,6 +317,24 @@ services:
       retries: 12
     restart: unless-stopped
 
+  # Optional Tor SOCKS5 proxy. No account or setup needed, unlike a VPN. Turn
+  # it on with: docker compose --profile tor up -d
+  # Then point Settings > Server > Outbound proxy at host "tor", port 9050,
+  # and/or add it as a SOCKS5 indexer proxy in Prowlarr (Settings > Indexer
+  # Proxies) with the same host and port, applied to the indexers you want
+  # searched over Tor. See docs/privacy.md.
+  tor:
+    image: osminogin/tor-simple:latest
+    profiles: ["tor"]
+    ports:
+      - "127.0.0.1:9050:9050"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "9050"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+
 volumes:
   radarr-config:
   sonarr-config:

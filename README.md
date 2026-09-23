@@ -84,7 +84,7 @@ Self-hosted does not mean nothing leaves the machine.
 - Posters, trailers and cast photos are loaded from public sites (TMDB, YouTube, MusicBrainz, Wikipedia). Those sites see the request. The outbound proxy setting can hide the server's own lookups.
 - Search suggestions send your query text to Wikipedia. Ollama model downloads need the network; a local model runs inference on your machine.
 
-Read your service settings before pointing this at anything sensitive.
+Read your service settings before pointing this at anything sensitive. For routing search or downloads through Tor or a VPN, see [privacy](docs/privacy.md).
 
 ## Quick start
 
@@ -197,6 +197,7 @@ scripts/                Setup and provisioning
 - [Administration](docs/administration.md): indexers, approvals, notifications, backup, locked-out recovery
 - [Watching on your TV](docs/tv.md)
 - [Casting](docs/casting.md)
+- [Privacy: anonymous search and downloads (Tor, VPN)](docs/privacy.md)
 - [Roadmap](docs/roadmap.md)
 - [HTTPS](docs/https.md) and [reaching it from outside your home](docs/remote-access.md)
 - [Development](docs/development.md)

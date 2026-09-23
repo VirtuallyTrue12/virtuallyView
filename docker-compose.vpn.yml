@@ -1,17 +1,22 @@
-# VirtuallyView docker-compose VPN override.
+# virtuallyView docker-compose VPN override. See docs/privacy.md.
 #
-# Routes qBittorrent's traffic through a VPN tunnel (gluetun) so your ISP
-# cannot see torrent traffic. ACTIVATION (do this once):
-#   1. Copy .env.example to .env and fill VPN_* values (ProtonVPN WireGuard).
+# Routes qBittorrent's traffic through a VPN tunnel (gluetun, open source) so
+# your ISP cannot see torrent traffic. ACTIVATION (do this once):
+#   1. Copy .env.example to .env and fill VPN_* values.
 #   2. Run:  docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
 #   3. Verify:  docker exec appletvopensourcce-qbittorrent-1 wget -qO- ifconfig.me
 #      It must print a VPN exit IP, NOT your home IP. scripts/doctor.sh does
 #      this check for you.
 # To go back to no-VPN: docker compose up -d --force-recreate qbittorrent
 #
+# Supported VPN_SERVICE_PROVIDER values (this gluetun build's own WireGuard
+# list): protonvpn, mullvad, airvpn, ivpn, nordvpn, surfshark, windscribe,
+# fastestvpn, custom.
+#
 # Why Tor is not offered for downloads: BitTorrent over Tor leaks your real
-# IP via peer exchange, is blocked by most trackers, and violates Tor exit
-# policy. Tor stays on the v2 roadmap for web traffic only.
+# IP via peer exchange, is blocked by most trackers, and violates Tor's exit
+# policy. For search (Prowlarr), which is plain web traffic, Tor is bundled
+# separately: docker compose --profile tor up -d. See docs/privacy.md.
 services:
   gluetun:
     image: qmcgaw/gluetun:latest
