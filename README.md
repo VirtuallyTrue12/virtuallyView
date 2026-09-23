@@ -199,6 +199,7 @@ scripts/                Setup and provisioning
 - [Casting](docs/casting.md)
 - [Privacy: anonymous search and downloads (Tor, VPN)](docs/privacy.md)
 - [Automatic updates](docs/updates.md)
+- [Wiki (offline Wikipedia via Kiwix)](docs/kiwix.md)
 - [Roadmap](docs/roadmap.md)
 - [HTTPS](docs/https.md) and [reaching it from outside your home](docs/remote-access.md)
 - [Development](docs/development.md)

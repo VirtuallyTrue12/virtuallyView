@@ -20,7 +20,7 @@ export function SystemActivity() {
     const poll = async () => {
       try {
         const r = await api.aiPullActive();
-        if (!cancelled) setPulls(r.jobs);
+        if (!cancelled) setPulls(r.jobs ?? []);
       } catch {
         if (!cancelled) setPulls([]);
       }

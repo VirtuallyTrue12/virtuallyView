@@ -23,6 +23,7 @@ const LINKS = [
 // Less used pages live under one menu so the bar stays readable.
 const MORE = [
   { to: '/books', label: 'Books' },
+  { to: '/wiki', label: 'Wiki' },
   { to: '/statistics', label: 'Stats' },
   { to: '/diagnostics', label: 'Diagnostics' },
   { to: '/themes', label: 'Themes' }

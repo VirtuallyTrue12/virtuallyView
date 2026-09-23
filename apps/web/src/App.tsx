@@ -25,6 +25,7 @@ import Person from './pages/Person';
 import LiveTV from './pages/LiveTV';
 import Photos from './pages/Photos';
 import Books from './pages/Books';
+import Wiki from './pages/Wiki';
 import PartyJoin from './pages/PartyJoin';
 import Account from './pages/Account';
 import Themes from './pages/Themes';
@@ -160,6 +161,7 @@ export default function App() {
         <Route path="/live" element={<LiveTV />} />
         <Route path="/photos" element={<Photos />} />
         <Route path="/books" element={<Books />} />
+        <Route path="/wiki" element={<Wiki />} />
         <Route path="/party/:code" element={<PartyJoin />} />
         <Route path="/music" element={<Music />} />
         <Route path="/music/:id" element={<ArtistDetails />} />

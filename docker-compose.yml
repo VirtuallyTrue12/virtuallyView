@@ -355,6 +355,31 @@ services:
     labels:
       - com.centurylinklabs.watchtower.enable=true
 
+  # Optional offline Wikipedia (and other wikis) reader. Only starts serving
+  # once you put at least one .zim file in the kiwix-data volume - this does
+  # not download anything for you. Get ZIM files from https://library.kiwix.org
+  # Turn it on with: docker compose --profile kiwix up -d
+  # Then, in Settings > Wiki, connect to http://kiwix:8080. See docs/kiwix.md.
+  kiwix:
+    image: ghcr.io/kiwix/kiwix-serve:latest
+    profiles: ["kiwix"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if ! ls /data/*.zim >/dev/null 2>&1; then
+          echo "No .zim files in the kiwix-data volume yet."
+          echo "Download one from https://library.kiwix.org, place it there, then: docker compose restart kiwix"
+          sleep infinity
+        fi
+        exec /usr/local/bin/kiwix-serve --port=8080 /data/*.zim
+    volumes:
+      - kiwix-data:/data
+    ports:
+      - "127.0.0.1:8888:8080"
+    restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
   # Optional automatic updates for the containers above (only the ones
   # labeled com.centurylinklabs.watchtower.enable=true, so it never touches
   # anything else on this Docker host). Fully automatic: no confirmation
@@ -390,3 +415,4 @@ volumes:
   downloads:
   app-data:
   ollama-data:
+  kiwix-data:

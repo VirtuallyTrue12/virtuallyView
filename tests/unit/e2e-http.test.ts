@@ -559,6 +559,33 @@ describe('e2e: AI assistant', () => {
   }, 40_000);
 });
 
+describe('e2e: kiwix', () => {
+  it('reports unconfigured by default, rejects a bad address, saves a good one, and blocks non-admins', async () => {
+    const status = await req('GET', '/api/kiwix/status');
+    expect(status.status).toBe(200);
+    expect(status.json.configured).toBe(false);
+
+    const badAddress = await req('POST', '/api/kiwix/config', { body: { url: 'not-a-url' }, cookieOverride: cookieAdmin });
+    expect(badAddress.status).toBe(400);
+
+    // e2eviewer's password was reset to this value earlier in the "accounts" suite.
+    const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
+    const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+    const nonAdmin = await req('POST', '/api/kiwix/config', { body: { url: 'http://192.168.1.50:8080' }, cookieOverride: cookieViewer });
+    expect(nonAdmin.status).toBe(403);
+
+    const saved = await req('POST', '/api/kiwix/config', { body: { url: 'http://192.168.1.50:8080' }, cookieOverride: cookieAdmin });
+    expect(saved.status).toBe(200);
+    expect(saved.json.configured).toBe(true);
+    expect(saved.json.url).toBe('http://192.168.1.50:8080');
+    expect(saved.json.healthy).toBe(false); // nothing is actually listening there in this test
+
+    const cleared = await req('POST', '/api/kiwix/config', { body: { url: '' }, cookieOverride: cookieAdmin });
+    expect(cleared.status).toBe(200);
+    expect(cleared.json.configured).toBe(false);
+  }, 20_000);
+});
+
 describe('e2e: themes', () => {
   it('lists themes, activates one and rejects unknown ids', async () => {
     const list = await req('GET', '/api/themes');
