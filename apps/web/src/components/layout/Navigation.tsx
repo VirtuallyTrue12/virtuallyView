@@ -24,6 +24,7 @@ const LINKS = [
 const MORE = [
   { to: '/books', label: 'Books' },
   { to: '/wiki', label: 'Wiki' },
+  { to: '/apps', label: 'Apps' },
   { to: '/statistics', label: 'Stats' },
   { to: '/diagnostics', label: 'Diagnostics' },
   { to: '/themes', label: 'Themes' }

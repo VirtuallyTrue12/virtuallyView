@@ -600,6 +600,45 @@ describe('e2e: kiwix', () => {
   }, 20_000);
 });
 
+describe('e2e: home lab apps', () => {
+  it('connects an Immich-like server, reports health and a headline, hides the key, and is admin only', async () => {
+    const { createServer } = await import('node:http');
+    const fake = createServer((rq, rs) => {
+      if (rq.url === '/api/server/ping') return void rs.end('{"res":"pong"}');
+      if (rq.url === '/api/server/statistics') {
+        if (rq.headers['x-api-key'] !== 'secret-key') { rs.statusCode = 401; return void rs.end('{}'); }
+        return void rs.end('{"photos":12,"videos":3}');
+      }
+      rs.statusCode = 404; rs.end('{}');
+    });
+    await new Promise<void>(ok => fake.listen(0, '127.0.0.1', ok));
+    const url = `http://127.0.0.1:${(fake.address() as { port: number }).port}`;
+    try {
+      const before = await req('GET', '/api/apps');
+      expect(before.json.apps.map((a: any) => a.id)).toEqual(['immich', 'audiobookshelf', 'kavita']);
+      expect(before.json.apps.every((a: any) => !a.connected)).toBe(true);
+
+      expect((await req('POST', '/api/apps/nope/config', { body: { url }, cookieOverride: cookieAdmin })).status).toBe(400);
+      expect((await req('POST', '/api/apps/immich/config', { body: { url: 'nope' }, cookieOverride: cookieAdmin })).status).toBe(400);
+
+      const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
+      const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+      expect((await req('POST', '/api/apps/immich/config', { body: { url }, cookieOverride: cookieViewer })).status).toBe(403);
+
+      const saved = await req('POST', '/api/apps/immich/config', { body: { url, apiKey: 'secret-key' }, cookieOverride: cookieAdmin });
+      expect(saved.status).toBe(200);
+      const immich = saved.json.apps.find((a: any) => a.id === 'immich');
+      expect(immich).toMatchObject({ connected: true, healthy: true, hasKey: true, headline: '12 photos, 3 videos' });
+      expect(JSON.stringify(saved.json)).not.toContain('secret-key');
+
+      const gone = await req('POST', '/api/apps/immich/config', { body: { url: '' }, cookieOverride: cookieAdmin });
+      expect(gone.json.apps.find((a: any) => a.id === 'immich').connected).toBe(false);
+    } finally {
+      fake.close();
+    }
+  }, 20_000);
+});
+
 describe('e2e: themes', () => {
   it('lists themes, activates one and rejects unknown ids', async () => {
     const list = await req('GET', '/api/themes');

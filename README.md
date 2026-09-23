@@ -200,6 +200,7 @@ scripts/                Setup and provisioning
 - [Privacy: anonymous search and downloads (Tor, VPN)](docs/privacy.md)
 - [Automatic updates](docs/updates.md)
 - [Wiki (offline Wikipedia via Kiwix)](docs/kiwix.md)
+- [Other apps (Immich, Audiobookshelf, Kavita)](docs/apps.md)
 - [Roadmap](docs/roadmap.md)
 - [HTTPS](docs/https.md) and [reaching it from outside your home](docs/remote-access.md)
 - [Development](docs/development.md)
