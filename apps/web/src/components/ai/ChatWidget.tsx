@@ -67,16 +67,32 @@ export default function ChatWidget() {
     }
   };
 
+  // Appends to a live "streaming" bubble as words arrive, then swaps it for
+  // the final message (with any confirmation/meta) once the reply completes.
+  const streamInto = async (request: ReturnType<typeof api.aiChatStream>) => {
+    setMessages(prev => [...prev, { role: 'assistant', content: '', meta: 'streaming' }]);
+    const reply = await request;
+    setMessages(prev => prev.slice(0, -1));
+    handleReply(reply);
+  };
+
   const send = async (text?: string, confirm?: PendingConfirmation) => {
     const content = text ?? input.trim();
     if ((!content && !confirm) || busy) return;
     setBusy(true);
+    const onDelta = (delta: string) => {
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (!last || last.meta !== 'streaming') return prev;
+        return [...prev.slice(0, -1), { ...last, content: last.content + delta }];
+      });
+    };
     if (confirm) {
       setPending(null);
       try {
-        const reply = await api.aiChat({ message: '', history, confirm: { tool: confirm.tool, arguments: confirm.arguments } });
-        handleReply(reply);
+        await streamInto(api.aiChatStream({ message: '', history, confirm: { tool: confirm.tool, arguments: confirm.arguments } }, onDelta));
       } catch (err) {
+        setMessages(prev => (prev[prev.length - 1]?.meta === 'streaming' ? prev.slice(0, -1) : prev));
         push({ role: 'assistant', content: `Could not reach the assistant: ${(err as Error).message}`, meta: 'Error' });
       } finally {
         setBusy(false);
@@ -86,9 +102,9 @@ export default function ChatWidget() {
     setInput('');
     push({ role: 'user', content });
     try {
-      const reply = await api.aiChat({ message: content, history });
-      handleReply(reply);
+      await streamInto(api.aiChatStream({ message: content, history }, onDelta));
     } catch (err) {
+      setMessages(prev => (prev[prev.length - 1]?.meta === 'streaming' ? prev.slice(0, -1) : prev));
       push({ role: 'assistant', content: `Could not reach the assistant: ${(err as Error).message}`, meta: 'Error' });
     } finally {
       setBusy(false);
@@ -143,8 +159,8 @@ export default function ChatWidget() {
         )}
         {messages.map((m, i) => (
           <div key={i} className={`chat-msg chat-msg--${m.role}`}>
-            <p>{m.content}</p>
-            {m.meta && <span className="chat-meta">{m.meta}</span>}
+            <p>{m.content}{m.meta === 'streaming' && <span className="chat-cursor" aria-hidden="true" />}</p>
+            {m.meta && m.meta !== 'streaming' && <span className="chat-meta">{m.meta}</span>}
             {pending && m === messages[messages.length - 1] && (
               <div className="chat-confirm">
                 <span className="chat-confirm-desc">{pending.description}</span>
@@ -156,7 +172,7 @@ export default function ChatWidget() {
             )}
           </div>
         ))}
-        {busy && <div className="chat-msg chat-msg--assistant"><p className="chat-typing">Thinking...</p></div>}
+        {busy && messages[messages.length - 1]?.meta !== 'streaming' && <div className="chat-msg chat-msg--assistant"><p className="chat-typing">Thinking...</p></div>}
       </div>
       <form className="chat-composer" onSubmit={onSubmit}>
         <input className="chat-input" value={input} onChange={e => setInput(e.target.value)} placeholder="Ask about your library..." aria-label="Ask the AI assistant" />

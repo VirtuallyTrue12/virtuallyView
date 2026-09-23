@@ -322,6 +322,11 @@ services:
   ollama:
     image: ollama/ollama:latest
     profiles: ["ai"]
+    # Public resolvers, like the *arr stack and app: without this, pulling a
+    # model fails to resolve registry.ollama.ai on some Docker/Podman networks.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
       - ollama-data:/root/.ollama
     ports:

@@ -36,6 +36,7 @@ import libraryFolderRoutes from './routes/library-folders.js';
 import artRoutes from './routes/art.js';
 import setupRoutes from './routes/setup.js';
 import { startAutoBackup } from './services/backup.js';
+import { startAiDigest } from './services/ai-digest.js';
 import { startRequestSync } from './services/requests.js';
 import { getAuthBackdrop } from './services/backdrop.js';
 import { getServerSettings } from './services/server-settings.js';
@@ -393,6 +394,7 @@ const start = async () => {
 
   startRequestSync();
   startAutoBackup();
+  startAiDigest();
   try {
     const port = Number(process.env.PORT ?? 3000);
     await server.listen({ port, host: '0.0.0.0' });

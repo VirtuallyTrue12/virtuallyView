@@ -556,6 +556,20 @@ describe('e2e: AI assistant', () => {
     const active = await req('GET', '/api/ai/pull/active');
     expect(active.status).toBe(200);
     expect(Array.isArray(active.json.jobs)).toBe(true);
+
+    const catalog = await req('GET', '/api/ai/models/catalog?q=qwen');
+    expect(catalog.status).toBe(200);
+    expect(catalog.json.models.length).toBeGreaterThan(1);
+    expect(catalog.json.models.every((m: any) => /qwen/i.test(m.tag) && ['fits', 'tight', 'too-big'].includes(m.fit))).toBe(true);
+    expect(catalog.json.system.totalMemGB).toBeGreaterThan(0);
+    expect((await req('GET', '/api/ai/models/catalog?q=zzzznomatch')).json.models).toEqual([]);
+
+    expect((await req('POST', '/api/ai/chat/stream', { body: {} })).status).toBe(400);
+    const streamed = await req('POST', '/api/ai/chat/stream', { body: { message: 'help' } });
+    expect(streamed.status).toBe(200);
+    const lines = streamed.text.trim().split('\n').map(l => JSON.parse(l));
+    expect(lines.slice(0, -1).map((l: any) => l.delta).join('')).toBe(lines[lines.length - 1].reply.text);
+    expect(lines[lines.length - 1].done).toBe(true);
   }, 40_000);
 });
 

@@ -1492,6 +1492,12 @@ a { color: inherit; text-decoration: none; }
 }
 
 .model-suggest-card--installed { border-color: rgba(111, 205, 143, 0.35); }
+.model-suggest-card--too-big { opacity: 0.7; }
+
+.model-fit { align-self: flex-start; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 999px; }
+.model-fit--fits { color: #6fcd8f; background: rgba(111, 205, 143, 0.14); }
+.model-fit--tight { color: #e0b34d; background: rgba(224, 179, 77, 0.14); }
+.model-fit--too-big { color: #e07a7a; background: rgba(224, 122, 122, 0.14); }
 
 .model-suggest-head {
   display: flex;
@@ -2492,6 +2498,8 @@ select.settings-input option:hover {
 }
 
 .chat-typing { opacity: 0.5; }
+.chat-cursor { display: inline-block; width: 2px; height: 0.9em; margin-left: 2px; vertical-align: text-bottom; background: currentColor; opacity: 0.6; animation: chat-cursor-blink 0.9s step-start infinite; }
+@keyframes chat-cursor-blink { 50% { opacity: 0; } }
 
 .chat-confirm {
   border: 1px solid var(--color-accent);

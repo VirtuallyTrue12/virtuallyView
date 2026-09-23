@@ -260,6 +260,22 @@ export interface PullStatus {
   percent?: number;
 }
 
+export interface CatalogModel {
+  tag: string;
+  family: string;
+  title: string;
+  params: string;
+  diskGB: number;
+  ramGB: number;
+  use: string;
+  fit: 'fits' | 'tight' | 'too-big';
+}
+
+export interface ModelCatalogResponse {
+  models: CatalogModel[];
+  system: { totalMemGB: number; freeMemGB: number; cpuCount: number };
+}
+
 export interface SourceCheck {
   name: string;
   kind: string;
@@ -578,6 +594,7 @@ export const api = {
   aiPullModel: (model: string) => postJSON<{ success: boolean; model: string; status: string }>('/api/ai/pull', { model }),
   aiPullStatus: (model: string) => getJSON<PullStatus>(`/api/ai/pull/${encodeURIComponent(model)}/status`),
   aiPullActive: () => getJSON<{ jobs: PullStatus[] }>('/api/ai/pull/active'),
+  aiModelCatalog: (q: string) => getJSON<ModelCatalogResponse>(`/api/ai/models/catalog?q=${encodeURIComponent(q)}`),
   themes: () => getJSON<ThemeSummary[]>('/api/themes'),
   importTheme: (theme: unknown, tokens: unknown) => postJSON<{ success: boolean; id: string; name: string }>('/api/themes/import', { theme, tokens }),
   deleteTheme: async (id: string) => { const r = await fetch(`/api/themes/${encodeURIComponent(id)}`, { method: 'DELETE' }); if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { message?: string }).message ?? 'Could not remove theme.'); },
@@ -595,6 +612,32 @@ export const api = {
     history?: { role: 'user' | 'assistant'; content: string }[];
     confirm?: { tool: string; arguments: Record<string, unknown> };
   }) => postJSON<AgentReply>('/api/ai/chat', body),
+  aiChatStream: async (
+    body: { message: string; history?: { role: 'user' | 'assistant'; content: string }[]; confirm?: { tool: string; arguments: Record<string, unknown> } },
+    onDelta: (text: string) => void
+  ): Promise<AgentReply> => {
+    const res = await fetch('/api/ai/chat/stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok || !res.body) throw new Error(`Request failed (${res.status}).`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let final: AgentReply | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const evt = JSON.parse(line) as { delta?: string; done?: boolean; reply?: AgentReply };
+        if (evt.delta) onDelta(evt.delta);
+        if (evt.done && evt.reply) final = evt.reply;
+      }
+    }
+    if (!final) throw new Error('The assistant stopped answering before finishing.');
+    return final;
+  },
   verifyMedia: (id: string) => getJSON<VerifyResult>(`/api/media/${encodeURIComponent(id)}/verify`),
   mediaDescription: (id: string) => getJSON<MediaDescription>(`/api/media/${encodeURIComponent(id)}/description`),
   movieCast: (id: string) => getJSON<{ mediaId: string; title: string; cast: { name: string; role: string; photo?: string }[]; source: string }>(`/api/movies/${encodeURIComponent(id)}/cast`).then(r => r.cast),

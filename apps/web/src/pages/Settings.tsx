@@ -11,6 +11,7 @@ import RequestRules from '../components/settings/RequestRules';
 import IndexersPanel from '../components/settings/IndexersPanel';
 import BackupPanel from '../components/settings/BackupPanel';
 import NotificationsPanel from '../components/settings/NotificationsPanel';
+import ModelBrowser from '../components/settings/ModelBrowser';
 import { humanName, secretHint, secretLabel, secretPlaceholder } from '../lib/integration-names';
 import { SvgIcon } from '../components/ui/SvgIcon';
 
@@ -20,15 +21,6 @@ const PERMISSION_LABELS: Record<string, string> = {
   manage: 'Read + request + manage downloads',
   destructive: 'Full access, including destructive actions'
 };
-
-const SUGGESTED_MODELS = [
-  { tag: 'qwen2.5:0.5b', title: 'Qwen 2.5', size: '~0.5 GB', use: 'Fast, tiny. Good enough for demo commands.' },
-  { tag: 'llama3.2:3b', title: 'Llama 3.2', size: '~2.0 GB', use: 'Small general-purpose assistant.' },
-  { tag: 'phi3.5:3.8b', title: 'Phi-3.5', size: '~2.2 GB', use: 'Compact and strong at reasoning.' },
-  { tag: 'mistral:7b', title: 'Mistral', size: '~4.1 GB', use: 'Solid all-rounder for tool use.' },
-  { tag: 'gemma2:9b', title: 'Gemma 2', size: '~5.5 GB', use: 'Google open model, great quality.' },
-  { tag: 'deepseek-r1:8b', title: 'DeepSeek R1', size: '~4.7 GB', use: 'Reasoning-focused, thinks step by step.' }
-];
 
 type CategoryId = 'indexers' | 'backup' | 'integrations' | 'users' | 'ai' | 'appearance' | 'notifications' | 'folders' | 'themes' | 'server' | 'about' | 'lightmode';
 
@@ -42,6 +34,7 @@ export default function Settings() {
   const [toggling, setToggling] = useState<string | null>(null);
   const [models, setModels] = useState<AiModel[]>([]);
   const [pulling, setPulling] = useState<string | null>(null);
+  const [pullPercent, setPullPercent] = useState<number | null>(null);
   const [pullCustom, setPullCustom] = useState('');
   const [pullMsg, setPullMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -254,6 +247,7 @@ export default function Settings() {
   const startPull = async (tag: string) => {
     if (pulling) return;
     setPulling(tag);
+    setPullPercent(null);
     setPullMsg(null);
     try {
       await api.aiPullModel(tag);
@@ -264,16 +258,21 @@ export default function Settings() {
         if (status.status === 'done') {
           if (pollRef.current) clearInterval(pollRef.current);
           setPulling(null);
+          setPullPercent(null);
           loadModels();
           flash('ok', `"${tag}" is ready.`);
         } else if (status.status === 'error') {
           if (pollRef.current) clearInterval(pollRef.current);
           setPulling(null);
+          setPullPercent(null);
           flash('err', `Pull for "${tag}" failed: ${status.message ?? 'Ollama error'}`);
+        } else {
+          setPullPercent(status.percent ?? null);
         }
       }, 3000);
     } catch (err) {
       setPulling(null);
+      setPullPercent(null);
       flash('err', (err as Error).message ?? 'Pull could not start.');
     }
   };
@@ -419,36 +418,7 @@ export default function Settings() {
             </div>
           )}
           {pullMsg && <div className={`notice notice--${pullMsg.tone}`}>{pullMsg.text}</div>}
-          <div className="settings-section">
-            <h3 className="section-title">Suggested models</h3>
-            <div className="model-suggest-grid">
-              {SUGGESTED_MODELS.map(m => {
-                const installed = installedTags.has(m.tag);
-                const isPulling = pulling === m.tag;
-                return (
-                  <div className={`model-suggest-card${installed ? ' model-suggest-card--installed' : ''}`} key={m.tag}>
-                    <div className="model-suggest-head">
-                      <span className="model-suggest-title">{m.title}</span>
-                      <span className="model-suggest-tag">{m.tag}</span>
-                    </div>
-                    <p className="model-suggest-meta">{m.size} · {m.use}</p>
-                    <div className="model-suggest-actions">
-                      {installed ? (
-                        <span className="model-suggest-installed">
-                          {activeModel === m.tag && <span className="model-active">active</span>}
-                          Installed
-                        </span>
-                      ) : (
-                        <button className="btn btn-primary btn-sm" type="button" onClick={() => startPull(m.tag)} disabled={!!pulling}>
-                          {isPulling ? 'Pulling...' : 'Pull'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <ModelBrowser installedTags={installedTags} activeModel={activeModel} pulling={pulling} pullPercent={pullPercent} onPull={startPull} />
           <div className="settings-section">
             <h3 className="section-title">Pull a custom model</h3>
             <div className="chat-widget-models-pull">

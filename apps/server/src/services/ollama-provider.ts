@@ -92,11 +92,11 @@ export class OllamaProvider implements AIProvider {
     return { content };
   }
 
-  async *streamResponse(messages: AIMessage[]): AsyncIterable<{ content: string }> {
+  async *streamResponse(messages: AIMessage[], format: string = 'json'): AsyncIterable<{ content: string }> {
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: this.model, messages, stream: true })
+      body: JSON.stringify({ model: this.model, messages, stream: true, format, options: { temperature: 0.2, num_ctx: 2048 } })
     });
     if (!res.ok || !res.body) throw new Error(`Ollama stream failed (${res.status})`);
     const reader = res.body.getReader();

@@ -10,7 +10,8 @@ export const EVENTS = [
   { key: 'request.available', label: 'A request is ready to watch' },
   { key: 'request.failed', label: 'A request failed' },
   { key: 'user.signup', label: 'Someone created an account' },
-  { key: 'backup', label: 'A backup finished or failed' }
+  { key: 'backup', label: 'A backup finished or failed' },
+  { key: 'ai.digest', label: 'Assistant activity summary (every few hours, only when something happened)' }
 ] as const;
 
 export interface NotifyInput {

@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
+import { totalmem, freemem, cpus } from 'node:os';
 import { Agent } from '../services/ai.js';
 import { OllamaProvider } from '../services/ollama-provider.js';
 import { getPermissionLevel, setPermissionLevel, listPermissionLevels, type PermissionLevel } from '../services/ai-permissions.js';
 import { getAiHistory } from '../services/ai-history.js';
+import { searchCatalog, fitFor } from '../services/model-catalog.js';
 
 interface PullJob {
   status: 'running' | 'done' | 'error';
@@ -126,6 +128,19 @@ export default async function aiRoutes(server: FastifyInstance) {
     return { model: request.params.model, status: job?.status ?? 'unknown', message: job?.message, percent: job?.percent };
   });
 
+  server.get<{ Querystring: { q?: string } }>('/api/ai/models/catalog', async request => {
+    // Fit is judged against total RAM, not free: free fluctuates with whatever
+    // else happens to be running at the moment of the request, which would
+    // make the same model flip between "fits" and "too big" from one check to
+    // the next. Total is the stable number a person actually sized their machine to.
+    const totalGB = totalmem() / 1024 ** 3;
+    const models = searchCatalog(request.query.q ?? '').map(m => ({ ...m, fit: fitFor(m.ramGB, totalGB) }));
+    return {
+      models,
+      system: { totalMemGB: Math.round(totalGB * 10) / 10, freeMemGB: Math.round((freemem() / 1024 ** 3) * 10) / 10, cpuCount: cpus().length }
+    };
+  });
+
   server.get('/api/ai/pull/active', async () => {
     const jobs = [...pullJobs.entries()]
       .filter(([, job]) => job.status === 'running')
@@ -167,5 +182,42 @@ export default async function aiRoutes(server: FastifyInstance) {
     } catch (err) {
       return reply.code(500).send({ kind: 'error', message: (err as Error).message });
     }
+  });
+
+  // Same answer as /api/ai/chat, delivered progressively: the reply text is
+  // already fully generated (this does not touch how the model itself runs,
+  // which stays in strict JSON mode for reliable tool-calling on a small
+  // model) but is sent to the client a few words at a time as newline-
+  // delimited JSON, so a long answer appears while it arrives instead of
+  // all at once. The final line always carries the complete reply.
+  server.post<{
+    Body: {
+      message: string;
+      history?: { role: 'user' | 'assistant'; content: string }[];
+      confirm?: { tool: string; arguments: Record<string, unknown> };
+    };
+  }>('/api/ai/chat/stream', async (request, reply) => {
+    const { message, history, confirm } = request.body ?? {};
+    if (!message?.trim() && !confirm) {
+      return reply.code(400).send({ message: 'Message is required.' });
+    }
+    reply.raw.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' });
+    let result: Awaited<ReturnType<typeof agent.chat>>;
+    try {
+      result = await agent.chat(message ?? '', { history: history ?? [], confirm: confirm ?? null });
+    } catch (err) {
+      reply.raw.end(`${JSON.stringify({ done: true, reply: { kind: 'error', message: (err as Error).message } })}\n`);
+      return;
+    }
+    const text = result.kind === 'message' || result.kind === 'tool-result' ? result.text : '';
+    if (text) {
+      const words = text.split(/(?<=\s)/); // keep trailing spaces attached, so words join back cleanly
+      const delayMs = Math.max(8, Math.min(40, Math.round(600 / Math.max(1, words.length))));
+      for (const word of words) {
+        reply.raw.write(`${JSON.stringify({ delta: word })}\n`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+    reply.raw.end(`${JSON.stringify({ done: true, reply: result })}\n`);
   });
 }
