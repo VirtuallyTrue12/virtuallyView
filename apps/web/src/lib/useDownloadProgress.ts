@@ -82,6 +82,13 @@ export function useTitleDownload(mediaId: string | undefined): TitleDownload | u
   return value;
 }
 
+/** Every title currently downloading, importing or queued, shared with the same poll as useTitleDownload. */
+export function useAllDownloads(): Map<string, TitleDownload> {
+  const [value, setValue] = useState(snapshot);
+  useEffect(() => subscribe(setValue), []);
+  return value;
+}
+
 /** "00:12:30" or an ISO time into "12 min left". */
 export function timeLeft(eta: string | undefined): string {
   if (!eta) return '';

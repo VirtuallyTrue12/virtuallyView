@@ -4,6 +4,7 @@ import { SvgIcon } from '../ui/SvgIcon';
 import { VvLogo } from './VvLogo';
 import { UserMenu } from './UserMenu';
 import { NotificationBell } from './NotificationBell';
+import { SystemActivity } from './SystemActivity';
 import type { AuthUser } from '../../lib/api';
 
 const LINKS = [
@@ -104,6 +105,7 @@ export function Navigation({ user, onSignOut }: { user?: AuthUser | null; onSign
         {MORE.map(link => <NavLink key={`m-${link.to}`} to={link.to} className={({ isActive }) => `nav-link nav-link--extra${isActive ? ' active' : ''}`}>{link.label}</NavLink>)}
         <MoreMenu />
       </div>
+      {user && <SystemActivity />}
       {user && <NotificationBell />}
       {user && onSignOut && <UserMenu user={user} onSignOut={onSignOut} />}
     </nav>

@@ -7,26 +7,56 @@ import { getAiHistory } from '../services/ai-history.js';
 interface PullJob {
   status: 'running' | 'done' | 'error';
   message?: string;
+  percent?: number;
+  updatedAt: number;
 }
 
 const pullJobs = new Map<string, PullJob>();
 
 async function pullInBackground(provider: OllamaProvider, name: string) {
-  pullJobs.set(name, { status: 'running' });
+  pullJobs.set(name, { status: 'running', updatedAt: Date.now() });
   try {
     const res = await fetch(`${provider.baseUrl}/api/pull`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, stream: false })
+      body: JSON.stringify({ name, stream: true })
     });
-    if (!res.ok) {
+    if (!res.ok || !res.body) {
       const body = await res.text().catch(() => '');
-      pullJobs.set(name, { status: 'error', message: `Ollama pull failed (${res.status}) ${body}`.trim() });
-    } else {
-      pullJobs.set(name, { status: 'done' });
+      pullJobs.set(name, { status: 'error', message: `Ollama pull failed (${res.status}) ${body}`.trim(), updatedAt: Date.now() });
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const evt = JSON.parse(line) as { status?: string; completed?: number; total?: number; error?: string };
+          if (evt.error) {
+            pullJobs.set(name, { status: 'error', message: evt.error, updatedAt: Date.now() });
+            continue;
+          }
+          const percent = evt.total && evt.completed ? Math.round((evt.completed / evt.total) * 100) : undefined;
+          pullJobs.set(name, { status: 'running', message: evt.status, percent, updatedAt: Date.now() });
+        } catch {
+          // ignore malformed line, keep waiting for the next one
+        }
+      }
+    }
+    const finalJob = pullJobs.get(name);
+    if (finalJob?.status !== 'error') {
+      pullJobs.set(name, { status: 'done', updatedAt: Date.now() });
     }
   } catch (err) {
-    pullJobs.set(name, { status: 'error', message: (err as Error).message });
+    pullJobs.set(name, { status: 'error', message: (err as Error).message, updatedAt: Date.now() });
   }
 }
 
@@ -93,7 +123,14 @@ export default async function aiRoutes(server: FastifyInstance) {
     Params: { model: string };
   }>('/api/ai/pull/:model/status', async request => {
     const job = pullJobs.get(request.params.model);
-    return { model: request.params.model, status: job?.status ?? 'unknown', message: job?.message };
+    return { model: request.params.model, status: job?.status ?? 'unknown', message: job?.message, percent: job?.percent };
+  });
+
+  server.get('/api/ai/pull/active', async () => {
+    const jobs = [...pullJobs.entries()]
+      .filter(([, job]) => job.status === 'running')
+      .map(([model, job]) => ({ model, status: job.status, message: job.message, percent: job.percent }));
+    return { jobs };
   });
 
   server.get('/api/ai/tools', async () => ({ tools: agent.listTools() }));

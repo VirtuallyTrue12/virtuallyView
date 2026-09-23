@@ -257,6 +257,7 @@ export interface PullStatus {
   model: string;
   status: 'running' | 'done' | 'error' | 'unknown';
   message?: string;
+  percent?: number;
 }
 
 export interface SourceCheck {
@@ -576,6 +577,7 @@ export const api = {
   aiModels: () => getJSON<{ models: AiModel[] }>('/api/ai/models'),
   aiPullModel: (model: string) => postJSON<{ success: boolean; model: string; status: string }>('/api/ai/pull', { model }),
   aiPullStatus: (model: string) => getJSON<PullStatus>(`/api/ai/pull/${encodeURIComponent(model)}/status`),
+  aiPullActive: () => getJSON<{ jobs: PullStatus[] }>('/api/ai/pull/active'),
   themes: () => getJSON<ThemeSummary[]>('/api/themes'),
   importTheme: (theme: unknown, tokens: unknown) => postJSON<{ success: boolean; id: string; name: string }>('/api/themes/import', { theme, tokens }),
   deleteTheme: async (id: string) => { const r = await fetch(`/api/themes/${encodeURIComponent(id)}`, { method: 'DELETE' }); if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { message?: string }).message ?? 'Could not remove theme.'); },

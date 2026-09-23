@@ -552,6 +552,10 @@ describe('e2e: AI assistant', () => {
 
     expect((await req('POST', '/api/ai/chat', { body: {} })).status).toBe(400);
     expect((await req('GET', '/api/ai/pull/does-not-exist/status')).status).toBe(200);
+
+    const active = await req('GET', '/api/ai/pull/active');
+    expect(active.status).toBe(200);
+    expect(Array.isArray(active.json.jobs)).toBe(true);
   }, 40_000);
 });
 
