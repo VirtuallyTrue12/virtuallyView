@@ -6,7 +6,30 @@ export interface ProwlarrIndexer {
   /** Set while Prowlarr is skipping it after repeated failures. */
   failingUntil?: string;
 }
-export interface ProwlarrIndexerDefinition { definitionName: string; name: string; protocol: string; privacy: string; language: string; description: string }
+export interface ProwlarrIndexerDefinition {
+  definitionName: string; name: string; protocol: string; privacy: string; language: string; description: string;
+  /** Adult (18+) content only: kept apart in the list so nobody adds one by accident. */
+  adult: boolean;
+}
+
+/** Prowlarr's connection errors, in words a person can act on. */
+export function explainIndexerError(raw: string): string {
+  const text = raw.replace(/\\u0027/g, "'");
+  if (/cloudflare/i.test(text)) return 'This site is behind Cloudflare protection, which Prowlarr cannot get past on its own. Choose another source.';
+  if (/ssl|certificate|tls/i.test(text)) return 'The secure connection to this site was cut off. Your internet provider or network is probably blocking it. Choose another source.';
+  if (/name.*(not|could not).*resolv|no such host|dns/i.test(text)) return 'This site could not be found. Its address may be blocked by your internet provider, or the site may be gone. Choose another source.';
+  if (/timed out|unavailable|unable to connect/i.test(text)) return 'This site is not answering right now. Try again later, or choose another source.';
+  if (/captcha/i.test(text)) return 'This site asks for a captcha, which Prowlarr cannot solve. Choose another source.';
+  return `Prowlarr could not add it: ${text}`;
+}
+
+const ADULT_WORDS = /porn|xxx|adult|hentai|18\+|\bsex|erotic|nsfw|\bjav\b/i;
+
+/** An indexer whose standard categories are all XXX (6000-6999), or that says so in its name. */
+export function isAdultIndexer(name: string, description: string, categoryIds: number[]): boolean {
+  const standard = categoryIds.filter(id => id < 100000);
+  return (standard.length > 0 && standard.every(id => id >= 6000 && id < 7000)) || ADULT_WORDS.test(`${name} ${description}`);
+}
 
 export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey: string }> {
   id = 'prowlarr';
@@ -84,7 +107,9 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
     return rows.map(r => ({
       definitionName: String(r.definitionName ?? r.implementationName ?? ''), name: String(r.name ?? r.definitionName ?? ''),
       protocol: String(r.protocol ?? ''), privacy: String(r.privacy ?? ''), language: String(r.language ?? ''),
-      description: String(r.description ?? '')
+      description: String(r.description ?? ''),
+      adult: isAdultIndexer(String(r.name ?? ''), String(r.description ?? ''),
+        ((r.capabilities as { categories?: Array<{ id?: number }> } | undefined)?.categories ?? []).map(c => Number(c.id)).filter(Number.isFinite))
     })).filter(d => d.definitionName);
   }
 
@@ -100,7 +125,7 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
       const first = /"errorMessage"\s*:\s*"([^"]+)"/.exec(detail)?.[1];
-      return { success: false, message: first ? `Prowlarr could not add it: ${first}` : `Prowlarr rejected the indexer (status ${res.status}).` };
+      return { success: false, message: first ? explainIndexerError(first) : `Prowlarr rejected the indexer (status ${res.status}).` };
     }
     const created = (await res.json()) as { id?: number };
     return { success: true, message: 'Indexer added. Prowlarr will share it with Radarr, Sonarr and Lidarr.', ...(created.id ? { id: created.id } : {}) };

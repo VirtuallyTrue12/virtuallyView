@@ -8,6 +8,9 @@ export default function IndexersPanel() {
   const [query, setQuery] = useState('');
   const [catalog, setCatalog] = useState<IndexerDefinition[]>([]);
   const [totalPublic, setTotalPublic] = useState(0);
+  const [totalAdult, setTotalAdult] = useState(0);
+  const [showAdult, setShowAdult] = useState(false);
+  const [adultCatalog, setAdultCatalog] = useState<IndexerDefinition[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
 
@@ -19,10 +22,11 @@ export default function IndexersPanel() {
   useEffect(() => {
     let alive = true;
     const t = setTimeout(() => {
-      api.indexerCatalog(query).then(r => { if (alive) { setCatalog(r.indexers); setTotalPublic(r.totalPublic); } }).catch(() => { if (alive) setCatalog([]); });
+      api.indexerCatalog(query).then(r => { if (alive) { setCatalog(r.indexers); setTotalPublic(r.totalPublic); setTotalAdult(r.totalAdult ?? 0); } }).catch(() => { if (alive) setCatalog([]); });
+      if (showAdult) api.indexerCatalog(query, true).then(r => { if (alive) setAdultCatalog(r.indexers); }).catch(() => { if (alive) setAdultCatalog([]); });
     }, 250);
     return () => { alive = false; clearTimeout(t); };
-  }, [query]);
+  }, [query, showAdult]);
 
   const act = async (key: string, fn: () => Promise<{ success: boolean; message: string }>) => {
     setBusy(key);
@@ -33,6 +37,17 @@ export default function IndexersPanel() {
   };
 
   const have = new Set((configured ?? []).map(i => i.definitionName));
+
+  const renderRow = (d: IndexerDefinition) => (
+    <li className="users-row" key={d.definitionName}>
+      <span className="users-name">{d.name}{d.adult && <span className="indexer-adult-badge">18+</span>}<small style={{ display: 'block', opacity: 0.7 }}>{d.protocol}{d.language ? `, ${d.language}` : ''}{d.description ? `. ${d.description.slice(0, 90)}` : ''}</small></span>
+      <span className="users-actions">
+        {have.has(d.definitionName)
+          ? <span className="users-you">added</span>
+          : <button className="btn btn-primary btn-sm" type="button" disabled={busy === d.definitionName} onClick={() => void act(d.definitionName, () => api.addIndexer(d.definitionName))}>{busy === d.definitionName ? 'Adding...' : 'Add'}</button>}
+      </span>
+    </li>
+  );
 
   return (
     <>
@@ -67,18 +82,19 @@ export default function IndexersPanel() {
         </p>
         <input className="settings-input" placeholder="Search indexers" value={query} onChange={e => setQuery(e.target.value)} aria-label="Search indexers" />
         <ul className="users-list" style={{ marginTop: 'var(--spacing-sm)' }}>
-          {catalog.map(d => (
-            <li className="users-row" key={d.definitionName}>
-              <span className="users-name">{d.name}<small style={{ display: 'block', opacity: 0.7 }}>{d.protocol}{d.language ? `, ${d.language}` : ''}{d.description ? `. ${d.description.slice(0, 90)}` : ''}</small></span>
-              <span className="users-actions">
-                {have.has(d.definitionName)
-                  ? <span className="users-you">added</span>
-                  : <button className="btn btn-primary btn-sm" type="button" disabled={busy === d.definitionName} onClick={() => void act(d.definitionName, () => api.addIndexer(d.definitionName))}>{busy === d.definitionName ? 'Adding...' : 'Add'}</button>}
-              </span>
-            </li>
-          ))}
+          {catalog.map(renderRow)}
           {catalog.length === 0 && <li className="users-row"><span className="users-name">No matches.</span></li>}
         </ul>
+        {totalAdult > 0 && (
+          <details className="indexer-adult" onToggle={e => setShowAdult((e.target as HTMLDetailsElement).open)}>
+            <summary>Adult (18+) sources ({totalAdult})</summary>
+            <p className="model-suggest-meta">Sources that only carry adult content. Kept apart so nobody adds one by accident.</p>
+            <ul className="users-list">
+              {adultCatalog.map(renderRow)}
+              {showAdult && adultCatalog.length === 0 && <li className="users-row"><span className="users-name">No matches.</span></li>}
+            </ul>
+          </details>
+        )}
       </section>
     </>
   );

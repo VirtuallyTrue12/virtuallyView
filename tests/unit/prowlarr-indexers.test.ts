@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProwlarrAdapter } from '@virtuallyview/integrations';
+import { explainIndexerError, isAdultIndexer } from '../../packages/integrations/src/adapters/ProwlarrAdapter';
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -39,5 +40,27 @@ describe('Prowlarr sources', () => {
     const result = await (await adapter()).testIndexer(1);
     expect(result.message).not.toMatch(/aborted/);
     expect(result.message).toMatch(/not answering/);
+  });
+});
+
+describe('adult sources', () => {
+  it('recognises adult-only sources by category or name', () => {
+    expect(isAdultIndexer('PornRips', '', [6000])).toBe(true);
+    expect(isAdultIndexer('OpenSharing', '', [6000, 6010, 100123])).toBe(true);
+    expect(isAdultIndexer('E-Hentai', 'Gallery site', [7000])).toBe(true);
+  });
+  it('does not flag a general source that also has an adult category', () => {
+    expect(isAdultIndexer('1337x', 'General torrents', [2000, 5000, 3000, 6000])).toBe(false);
+    expect(isAdultIndexer('Nyaa', 'Anime', [5070, 100001])).toBe(false);
+    expect(isAdultIndexer('Sussex Radio', '', [3000])).toBe(false);
+  });
+});
+
+describe('add errors in plain words', () => {
+  it('explains the errors people actually hit', () => {
+    expect(explainIndexerError('Unable to access 1337x.to, blocked by CloudFlare Protection.')).toMatch(/Cloudflare protection/);
+    expect(explainIndexerError("Unable to connect to indexer. This is typically caused by DNS/SSL issues. See: \\u0027https://wiki\\u0027 The SSL connection could not be established, see inner exception.")).toMatch(/secure connection .* cut off/);
+    expect(explainIndexerError('Http request timed out')).toMatch(/not answering/);
+    expect(explainIndexerError('something new')).toBe('Prowlarr could not add it: something new');
   });
 });

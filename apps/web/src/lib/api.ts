@@ -401,7 +401,7 @@ export interface SearchAll {
 }
 
 export interface Indexer { id: number; name: string; protocol: string; privacy: string; enabled: boolean; definitionName: string; failingUntil?: string }
-export interface IndexerDefinition { definitionName: string; name: string; protocol: string; privacy: string; language: string; description: string }
+export interface IndexerDefinition { definitionName: string; name: string; protocol: string; privacy: string; language: string; description: string; adult?: boolean }
 export interface SetupStatus { items: Array<{ id: string; label: string; ok: boolean; detail: string; href: string }>; complete: boolean }
 export interface AppNotification { id: number; type: string; title: string; body: string; link: string; createdAt: string; read: boolean }
 export interface NotificationList { unread: number; items: AppNotification[]; events?: Array<{ key: string; label: string }> }
@@ -542,7 +542,7 @@ export const api = {
   },
   request: (id: string) => getJSON<RequestItem>(`/api/requests/${encodeURIComponent(id)}`),
   indexers: () => getJSON<{ indexers: Indexer[] }>('/api/indexers'),
-  indexerCatalog: (q: string) => getJSON<{ indexers: IndexerDefinition[]; totalPublic: number }>(`/api/indexers/catalog?q=${encodeURIComponent(q)}`),
+  indexerCatalog: (q: string, adult = false) => getJSON<{ indexers: IndexerDefinition[]; totalPublic: number; totalAdult: number }>(`/api/indexers/catalog?q=${encodeURIComponent(q)}${adult ? '&adult=1' : ''}`),
   addIndexer: (definitionName: string) => postJSON<{ success: boolean; message: string }>('/api/indexers', { definitionName }),
   testIndexer: (id: number) => postJSON<{ success: boolean; message: string }>(`/api/indexers/${id}/test`),
   removeIndexer: (id: number) => requestJSON<{ success: boolean; message: string }>('DELETE', `/api/indexers/${id}`),

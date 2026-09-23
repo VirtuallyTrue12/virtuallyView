@@ -19,18 +19,21 @@ export default async function indexerRoutes(server: FastifyInstance) {
   });
 
   // Public indexers only: they need no account. Private ones are added in Prowlarr with your own login.
-  server.get<{ Querystring: { q?: string } }>('/api/indexers/catalog', async (request, reply) => {
+  server.get<{ Querystring: { q?: string; adult?: string } }>('/api/indexers/catalog', async (request, reply) => {
     try {
       if (!catalogCache || Date.now() - catalogCache.at > 10 * 60_000) {
         catalogCache = { at: Date.now(), items: await prowlarr().indexerCatalog() };
       }
       const q = (request.query.q ?? '').trim().toLowerCase();
-      const items = catalogCache.items
-        .filter(d => d.privacy === 'public')
+      // Adult sources are only sent when that section is opened on purpose.
+      const adult = request.query.adult === '1';
+      const pub = catalogCache.items.filter(d => d.privacy === 'public');
+      const items = pub
+        .filter(d => d.adult === adult)
         .filter(d => !q || `${d.name} ${d.description} ${d.language}`.toLowerCase().includes(q))
         .sort((a, b) => a.name.localeCompare(b.name))
         .slice(0, 60);
-      return { indexers: items, totalPublic: catalogCache.items.filter(d => d.privacy === 'public').length };
+      return { indexers: items, totalPublic: pub.filter(d => !d.adult).length, totalAdult: pub.filter(d => d.adult).length };
     } catch (error) {
       return reply.code(502).send({ message: error instanceof Error ? error.message : 'Prowlarr is not reachable.' });
     }

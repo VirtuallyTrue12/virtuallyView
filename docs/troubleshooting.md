@@ -86,6 +86,14 @@ Press **Set up for me**. It runs the same setup as the first start again and ski
 
 The app needs at least one place to search that answers. **Set up for me** adds Internet Archive, which is legal but has mostly older, public-domain films. Internet Archive sometimes stops answering Prowlarr (it slows down Prowlarr's requests on purpose), and Settings > Indexers then shows it as **Not answering**. Open **Settings > Indexers** and add other sources you are allowed to use.
 
+### Adding a source fails
+
+- **"The secure connection to this site was cut off"** or **"This site could not be found"**: your internet provider or network is blocking that site. Choose another source.
+- **"This site is behind Cloudflare protection"**: Prowlarr cannot get past Cloudflare's check on its own. Choose another source.
+- **"This site is not answering"**: it is down or overloaded. Try again later.
+
+Adult (18+) sources are listed separately under **Adult (18+) sources**, closed by default.
+
 ### I use my own Radarr, Sonarr or Lidarr, not the bundled ones
 
 Run only the app with `docker compose up -d app`, then connect each service under **Settings > Services** with its address and API key (in that service's Settings > General). Use an address the app can reach, not `localhost`.
