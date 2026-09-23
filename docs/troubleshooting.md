@@ -84,7 +84,7 @@ Press **Set up for me**. It runs the same setup as the first start again and ski
 
 ### Requests find nothing ("Places to search")
 
-The app needs at least one place to search that answers. **Set up for me** adds Internet Archive, which is legal but has mostly older, public-domain films. Internet Archive sometimes stops answering Prowlarr (it slows down Prowlarr's requests on purpose), and Settings > Indexers then shows it as **Not answering**. Open **Settings > Indexers** and add other sources you are allowed to use.
+The app needs at least one place to search that answers. **Set up for me** adds three general-purpose public sources so one being slow or blocked does not stop the others. Internet Archive sometimes stops answering Prowlarr (it slows down Prowlarr's requests on purpose), and Settings > Indexers then shows it as **Not answering**; the other two keep working. Open **Settings > Indexers** and add more sources you are allowed to use if you still find gaps.
 
 ### Adding a source fails
 

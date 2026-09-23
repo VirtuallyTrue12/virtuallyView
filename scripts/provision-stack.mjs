@@ -6,10 +6,11 @@
  * indexers sync out automatically. Safe to run repeatedly: every step checks
  * for an existing entry before creating one.
  *
- * A public-domain Internet Archive indexer is enabled by default so a fresh
- * stack can perform a real search without a manual Prowlarr step. Set
- * PROWLARR_AUTO_INDEXER=none to disable it, or set it to an indexer
- * definition supported by the installed Prowlarr version.
+ * A few general-purpose public search sources are enabled by default (see
+ * AUTO_INDEXERS below) so a fresh stack can find and download something
+ * without a manual Prowlarr step. Set PROWLARR_AUTO_INDEXERS=none to disable
+ * this, or to a comma-separated list of indexer definitions supported by the
+ * installed Prowlarr version.
  */
 
 // Radarr and Sonarr are on the Servarr v3 API; Lidarr (this version) is
@@ -18,7 +19,13 @@ const RADARR = { name: 'Radarr', url: process.env.RADARR_URL, key: process.env.R
 const SONARR = { name: 'Sonarr', url: process.env.SONARR_URL, key: process.env.SONARR_API_KEY, rootFolder: '/media/tv', category: 'sonarr', apiVersion: 'v3' };
 const LIDARR = { name: 'Lidarr', url: process.env.LIDARR_URL, key: process.env.LIDARR_API_KEY, rootFolder: '/media/music', category: 'lidarr', apiVersion: 'v1' };
 const PROWLARR = { url: process.env.PROWLARR_URL, key: process.env.PROWLARR_API_KEY };
-const AUTO_INDEXER = process.env.PROWLARR_AUTO_INDEXER ?? 'internetarchive';
+// Several sources, not one: Internet Archive is legal but sometimes throttles
+// automated tools (see docs/troubleshooting.md), so two general-purpose public
+// sources are added alongside it, so a request can still be found when one
+// source is slow or unavailable. Comma-separated; PROWLARR_AUTO_INDEXER
+// (singular, older installs) still works and is used in place of this.
+const AUTO_INDEXERS = (process.env.PROWLARR_AUTO_INDEXER ?? process.env.PROWLARR_AUTO_INDEXERS ?? 'internetarchive,thepiratebay,torrentdownloads')
+  .split(',').map(s => s.trim()).filter(Boolean);
 const QBIT = {
   host: process.env.QBITTORRENT_HOST ?? 'qbittorrent',
   port: Number(process.env.QBITTORRENT_PORT ?? 8080),
@@ -296,20 +303,10 @@ async function ensureProwlarrApplication(app, implementation) {
   log(`Prowlarr: registered ${implementation} - its indexers will sync automatically once you add some`);
 }
 
-async function ensureProwlarrIndexer() {
-  if (!AUTO_INDEXER || AUTO_INDEXER.toLowerCase() === 'none') {
-    log('Prowlarr: automatic indexer setup disabled');
-    return;
-  }
-
-  const headers = { 'X-Api-Key': PROWLARR.key, 'Content-Type': 'application/json' };
-  const existingResponse = await fetch(`${PROWLARR.url}/api/v1/indexer`, { headers });
-  if (!existingResponse.ok) {
-    throw new Error(`Prowlarr: could not list indexers (${existingResponse.status})`);
-  }
-  const existing = await existingResponse.json();
-  if (existing.some(indexer => indexer.definitionName === AUTO_INDEXER || indexer.name?.toLowerCase() === AUTO_INDEXER.toLowerCase())) {
-    log(`Prowlarr: ${AUTO_INDEXER} indexer already configured`);
+/** Add one search source, skipping it quietly if it is already there or unknown to this Prowlarr version. */
+async function ensureOneIndexer(definitionName, headers, existing) {
+  if (existing.some(indexer => indexer.definitionName === definitionName || indexer.name?.toLowerCase() === definitionName.toLowerCase())) {
+    log(`Prowlarr: ${definitionName} already configured`);
     return;
   }
 
@@ -318,9 +315,10 @@ async function ensureProwlarrIndexer() {
     throw new Error(`Prowlarr: could not load indexer schemas (${schemaResponse.status})`);
   }
   const schemas = await schemaResponse.json();
-  const schema = schemas.find(item => item.definitionName === AUTO_INDEXER);
+  const schema = schemas.find(item => item.definitionName === definitionName);
   if (!schema) {
-    throw new Error(`Prowlarr: indexer definition "${AUTO_INDEXER}" is not available`);
+    log(`Prowlarr: indexer definition "${definitionName}" is not available in this Prowlarr version, skipping`);
+    return;
   }
 
   const baseUrl = schema.indexerUrls?.[0];
@@ -350,9 +348,34 @@ async function ensureProwlarrIndexer() {
   });
   if (!create.ok) {
     const body = await create.text().catch(() => '');
-    throw new Error(`Prowlarr: could not add ${schema.name} indexer (${create.status}). ${body}`.trim());
+    log(`Prowlarr: could not add ${schema.name} (${create.status}). ${body}`.trim());
+    return;
   }
-  log(`Prowlarr: added ${schema.name} indexer`);
+  log(`Prowlarr: added ${schema.name} as a search source`);
+}
+
+async function ensureProwlarrIndexer() {
+  if (!AUTO_INDEXERS.length || AUTO_INDEXERS.every(name => name.toLowerCase() === 'none')) {
+    log('Prowlarr: automatic indexer setup disabled');
+    return;
+  }
+
+  const headers = { 'X-Api-Key': PROWLARR.key, 'Content-Type': 'application/json' };
+  const existingResponse = await fetch(`${PROWLARR.url}/api/v1/indexer`, { headers });
+  if (!existingResponse.ok) {
+    throw new Error(`Prowlarr: could not list indexers (${existingResponse.status})`);
+  }
+  const existing = await existingResponse.json();
+  // Each source is independent: one failing (a site down, blocked by an ISP,
+  // behind Cloudflare) must not stop the others from being added.
+  for (const definitionName of AUTO_INDEXERS) {
+    if (definitionName.toLowerCase() === 'none') continue;
+    try {
+      await ensureOneIndexer(definitionName, headers, existing);
+    } catch (err) {
+      log(`Prowlarr: ${definitionName} - ${err instanceof Error ? err.message : err}`);
+    }
+  }
 }
 
 async function firstProwlarrAppProfileId(headers) {
