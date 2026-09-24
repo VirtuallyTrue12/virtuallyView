@@ -167,3 +167,52 @@ describe('isolated authentication lifecycle', () => {
     expect(restarted.isAuthenticated(token)).toBe(true);
   });
 });
+
+describe('password storage and session tokens', () => {
+  test('new accounts use salted scrypt, not a bare SHA-256, and two accounts with one password differ', () => {
+    expect(createAccount('owner', password).ok).toBe(true);
+    expect(createAccount('viewer', password).ok).toBe(true);
+    const stored = JSON.parse(disk.contents) as Array<{ passwordHash: string }>;
+    expect(stored[0]!.passwordHash).toMatch(/^scrypt\$\d+\$\d+\$\d+\$[0-9a-f]{32}\$[0-9a-f]{128}$/);
+    expect(stored[0]!.passwordHash).not.toBe(stored[1]!.passwordHash);
+    expect(stored[0]!.passwordHash).not.toContain(createHash('sha256').update(password).digest('hex'));
+    expect(authenticate('owner', password)).toBeTruthy();
+    expect(authenticate('owner', 'wrong-password-x')).toBeNull();
+    expect(authenticate('nobody', password)).toBeNull();
+  });
+
+  test('an old SHA-256 account still signs in once and is rehashed', () => {
+    const legacy = createHash('sha256').update(password).digest('hex');
+    disk.exists = true;
+    disk.contents = JSON.stringify([{ id: 'u1', username: 'owner', passwordHash: legacy, role: 'admin', createdAt: new Date(0).toISOString() }]);
+    expect(authenticate('owner', 'wrong-password-x')).toBeNull();
+    expect(JSON.parse(disk.contents)[0].passwordHash).toBe(legacy);
+    expect(authenticate('owner', password)).toBeTruthy();
+    const after = JSON.parse(disk.contents)[0].passwordHash as string;
+    expect(after).toMatch(/^scrypt\$/);
+    expect(authenticate('owner', password)).toBeTruthy();
+  });
+
+  test('a corrupted hash is refused and never lets a guessed hash in', () => {
+    disk.exists = true;
+    disk.contents = JSON.stringify([{ id: 'u1', username: 'owner', passwordHash: 'scrypt$1$1$1$zz$zz', role: 'admin', createdAt: new Date(0).toISOString() }]);
+    expect(authenticate('owner', password)).toBeNull();
+    // Submitting the stored hash text as the password must not work either.
+    const legacy = createHash('sha256').update(password).digest('hex');
+    disk.contents = JSON.stringify([{ id: 'u1', username: 'owner', passwordHash: legacy, role: 'admin', createdAt: new Date(0).toISOString() }]);
+    expect(authenticate('owner', legacy)).toBeNull();
+  });
+
+  test('the session file holds token hashes, never the token, and sessions survive a reload format', () => {
+    createAccount('owner', password);
+    const token = authenticate('owner', password)!;
+    expect(disk.sessions).not.toBeNull();
+    expect(disk.sessions).not.toContain(token);
+    const file = JSON.parse(disk.sessions!) as { v: number; sessions: Record<string, unknown> };
+    expect(file.v).toBe(2);
+    expect(Object.keys(file.sessions)).toContain(createHash('sha256').update(token).digest('hex'));
+    expect(isAuthenticated(token)).toBe(true);
+    revoke(token);
+    expect(isAuthenticated(token)).toBe(false);
+  });
+});

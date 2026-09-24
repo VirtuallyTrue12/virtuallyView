@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DATA_DIR } from '../lib/paths.js';
@@ -79,9 +79,13 @@ function loadSessions(): void {
   try {
     const file = sessionsPath();
     if (!existsSync(file)) return;
-    const parsed = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    // Version 2 files hold token hashes; older files held the tokens themselves.
+    const hashed = raw.v === 2;
+    const parsed = (hashed ? raw.sessions : raw) as Record<string, unknown>;
     const now = Date.now();
-    for (const [token, value] of Object.entries(parsed)) {
+    for (const [stored, value] of Object.entries(parsed ?? {})) {
+      const token = hashed ? stored : tokenKey(stored);
       if (typeof value === 'number' && Number.isFinite(value) && value > now) {
         // Pre-multi-user session: keep it as an environment/admin session.
         sessions.set(token, { expiresAt: value, userId: 'env' });
@@ -113,7 +117,7 @@ function persistSessions(): void {
       else sessions.delete(token);
     }
     mkdirSync(dirname(sessionsPath()), { recursive: true });
-    writeFileSync(sessionsPath(), JSON.stringify(record), { encoding: 'utf8', mode: 0o600 });
+    writeFileSync(sessionsPath(), JSON.stringify({ v: 2, sessions: record }), { encoding: 'utf8', mode: 0o600 });
   } catch {
     // Read-only volume: sessions still work for this process lifetime, they
     // just do not survive a restart.
@@ -127,6 +131,38 @@ function digest(value: string): Buffer {
 function isSha256(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{64}$/i.test(value);
 }
+
+// Passwords are stored as scrypt with a per-account salt. Accounts created
+// before this used a single unsalted SHA-256; those still sign in and are
+// rehashed on their next successful login.
+const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
+const SCRYPT_FORMAT = /^scrypt\$\d+\$\d+\$\d+\$[0-9a-f]{32}\$[0-9a-f]{128}$/;
+
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const hash = scryptSync(password, salt, SCRYPT.keylen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, maxmem: 64 * 1024 * 1024 });
+  return `scrypt$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${salt.toString('hex')}$${hash.toString('hex')}`;
+}
+
+function isStoredHash(value: unknown): value is string {
+  return isSha256(value) || (typeof value === 'string' && SCRYPT_FORMAT.test(value));
+}
+
+export function verifyPassword(stored: string, candidate: string): boolean {
+  if (/^[0-9a-f]{64}$/i.test(stored)) return timingSafeEqual(Buffer.from(stored, 'hex'), digest(candidate));
+  const [, n, r, p, salt, hash] = stored.split('$');
+  if (!SCRYPT_FORMAT.test(stored) || !salt || !hash) return false;
+  const expected = Buffer.from(hash, 'hex');
+  const actual = scryptSync(candidate, Buffer.from(salt, 'hex'), expected.length, { N: Number(n), r: Number(r), p: Number(p), maxmem: 64 * 1024 * 1024 });
+  return timingSafeEqual(expected, actual);
+}
+
+// A real hash to compare against when the username does not exist, so a wrong
+// name and a wrong password take about the same time.
+const DUMMY_HASH = hashPassword(randomBytes(8).toString('hex'));
+
+/** Session tokens are never stored: only their SHA-256, so a leaked file or backup cannot be replayed. */
+const tokenKey = (token: string) => createHash('sha256').update(token).digest('hex');
 
 function isRole(value: unknown): value is Role {
   return value === 'admin' || value === 'user';
@@ -165,7 +201,7 @@ function parseUsers(raw: string): StoredUser[] {
     const users: StoredUser[] = [];
     for (const entry of parsed) {
       const user = entry as Partial<StoredUser>;
-      if (!user || typeof user.username !== 'string' || !isSha256(user.passwordHash)) {
+      if (!user || typeof user.username !== 'string' || !isStoredHash(user.passwordHash)) {
         throw new Error('Stored user data is corrupt.');
       }
       users.push({
@@ -261,7 +297,7 @@ export function createAccount(username: string, candidate: string, role?: Role):
   const user: StoredUser = {
     id: makeId(),
     username: name,
-    passwordHash: digest(candidate).toString('hex'),
+    passwordHash: hashPassword(candidate),
     role: isFirst ? 'admin' : (role ?? 'user'),
     createdAt: new Date().toISOString()
   };
@@ -288,13 +324,18 @@ export function authenticate(username: string, candidate: string, stayLoggedIn =
   // account exists it stops being accepted.
   const useEnv = !storeExists() && Boolean(envPassword());
   const account = users.find(user => user.username.toLowerCase() === name.toLowerCase());
-  const expected = account
-    ? Buffer.from(account.passwordHash, 'hex')
-    : useEnv && name === envUsername()
-      ? digest(envPassword() ?? '')
-      : null;
-  if (!expected) return null;
-  if (!timingSafeEqual(expected, digest(candidate))) return null;
+  let ok = false;
+  if (account) {
+    ok = verifyPassword(account.passwordHash, candidate);
+    if (ok && isSha256(account.passwordHash)) {
+      try { writeUsers(users.map(user => (user.id === account.id ? { ...user, passwordHash: hashPassword(candidate) } : user))); } catch { /* keeps the old hash; tried again next login */ }
+    }
+  } else if (useEnv && name === envUsername()) {
+    ok = timingSafeEqual(digest(envPassword() ?? ''), digest(candidate));
+  } else {
+    verifyPassword(DUMMY_HASH, candidate);
+  }
+  if (!ok) return null;
 
   const token = randomBytes(32).toString('hex');
   const now = Date.now();
@@ -303,7 +344,7 @@ export function authenticate(username: string, candidate: string, stayLoggedIn =
     if (value.expiresAt <= now) sessions.delete(session);
   }
   const ttl = stayLoggedIn ? PERSISTENT_LIFETIME_MS : SESSION_LIFETIME_MS;
-  sessions.set(token, {
+  sessions.set(tokenKey(token), {
     expiresAt: now + ttl, userId: account?.id ?? 'env', createdAt: now,
     ...(meta.device ? { device: meta.device } : {}), ...(meta.ip ? { ip: meta.ip } : {})
   });
@@ -324,7 +365,7 @@ export function issueSession(userId: string, stayLoggedIn = false, meta: Session
   for (const [session, value] of sessions) {
     if (value.expiresAt <= now) sessions.delete(session);
   }
-  sessions.set(token, {
+  sessions.set(tokenKey(token), {
     expiresAt: now + (stayLoggedIn ? PERSISTENT_LIFETIME_MS : SESSION_LIFETIME_MS), userId, createdAt: now,
     ...(meta.device ? { device: meta.device } : {}), ...(meta.ip ? { ip: meta.ip } : {})
   });
@@ -366,10 +407,10 @@ export function updateProfile(id: string, patch: { avatar?: string; maxRating?: 
 export function isAuthenticated(token: string | undefined): boolean {
   if (!token) return false;
   loadSessions();
-  const session = sessions.get(token);
+  const session = sessions.get(tokenKey(token));
   if (!session) return false;
   if (session.expiresAt <= Date.now()) {
-    sessions.delete(token);
+    sessions.delete(tokenKey(token));
     persistSessions();
     return false;
   }
@@ -380,7 +421,7 @@ export function isAuthenticated(token: string | undefined): boolean {
 export function currentUser(token: string | undefined): PublicUser | null {
   if (!token || !isAuthenticated(token)) return null;
   loadSessions();
-  const userId = sessions.get(token)?.userId;
+  const userId = sessions.get(tokenKey(token))?.userId;
   if (!userId) return null;
   if (userId === 'env') {
     if (!envPassword() || storeExists()) return null;
@@ -463,7 +504,7 @@ export function setUserRole(id: string, role: Role): { ok: boolean; message?: st
 export function revoke(token: string | undefined): void {
   if (!token) return;
   loadSessions();
-  if (sessions.delete(token)) persistSessions();
+  if (sessions.delete(tokenKey(token))) persistSessions();
 }
 
 export function readSessionCookie(header: string | undefined): string | undefined {
@@ -481,7 +522,7 @@ export function setUserPassword(id: string, password: string): { ok: boolean; me
   }
   if (!users.some(user => user.id === id)) return { ok: false, message: 'User not found.' };
   try {
-    writeUsers(users.map(user => (user.id === id ? { ...user, passwordHash: digest(password).toString('hex') } : user)));
+    writeUsers(users.map(user => (user.id === id ? { ...user, passwordHash: hashPassword(password) } : user)));
   } catch {
     return { ok: false, message: 'Could not write the user store.' };
   }
@@ -504,7 +545,7 @@ export function changeOwnPassword(id: string, current: string, next: string, kee
   }
   const account = users.find(user => user.id === id);
   if (!account) return { ok: false, message: 'Password changes are only available for stored accounts.' };
-  if (typeof current !== 'string' || !timingSafeEqual(Buffer.from(account.passwordHash, 'hex'), digest(current))) {
+  if (typeof current !== 'string' || !verifyPassword(account.passwordHash, current)) {
     return { ok: false, message: 'Current password is incorrect.' };
   }
   const result = setUserPassword(id, next);
@@ -512,13 +553,13 @@ export function changeOwnPassword(id: string, current: string, next: string, kee
   // setUserPassword signed everything out; re-issue nothing, caller keeps its own session.
   if (keepToken) {
     loadSessions();
-    sessions.set(keepToken, { expiresAt: Date.now() + SESSION_LIFETIME_MS, userId: id, createdAt: Date.now() });
+    sessions.set(tokenKey(keepToken), { expiresAt: Date.now() + SESSION_LIFETIME_MS, userId: id, createdAt: Date.now() });
     persistSessions();
   }
   return { ok: true };
 }
 
-const shortId = (token: string) => createHash('sha256').update(token).digest('hex').slice(0, 16);
+const shortId = (key: string) => key.slice(0, 16);
 
 /** Signed-in devices: everyone's for an admin, otherwise only the caller's own. */
 export function listSessions(asUserId: string, admin: boolean, currentToken?: string): SessionInfo[] {
@@ -533,7 +574,7 @@ export function listSessions(asUserId: string, admin: boolean, currentToken?: st
       id: shortId(token), userId: session.userId, username: names.get(session.userId) ?? session.userId,
       device: session.device ?? 'Unknown device', ip: session.ip ?? '',
       createdAt: session.createdAt ? new Date(session.createdAt).toISOString() : '',
-      expiresAt: new Date(session.expiresAt).toISOString(), current: token === currentToken
+      expiresAt: new Date(session.expiresAt).toISOString(), current: currentToken !== undefined && token === tokenKey(currentToken)
     });
   }
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -556,7 +597,7 @@ export function revokeOtherSessions(userId: string, keepToken: string): number {
   loadSessions();
   let removed = 0;
   for (const [token, session] of sessions) {
-    if (session.userId === userId && token !== keepToken) { sessions.delete(token); removed++; }
+    if (session.userId === userId && token !== tokenKey(keepToken)) { sessions.delete(token); removed++; }
   }
   if (removed) persistSessions();
   return removed;
