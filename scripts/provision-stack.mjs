@@ -24,7 +24,7 @@ const PROWLARR = { url: process.env.PROWLARR_URL, key: process.env.PROWLARR_API_
 // sources are added alongside it, so a request can still be found when one
 // source is slow or unavailable. Comma-separated; PROWLARR_AUTO_INDEXER
 // (singular, older installs) still works and is used in place of this.
-const AUTO_INDEXERS = (process.env.PROWLARR_AUTO_INDEXER ?? process.env.PROWLARR_AUTO_INDEXERS ?? 'internetarchive,thepiratebay,torrentdownloads')
+const AUTO_INDEXERS = (process.env.PROWLARR_AUTO_INDEXER ?? process.env.PROWLARR_AUTO_INDEXERS ?? 'all-public')
   .split(',').map(s => s.trim()).filter(Boolean);
 const QBIT = {
   host: process.env.QBITTORRENT_HOST ?? 'qbittorrent',
@@ -304,54 +304,131 @@ async function ensureProwlarrApplication(app, implementation) {
 }
 
 /** Add one search source, skipping it quietly if it is already there or unknown to this Prowlarr version. */
+const ADULT_WORDS = /porn|xxx|adult|hentai|18\+|\bsex|erotic|nsfw|\bjav\b/i;
+function isAdult(schema) {
+  const ids = (schema.capabilities?.categories ?? []).map(c => Number(c.id)).filter(n => Number.isFinite(n) && n < 100000);
+  return (ids.length > 0 && ids.every(id => id >= 6000 && id < 7000)) || ADULT_WORDS.test(`${schema.name} ${schema.description ?? ''}`);
+}
+
+async function addIndexerFromSchema(schema, headers, { test, tags = [] }) {
+  const fields = schema.fields.map(field => {
+    const value = field.name === 'baseUrl' ? schema.indexerUrls?.[0] : field.value;
+    return value === undefined ? { name: field.name } : { name: field.name, value };
+  });
+  // test=true: Prowlarr test-connects before saving, so only sources that answer
+  // right now are kept. test=false (forceSave): save even if the site is slow.
+  const create = await fetch(`${PROWLARR.url}/api/v1/indexer${test ? '' : '?forceSave=true'}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      enable: true, redirect: false, name: schema.name, implementation: schema.implementation,
+      implementationName: schema.implementationName, configContract: schema.configContract,
+      protocol: schema.protocol, privacy: schema.privacy, priority: schema.priority ?? 25, fields, tags,
+      appProfileId: (await firstProwlarrAppProfileId(headers)) ?? 1
+    }),
+    signal: AbortSignal.timeout(60000)
+  });
+  return create.ok ? { ok: true } : { ok: false, body: await create.text().catch(() => '') };
+}
+
 async function ensureOneIndexer(definitionName, headers, existing) {
   if (existing.some(indexer => indexer.definitionName === definitionName || indexer.name?.toLowerCase() === definitionName.toLowerCase())) {
     log(`Prowlarr: ${definitionName} already configured`);
     return;
   }
-
   const schemaResponse = await fetch(`${PROWLARR.url}/api/v1/indexer/schema`, { headers });
-  if (!schemaResponse.ok) {
-    throw new Error(`Prowlarr: could not load indexer schemas (${schemaResponse.status})`);
-  }
-  const schemas = await schemaResponse.json();
-  const schema = schemas.find(item => item.definitionName === definitionName);
+  if (!schemaResponse.ok) throw new Error(`Prowlarr: could not load indexer schemas (${schemaResponse.status})`);
+  const schema = (await schemaResponse.json()).find(item => item.definitionName === definitionName);
   if (!schema) {
     log(`Prowlarr: indexer definition "${definitionName}" is not available in this Prowlarr version, skipping`);
     return;
   }
+  const result = await addIndexerFromSchema(schema, headers, { test: false });
+  log(result.ok ? `Prowlarr: added ${schema.name} as a search source` : `Prowlarr: could not add ${schema.name}. ${result.body}`.trim());
+}
 
-  const baseUrl = schema.indexerUrls?.[0];
-  const fields = schema.fields.map(field => {
-    const value = field.name === 'baseUrl' ? baseUrl : field.value;
-    return value === undefined ? { name: field.name } : { name: field.name, value };
-  });
-  // forceSave: Prowlarr test-connects to the site before saving. A slow answer
-  // from the site must not block setup; Prowlarr retries it on its own later.
-  const create = await fetch(`${PROWLARR.url}/api/v1/indexer?forceSave=true`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      enable: true,
-      redirect: false,
-      name: schema.name,
-      implementation: schema.implementation,
-      implementationName: schema.implementationName,
-      configContract: schema.configContract,
-      protocol: schema.protocol,
-      privacy: schema.privacy,
-      priority: schema.priority ?? 25,
-      fields
-      ,
-      appProfileId: (await firstProwlarrAppProfileId(headers)) ?? 1
-    })
-  });
-  if (!create.ok) {
-    const body = await create.text().catch(() => '');
-    log(`Prowlarr: could not add ${schema.name} (${create.status}). ${body}`.trim());
-    return;
+/** Every public, non-adult source that answers. Ones behind Cloudflare are retried through FlareSolverr. */
+async function ensureAllPublicIndexers(headers, existing) {
+  const schemaResponse = await fetch(`${PROWLARR.url}/api/v1/indexer/schema`, { headers });
+  if (!schemaResponse.ok) throw new Error(`Prowlarr: could not load indexer schemas (${schemaResponse.status})`);
+  const have = new Set(existing.flatMap(i => [i.definitionName, i.name?.toLowerCase()]));
+  const todo = (await schemaResponse.json()).filter(sc => sc.privacy === 'public' && !isAdult(sc) && !have.has(sc.definitionName) && !have.has(sc.name?.toLowerCase()));
+  const tagId = await ensureFlareSolverr(headers);
+  log(`Prowlarr: trying ${todo.length} public sources (adult ones are never added automatically)`);
+  let added = 0, viaFlare = 0;
+  let next = 0;
+  const worker = async () => {
+    while (next < todo.length) {
+      const schema = todo[next++];
+      try {
+        let r = await addIndexerFromSchema(schema, headers, { test: true });
+        if (!r.ok && tagId && /cloudflare|ddos|captcha|challenge|403|forbidden/i.test(r.body)) {
+          r = await addIndexerFromSchema(schema, headers, { test: true, tags: [tagId] });
+          if (r.ok) viaFlare++;
+        }
+        if (r.ok) added++;
+      } catch { /* a slow site must not stop the rest */ }
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  log(`Prowlarr: ${added} of ${todo.length} public sources are working and were added (${viaFlare} through FlareSolverr). The rest are retried on the next start.`);
+}
+
+async function ensureFlareSolverr(headers) {
+  const host = process.env.FLARESOLVERR_URL ?? 'http://flaresolverr:8191';
+  try {
+    const up = await fetch(host, { signal: AbortSignal.timeout(4000) });
+    if (!up.ok) return undefined;
+    const tags = await (await fetch(`${PROWLARR.url}/api/v1/tag`, { headers })).json();
+    let tag = tags.find(t => t.label === 'flaresolverr');
+    if (!tag) tag = await (await fetch(`${PROWLARR.url}/api/v1/tag`, { method: 'POST', headers, body: JSON.stringify({ label: 'flaresolverr' }) })).json();
+    const proxies = await (await fetch(`${PROWLARR.url}/api/v1/indexerProxy`, { headers })).json();
+    if (!proxies.some(p => p.implementation === 'FlareSolverr')) {
+      const schema = (await (await fetch(`${PROWLARR.url}/api/v1/indexerProxy/schema`, { headers })).json()).find(p => p.implementation === 'FlareSolverr');
+      if (schema) {
+        const fields = schema.fields.map(f => ({ name: f.name, value: f.name === 'host' ? host : f.value }));
+        await fetch(`${PROWLARR.url}/api/v1/indexerProxy`, { method: 'POST', headers, body: JSON.stringify({ ...schema, name: 'FlareSolverr', fields, tags: [tag.id] }) });
+      }
+    }
+    return tag.id;
+  } catch {
+    return undefined;
   }
-  log(`Prowlarr: added ${schema.name} as a search source`);
+}
+
+
+/**
+ * qBittorrent must save where the *arr apps can see the files (the shared
+ * /downloads volume). Its own default is inside its config volume, which
+ * Radarr/Sonarr/Lidarr cannot read, so finished downloads never import.
+ * Existing torrents are moved, not deleted, so they keep seeding.
+ */
+async function ensureQbitSavePath() {
+  const base = `http://${QBIT.host}:${QBIT.port}`;
+  const login = await fetch(`${base}/api/v2/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: base },
+    body: new URLSearchParams({ username: QBIT.username, password: QBIT.password })
+  });
+  const cookie = login.headers.get('set-cookie')?.split(';')[0];
+  if (!login.ok || !cookie) throw new Error('qBittorrent: could not sign in to set the download folder');
+  const headers = { Cookie: cookie, Referer: base };
+  const prefs = await (await fetch(`${base}/api/v2/app/preferences`, { headers })).json();
+  if (prefs.save_path !== '/downloads') {
+    await fetch(`${base}/api/v2/app/setPreferences`, {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ json: JSON.stringify({ save_path: '/downloads', temp_path_enabled: false }) })
+    });
+    log('qBittorrent: downloads now save to the shared /downloads folder');
+  }
+  const torrents = await (await fetch(`${base}/api/v2/torrents/info`, { headers })).json();
+  const stray = torrents.filter(t => !String(t.save_path).startsWith('/downloads'));
+  if (stray.length) {
+    await fetch(`${base}/api/v2/torrents/setLocation`, {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ hashes: stray.map(t => t.hash).join('|'), location: '/downloads' })
+    });
+    log(`qBittorrent: moved ${stray.length} download(s) to /downloads so the *arr apps can import them`);
+  }
 }
 
 async function ensureProwlarrIndexer() {
@@ -370,6 +447,10 @@ async function ensureProwlarrIndexer() {
   // behind Cloudflare) must not stop the others from being added.
   for (const definitionName of AUTO_INDEXERS) {
     if (definitionName.toLowerCase() === 'none') continue;
+    if (definitionName.toLowerCase() === 'all-public') {
+      try { await ensureAllPublicIndexers(headers, existing); } catch (err) { log(`Prowlarr: all-public - ${err instanceof Error ? err.message : err}`); }
+      continue;
+    }
     try {
       await ensureOneIndexer(definitionName, headers, existing);
     } catch (err) {
@@ -418,16 +499,17 @@ async function main() {
   const step = async (label, run) => {
     try { await run(); } catch (err) { failed.push(label); log(`${label}: ${err instanceof Error ? err.message : err}`); }
   };
+  await step('qBittorrent download folder', () => ensureQbitSavePath());
   for (const app of APPS) {
     await step(`${app.name} root folder`, () => ensureRootFolder(app));
     await step(`${app.name} file renaming`, () => ensureNaming(app));
     if (app === LIDARR) await step('Lidarr audio preferences', () => ensureMusicPreferences(app));
     for (const client of DOWNLOAD_CLIENTS) await step(`${app.name} download client`, () => ensureDownloadClient(app, client));
   }
-  await step('Prowlarr search source', () => ensureProwlarrIndexer());
   await step('Prowlarr link to Radarr', () => ensureProwlarrApplication(RADARR, 'Radarr'));
   await step('Prowlarr link to Sonarr', () => ensureProwlarrApplication(SONARR, 'Sonarr'));
   await step('Prowlarr link to Lidarr', () => ensureProwlarrApplication(LIDARR, 'Lidarr'));
+  await step('Prowlarr search sources', () => ensureProwlarrIndexer());
   await step('Prowlarr sync', () => syncProwlarrApplications());
   await step('Bazarr subtitles', () => ensureBazarr());
 

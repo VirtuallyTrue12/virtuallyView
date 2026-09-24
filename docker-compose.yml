@@ -45,6 +45,14 @@ services:
       - qbittorrent-config:/config
     entrypoint: ["sh", "-c", "mkdir -p /config/qBittorrent && test -f /config/qBittorrent/qBittorrent.conf || cp /seed/qBittorrent.conf /config/qBittorrent/qBittorrent.conf"]
 
+  # Makes the folders NZBGet reports to the *arr apps, so their health checks
+  # do not warn about a missing path before the first Usenet download.
+  downloads-init:
+    image: alpine:3.20
+    volumes:
+      - downloads:/downloads
+    entrypoint: ["sh", "-c", "mkdir -p /downloads/completed/Movies /downloads/completed/Series /downloads/completed/Music"]
+
   # --- The *arr stack, a download client, and a media server ---
 
   radarr:
@@ -203,6 +211,9 @@ services:
 
   nzbget:
     image: lscr.io/linuxserver/nzbget:latest
+    depends_on:
+      downloads-init:
+        condition: service_completed_successfully
     environment:
       - PUID=0
       - PGID=0
@@ -231,7 +242,8 @@ services:
       - SONARR_API_KEY=b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5
       - PROWLARR_URL=http://prowlarr:9696
       - PROWLARR_API_KEY=c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6
-      - PROWLARR_AUTO_INDEXERS=${PROWLARR_AUTO_INDEXERS:-internetarchive,thepiratebay,torrentdownloads}
+      - PROWLARR_AUTO_INDEXERS=${PROWLARR_AUTO_INDEXERS:-all-public}
+      - FLARESOLVERR_URL=http://flaresolverr:8191
       - LIDARR_URL=http://lidarr:8686
       - LIDARR_API_KEY=d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1
       - BAZARR_URL=http://bazarr:6767
@@ -262,6 +274,8 @@ services:
       nzbget:
         condition: service_started
       bazarr:
+        condition: service_started
+      flaresolverr:
         condition: service_started
     restart: "no"
 
@@ -317,6 +331,96 @@ services:
     labels:
       - com.centurylinklabs.watchtower.enable=true
 
+  # Solves the Cloudflare checks some public search sources sit behind, so more
+  # of them work. Prowlarr routes only the sources that need it through here.
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - LOG_LEVEL=info
+      - TZ=Etc/UTC
+    restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # --- Other apps, each one command away: docker compose --profile <name> up -d ---
+  # They keep their own logins and data. The Apps page finds them by itself.
+
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    profiles: ["audiobookshelf"]
+    ports:
+      - "${VV_APPS_BIND:-0.0.0.0}:13378:80"
+    volumes:
+      - audiobookshelf-config:/config
+      - audiobookshelf-metadata:/metadata
+      - audiobookshelf-books:/audiobooks
+      - audiobookshelf-podcasts:/podcasts
+    restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  kavita:
+    image: jvmilazz0/kavita:latest
+    profiles: ["kavita"]
+    ports:
+      - "${VV_APPS_BIND:-0.0.0.0}:5000:5000"
+    volumes:
+      - kavita-config:/kavita/config
+      - media-books:/books:ro
+    restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    profiles: ["immich"]
+    environment:
+      - DB_HOSTNAME=immich-postgres
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=${IMMICH_DB_PASSWORD:-immich-local-db}
+      - DB_DATABASE_NAME=immich
+      - REDIS_HOSTNAME=immich-redis
+    volumes:
+      - immich-upload:/data
+      - media-photos:/usr/src/app/external/photos:ro
+    ports:
+      - "${VV_APPS_BIND:-0.0.0.0}:2283:2283"
+    depends_on:
+      - immich-redis
+      - immich-postgres
+    restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    profiles: ["immich"]
+    volumes:
+      - immich-model-cache:/cache
+    restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  immich-redis:
+    image: docker.io/valkey/valkey:8-bookworm
+    profiles: ["immich"]
+    restart: unless-stopped
+
+  immich-postgres:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+    profiles: ["immich"]
+    environment:
+      - POSTGRES_PASSWORD=${IMMICH_DB_PASSWORD:-immich-local-db}
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=immich
+      - POSTGRES_INITDB_ARGS=--data-checksums
+    volumes:
+      - immich-db:/var/lib/postgresql/data
+    restart: unless-stopped
+
   # Optional AI assistant (about 5 GB). Not started by default so the first
   # install is quick. Turn it on with: docker compose --profile ai up -d
   ollama:
@@ -360,27 +464,27 @@ services:
     labels:
       - com.centurylinklabs.watchtower.enable=true
 
-  # Optional offline Wikipedia (and other wikis) reader. Only starts serving
-  # once you put at least one .zim file in the kiwix-data volume - this does
-  # not download anything for you. Get ZIM files from https://library.kiwix.org
+  # Optional offline Wikipedia (and other wikis) reader. Downloads the libraries
+  # listed in KIWIX_ZIMS (a small starter set by default) and serves them, more
+  # appearing as each finishes. Or copy your own .zim files into the volume.
   # Turn it on with: docker compose --profile kiwix up -d
-  # Then, in Settings > Wiki, connect to http://kiwix:8080. See docs/kiwix.md.
+  # The Wiki page finds it by itself. See docs/kiwix.md.
   kiwix:
     image: ghcr.io/kiwix/kiwix-serve:latest
     profiles: ["kiwix"]
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        if ! ls /data/*.zim >/dev/null 2>&1; then
-          echo "No .zim files in the kiwix-data volume yet."
-          echo "Download one from https://library.kiwix.org, place it there, then: docker compose restart kiwix"
-          sleep infinity
-        fi
-        exec /usr/local/bin/kiwix-serve --port=8080 /data/*.zim
+    entrypoint: ["/bin/sh", "/run.sh"]
+    environment:
+      # Libraries to download and keep (folder/name-prefix, newest picked). Small
+      # by default; see docs/kiwix.md for the survival, medicine and full-Wikipedia packs.
+      - KIWIX_ZIMS=${KIWIX_ZIMS:-wikipedia/wikipedia_en_all_mini wikibooks/wikibooks_en_all_nopic wikivoyage/wikivoyage_en_all_maxi other/appropedia_en_all_maxi other/zimgit-medicine_en other/zimgit-water_en}
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
       - kiwix-data:/data
+      - ./docker/kiwix/run.sh:/run.sh:ro
     ports:
-      - "127.0.0.1:8888:8080"
+      - "${VV_APPS_BIND:-0.0.0.0}:8888:8080"
     restart: unless-stopped
     labels:
       - com.centurylinklabs.watchtower.enable=true
@@ -421,3 +525,11 @@ volumes:
   app-data:
   ollama-data:
   kiwix-data:
+  audiobookshelf-config:
+  audiobookshelf-metadata:
+  audiobookshelf-books:
+  audiobookshelf-podcasts:
+  kavita-config:
+  immich-upload:
+  immich-model-cache:
+  immich-db:

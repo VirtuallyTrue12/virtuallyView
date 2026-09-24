@@ -1,0 +1,72 @@
+# virtuallyView: download VPN with NO account. See docs/privacy.md.
+#
+# Uses VPN Gate (an open academic project, University of Tsukuba): free public
+# relays run by volunteers, no sign-up. Each start picks the best available
+# relay. Honest limits: relays are volunteers and VPN Gate keeps connection
+# logs, so this hides your downloads from your internet provider but is NOT
+# anonymity, and speed varies. For a paid, audited provider (Mullvad, Proton,
+# IVPN, AirVPN...) use docker-compose.vpn.yml with your own WireGuard key.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.vpn-free.yml up -d
+# Verify: docker exec appletvopensourcce-vpn-1 wget -qO- ifconfig.me   (not your home IP)
+# Back to no VPN: docker compose up -d --force-recreate qbittorrent
+# Pick a country: VPN_SERVER_COUNTRY_CODE=NL (two-letter code) in .env.
+services:
+  vpngate-config:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "scripts/vpngate.mjs", "/gluetun/custom.ovpn"]
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - VPN_SERVER_COUNTRY_CODE=${VPN_SERVER_COUNTRY_CODE:-}
+    volumes:
+      - gluetun-config:/gluetun
+    restart: "no"
+
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: appletvopensourcce-vpn-1
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=openvpn
+      - OPENVPN_CUSTOM_CONFIG=/gluetun/custom.ovpn
+      - OPENVPN_USER=vpn
+      - OPENVPN_PASSWORD=vpn
+      - FIREWALL_OUTBOUND_SUBNETS=10.89.0.0/16,172.16.0.0/12
+      - FIREWALL_INPUT_PORTS=8080
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:6881:6881"
+      - "127.0.0.1:6881:6881/udp"
+    volumes:
+      - gluetun-config:/gluetun
+    depends_on:
+      vpngate-config:
+        condition: service_completed_successfully
+    networks:
+      default:
+        aliases:
+          - qbittorrent
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- --timeout=5 https://ipinfo.io/ip || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  qbittorrent:
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    ports: !reset []
+
+volumes:
+  gluetun-config:

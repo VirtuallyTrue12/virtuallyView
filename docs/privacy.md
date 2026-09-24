@@ -36,23 +36,41 @@ Should print `{"IsTor":true, ...}` with an exit address that is not your own.
 
 ## VPN for downloads
 
+Two ways, both use [gluetun](https://github.com/qdm12/gluetun), an open-source VPN client container. Either one routes only qBittorrent's traffic; search, browsing and every other service are untouched.
+
+### No account (VPN Gate)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.vpn-free.yml up -d
+```
+
+Uses [VPN Gate](https://www.vpngate.net), an open academic project of the University of Tsukuba: free public relays, no sign-up. Every start picks the best available relay; set `VPN_SERVER_COUNTRY_CODE=NL` (any two-letter code) in `.env` to choose a country.
+
+**Read this before relying on it.** The relays are run by volunteers, and VPN Gate keeps connection logs. This hides your downloads from your internet provider; it is not anonymity, and speed and availability vary. If that matters, use a provider below.
+
+Tested live: qBittorrent's traffic left through a VPN Gate relay (a different IP from the machine's own), and Radarr and Sonarr kept reaching qBittorrent through it.
+
+### Your own provider (WireGuard)
+
 ```bash
 cp .env.example .env
-# fill in VPN_WIREGUARD_PRIVATE_KEY and, if needed, VPN_SERVICE_PROVIDER
+# fill in VPN_WIREGUARD_PRIVATE_KEY and VPN_SERVICE_PROVIDER
 docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
 ```
 
-This routes qBittorrent's traffic through [gluetun](https://github.com/qdm12/gluetun), an open-source VPN client container, so your ISP sees only an encrypted tunnel, not torrent traffic. The overlay does not touch search, browsing, or any other service.
+**Supported providers** (gluetun's own WireGuard list): `protonvpn`, `mullvad`, `airvpn`, `ivpn`, `nordvpn`, `surfshark`, `windscribe`, `fastestvpn`, or `custom` for any other WireGuard-based provider.
 
-**Supported providers** (gluetun's own WireGuard provider list, checked against the running image): `protonvpn`, `mullvad`, `airvpn`, `ivpn`, `nordvpn`, `surfshark`, `windscribe`, `fastestvpn`, or `custom` for any other WireGuard-based provider. Set `VPN_SERVICE_PROVIDER` in `.env` to one of these.
-
-A few notes on picking one, without endorsing any single provider:
-
-- **Mullvad** and **IVPN** accept anonymous payment and publish independently audited no-logs claims; among the supported list they ask for the least identifying information to sign up.
-- **ProtonVPN** is the current default here mainly because it has a free tier, useful for testing this overlay before paying for anything.
+- **Mullvad** and **IVPN** accept anonymous payment and publish audited no-logs claims; they ask for the least identifying information to sign up.
+- **ProtonVPN** has a free tier, useful for trying this before paying.
 - **AirVPN** is community-run and open about its infrastructure.
 - Whichever you pick, read their own privacy policy; nothing above is a guarantee.
 
-**I have not been able to test this overlay against a live tunnel** while writing it: every provider above requires a paid or registered account, and none was available to verify with. The compose file's syntax is validated and the service starts, but the tunnel itself is unverified. If you set it up, `scripts/doctor.sh` checks that qBittorrent's visible IP is the VPN's, not yours; please open an issue if something is wrong.
+This path has the same wiring fixes as the free one (the overlay used to be rejected by Compose, and now keeps qBittorrent reachable by name), but I could only test the tunnel itself with the no-account option, since the providers above need an account.
 
-**Why Tor is not offered for the download client itself:** BitTorrent over Tor leaks your real IP through peer exchange and DHT regardless of the proxy, is blocked by most trackers, and goes against the Tor Project's own exit policy. This is a well-known limitation of Tor, not a gap in this project.
+### Checking it, and going back
+
+`docker exec appletvopensourcce-vpn-1 wget -qO- ifconfig.me` must print an address that is not your own; `scripts/doctor.sh` checks the same. To stop using a VPN: `docker compose up -d --force-recreate qbittorrent` (without the overlay file). Note that running plain `docker compose up -d` later also puts qBittorrent back outside the VPN.
+
+### Why Tor is not offered for downloads
+
+BitTorrent over Tor leaks your real IP through peer exchange, is blocked by most trackers, and violates Tor's exit policy. For search, which is plain web traffic, use the Tor section above.
