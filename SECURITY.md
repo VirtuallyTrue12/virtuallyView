@@ -2,7 +2,7 @@
 
 ## Reporting a problem
 
-Open a private security advisory on the repository, or email the maintainer if an address is listed on the project page. Please do not file public issues for vulnerabilities. Include what you found, how to reproduce it and what it lets someone do.
+Use GitHub's private reporting: on the repository open **Security > Report a vulnerability** (https://github.com/VirtuallyTrue12/virtuallyView/security/advisories/new). It reaches the maintainer privately and is not public until fixed. Please do not file public issues for vulnerabilities. Include what you found, how to reproduce it and what it lets someone do.
 
 ## What to know before you run it
 
