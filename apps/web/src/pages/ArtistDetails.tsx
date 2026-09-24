@@ -6,6 +6,7 @@ import { FavoriteButton } from '../components/media/UserFlagButtons';
 import { RemoveTitle } from '../components/media/RemoveTitle';
 import { TitleQuality } from '../components/media/TitleQuality';
 import { SearchAgain } from '../components/media/SearchAgain';
+import { UpgradeQuality } from '../components/media/UpgradeQuality';
 import { ArtistVideos } from '../components/media/ArtistVideos';
 import { useMusicPlayer } from '../components/media/MusicProvider';
 import { artistMix } from '../lib/instant-mix';
@@ -125,6 +126,7 @@ export default function ArtistDetails() {
               {/^lidarr-/.test(artist.id) && (artist.trackFileCount ?? 0) < (artist.totalTrackCount ?? 0) && (
                 <SearchAgain label="Search missing albums" run={() => api.searchArtist(artist.id)} small={false} />
               )}
+              {/^lidarr-/.test(artist.id) && (artist.trackFileCount ?? 0) > 0 && <UpgradeQuality artistId={artist.id} />}
               {mixNote && <span className="notice notice--err">{mixNote}</span>}
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPickingCover(v => !v)} aria-expanded={pickingCover}>
                 {chosenCover ? 'Change artwork' : 'Choose artwork'}

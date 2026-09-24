@@ -180,6 +180,7 @@ async function ensureMusicPreferences(app) {
  * mono and low-bitrate rips) and keeps upgrading toward lossless.
  */
 async function ensureBestAvailableMusicProfile(app) {
+  await ensureStandardMusicProfile(app);
   const headers = { 'X-Api-Key': app.key, 'Content-Type': 'application/json' };
   const name = 'Best available';
   const res = await fetch(`${app.url}/api/v1/qualityprofile`, { headers });
@@ -194,6 +195,26 @@ async function ensureBestAvailableMusicProfile(app) {
   const { id: _id, ...rest } = template;
   const made = await fetch(`${app.url}/api/v1/qualityprofile`, { method: 'POST', headers, body: JSON.stringify({ ...rest, name, items, cutoff: lossless.id, upgradeAllowed: true }) });
   log(made.ok ? 'Lidarr: added the "Best available" music quality profile' : `Lidarr: could not add the "Best available" profile (${made.status})`);
+}
+
+/**
+ * "Standard" is what music requests use, and it means "anything is fine": every
+ * quality except trash, including unlabelled releases and FLAC when one turns
+ * up quickly. It aims for high-quality lossy and upgrades toward that.
+ * The one-click "Upgrade quality" button moves an artist to "Best available".
+ */
+async function ensureStandardMusicProfile(app) {
+  const headers = { 'X-Api-Key': app.key, 'Content-Type': 'application/json' };
+  const res = await fetch(`${app.url}/api/v1/qualityprofile`, { headers });
+  if (!res.ok) return;
+  const standard = (await res.json()).find(p => p.name === 'Standard');
+  if (!standard) return;
+  const high = standard.items.find(i => /high quality lossy/i.test(i.name ?? ''));
+  const items = standard.items.map(i => ({ ...i, allowed: !/trash/i.test(i.name ?? '') && !/^wav$/i.test(i.quality?.name ?? '') }));
+  const wanted = JSON.stringify(items.map(i => i.allowed));
+  if (JSON.stringify(standard.items.map(i => i.allowed)) === wanted && standard.upgradeAllowed && (!high || standard.cutoff === high.id)) return;
+  const put = await fetch(`${app.url}/api/v1/qualityprofile/${standard.id}`, { method: 'PUT', headers, body: JSON.stringify({ ...standard, items, upgradeAllowed: true, ...(high ? { cutoff: high.id } : {}) }) });
+  log(put.ok ? 'Lidarr: the "Standard" music profile now accepts any quality' : `Lidarr: could not update the "Standard" profile (${put.status})`);
 }
 
 // Bazarr: connect to Radarr and Sonarr, add keyless subtitle sources, create one
@@ -483,6 +504,14 @@ async function ensureQbitSavePath() {
       body: new URLSearchParams({ json: JSON.stringify({ save_path: '/downloads', temp_path_enabled: false }) })
     });
     log('qBittorrent: downloads now save to the shared /downloads folder');
+  }
+  // The stock limit is 3 at a time, so a new request waits behind whole seasons. Slow torrents do not count.
+  if (prefs.max_active_downloads < 8 || !prefs.dont_count_slow_torrents) {
+    await fetch(`${base}/api/v2/app/setPreferences`, {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ json: JSON.stringify({ max_active_downloads: Math.max(8, prefs.max_active_downloads), max_active_torrents: Math.max(20, prefs.max_active_torrents), max_active_uploads: Math.max(8, prefs.max_active_uploads), dont_count_slow_torrents: true }) })
+    });
+    log('qBittorrent: up to 8 downloads run at once, and slow ones no longer hold up new requests');
   }
   const torrents = await (await fetch(`${base}/api/v2/torrents/info`, { headers })).json();
   const stray = torrents.filter(t => !String(t.save_path).startsWith('/downloads'));

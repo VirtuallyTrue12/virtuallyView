@@ -283,3 +283,27 @@ describe('pick a release by hand', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('upgrade music quality', () => {
+  it('tells the person it takes time, then moves the artist to Best available and searches', async () => {
+    const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    await page.route('**/api/artists/lidarr-3', r => r.fulfill(json({ id: 'lidarr-3', title: 'Queen', type: 'artist', status: 'available', trackFileCount: 12, totalTrackCount: 12, albumCount: 1 })));
+    await page.route('**/api/artists/lidarr-3/albums', r => r.fulfill(json({ artistId: 'lidarr-3', albums: [] })));
+    await page.route('**/api/artists/lidarr-3/covers', r => r.fulfill(json({ candidates: [], chosen: null })));
+    await page.route('**/api/artists/lidarr-3/videos', r => r.fulfill(json({ concerts: [], videos: [] })));
+    await page.route('**/api/quality/artist/lidarr-3', async r => {
+      if (r.request().method() === 'GET') return r.fulfill(json({ profiles: [{ id: 1, name: 'Any' }, { id: 3, name: 'Standard' }, { id: 4, name: 'Best available' }], current: 3 }));
+      posted = r.request().postDataJSON();
+      return r.fulfill(json({ success: true, message: 'Quality updated. Searching for a release in that quality.' }));
+    });
+    let posted: unknown = null;
+    await page.goto(base + '/music/lidarr-3');
+    await page.getByRole('button', { name: 'Upgrade quality' }).click();
+    expect(await page.locator('.upgrade-quality-confirm').innerText()).toMatch(/can take some time/i);
+    await page.getByRole('button', { name: 'Start upgrade' }).click();
+    await page.waitForSelector('.upgrade-quality .notice--ok');
+    expect(posted).toEqual({ profileId: 4, search: true });
+    expect(await page.locator('.upgrade-quality .notice--ok').innerText()).toMatch(/take a while/i);
+    expect(errors).toEqual([]);
+  });
+});
