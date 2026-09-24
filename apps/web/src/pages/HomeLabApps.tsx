@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { BackButton } from '../components/layout/BackButton';
 
-interface AppStatus { id: string; name: string; what: string; keyHelp: string; connected: boolean; url: string | null; healthy: boolean; hasKey: boolean; headline?: string }
+interface AppStatus { id: string; name: string; what: string; keyHelp: string; install: string; port: number; bundled?: boolean; connected: boolean; url: string | null; healthy: boolean; hasKey: boolean; headline?: string }
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
@@ -40,9 +40,19 @@ function AppCard({ app, onSaved }: { app: AppStatus; onSaved: (apps: AppStatus[]
       )}
       {app.connected && !editing && (
         <div className="users-actions">
-          {app.healthy && app.url && <a className="btn btn-primary btn-sm" href={app.url} target="_blank" rel="noreferrer noopener">Open {app.name}</a>}
+          {app.healthy && app.url && <a className="btn btn-primary btn-sm" href={app.bundled ? `${window.location.protocol}//${window.location.hostname}:${app.port}` : app.url} target="_blank" rel="noreferrer noopener">Open {app.name}</a>}
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>Change</button>
           <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={e => void save(e, true)}>Disconnect</button>
+        </div>
+      )}
+      {!app.connected && (
+        <div className="settings-help">
+          Not running yet? Install it next to this server with one command:
+          <div className="users-actions" style={{ marginTop: 6 }}>
+            <code>{app.install}</code>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void navigator.clipboard?.writeText(app.install)}>Copy</button>
+          </div>
+          It connects here by itself a few seconds after it starts.
         </div>
       )}
       {editing && (

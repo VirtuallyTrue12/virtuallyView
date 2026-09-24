@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { BackButton } from '../components/layout/BackButton';
 
-interface KiwixStatus { configured: boolean; url: string | null; healthy: boolean }
+interface KiwixStatus { configured: boolean; url: string | null; healthy: boolean; bundled?: boolean }
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
@@ -74,7 +74,7 @@ export default function Wiki() {
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => void disconnect()} disabled={busy}>Disconnect</button>
           </div>
         </div>
-        <iframe src={status.url ?? ''} title="Kiwix" className="wiki-frame" />
+        <iframe src={status.bundled ? `${window.location.protocol}//${window.location.hostname}:8888` : status.url ?? ''} title="Kiwix" className="wiki-frame" />
       </main>
     );
   }
@@ -96,9 +96,9 @@ export default function Wiki() {
           Only an administrator can change this.
         </p>
         <p className="settings-help">
-          Already run a Kiwix server? Enter its address below. Otherwise, turn on the bundled one with
-          <code> docker compose --profile kiwix up -d</code>, put .zim files in its data folder, then enter
-          <code> http://kiwix:8080</code>. See docs/kiwix.md.
+          Already run a Kiwix server? Enter its address below. Otherwise turn on the bundled one with
+          <code> docker compose --profile kiwix up -d</code>: it downloads a starter set of libraries (Wikipedia, wikibooks,
+          travel, medicine, water and more) and this page connects to it by itself. Bigger packs are one setting away, see docs/kiwix.md.
         </p>
         <form className="users-add" onSubmit={e => void save(e)}>
           <label className="login-field"><span>Address</span><input className="settings-input" value={url} onChange={e => setUrl(e.target.value)} placeholder="http://192.168.1.5:8080 or http://kiwix:8080" required /></label>

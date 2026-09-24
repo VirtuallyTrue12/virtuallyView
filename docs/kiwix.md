@@ -1,44 +1,34 @@
 # Wiki (Kiwix)
 
-[Kiwix](https://www.kiwix.org) (open source) reads ZIM files - full offline
-copies of Wikipedia, Wiktionary, Project Gutenberg, StackExchange and
-hundreds of other sites, with no internet connection needed once downloaded.
-The Wiki page in the nav (under More) embeds Kiwix's own reader, which
-already has search and browsing built in - nothing to rebuild there.
+[Kiwix](https://www.kiwix.org) (open source) reads ZIM files: full offline copies of Wikipedia, Wiktionary, medical references, repair guides and hundreds of other sites, with no internet needed once downloaded. The Wiki page (under More) embeds Kiwix's own reader, which already has search and browsing.
 
-You have two options, and they aren't exclusive - use whichever fits.
-
-## Option 1: connect to a Kiwix server you already run
-
-If you already run `kiwix-serve` somewhere on your network (a NAS, another
-machine, a Raspberry Pi), go to Wiki in the nav and enter its address, e.g.
-`http://192.168.1.50:8080`. That's it - only an administrator can change this.
-
-## Option 2: use the bundled one
+## Bundled server
 
 ```
 docker compose --profile kiwix up -d
 ```
 
-This starts `kiwix-serve` (the official image) with an empty data volume. It
-does **not** download anything for you - Wikipedia ZIM files run from a few
-hundred MB (a single-topic slice) to 100+ GB (the full multi-language
-archive with images), so fetching one automatically would be a bad default.
+It downloads the libraries listed in `KIWIX_ZIMS` (a small starter set by default: Wikipedia intro articles, wikibooks, travel, appropedia, medicine and water guides), serves them, and adds each new one as it finishes. Downloads resume after a restart. The Wiki page connects to it by itself. Check progress with `docker compose logs -f kiwix`.
 
-1. Pick a ZIM file from [library.kiwix.org](https://library.kiwix.org).
-2. Put it in the `kiwix-data` volume. On real Docker:
-   `docker cp your-file.zim appletvopensourcce-kiwix-1:/data/`
-   On Podman, the container name may differ - check with
-   `docker compose ps kiwix`.
-3. `docker compose restart kiwix`
-4. In Wiki in the nav, connect to `http://kiwix:8080` (the container's name
-   on the internal network) or `http://localhost:8888` if you're on the same
-   machine.
+Already run a Kiwix server elsewhere? Enter its address on the Wiki page instead.
 
-Until you add a ZIM file, the container stays up but prints a reminder in
-its logs instead of crash-looping - check with `docker compose logs kiwix`.
+## Choosing libraries
 
-## Updating the library
+`KIWIX_ZIMS` in `.env` is a space-separated list of `folder/name-prefix`; the newest version is picked. Sizes below are approximate.
 
-Kiwix doesn't hot-reload new files. After adding or removing a ZIM file,
-`docker compose restart kiwix` picks up the change.
+| Pack | Entries | Size |
+| --- | --- | --- |
+| Starter (default) | `wikipedia/wikipedia_en_all_mini wikibooks/wikibooks_en_all_nopic wikivoyage/wikivoyage_en_all_maxi other/appropedia_en_all_maxi other/zimgit-medicine_en other/zimgit-water_en` | ~18 GB |
+| Full English Wikipedia with images | `wikipedia/wikipedia_en_all_maxi` (replaces mini) | ~119 GB |
+| Wikipedia without images | `wikipedia/wikipedia_en_all_nopic` | ~49 GB |
+| Medicine | `other/mdwiki_en_all_maxi wikipedia/wikipedia_en_medicine_maxi other/wikem_en_all_maxi` | ~4.5 GB |
+| Survival and how-to | `other/zimgit-post-disaster_en other/zimgit-food-preparation_en other/zimgit-knots_en other/zimgit-water_en other/zimgit-medicine_en other/appropedia_en_all_maxi ifixit/ifixit_en_all` | ~4.5 GB |
+| Dictionary | `wiktionary/wiktionary_en_all_nopic` | ~8.5 GB |
+
+Example: `KIWIX_ZIMS="wikipedia/wikipedia_en_all_maxi other/mdwiki_en_all_maxi other/zimgit-post-disaster_en ifixit/ifixit_en_all"`, then `docker compose up -d kiwix`.
+
+Browse everything available at [library.kiwix.org](https://library.kiwix.org) (files live under `download.kiwix.org/zim/<folder>/`). You can also copy any `.zim` file into the `kiwix-data` volume and run `docker compose restart kiwix`.
+
+Dropping a library from the list does not delete it; remove the file from the volume to reclaim the space.
+
+If the dashboard is served over HTTPS, browsers block the embedded (HTTP) reader; open it directly on port 8888 instead.

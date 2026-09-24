@@ -36,9 +36,16 @@ export function clearKiwixConfig(): void {
   writeFileSync(FILE, JSON.stringify({ url: '' }), { encoding: 'utf8', mode: 0o600 });
 }
 
-export async function kiwixStatus(): Promise<{ configured: boolean; url: string | null; healthy: boolean }> {
-  const config = loadKiwixConfig();
+export const BUNDLED_KIWIX = 'http://kiwix:8080';
+
+export async function kiwixStatus(): Promise<{ configured: boolean; url: string | null; healthy: boolean; bundled?: boolean }> {
+  let config = loadKiwixConfig();
+  // The bundled container answering means nothing to type in.
+  if (!config && !existsSync(FILE) && (await pingService(BUNDLED_KIWIX, 1500)).healthy) {
+    saveKiwixConfig(BUNDLED_KIWIX);
+    config = loadKiwixConfig();
+  }
   if (!config) return { configured: false, url: null, healthy: false };
   const { healthy } = await pingService(config.url, 4000);
-  return { configured: true, url: config.url, healthy };
+  return { configured: true, url: config.url, healthy, bundled: config.url === BUNDLED_KIWIX };
 }
