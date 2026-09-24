@@ -3,7 +3,7 @@ import { getDownloads } from '../services/real-downloads.js';
 import { getAdapter } from '../services/registry.js';
 import { getServerSettings } from '../services/server-settings.js';
 import { currentActor } from '../services/user-context.js';
-import { createRequest, getRequests, getRequest, approveRequest, cancelRequest, deleteRequest, lookupCandidates, type MediaKind, type CreateRequestInput } from '../services/requests.js';
+import { createRequest, getRequests, getRequest, approveRequest, cancelRequest, stopRequest, deleteRequest, lookupCandidates, type MediaKind, type CreateRequestInput } from '../services/requests.js';
 
 /** Administrators manage every request; everyone else only their own. */
 function mayManage(id: string): boolean {
@@ -128,15 +128,14 @@ export default async function requestsRoutes(server: FastifyInstance) {
   server.post('/api/requests/:id/stop', async (request, reply) => {
     const { id } = request.params as { id: string };
     if (!mayManage(id)) return reply.code(403).send({ message: 'You can only change your own requests.' });
-    // "Stop" is the harder of the two: cancel the pipeline entry first, then
-    // attempt to remove any matching queue item from the download client so a
-    // stalled transfer does not keep running in the background.
-    const cancelled = cancelRequest(id);
-    if (!cancelled) {
+    // "Stop" cancels the request and also removes its running downloads from the
+    // download client, so nothing keeps transferring in the background.
+    const result = await stopRequest(id);
+    if (!result) {
       reply.code(404);
       return { error: 'not_found', message: `No request found with id "${id}".` };
     }
-    return { ...cancelled, stopped: true };
+    return { ...result.request, stopped: true, stoppedDownloads: result.stoppedDownloads };
   });
 
   // --- Download quality (movie: Radarr, series: Sonarr, artist: Lidarr profiles) ---

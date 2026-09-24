@@ -36,47 +36,56 @@ ok "docker daemon reachable"
 step "2/6 Configuration"
 if [ ! -f .env ]; then
   cp .env.example .env
-  ok "created .env from .env.example (edit it later for VPN, optional)"
+  ok "created .env from .env.example (everything in it is optional)"
 else
   ok ".env present"
+fi
+# Read only the settings this script needs, without running anything in .env.
+PORT=$(sed -n 's/^DASHBOARD_PORT=\([0-9]\{2,5\}\)$/\1/p' .env | tail -1)
+PORT=${PORT:-3000}
+URL="http://127.0.0.1:${PORT}"
+COMPOSE="docker compose"
+if [ "${VV_RELEASE:-}" = "1" ]; then
+  COMPOSE="docker compose -f docker-compose.yml -f docker-compose.release.yml"
+  ok "using the published release image (VV_RELEASE=1)"
 fi
 
 step "3/6 Starting the media stack"
 echo "First start downloads images (~2 GB) and runs one-time seeds."
-if ! docker compose up -d; then
+if ! $COMPOSE up -d; then
   fail "compose failed. If this mentions overlay/btrfs, reboot into the newest kernel and re-run."
   exit 1
 fi
 ok "stack started"
 
-step "4/6 Waiting for services to become healthy"
+step "4/6 Waiting for the dashboard"
 echo "This can take a few minutes on first run."
-for i in $(seq 1 60); do
-  unhealthy=$(docker compose ps --format '{{.Service}} {{.Status}}' 2>/dev/null | grep -vc 'healthy\|Up' || true)
-  up=$(curl -fs --max-time 3 http://127.0.0.1:3000/api/health >/dev/null 2>&1 && echo yes || echo no)
-  [ "$up" = yes ] && break
+for i in $(seq 1 90); do
+  curl -fs --max-time 3 "$URL/api/ready" >/dev/null 2>&1 && break
   sleep 5
 done
-if ! curl -fs --max-time 3 http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
-  fail "Dashboard did not come up. Run: docker compose logs app | tail -50"
+if ! curl -fs --max-time 3 "$URL/api/ready" >/dev/null 2>&1; then
+  fail "The dashboard did not become ready. Run: $COMPOSE logs app | tail -50"
   exit 1
 fi
-ok "dashboard is up on http://127.0.0.1:3000"
+ok "dashboard is ready on $URL"
 
-step "5/6 Verifying integrations"
-sleep 5
-token=$(curl -fs -X POST http://127.0.0.1:3000/api/auth/login -H 'Content-Type: application/json' \
-  -d "{\"username\":\"${DASH_USER:-root}\",\"password\":\"${DASH_PASS:?Set DASH_PASS env or log in via UI}\"}" \
-  | sed -n 's/.*"authenticated":true.*/&/p')
-if [ -z "$token" ]; then
-  warn "Could not auto-verify integrations (login failed?). Open the dashboard and check Settings."
+step "5/6 Checking the first-time wiring"
+# The one-shot setup connects the services to each other. Wait for it, then say what happened.
+for i in $(seq 1 60); do
+  state=$($COMPOSE ps -a --format '{{.Service}} {{.State}}' 2>/dev/null | sed -n 's/^provision //p')
+  [ "$state" = "exited" ] && break
+  sleep 5
+done
+if [ "$state" = "exited" ] && $COMPOSE logs provision 2>/dev/null | tail -20 | grep -q "Done\."; then
+  ok "services are connected to each other"
 else
-  echo "  Opening http://127.0.0.1:3000 in your browser will show Setup if this is the first run."
+  warn "first-time wiring did not finish cleanly. Run it again with: $COMPOSE run --rm provision"
+  echo "  and see what it says: $COMPOSE logs provision | tail -30"
 fi
 
 step "6/6 Done"
 echo "Next steps:"
-echo "  1. Open http://127.0.0.1:3000 and create your account (first run only)."
-echo "  2. Optional VPN: cp .env.example .env, fill VPN_* keys, then:"
-echo "     docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d"
+echo "  1. Open $URL and create your account (first run only)."
+echo "  2. Optional VPN with no account: docker compose -f docker-compose.yml -f docker-compose.vpn-free.yml up -d  (see docs/privacy.md)"
 echo "  3. Run scripts/doctor.sh anytime to diagnose problems step by step."

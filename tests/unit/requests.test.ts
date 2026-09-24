@@ -1,7 +1,14 @@
 import { describe, test, expect, vi, beforeAll, afterEach } from 'vitest';
-import { createRequest, cancelRequest, deleteRequest, getRequests, getRequest, reviewStuckSearches, syncRequestsWithServices } from '../../apps/server/src/services/requests.js';
+import { createRequest, cancelRequest, stopRequest, deleteRequest, getRequests, getRequest, reviewStuckSearches, syncRequestsWithServices } from '../../apps/server/src/services/requests.js';
 import { getAdapter } from '../../apps/server/src/services/registry.js';
 import type { RadarrAdapter, SonarrAdapter, LidarrAdapter } from '@virtuallyview/integrations';
+
+const downloads = vi.hoisted(() => ({ rows: [] as Array<Record<string, unknown>>, removed: [] as string[] }));
+vi.mock('../../apps/server/src/services/real-downloads.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../apps/server/src/services/real-downloads.js')>()),
+  getDownloads: async () => downloads.rows,
+  actOnDownload: async (id: string) => { downloads.removed.push(id); return { success: true, message: 'ok' }; }
+}));
 
 const uuid = '33333333-3333-4333-8333-333333333333';
 const json = (body: unknown) => new Response(JSON.stringify(body));
@@ -142,6 +149,28 @@ describe('request pipeline', () => {
     expect(cancelled?.status).toBe('cancelled');
   });
 
+  test('stopping a request also removes its running downloads, and only its own', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const instance = instanceFixture(url);
+      if (instance) return instance;
+      if (init?.method === 'POST') return json({ id: 42 });
+      return json([{ tmdbId: 1, title: 'Stop Me', year: 2021 }]);
+    }));
+    const created = await createRequest({ title: 'Stop Me', selectedProviderId: '1' });
+    const providerId = created.request!.providerId ?? 'radarr-42';
+    downloads.removed = [];
+    downloads.rows = [
+      { id: 'queue-radarr-1', mediaId: providerId, actions: ['remove'] },
+      { id: 'queue-radarr-2', mediaId: 'someone-else', actions: ['remove'] },
+      { id: 'queue-radarr-3', mediaId: providerId, actions: [] }
+    ];
+    const result = await stopRequest(created.request!.id);
+    expect(result?.request.status).toBe('cancelled');
+    expect(result?.stoppedDownloads).toBe(1);
+    expect(downloads.removed).toEqual(['queue-radarr-1']);
+    expect(await stopRequest('request-does-not-exist')).toBeNull();
+    downloads.rows = [];
+  });
   test('a cancelled request is not silently marked available by later sync', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
       const instance = instanceFixture(url);

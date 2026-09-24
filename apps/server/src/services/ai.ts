@@ -7,7 +7,7 @@ import {
   resumeDownload,
   removeDownload
 } from './real-downloads.js';
-import { createRequest, getRequests, cancelRequest, type RequestItem } from './requests.js';
+import { createRequest, getRequests, stopRequest, type RequestItem } from './requests.js';
 import { OllamaProvider } from './ollama-provider.js';
 import { isAllowed, type PermissionLevel } from './ai-permissions.js';
 import { recordAiAction } from './ai-history.js';
@@ -282,9 +282,9 @@ function buildRegistry(adapter: RadarrAdapter): ToolRegistry {
         break;
       case 'cancel_request':
         execute = async a => {
-          const updated = cancelRequest(normalizeRequestId(String(a.request_id)));
-          if (!updated) throw new Error(`Request ${a.request_id} not found.`);
-          return updated;
+          const stopped = await stopRequest(normalizeRequestId(String(a.request_id)));
+          if (!stopped) throw new Error(`Request ${a.request_id} not found.`);
+          return stopped.request;
         };
         break;
       case 'get_lidarr_artists':

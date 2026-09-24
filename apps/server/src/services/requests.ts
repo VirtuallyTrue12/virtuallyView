@@ -8,7 +8,8 @@ import type { RadarrAdapter, SonarrAdapter, LidarrAdapter } from '@virtuallyview
 type RequestCandidate = Awaited<ReturnType<RadarrAdapter['lookupCandidates']>>[number];
 import { getAdapter } from './registry.js';
 import { createDownload, updateDownload } from './downloads.js';
-import { all as dbAll, run as dbRun } from '../db/app-db.js';
+import { actOnDownload, getDownloads } from './real-downloads.js';
+import { all as dbAll, run as dbRun, transaction as dbTransaction } from '../db/app-db.js';
 
 export type RequestStatus =
   | 'pending'
@@ -99,6 +100,24 @@ function matchesMetadata(item: LibraryItem, provider: RequestCandidate['provider
   return String(item.provider?.metadata?.[key] ?? '') === id;
 }
 
+/**
+ * What a download-queue row means for the request behind it. Every status the
+ * queue can report is handled on purpose; nothing unknown is called "downloading".
+ */
+export function requestStateForQueue(queueStatus: string | undefined, queueMessage?: string): { status: RequestStatus; message?: string } {
+  switch (queueStatus) {
+    case 'downloading':
+    case undefined: return { status: 'downloading' };
+    case 'queued': return { status: 'downloading', message: 'Waiting in the download queue.' };
+    case 'paused': return { status: 'downloading', message: 'Paused in the download client. Resume it from Downloads.' };
+    case 'importing':
+    case 'completed': return { status: 'importing' };
+    case 'failed': return { status: 'searching', message: `The last download failed${queueMessage ? `: ${queueMessage}` : ''}. Another release is searched for.` };
+    // Anything else (warning, delay, ...): it is in the queue, so it is not searching, but say what the queue said.
+    default: return { status: 'downloading', message: `The download queue reports "${queueStatus}".${queueMessage ? ` ${queueMessage}` : ''}` };
+  }
+}
+
 const downloadByRequest = new Map<string, string>();
 const lastLoggedProgress = new Map<string, number>();
 
@@ -113,11 +132,14 @@ function now(): string {
 
 function persist(): void {
   try {
-    dbRun('DELETE FROM requests');
-    const insert = dbRun;
-    for (const r of requests) {
-      insert('INSERT INTO requests (id, payload, updated_at) VALUES (?, ?, ?)', r.id, JSON.stringify(r), r.updatedAt);
-    }
+    // One transaction: an interruption (crash, full disk) leaves the previous
+    // list intact instead of an empty or half-written one.
+    dbTransaction(() => {
+      dbRun('DELETE FROM requests');
+      for (const r of requests) {
+        dbRun('INSERT INTO requests (id, payload, updated_at) VALUES (?, ?, ?)', r.id, JSON.stringify(r), r.updatedAt);
+      }
+    });
   } catch {
     // Persistence is best-effort; the in-memory ledger still works.
   }
@@ -507,6 +529,26 @@ export async function approveRequest(id: string): Promise<RequestItem | null> {
   return getRequest(id) ?? null;
 }
 
+/**
+ * Cancel a request AND stop what is downloading for it. Cancelling used to
+ * change only this list, so a transfer could keep running. Files that were
+ * already downloaded are left alone; the title itself stays in the media
+ * service (removing it is a separate, deliberate action).
+ */
+export async function stopRequest(id: string): Promise<{ request: RequestItem; stoppedDownloads: number } | null> {
+  const target = getRequest(id);
+  if (!target) return null;
+  let stopped = 0;
+  if (target.providerId && target.status !== 'available') {
+    try {
+      const rows = (await getDownloads()).filter(row => row.mediaId === target.providerId && row.actions.includes('remove'));
+      for (const row of rows) if ((await actOnDownload(row.id, 'remove')).success) stopped++;
+    } catch { /* the download client is unreachable: the request is still cancelled */ }
+  }
+  const request = cancelRequest(id);
+  return request ? { request, stoppedDownloads: stopped } : null;
+}
+
 export function cancelRequest(id: string): RequestItem | null {
   const target = getRequest(id);
   if (!target) return null;
@@ -573,7 +615,7 @@ export async function syncRequestsWithServices(): Promise<void> {
   for (const [mediaType, reqs] of byType) {
     const adapter = adapterFor(mediaType);
     let library: LibraryItem[] = [];
-    let queue: Array<{ title?: string; mediaId?: string; progress?: number; status?: string }> = [];
+    let queue: Array<{ title?: string; mediaId?: string; progress?: number; status?: string; message?: string }> = [];
     try {
       library = (await adapter.getItems()) as unknown as typeof library;
       queue = (await adapter.getQueue()) as unknown as typeof queue;
@@ -602,11 +644,12 @@ export async function syncRequestsWithServices(): Promise<void> {
       const localId = req.providerId ?? inLibrary?.id;
       const queued = localId ? queue.find(q => q.mediaId === localId) : undefined;
       if (queued) {
-        const status: RequestStatus = queued.status === 'importing' ? 'importing' : 'downloading';
-        logStatusChange(req.id, before, status);
+        const mapped = requestStateForQueue(queued.status, queued.message);
+        logStatusChange(req.id, before, mapped.status);
         const progress = queued.progress ?? req.progress ?? 0;
-        logProgress(req.id, progress);
-        patch(req.id, { status, progress, ...(getRequest(req.id)?.message?.startsWith(NOTHING_FOUND_PREFIX) ? { message: undefined } : {}) });
+        if (mapped.status === 'downloading') logProgress(req.id, progress);
+        const keepNothingFound = mapped.message === undefined && getRequest(req.id)?.message?.startsWith(NOTHING_FOUND_PREFIX);
+        patch(req.id, { status: mapped.status, progress, message: mapped.message ?? (keepNothingFound ? undefined : getRequest(req.id)?.message) });
         await syncDownload(getRequest(req.id)!);
       }
     }
