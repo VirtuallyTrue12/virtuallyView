@@ -1,6 +1,6 @@
 # Development
 
-Requires Node.js 20 or newer and npm.
+Requires Node.js 22.5 or newer and npm.
 
 ```bash
 npm install

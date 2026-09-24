@@ -93,10 +93,11 @@ Read your service settings before pointing this at anything sensitive. For routi
 ### Docker or Podman (recommended)
 
 ```bash
-docker compose up -d
+git clone https://github.com/VirtuallyTrue12/virtuallyView.git && cd virtuallyView
+docker compose -f docker-compose.yml -f docker-compose.release.yml up -d
 ```
 
-One command. Nothing else to install, register or configure. This starts virtuallyView and everything it needs underneath, already wired together and talking to each other, no setup required from you. If you have never touched Docker before, [install for beginners](docs/install-for-beginners.md) walks through every step, screenshots included.
+This pulls the published, versioned image and starts virtuallyView with the services underneath it, already connected to each other. Prefer to build it yourself from this folder? `docker compose up -d` does that instead (a few minutes longer on the first run). It needs Docker with Compose 2.24 or newer, or Podman with a compatible Compose; plan for about 2 GB of images, 4 GB of RAM and free disk for your media. If you have never touched Docker before, [install for beginners](docs/install-for-beginners.md) walks through every step, screenshots included.
 
 Under the hood it brings up a small stack of open-source engines that do the actual finding and downloading (Radarr, Sonarr, Prowlarr, Lidarr, Bazarr, qBittorrent and NZBGet) and connects them to each other and to virtuallyView automatically: root folders, the download client, the indexer connections, all of it. You never need to open their pages or know what they are. They share a private network, but the ports published on your computer are reachable by anything that can reach it, so read [deployment](docs/deployment.md) before exposing them.
 
@@ -125,7 +126,7 @@ New to Docker? Follow the [install guide for beginners](docs/install-for-beginne
 
 It worked? Tell one friend still renting, and if it saved you a subscription, the [keep](#feed-the-keep) is fed by people like you.
 
-A prebuilt image is published for each release at `ghcr.io/<owner>/virtuallyview` if you would rather not build it yourself.
+The published image is `ghcr.io/virtuallytrue12/virtuallyview`, tagged with each release version (and `latest`).
 
 The bundled stack keeps its library and downloads in named volumes, not in this folder. To use an existing library, change the `media-movies`, `media-tv`, `media-music` and `downloads` volumes in `docker-compose.yml` to bind mounts. The *arr containers run as `PUID=0`/`PGID=0` to avoid volume permission trouble; see [the seed guide](docker/seed/README.md) for how to run unprivileged.
 
@@ -137,7 +138,7 @@ Anyone on your network can open `http://<this-computer's-ip>:3000`. Add their ac
 
 ### From source
 
-Requires Node.js 20 or newer.
+Requires Node.js 22.5 or newer (the server uses the built-in SQLite module; the Docker image runs Node 24).
 
 ```bash
 npm install

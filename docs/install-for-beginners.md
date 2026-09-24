@@ -29,8 +29,10 @@ Without Git: on the repository page choose Code > Download ZIP, unzip it, and op
 ## 3. Start it
 
 ```
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.release.yml up -d
 ```
+
+(If that is refused because the release image is not published yet, `docker compose up -d` builds it from the folder instead.)
 
 The first start downloads several images (Radarr, Sonarr, Lidarr, Prowlarr, Bazarr, qBittorrent, NZBGet and the app) and can take 5 to 10 minutes. It wires the services together for you.
 

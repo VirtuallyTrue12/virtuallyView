@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0
+
+Security, install and reliability release. Read the notes marked **Upgrade** before updating.
+
+- **Security.** Passwords are now stored with salted scrypt instead of a bare SHA-256, and session tokens are stored only as hashes. **Upgrade:** existing accounts keep working and are rehashed on their next sign-in; sessions saved by 0.1.0 are converted on first start.
+- **Security.** The assistant now enforces who may act (regular people cannot pause, retry, remove or change themes through it), and its confirmations are one-time, server-issued records tied to one person and one exact action.
+- **Security.** A person's age limit now applies to every playback route for an episode, not only the series page.
+- **Fixed.** Downloads never imported when qBittorrent saved into its own config volume; it now saves to the shared downloads folder and existing installs are corrected on the next setup run.
+- **Fixed.** The VPN overlay was rejected by Compose and hid qBittorrent from the other services; both fixed, and a no-account option (VPN Gate) was added with automatic relay replacement.
+- **Install.** A version-pinned `docker-compose.release.yml` pulls the published image; release publishing now runs the same checks as CI plus a smoke test. Node.js 22.5 or newer is required (the README said 20).
+- **Added.** Seek-bar preview thumbnails, live TV record-now, Kiwix offline libraries, an Apps page for Immich, Audiobookshelf and Kavita, opt-in automatic updates (Watchtower), paranoid mode (all searching over Tor), model browser and progressive replies in the assistant, and a background activity indicator.
+
 ## 0.1.0
 
 First public release.

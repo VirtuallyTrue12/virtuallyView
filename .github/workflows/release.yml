@@ -1,6 +1,8 @@
 name: Release image
 
-# Publishes ghcr.io/<owner>/<repo> when you push a version tag such as v0.1.0.
+# Publishes ghcr.io/<owner>/<repo> when you push a version tag such as v0.2.0.
+# Nothing is published unless the same checks CI runs pass on that exact commit,
+# the version numbers agree, and the built image starts and answers its health check.
 on:
   push:
     tags: ['v*']
@@ -10,7 +12,23 @@ permissions:
   packages: write
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: node scripts/check-version.mjs
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+
   image:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +45,15 @@ jobs:
           tags: virtuallyview:inspect
       - name: Check the image contents
         run: sh scripts/check-image.sh virtuallyview:inspect
+
+      # Start the image on its own and check it reports the tagged version.
+      - name: Smoke test
+        run: |
+          docker run -d --name vv -p 3000:3000 virtuallyview:inspect
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:3000/api/health && break; sleep 2; done
+          curl -fs http://127.0.0.1:3000/api/health | grep "\"version\":\"${GITHUB_REF_NAME#v}\""
+          curl -fs http://127.0.0.1:3000/ | grep -qi "<div id=\"root\""
+          docker rm -f vv
 
       - uses: docker/login-action@v3
         with:

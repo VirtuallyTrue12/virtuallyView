@@ -36,6 +36,7 @@ import appsRoutes from './routes/apps.js';
 import libraryFolderRoutes from './routes/library-folders.js';
 import artRoutes from './routes/art.js';
 import setupRoutes from './routes/setup.js';
+import { VERSION } from './lib/version.js';
 import { startAutoBackup } from './services/backup.js';
 import { startAiDigest } from './services/ai-digest.js';
 import { startRequestSync } from './services/requests.js';
@@ -90,7 +91,7 @@ function deviceLabel(ua: string | undefined): string {
   return `${browser} on ${os}`;
 }
 
-server.get('/api/health', async () => ({ status: 'ok', version: '1.0.0' }));
+server.get('/api/health', async () => ({ status: 'ok', version: VERSION }));
 server.get('/api/metrics', async () => ({ ...metrics, uptimeSeconds: Math.round(process.uptime()) }));
 server.get('/api/auth/status', async request => {
   const token = readSessionCookie(request.headers.cookie);

@@ -1,0 +1,16 @@
+# Use the published, versioned image instead of building from this folder:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.release.yml up -d
+#
+# The version below is the release this checkout belongs to (a check in CI keeps
+# it equal to package.json). Building from source stays available with a plain
+# "docker compose up -d". Override with VV_VERSION=<x.y.z> to pin another one.
+services:
+  app:
+    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.2.0}
+    build: !reset null
+    pull_policy: missing
+  provision:
+    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.2.0}
+    build: !reset null
+    pull_policy: missing
