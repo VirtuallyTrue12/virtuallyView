@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import net from 'node:net';
 /**
  * Runs once when the Docker Compose stack starts. Wires Radarr, Sonarr, and
  * Lidarr to qBittorrent as a download client, sets each app's root folder,
@@ -459,6 +460,75 @@ async function ensureProwlarrIndexer() {
   }
 }
 
+
+/**
+ * SEARCH_VIA_TOR=true: every search source is reached through the bundled Tor
+ * proxy. Each source is tested over Tor; the ones that answer are tagged to use
+ * it, the ones that do not are switched OFF (never left to search directly,
+ * which would defeat the point) and marked so that turning the setting off
+ * later switches them back on. Setting it to false undoes all of it.
+ */
+async function ensureSearchViaTor(headers) {
+  const on = /^(1|true|yes|on)$/i.test(process.env.SEARCH_VIA_TOR ?? '');
+  const torHost = process.env.TOR_HOST ?? 'tor';
+  const torPort = Number(process.env.TOR_PORT ?? 9050);
+  const api = (path, init) => fetch(`${PROWLARR.url}/api/v1${path}`, { headers, signal: AbortSignal.timeout(120000), ...init });
+  const tags = await (await api('/tag')).json();
+  const ensureTag = async label => tags.find(t => t.label === label) ?? await (await api('/tag', { method: 'POST', body: JSON.stringify({ label }) })).json();
+  const indexers = await (await api('/indexer')).json();
+  const proxies = await (await api('/indexerProxy')).json();
+  const torProxy = proxies.find(p => p.name === 'Tor (virtuallyView)');
+  const viaTag = tags.find(t => t.label === 'vv-tor');
+  const offTag = tags.find(t => t.label === 'vv-tor-off');
+
+  if (!on) {
+    if (!torProxy && !viaTag && !offTag) return;
+    for (const ix of indexers) {
+      const mine = (ix.tags ?? []).filter(t => t === viaTag?.id || t === offTag?.id);
+      if (!mine.length) continue;
+      await api(`/indexer/${ix.id}?forceSave=true`, { method: 'PUT', body: JSON.stringify({ ...ix, tags: ix.tags.filter(t => !mine.includes(t)), enable: mine.includes(offTag?.id) ? true : ix.enable }) });
+    }
+    if (torProxy) await api(`/indexerProxy/${torProxy.id}`, { method: 'DELETE' });
+    log('Prowlarr: search over Tor is off; sources are back to searching directly');
+    return;
+  }
+
+  const reachable = await new Promise(ok => {
+    const socket = net.connect({ host: torHost, port: torPort, timeout: 5000 }, () => { socket.destroy(); ok(true); });
+    socket.on('error', () => ok(false)); socket.on('timeout', () => { socket.destroy(); ok(false); });
+  });
+  if (!reachable) throw new Error(`SEARCH_VIA_TOR is on but the Tor proxy at ${torHost}:${torPort} is not running. Start it with COMPOSE_PROFILES=tor (or: docker compose --profile tor up -d)`);
+
+  const via = await ensureTag('vv-tor');
+  const off = await ensureTag('vv-tor-off');
+  if (!torProxy) {
+    const schema = (await (await api('/indexerProxy/schema')).json()).find(p => p.implementation === 'Socks5');
+    if (!schema) throw new Error('This Prowlarr has no SOCKS5 indexer proxy');
+    const fields = schema.fields.map(f => ({ name: f.name, value: f.name === 'host' ? torHost : f.name === 'port' ? torPort : f.value }));
+    const made = await api('/indexerProxy', { method: 'POST', body: JSON.stringify({ ...schema, name: 'Tor (virtuallyView)', fields, tags: [via.id] }) });
+    if (!made.ok) throw new Error(`Prowlarr: could not add the Tor proxy (${made.status})`);
+  }
+
+  const flare = tags.find(t => t.label === 'flaresolverr');
+  const todo = indexers.filter(ix => !(ix.tags ?? []).includes(via.id));
+  let working = 0, disabled = 0, next = 0;
+  const worker = async () => {
+    while (next < todo.length) {
+      const ix = todo[next++];
+      // A source cannot use two proxies at once; FlareSolverr is dropped in favour of Tor.
+      const base = (ix.tags ?? []).filter(t => t !== flare?.id && t !== off.id);
+      try {
+        const tested = await api(`/indexer/${ix.id}`, { method: 'PUT', body: JSON.stringify({ ...ix, enable: true, tags: [...base, via.id] }) });
+        if (tested.ok) { working++; continue; }
+      } catch { /* treated as not working over Tor */ }
+      await api(`/indexer/${ix.id}?forceSave=true`, { method: 'PUT', body: JSON.stringify({ ...ix, enable: false, tags: [...base, off.id] }) });
+      disabled++;
+    }
+  };
+  await Promise.all(Array.from({ length: 4 }, worker));
+  log(`Prowlarr: search over Tor is on. ${working} source(s) work through it; ${disabled} do not (Tor exits are often blocked) and are switched off rather than searching directly.`);
+}
+
 async function firstProwlarrAppProfileId(headers) {
   const response = await fetch(`${PROWLARR.url}/api/v1/appprofile`, { headers });
   if (!response.ok) return undefined;
@@ -510,6 +580,7 @@ async function main() {
   await step('Prowlarr link to Sonarr', () => ensureProwlarrApplication(SONARR, 'Sonarr'));
   await step('Prowlarr link to Lidarr', () => ensureProwlarrApplication(LIDARR, 'Lidarr'));
   await step('Prowlarr search sources', () => ensureProwlarrIndexer());
+  await step('Prowlarr search over Tor', () => ensureSearchViaTor({ 'X-Api-Key': PROWLARR.key, 'Content-Type': 'application/json' }));
   await step('Prowlarr sync', () => syncProwlarrApplications());
   await step('Bazarr subtitles', () => ensureBazarr());
 

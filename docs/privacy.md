@@ -34,6 +34,27 @@ Should print `{"IsTor":true, ...}` with an exit address that is not your own.
 
 **If an indexer you tagged for Tor stops answering:** the `tor` profile must be running (`docker compose ps`), and some sites refuse connections from known Tor exit nodes outright; that is the site's choice, not a bug here.
 
+## Paranoid mode: all searching over Tor
+
+Two lines in `.env`:
+
+```
+SEARCH_VIA_TOR=true
+COMPOSE_PROFILES=tor
+```
+
+then `docker compose up -d` and run the setup again (Settings, or `docker compose run --rm provision`). It starts the bundled Tor proxy and:
+
+- routes every Prowlarr search source through it;
+- tests each source over Tor, and **switches off** the ones that do not answer, instead of letting them search directly (many sites block Tor exit nodes);
+- sends the server's own lookups (metadata, covers, trailers) through Tor as well.
+
+Tested live on this stack: 37 of 51 sources worked over Tor, a search returned 387 results from 16 sources, and with the Tor container stopped the same search returned nothing (it fails closed rather than leaking). Some sources that a home ISP blocks even worked better over Tor.
+
+Expect fewer sources and slower searches. Set `SEARCH_VIA_TOR=false` and run the setup again to undo all of it: switched-off sources are turned back on and the proxy is removed.
+
+Pair it with a VPN for downloads (below): your searches and your downloads then leave through different doors. This is a strong improvement, not full anonymity: the peers you download from still see the VPN's address, and Tor does not protect an account you sign in to.
+
 ## VPN for downloads
 
 Two ways, both use [gluetun](https://github.com/qdm12/gluetun), an open-source VPN client container. Either one routes only qBittorrent's traffic; search, browsing and every other service are untouched.

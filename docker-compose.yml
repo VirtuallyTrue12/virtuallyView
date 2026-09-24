@@ -244,6 +244,7 @@ services:
       - PROWLARR_API_KEY=c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6
       - PROWLARR_AUTO_INDEXERS=${PROWLARR_AUTO_INDEXERS:-all-public}
       - FLARESOLVERR_URL=http://flaresolverr:8191
+      - SEARCH_VIA_TOR=${SEARCH_VIA_TOR:-false}
       - LIDARR_URL=http://lidarr:8686
       - LIDARR_API_KEY=d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1
       - BAZARR_URL=http://bazarr:6767
@@ -312,6 +313,7 @@ services:
       - NZBGET_PASSWORD=${NZBGET_PASSWORD:-nzbget}
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:0.5b}
+      - SEARCH_VIA_TOR=${SEARCH_VIA_TOR:-false}
     volumes:
       - app-data:/app/apps/server/data
       - media-movies:/media/movies:ro

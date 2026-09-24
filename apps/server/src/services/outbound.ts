@@ -21,7 +21,8 @@ function activeProxy(): OutboundProxyConfig | null {
   } catch {
     // Settings unreadable: fall back to the environment override below
   }
-  const raw = process.env.OUTBOUND_PROXY;
+  // Paranoid mode: one switch sends the server's own lookups through the bundled Tor proxy too.
+  const raw = process.env.OUTBOUND_PROXY || (/^(1|true|yes|on)$/i.test(process.env.SEARCH_VIA_TOR ?? '') ? 'tor://tor:9050' : undefined);
   if (raw && raw.includes('://')) {
     const [scheme, rest] = raw.split('://');
     const [host, portRaw] = rest.split(':');
