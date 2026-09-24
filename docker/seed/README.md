@@ -1,25 +1,25 @@
 # Seed configuration
 
-These files are copied into each service's config volume the first time it starts, so `docker compose up -d` brings up a fully connected stack with zero manual setup: Radarr, Sonarr, Prowlarr, Lidarr, and qBittorrent all get a fixed, known API key or login, and the dashboard connects to all of them automatically using those same values.
+These files are copied into each service's config volume the first time it starts, so `docker compose up -d` brings up a fully connected stack with no manual setup: Radarr, Sonarr, Prowlarr, Lidarr and qBittorrent are pre-configured, and the dashboard connects to all of them automatically.
 
-They are only copied in if the target config file does not already exist (see the `*-init` services in `docker-compose.yml`), so editing credentials inside the running apps later is safe and persists normally.
+They are only copied in if the target config file does not already exist (see the `*-init` services in `docker-compose.yml`), so editing settings inside the running apps later is safe and persists normally.
 
-**These are public, published default credentials, not secrets.** They exist so the stack can wire itself together on a private network. If you expose any of these services directly to the internet (not just the dashboard), change their API key or password first, in each app's own settings, then update the corresponding fields in `docker-compose.yml`.
+## API keys are generated for each install
 
-| Service | Default | Where to change it |
-| --- | --- | --- |
-| Radarr | API key `a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4` | Settings > General |
-| Sonarr | API key `b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5` | Settings > General |
-| Prowlarr | API key `c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6` | Settings > General |
-| Lidarr | API key `d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1` | Settings > General |
-| qBittorrent | `admin` / `adminadmin` | WebUI > Tools > Options > Web UI |
+The seed files carry **no keys**. On first boot a one-shot service (`secrets-init`, see `docker/secrets-init.sh`) writes one key per service into a `secrets` volume, and the services read theirs from it (`FILE__RADARR__AUTH__APIKEY` and so on); the dashboard, the health checks and the setup script read the same files. For each service it uses, in order:
 
-Bazarr is not pre-seeded (its config format is less stable across versions). Open **Settings > Integrations** after the first boot:
+1. a key already in the `secrets` volume (so nothing changes on a rerun);
+2. a key you set in `.env` (`RADARR_API_KEY`, `SONARR_API_KEY`, `PROWLARR_API_KEY`, `LIDARR_API_KEY`, `BAZARR_API_KEY`);
+3. the key an existing install already has in its config, so upgrading never locks the dashboard out of a running stack;
+4. a new random key.
 
-1. Copy Bazarr's API key from its Settings > General page.
-2. Save its URL and key in virtuallyView. The dashboard reports it as `setup_required` instead of silently treating an incomplete setup as a network outage.
+So a new install has keys nobody else has. An install that was created before this keeps its earlier keys, which were the published defaults `a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4` (Radarr) and so on: if you have one, treat them as public until you replace them. To replace them, back up (Settings > Backup), remove the stack and its volumes, and start again.
 
-For deployments beyond a private machine, replace every seeded Arr/qBittorrent credential before publishing any port and provide the corresponding values through a private `.env` file or secret manager. Do not commit that file.
+To read a key: `docker compose exec app cat /secrets/radarr` (or `sonarr`, `prowlarr`, `lidarr`, `bazarr`).
+
+## qBittorrent
+
+qBittorrent is seeded with the login `admin` / `adminadmin` and only accepts connections from this machine and the stack's private network (its port is published on `127.0.0.1` only). Change the password in its own WebUI (Tools > Options > Web UI) if other people use this machine, then update the same password in Settings > Services. It is the one credential that is still a shared default.
 
 ## Why these containers run as root (PUID=0/PGID=0)
 

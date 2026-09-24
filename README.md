@@ -101,7 +101,7 @@ This pulls the published, versioned image and starts virtuallyView with the serv
 
 Under the hood it brings up a small stack of open-source engines that do the actual finding and downloading (Radarr, Sonarr, Prowlarr, Lidarr, Bazarr, qBittorrent and NZBGet) and connects them to each other and to virtuallyView automatically: root folders, the download client, the indexer connections, all of it. You never need to open their pages or know what they are. They share a private network, but the ports published on your computer are reachable by anything that can reach it, so read [deployment](docs/deployment.md) before exposing them.
 
-The seeded API keys and qBittorrent login are public defaults, listed in [docker/seed/README.md](docker/seed/README.md). Change them before anyone else can reach the ports.
+Each new install gets its own generated service keys ([docker/seed/README.md](docker/seed/README.md)); the one shared default left is qBittorrent's login, which only this machine can reach. Read [security](SECURITY.md) before exposing anything beyond your home network.
 
 Open http://localhost:3000 and create the first account. It becomes the administrator. Then:
 

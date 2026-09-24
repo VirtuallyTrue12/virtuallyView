@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 import net from 'node:net';
+import { readFileSync } from 'node:fs';
+
+// FOO_API_KEY_FILE=/path reads the key generated at first boot into FOO_API_KEY.
+for (const [name, path] of Object.entries(process.env)) {
+  const match = /^(.+_API_KEY)_FILE$/.exec(name);
+  if (!match || !path || process.env[match[1]]) continue;
+  try { process.env[match[1]] = readFileSync(path, 'utf8').trim(); } catch { /* optional */ }
+}
 /**
  * Runs once when the Docker Compose stack starts. Wires Radarr, Sonarr, and
  * Lidarr to qBittorrent as a download client, sets each app's root folder,
@@ -345,8 +353,13 @@ async function ensureOneIndexer(definitionName, headers, existing) {
     log(`Prowlarr: indexer definition "${definitionName}" is not available in this Prowlarr version, skipping`);
     return;
   }
-  const result = await addIndexerFromSchema(schema, headers, { test: false });
-  log(result.ok ? `Prowlarr: added ${schema.name} as a search source` : `Prowlarr: could not add ${schema.name}. ${result.body}`.trim());
+  let result = await addIndexerFromSchema(schema, headers, { test: false });
+  if (!result.ok && /cloudflare|ddos|captcha|challenge/i.test(result.body)) {
+    const tag = await ensureFlareSolverr(headers);
+    if (tag) result = await addIndexerFromSchema(schema, headers, { test: false, tags: [tag] });
+  }
+  const reason = /"errorMessage"\s*:\s*"([^"]+)"/.exec(result.body)?.[1] ?? result.body;
+  log(result.ok ? `Prowlarr: added ${schema.name} as a search source` : `Prowlarr: could not add ${schema.name} right now (${reason.slice(0, 120)}). It is tried again on the next setup run.`);
 }
 
 /** Every public, non-adult source that answers. Ones behind Cloudflare are retried through FlareSolverr. */
@@ -560,15 +573,26 @@ async function main() {
   log('Waiting for Radarr, Sonarr, Lidarr, and Prowlarr to come online...');
   const ready = await Promise.all([...APPS.map(a => waitForReady(a)), waitForProwlarr()]);
   if (ready.some(r => !r)) {
-    log('One or more services did not come online in time. Nothing was configured; they will still work if you set them up manually in Settings.');
+    log('One or more services did not come online in time. Nothing was configured; they will still work if you set them up manually in Settings. Run "docker compose run --rm provision" once they are up.');
+    process.exitCode = 2;
     return;
   }
 
   // Each step runs on its own: one failure (a slow website, a service that is
   // still starting) is reported and the rest of the setup carries on.
   const failed = [];
+  // A step that fails is retried with a growing pause (a service that is still
+  // starting usually answers a moment later) before it is reported as failed.
   const step = async (label, run) => {
-    try { await run(); } catch (err) { failed.push(label); log(`${label}: ${err instanceof Error ? err.message : err}`); }
+    const pauses = [5000, 10000, 20000];
+    for (let attempt = 0; ; attempt++) {
+      try { await run(); return; } catch (err) {
+        if (attempt < pauses.length) { await new Promise(resolve => setTimeout(resolve, pauses[attempt])); continue; }
+        failed.push(label);
+        log(`${label}: ${err instanceof Error ? err.message : err}`);
+        return;
+      }
+    }
   };
   await step('qBittorrent download folder', () => ensureQbitSavePath());
   for (const app of APPS) {

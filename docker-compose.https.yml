@@ -17,7 +17,8 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
-      - app
+      app:
+        condition: service_healthy
 
   # Only Caddy is reachable from outside now; the app answers on the private network.
   app:

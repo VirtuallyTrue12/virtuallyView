@@ -3,6 +3,26 @@ services:
   # Each *-init container copies a pre-built config into that service's
   # volume only if it isn't there yet, so first boot needs no manual setup.
 
+  # Creates each service's API key on first boot (random, or the one an existing
+  # install already has), so no two installs share keys. See docker/secrets-init.sh.
+  secrets-init:
+    image: alpine:3.20
+    environment:
+      - RADARR_API_KEY=${RADARR_API_KEY:-}
+      - SONARR_API_KEY=${SONARR_API_KEY:-}
+      - PROWLARR_API_KEY=${PROWLARR_API_KEY:-}
+      - LIDARR_API_KEY=${LIDARR_API_KEY:-}
+      - BAZARR_API_KEY=${BAZARR_API_KEY:-}
+    volumes:
+      - secrets:/secrets
+      - radarr-config:/cfg/radarr:ro
+      - sonarr-config:/cfg/sonarr:ro
+      - prowlarr-config:/cfg/prowlarr:ro
+      - lidarr-config:/cfg/lidarr:ro
+      - bazarr-config:/cfg/bazarr:ro
+      - ./docker/secrets-init.sh:/init.sh:ro
+    entrypoint: ["sh", "/init.sh"]
+
   radarr-init:
     image: alpine:3.20
     volumes:
@@ -33,10 +53,14 @@ services:
 
   bazarr-init:
     image: alpine:3.20
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
     volumes:
       - ./docker/seed/bazarr/config.yaml:/seed/config.yaml:ro
       - bazarr-config:/config
-    entrypoint: ["sh", "-c", "mkdir -p /config/config && test -f /config/config/config.yaml || cp /seed/config.yaml /config/config/config.yaml"]
+      - secrets:/secrets:ro
+    entrypoint: ["sh", "-c", "mkdir -p /config/config && test -f /config/config/config.yaml || { cp /seed/config.yaml /config/config/config.yaml && sed -i \"s/SEEDED_AT_FIRST_BOOT/$$(cat /secrets/bazarr)/\" /config/config/config.yaml; }"]
 
   qbittorrent-init:
     image: alpine:3.20
@@ -60,6 +84,8 @@ services:
     depends_on:
       radarr-init:
         condition: service_completed_successfully
+      secrets-init:
+        condition: service_completed_successfully
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -67,14 +93,16 @@ services:
       - PUID=0
       - PGID=0
       - TZ=Etc/UTC
+      - FILE__RADARR__AUTH__APIKEY=/secrets/radarr
     volumes:
+      - secrets:/secrets:ro
       - radarr-config:/config
       - media-movies:/media/movies
       - downloads:/downloads
     ports:
       - "127.0.0.1:7878:7878"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "--header=X-Api-Key: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", "http://localhost:7878/api/v3/system/status"]
+      test: ["CMD-SHELL", "wget -qO- --header=\"X-Api-Key: $$(cat /secrets/radarr)\" http://localhost:7878/api/v3/system/status"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -87,6 +115,8 @@ services:
     depends_on:
       sonarr-init:
         condition: service_completed_successfully
+      secrets-init:
+        condition: service_completed_successfully
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -94,14 +124,16 @@ services:
       - PUID=0
       - PGID=0
       - TZ=Etc/UTC
+      - FILE__SONARR__AUTH__APIKEY=/secrets/sonarr
     volumes:
+      - secrets:/secrets:ro
       - sonarr-config:/config
       - media-tv:/media/tv
       - downloads:/downloads
     ports:
       - "127.0.0.1:8989:8989"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "--header=X-Api-Key: b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5", "http://localhost:8989/api/v3/system/status"]
+      test: ["CMD-SHELL", "wget -qO- --header=\"X-Api-Key: $$(cat /secrets/sonarr)\" http://localhost:8989/api/v3/system/status"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -114,6 +146,8 @@ services:
     depends_on:
       prowlarr-init:
         condition: service_completed_successfully
+      secrets-init:
+        condition: service_completed_successfully
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -121,12 +155,14 @@ services:
       - PUID=0
       - PGID=0
       - TZ=Etc/UTC
+      - FILE__PROWLARR__AUTH__APIKEY=/secrets/prowlarr
     volumes:
+      - secrets:/secrets:ro
       - prowlarr-config:/config
     ports:
       - "127.0.0.1:9696:9696"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "--header=X-Api-Key: c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6", "http://localhost:9696/api/v1/system/status"]
+      test: ["CMD-SHELL", "wget -qO- --header=\"X-Api-Key: $$(cat /secrets/prowlarr)\" http://localhost:9696/api/v1/system/status"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -139,6 +175,8 @@ services:
     depends_on:
       lidarr-init:
         condition: service_completed_successfully
+      secrets-init:
+        condition: service_completed_successfully
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -146,14 +184,16 @@ services:
       - PUID=0
       - PGID=0
       - TZ=Etc/UTC
+      - FILE__LIDARR__AUTH__APIKEY=/secrets/lidarr
     volumes:
+      - secrets:/secrets:ro
       - lidarr-config:/config
       - media-music:/media/music
       - downloads:/downloads
     ports:
       - "127.0.0.1:8686:8686"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "--header=X-Api-Key: d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1", "http://localhost:8686/api/v1/system/status"]
+      test: ["CMD-SHELL", "wget -qO- --header=\"X-Api-Key: $$(cat /secrets/lidarr)\" http://localhost:8686/api/v1/system/status"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -235,20 +275,22 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["node", "scripts/provision-stack.mjs"]
+    volumes:
+      - secrets:/secrets:ro
     environment:
       - RADARR_URL=http://radarr:7878
-      - RADARR_API_KEY=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+      - RADARR_API_KEY_FILE=/secrets/radarr
       - SONARR_URL=http://sonarr:8989
-      - SONARR_API_KEY=b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5
+      - SONARR_API_KEY_FILE=/secrets/sonarr
       - PROWLARR_URL=http://prowlarr:9696
-      - PROWLARR_API_KEY=c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6
+      - PROWLARR_API_KEY_FILE=/secrets/prowlarr
       - PROWLARR_AUTO_INDEXERS=${PROWLARR_AUTO_INDEXERS:-internetarchive,linuxtracker,btetree}
       - FLARESOLVERR_URL=http://flaresolverr:8191
       - SEARCH_VIA_TOR=${SEARCH_VIA_TOR:-false}
       - LIDARR_URL=http://lidarr:8686
-      - LIDARR_API_KEY=d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1
+      - LIDARR_API_KEY_FILE=/secrets/lidarr
       - BAZARR_URL=http://bazarr:6767
-      - BAZARR_API_KEY=${BAZARR_API_KEY:-e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2}
+      - BAZARR_API_KEY_FILE=/secrets/bazarr
       - SUBTITLE_LANGUAGES=${SUBTITLE_LANGUAGES:-en}
       - QBITTORRENT_HOST=qbittorrent
       - QBITTORRENT_USERNAME=admin
@@ -278,7 +320,10 @@ services:
         condition: service_started
       flaresolverr:
         condition: service_started
-    restart: "no"
+      secrets-init:
+        condition: service_completed_successfully
+    # Fails loudly, and tries again a couple of times, instead of reporting success after a failure.
+    restart: "on-failure:2"
 
   app:
     build:
@@ -288,7 +333,7 @@ services:
     # the local network can reach it at http://<host-ip>:3000. The *arr stack,
     # download clients and Ollama stay bound to 127.0.0.1 (host-only).
     ports:
-      - "0.0.0.0:3000:3000"
+      - "0.0.0.0:${DASHBOARD_PORT:-3000}:3000"
     # Public resolvers, like the other services: without this the app cannot
     # resolve TMDB/YouTube/MusicBrainz, so trailers, cast and covers all fail.
     dns:
@@ -296,15 +341,15 @@ services:
       - 8.8.8.8
     environment:
       - RADARR_URL=http://radarr:7878
-      - RADARR_API_KEY=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+      - RADARR_API_KEY_FILE=/secrets/radarr
       - SONARR_URL=http://sonarr:8989
-      - SONARR_API_KEY=b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5
+      - SONARR_API_KEY_FILE=/secrets/sonarr
       - PROWLARR_URL=http://prowlarr:9696
-      - PROWLARR_API_KEY=c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6
+      - PROWLARR_API_KEY_FILE=/secrets/prowlarr
       - LIDARR_URL=http://lidarr:8686
-      - LIDARR_API_KEY=d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1
+      - LIDARR_API_KEY_FILE=/secrets/lidarr
       - BAZARR_URL=http://bazarr:6767
-      - BAZARR_API_KEY=${BAZARR_API_KEY:-e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2}
+      - BAZARR_API_KEY_FILE=/secrets/bazarr
       - QBITTORRENT_URL=http://qbittorrent:8080
       - QBITTORRENT_USERNAME=admin
       - QBITTORRENT_PASSWORD=adminadmin
@@ -319,12 +364,19 @@ services:
       - TRUST_PROXY=${TRUST_PROXY:-}
     volumes:
       - helper-shared:/shared:ro
+      - secrets:/secrets:ro
       - app-data:/app/apps/server/data
       - media-movies:/media/movies:ro
       - media-tv:/media/tv:ro
       - media-music:/media/music:ro
       - media-photos:/media/photos:ro
       - media-books:/media/books:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ready >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     depends_on:
       - radarr
       - sonarr
@@ -548,6 +600,7 @@ volumes:
   app-data:
   ollama-data:
   kiwix-data:
+  secrets:
   helper-shared:
   audiobookshelf-config:
   audiobookshelf-metadata:

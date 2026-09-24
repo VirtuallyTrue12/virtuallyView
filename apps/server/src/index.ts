@@ -1,3 +1,4 @@
+import './lib/env-files.js';
 import { existsSync } from 'node:fs';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
@@ -38,6 +39,7 @@ import artRoutes from './routes/art.js';
 import setupRoutes from './routes/setup.js';
 import { VERSION } from './lib/version.js';
 import { redactUrl } from './lib/redact.js';
+import { all } from './db/app-db.js';
 import { startAutoBackup } from './services/backup.js';
 import { startAiDigest } from './services/ai-digest.js';
 import { startRequestSync } from './services/requests.js';
@@ -125,6 +127,13 @@ function deviceLabel(ua: string | undefined): string {
 }
 
 server.get('/api/health', async () => ({ status: 'ok', version: VERSION }));
+// Ready means the app can actually serve: its database answers. Nothing about
+// services or configuration is exposed, so container healthchecks can use it.
+server.get('/api/ready', async (_request, reply) => {
+  let database = false;
+  try { all('SELECT 1'); database = true; } catch { /* reported below */ }
+  return reply.code(database ? 200 : 503).send({ ready: database, database, version: VERSION });
+});
 server.get('/api/metrics', async () => ({ ...metrics, uptimeSeconds: Math.round(process.uptime()) }));
 server.get('/api/auth/status', async request => {
   const token = readSessionCookie(request.headers.cookie);
@@ -360,7 +369,7 @@ server.addHook('preHandler', async (request, reply) => {
   // Health and metrics stay public so uptime monitors and container
   // healthchecks work without a dashboard session. They expose no
   // library or configuration data.
-  if (request.url === '/api/health' || request.url === '/api/metrics') return;
+  if (request.url === '/api/health' || request.url === '/api/ready' || request.url === '/api/metrics') return;
   if (!isAuthenticated(readSessionCookie(request.headers.cookie))) {
     const [pathname = '', query = ''] = request.url.split('?');
     if (request.method === 'GET' && verifyStreamToken(new URLSearchParams(query).get('st') ?? undefined, pathname)) return;

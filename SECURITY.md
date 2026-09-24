@@ -6,7 +6,7 @@ Open a private security advisory on the repository, or email the maintainer if a
 
 ## What to know before you run it
 
-- **The bundled stack ships public default keys.** The Radarr, Sonarr, Prowlarr and Lidarr API keys and the qBittorrent login in `docker/seed/README.md` are known to everyone. Change them, and do not expose those ports to the internet (they are bound to this machine only unless you change that).
+- **Service keys are generated for each install.** New installs get random Radarr, Sonarr, Prowlarr, Lidarr and Bazarr keys; installs made before 0.2.0 keep their earlier, published default keys until replaced. qBittorrent still uses the shared default login `admin` / `adminadmin`, so it stays bound to this machine only; change it if others use the machine ([docker/seed/README.md](docker/seed/README.md)). Do not expose these ports to the internet.
 - **The first account is the administrator.** Create it before anyone else can reach the server. Later sign-up is closed unless you turn it on under Settings > Server.
 - **Passwords are short by design.** This is meant for a home network, so the minimum is four characters. They are stored with salted scrypt, not readable from the data folder. Use a longer one if the server is reachable from outside.
 - **Sign-in attempts are rate limited** per address. The server has no TLS of its own: put it behind a reverse proxy with HTTPS before exposing it beyond your network ([docs/https.md](docs/https.md)). It only believes forwarded addresses from a proxy you name (`TRUST_PROXY`).

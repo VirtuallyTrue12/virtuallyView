@@ -38,7 +38,7 @@ done
 
 step "5. Indexers"
 echo "  Radarr needs at least one enabled indexer to find movies."
-KR=$(grep -oP 'RADARR_API_KEY=\K[A-Za-z0-9]+' docker-compose.yml 2>/dev/null | head -1)
+KR=$(docker compose exec -T app cat /secrets/radarr 2>/dev/null || grep -oP 'RADARR_API_KEY=\K[A-Za-z0-9]+' docker-compose.yml 2>/dev/null | head -1)
 if [ -n "$KR" ]; then
   count=$(curl -fs -H "X-Api-Key: $KR" http://127.0.0.1:7878/api/v3/indexer 2>/dev/null | grep -c '"enable": true' || true)
   [ "$count" -gt 0 ] && ok "radarr has $count enabled indexer(s)" || warn "no enabled indexers in Radarr; run scripts/fix-indexers.sh or add one in Prowlarr UI"
