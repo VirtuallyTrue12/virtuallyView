@@ -712,6 +712,17 @@ describe('e2e: concerts and videos', () => {
   }, 30_000);
 });
 
+describe('e2e: pick a release', () => {
+  it('is administrator-only and validates its input', async () => {
+    const cookieViewer = await viewerCookie();
+    expect((await req('GET', '/api/releases/search?q=queen', { cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('POST', '/api/releases/grab', { body: { id: 'x' }, cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('GET', '/api/releases/search?q=a', { cookieOverride: cookieAdmin })).status).toBe(400);
+    expect((await req('POST', '/api/releases/grab', { body: {}, cookieOverride: cookieAdmin })).status).toBe(400);
+    expect((await req('POST', '/api/releases/grab', { body: { id: 'magnet:?xt=urn:btih:never-listed' }, cookieOverride: cookieAdmin })).status).toBe(502);
+  }, 30_000);
+});
+
 describe('e2e: kiwix', () => {
   it('reports unconfigured by default, rejects a bad address, saves a good one, and blocks non-admins', async () => {
     const status = await req('GET', '/api/kiwix/status');

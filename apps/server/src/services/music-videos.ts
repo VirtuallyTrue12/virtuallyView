@@ -15,6 +15,8 @@ export type VideoKind = 'Concerts' | 'Videos';
 export type JobStatus = 'filed' | 'needs_artist' | 'error' | 'skipped';
 
 export const VIDEO_EXT = new Set(['.mkv', '.mp4', '.m4v', '.avi', '.mov', '.ts', '.m2ts', '.webm', '.wmv', '.mpg', '.mpeg', '.vob']);
+/** Categories the person chose when they picked a release by hand (see release-picker). */
+const EXPLICIT_KIND: Record<string, VideoKind> = { 'vv-concerts': 'Concerts', 'vv-videos': 'Videos' };
 const MANAGED_CATEGORIES = new Set(['radarr', 'sonarr', 'lidarr', 'movies', 'tv', 'music', 'series']);
 
 const CONCERT_RE = /\b(live (?:at|in|from|on|@|aid|8)|live \d{4}|in concert|concert|unplugged|world tour|tour \d{4}|farewell tour|festival|rock in rio|glastonbury|wembley|acoustic sessions?)\b/i;
@@ -120,7 +122,7 @@ export interface FileOutcome { status: JobStatus; artist?: ArtistFolder; created
 
 /** Files one finished torrent under its artist. `artistName` is a person's answer and beats guessing. */
 export async function fileTorrent(torrent: TorrentInfo, deps: FilerDeps, opts: { artistName?: string; kind?: VideoKind } = {}): Promise<FileOutcome> {
-  const kind = opts.kind ?? classifyMusicVideo(torrent.name) ?? 'Videos';
+  const kind = opts.kind ?? EXPLICIT_KIND[torrent.category.toLowerCase()] ?? classifyMusicVideo(torrent.name) ?? 'Videos';
   const guesses = opts.artistName ? [opts.artistName] : artistGuesses(torrent.name);
   try {
     const resolved = await resolveArtist(guesses, deps);
@@ -154,7 +156,7 @@ export async function findCandidates(deps: FilerDeps): Promise<TorrentInfo[]> {
   for (const t of torrents) {
     if (t.progress < 100 || done.has(t.hash)) continue;
     if (MANAGED_CATEGORIES.has(t.category.toLowerCase())) continue;
-    if (!classifyMusicVideo(t.name)) continue;
+    if (!EXPLICIT_KIND[t.category.toLowerCase()] && !classifyMusicVideo(t.name)) continue;
     // Already sitting in an artist's Concerts/Videos folder: nothing to do.
     if (/[\\/](Concerts|Videos)([\\/]|$)/.test(t.savePath)) continue;
     const files = await deps.qbit.torrentFiles(t.hash).catch(() => []);

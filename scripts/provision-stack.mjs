@@ -173,6 +173,29 @@ async function ensureMusicPreferences(app) {
   }
 }
 
+/**
+ * The stock "Lossless" music profile refuses every MP3 and unlabelled release,
+ * and most public sources only have those, so requests never download. This
+ * profile takes anything but trash (the release profile above already ignores
+ * mono and low-bitrate rips) and keeps upgrading toward lossless.
+ */
+async function ensureBestAvailableMusicProfile(app) {
+  const headers = { 'X-Api-Key': app.key, 'Content-Type': 'application/json' };
+  const name = 'Best available';
+  const res = await fetch(`${app.url}/api/v1/qualityprofile`, { headers });
+  if (!res.ok) throw new Error(`Lidarr: could not read quality profiles (${res.status})`);
+  const profiles = await res.json();
+  if (profiles.some(p => p.name === name)) return;
+  const template = profiles.find(p => p.name === 'Any') ?? profiles[0];
+  if (!template) return;
+  const lossless = template.items.find(i => /lossless/i.test(i.name ?? '') && i.id !== undefined);
+  if (!lossless) return;
+  const items = template.items.map(i => ({ ...i, allowed: !/trash/i.test(i.name ?? '') && !/^wav$/i.test(i.quality?.name ?? '') }));
+  const { id: _id, ...rest } = template;
+  const made = await fetch(`${app.url}/api/v1/qualityprofile`, { method: 'POST', headers, body: JSON.stringify({ ...rest, name, items, cutoff: lossless.id, upgradeAllowed: true }) });
+  log(made.ok ? 'Lidarr: added the "Best available" music quality profile' : `Lidarr: could not add the "Best available" profile (${made.status})`);
+}
+
 // Bazarr: connect to Radarr and Sonarr, add keyless subtitle sources, create one
 // language profile and give new titles that profile.
 async function ensureBazarr() {
@@ -625,6 +648,7 @@ async function main() {
     await step(`${app.name} root folder`, () => ensureRootFolder(app));
     await step(`${app.name} file renaming`, () => ensureNaming(app));
     if (app === LIDARR) await step('Lidarr audio preferences', () => ensureMusicPreferences(app));
+    if (app === LIDARR) await step('Lidarr best-available profile', () => ensureBestAvailableMusicProfile(app));
     for (const client of DOWNLOAD_CLIENTS) await step(`${app.name} download client`, () => ensureDownloadClient(app, client));
   }
   await step('Prowlarr link to Radarr', () => ensureProwlarrApplication(RADARR, 'Radarr'));

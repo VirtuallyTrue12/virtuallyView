@@ -196,6 +196,23 @@ export class QBittorrentAdapter implements IntegrationAdapter<{ url: string; api
     })).filter(t => t.hash);
   }
 
+  /** Starts a download from a magnet link. `category` keeps it apart from what Radarr, Sonarr and Lidarr manage. */
+  async addMagnet(magnet: string, category: string): Promise<{ success: boolean; message: string }> {
+    const res = await this.authedFetch('/api/v2/torrents/add', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ urls: magnet, category })
+    });
+    return res.ok ? { success: true, message: 'Started.' } : { success: false, message: `qBittorrent returned ${res.status}.` };
+  }
+
+  /** Starts a download from the bytes of a .torrent file. */
+  async addTorrentFile(bytes: Uint8Array, category: string): Promise<{ success: boolean; message: string }> {
+    const form = new FormData();
+    form.append('torrents', new Blob([new Uint8Array(bytes)], { type: 'application/x-bittorrent' }), 'release.torrent');
+    form.append('category', category);
+    const res = await this.authedFetch('/api/v2/torrents/add', { method: 'POST', body: form });
+    return res.ok ? { success: true, message: 'Started.' } : { success: false, message: `qBittorrent returned ${res.status}.` };
+  }
+
   /** File names inside one torrent, relative to its folder. */
   async torrentFiles(hash: string): Promise<string[]> {
     const res = await this.authedFetch(`/api/v2/torrents/files?hash=${encodeURIComponent(hash)}`);

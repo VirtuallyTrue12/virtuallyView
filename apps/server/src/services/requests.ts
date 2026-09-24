@@ -351,7 +351,7 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
   }
   const { key: service, rootFolder } = SERVICE_BY_TYPE[mediaType];
   const chosenQuality = typeof input.qualityProfile === 'string' ? input.qualityProfile.trim() : '';
-  const quality = chosenQuality || getServerSettings().defaultQuality?.[mediaType]?.trim() || (mediaType === 'artist' ? 'Lossless' : 'HD-1080p');
+  const quality = chosenQuality || getServerSettings().defaultQuality?.[mediaType]?.trim() || (mediaType === 'artist' ? 'Best available' : 'HD-1080p');
   const request: RequestItem = {
     id: `request-${seq++}`, title, year: input.year, overview: input.overview,
     selectedProviderId: input.selectedProviderId, status: 'pending', service, mediaType,

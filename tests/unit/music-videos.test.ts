@@ -96,6 +96,14 @@ describe('filing under the artist', () => {
     expect(added).toEqual([]);
   });
 
+  it('files a download the person marked as a concert even though its name says nothing', async () => {
+    const list = [torrent('Linkin Park - Rock Am Ring 2004', { hash: '3'.repeat(40), category: 'vv-concerts' }), torrent('Some Movie 2010', { hash: '4'.repeat(40), category: 'vv-manual' })];
+    const { deps, moves } = fakes([{ id: 8, name: 'Linkin Park', path: '/media/music/Linkin Park' }], [], list);
+    const out = await mv.sweepMusicVideos(deps);
+    expect(out).toHaveLength(1);
+    expect(moves).toEqual([['3'.repeat(40), '/media/music/Linkin Park/Concerts']]);
+  });
+
   it('only sweeps finished, unmanaged concert downloads, and only once', async () => {
     const list = [
       torrent('Foo.Fighters.Live.at.Wembley.2008.1080p', { hash: 'e'.repeat(40) }),

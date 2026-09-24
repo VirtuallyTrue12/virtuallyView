@@ -7,6 +7,7 @@ import { lookupRequestCandidates } from '../lib/request-selection';
 import { useRequester } from '../lib/useRequester';
 import { humanName } from '../lib/integration-names';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import { ReleasePicker } from '../components/media/ReleasePicker';
 
 const ACTIVE = ['pending', 'searching', 'downloading', 'importing'];
 type Filter = 'all' | 'active' | 'failed' | 'done';
@@ -282,6 +283,7 @@ export default function Requests() {
                       </div>
                     )}
                     <RequestActivityFeed events={item.events} status={item.status} />
+                    {isAdmin && (item.status === 'searching' || item.status === 'failed') && <ReleasePicker initialQuery={item.title} />}
                     {item.status === 'searching' && (
                       item.message?.startsWith('Nothing found yet')
                         ? <p className="request-detail request-detail--warn">{item.message}</p>

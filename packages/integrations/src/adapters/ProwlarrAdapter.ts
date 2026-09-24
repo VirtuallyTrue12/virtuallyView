@@ -31,6 +31,12 @@ export function isAdultIndexer(name: string, description: string, categoryIds: n
   return (standard.length > 0 && standard.every(id => id >= 6000 && id < 7000)) || ADULT_WORDS.test(`${name} ${description}`);
 }
 
+export interface ProwlarrRelease {
+  guid: string; title: string; indexer: string; indexerId: number;
+  size: number; seeders: number; leechers: number; ageDays: number;
+  protocol: string; downloadUrl: string;
+}
+
 export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey: string }> {
   id = 'prowlarr';
   name = 'Prowlarr';
@@ -161,6 +167,21 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
   private requireConfig(): { url: string; apiKey: string } {
     if (!this.config) throw new Error('Prowlarr is not connected. Add its URL and API key in Settings.');
     return this.config;
+  }
+
+  /** Free-text release search across every source, for picking a download by hand. */
+  async searchReleases(query: string): Promise<ProwlarrRelease[]> {
+    const { url, apiKey } = this.requireConfig();
+    const res = await fetch(`${url}/api/v1/search?query=${encodeURIComponent(query)}&type=search&limit=100`, {
+      headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(75_000)
+    });
+    if (!res.ok) throw new Error(`Prowlarr returned ${res.status} while searching.`);
+    const data = (await res.json()) as Array<Record<string, unknown>>;
+    return data.map(r => ({
+      guid: String(r.guid ?? ''), title: String(r.title ?? ''), indexer: String(r.indexer ?? ''), indexerId: Number(r.indexerId ?? 0),
+      size: Number(r.size ?? 0), seeders: Number(r.seeders ?? 0), leechers: Number(r.leechers ?? 0), ageDays: Number(r.age ?? 0),
+      protocol: String(r.protocol ?? ''), downloadUrl: String(r.downloadUrl ?? r.magnetUrl ?? '')
+    })).filter(r => r.guid && r.title);
   }
 
   async search(query: string): Promise<Media[]> {

@@ -254,3 +254,32 @@ describe('concerts and videos', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('pick a release by hand', () => {
+  it('searches with your own words from a request that found nothing, and starts the one you choose', async () => {
+    const now = new Date().toISOString();
+    await page.route(/\/api\/requests(\?.*)?$/, r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [{
+      id: 'request-9', title: 'Linkin Park - Live at Rock am Ring', year: 2004, status: 'searching', service: 'radarr', mediaType: 'movie',
+      message: 'Nothing found yet', createdAt: now, updatedAt: now
+    }], total: 1 }) }));
+    let searched = '';
+    let grabbed: unknown = null;
+    await page.route('**/api/releases/search**', r => { searched = new URL(r.request().url()).searchParams.get('q') ?? ''; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ query: searched, releases: [
+      { id: 'magnet:?xt=urn:btih:2', title: 'Linkin Park - Rock Am Ring 2004', cleanTitle: 'Linkin Park - Rock Am Ring 2004', indexer: 'The Pirate Bay', sizeBytes: 976_000_000, seeders: 9, ageDays: 400, quality: '', filesUnder: 'Concerts' }
+    ] }) }); });
+    await page.route('**/api/releases/grab', r => { grabbed = r.request().postDataJSON(); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, message: "Downloading. It will be filed under the artist's Concerts when it finishes.", filesUnder: 'Concerts' }) }); });
+    await page.goto(base + '/requests');
+    await page.locator('.request-card-head').first().click();
+    await page.getByRole('button', { name: 'Find a release myself' }).click();
+    await page.getByLabel('Search words').fill('Linkin Park Rock am Ring 2004');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.waitForSelector('.release-row');
+    expect(searched).toBe('Linkin Park Rock am Ring 2004');
+    expect(await page.locator('.release-row-meta').innerText()).toMatch(/9 seeders.*files under artist \/ Concerts/);
+    await page.locator('.release-row').getByRole('button', { name: 'Download' }).click();
+    await page.waitForSelector('.release-picker-note');
+    expect(grabbed).toEqual({ id: 'magnet:?xt=urn:btih:2', fileAs: 'auto' });
+    expect(await page.locator('.release-picker-note').innerText()).toMatch(/filed under the artist/);
+    expect(errors).toEqual([]);
+  });
+});

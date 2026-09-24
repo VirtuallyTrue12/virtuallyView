@@ -20,3 +20,9 @@ A name like "Rock Concert 2019 1080p" has no artist in it. The download waits, a
 - A wrong guess is never made silently: a name is used only when it closely matches a real artist.
 - qBittorrent needs the music volume mounted; `docker-compose.yml` does this. On an existing install run `docker compose up -d` once after updating.
 - Each artist folder must be one Lidarr knows about. Files placed by hand into `Concerts` or `Videos` inside an artist's folder show up too.
+
+## When the automatic search finds nothing
+
+Concerts and unusual titles are often named differently from how Radarr searches for them, so a request can sit on "searching" forever. Administrators can open the request on the Requests page and press **Find a release myself**: search with your own words ("Linkin Park Rock am Ring 2004"), see everything the sources have (best-seeded first), and press Download. Choose what happens when it finishes: file it under the artist as a concert or a music video, let the name decide, or just download it. Searching every source can take up to a minute.
+
+Downloads started this way are not managed by Radarr, Sonarr or Lidarr. Concerts and videos file themselves under the artist; anything else stays in the downloads folder for you to import.

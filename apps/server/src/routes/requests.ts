@@ -155,7 +155,7 @@ export default async function requestsRoutes(server: FastifyInstance) {
     if (!adapter?.listQualityProfiles) return reply.code(400).send({ message: 'Choose movie, series or artist.' });
     try {
       const configured = getServerSettings().defaultQuality?.[mediaType as 'movie' | 'series' | 'artist'] ?? '';
-      return { profiles: await adapter.listQualityProfiles(), defaultName: configured || (mediaType === 'artist' ? 'Lossless' : 'HD-1080p') };
+      return { profiles: await adapter.listQualityProfiles(), defaultName: configured || (mediaType === 'artist' ? 'Best available' : 'HD-1080p') };
     } catch (error) {
       return reply.code(502).send({ message: error instanceof Error ? error.message : 'Could not read quality profiles.' });
     }

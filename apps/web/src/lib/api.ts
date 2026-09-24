@@ -474,7 +474,11 @@ function deleteJSON<T>(path: string): Promise<T> {
 export interface MusicVideoItem { id: string; title: string; kind: 'Concerts' | 'Videos'; sizeBytes: number; folder: string }
 export interface MusicVideoJob { hash: string; name: string; status: string; kind: 'Concerts' | 'Videos'; artistId: number | null; artistName: string | null; message: string; updatedAt: string }
 
+export interface ReleaseChoice { id: string; title: string; cleanTitle: string; indexer: string; sizeBytes: number; seeders: number; ageDays: number; quality: string; filesUnder: 'Concerts' | 'Videos' | null }
+
 export const api = {
+  searchReleases: (q: string) => getJSON<{ query: string; releases: ReleaseChoice[] }>(`/api/releases/search?q=${encodeURIComponent(q)}`),
+  grabRelease: (id: string, fileAs: 'auto' | 'concert' | 'video' | 'none' = 'auto') => postJSON<{ ok: boolean; message: string; filesUnder: 'Concerts' | 'Videos' | null }>('/api/releases/grab', { id, fileAs }),
   artistVideos: (id: string) => getJSON<{ concerts: MusicVideoItem[]; videos: MusicVideoItem[] }>(`/api/artists/${encodeURIComponent(id)}/videos`),
   pendingMusicVideos: () => getJSON<{ jobs: MusicVideoJob[] }>('/api/music-videos/pending'),
   fileMusicVideo: (hash: string, artist: string, kind?: 'Concerts' | 'Videos') => postJSON<{ ok: boolean; message: string; artistId?: number }>('/api/music-videos/file', { hash, artist, kind }),
