@@ -627,6 +627,16 @@ describe('e2e: assistant authorization', () => {
   }, 30_000);
 });
 
+describe('e2e: bulk public indexers', () => {
+  it('is administrator only and reports honestly when Prowlarr is not connected', async () => {
+    const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
+    const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+    expect((await req('POST', '/api/indexers/enable-public', { body: {}, cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('POST', '/api/indexers/enable-public', { body: {}, cookieOverride: cookieAdmin })).status).toBe(502);
+    expect((await req('GET', '/api/indexers/enable-public/status')).json.state).toBe('idle');
+  }, 20_000);
+});
+
 describe('e2e: kiwix', () => {
   it('reports unconfigured by default, rejects a bad address, saves a good one, and blocks non-admins', async () => {
     const status = await req('GET', '/api/kiwix/status');

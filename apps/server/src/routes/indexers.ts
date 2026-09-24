@@ -7,8 +7,40 @@ type Health = { healthCheck: () => Promise<{ healthy: boolean }> };
 
 let catalogCache: { at: number; items: ProwlarrIndexerDefinition[] } | null = null;
 
+interface BulkState { state: 'idle' | 'running' | 'done' | 'failed'; total: number; checked: number; added: number; message?: string }
+let bulk: BulkState = { state: 'idle', total: 0, checked: 0, added: 0 };
+
 export default async function indexerRoutes(server: FastifyInstance) {
   const prowlarr = () => getAdapter('prowlarr') as unknown as ProwlarrAdapter;
+
+  // Opt-in, and only when an administrator asks: every public, non-adult source
+  // that answers a connection test. Nothing broad is ever added on its own.
+  server.post('/api/indexers/enable-public', async (_request, reply) => {
+    if (bulk.state === 'running') return reply.code(409).send({ message: 'Already adding sources.', ...bulk });
+    let todo: string[];
+    try {
+      const have = new Set((await prowlarr().listIndexers()).map(i => i.definitionName));
+      catalogCache = { at: Date.now(), items: await prowlarr().indexerCatalog() };
+      todo = catalogCache.items.filter(d => d.privacy === 'public' && !d.adult && !have.has(d.definitionName)).map(d => d.definitionName);
+    } catch (error) {
+      return reply.code(502).send({ message: error instanceof Error ? error.message : 'Prowlarr is not reachable.' });
+    }
+    bulk = { state: 'running', total: todo.length, checked: 0, added: 0 };
+    void (async () => {
+      let next = 0;
+      const worker = async () => {
+        while (next < todo.length) {
+          const name = todo[next++]!;
+          try { if ((await prowlarr().addIndexer(name)).success) bulk.added++; } catch { /* one slow source must not stop the rest */ }
+          bulk.checked++;
+        }
+      };
+      try { await Promise.all(Array.from({ length: 4 }, worker)); bulk.state = 'done'; }
+      catch (error) { bulk = { ...bulk, state: 'failed', message: error instanceof Error ? error.message : 'Stopped unexpectedly.' }; }
+    })();
+    return reply.code(202).send(bulk);
+  });
+  server.get('/api/indexers/enable-public/status', async () => bulk);
 
   server.get('/api/indexers', async (_request, reply) => {
     try {

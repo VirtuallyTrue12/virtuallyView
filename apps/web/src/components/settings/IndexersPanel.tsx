@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, type Indexer, type IndexerDefinition } from '../../lib/api';
+import { api, type BulkIndexers, type Indexer, type IndexerDefinition } from '../../lib/api';
 
 /** Indexers decide where downloads come from. Without one, requests find nothing. */
 export default function IndexersPanel() {
@@ -12,6 +12,7 @@ export default function IndexersPanel() {
   const [showAdult, setShowAdult] = useState(false);
   const [adultCatalog, setAdultCatalog] = useState<IndexerDefinition[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [bulk, setBulk] = useState<BulkIndexers | null>(null);
   const [note, setNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -34,6 +35,19 @@ export default function IndexersPanel() {
     try { const r = await fn(); setNote({ tone: r.success ? 'ok' : 'err', text: r.message }); await load(); }
     catch (e) { setNote({ tone: 'err', text: (e as Error).message }); }
     finally { setBusy(null); }
+  };
+
+  useEffect(() => {
+    if (bulk?.state !== 'running') return;
+    const t = setInterval(() => {
+      api.bulkIndexerStatus().then(next => { setBulk(next); if (next.state !== 'running') void load(); }).catch(() => undefined);
+    }, 3000);
+    return () => clearInterval(t);
+  }, [bulk?.state, load]);
+
+  const enableAll = async () => {
+    setNote(null);
+    try { setBulk(await api.enableAllPublicIndexers()); } catch (e) { setNote({ tone: 'err', text: (e as Error).message }); }
   };
 
   const have = new Set((configured ?? []).map(i => i.definitionName));
@@ -80,6 +94,17 @@ export default function IndexersPanel() {
         <p className="model-suggest-meta">
           These need no account ({totalPublic || 'many'} available). For a private tracker, add it in Prowlarr itself so you can enter your own login.
         </p>
+        <div className="notice notice--muted" style={{ marginBottom: 'var(--spacing-sm)' }}>
+          <strong>Add every public source that works.</strong> Tests each one and keeps the ones that answer. Adult sources are never included.
+          Public sources can carry copyrighted material that is unlawful to obtain where you live: only use what you have the right to use.
+          <div style={{ marginTop: 6 }}>
+            <button className="btn btn-secondary btn-sm" type="button" onClick={() => void enableAll()} disabled={bulk?.state === 'running'}>
+              {bulk?.state === 'running' ? `Checking ${bulk.checked} of ${bulk.total}, ${bulk.added} added...` : 'Add all working public sources'}
+            </button>
+            {bulk?.state === 'done' && <span style={{ marginLeft: 8 }}>Done: {bulk.added} added out of {bulk.total} checked.</span>}
+            {bulk?.state === 'failed' && <span style={{ marginLeft: 8 }}>Stopped: {bulk.message}</span>}
+          </div>
+        </div>
         <input className="settings-input" placeholder="Search indexers" value={query} onChange={e => setQuery(e.target.value)} aria-label="Search indexers" />
         <ul className="users-list" style={{ marginTop: 'var(--spacing-sm)' }}>
           {catalog.map(renderRow)}

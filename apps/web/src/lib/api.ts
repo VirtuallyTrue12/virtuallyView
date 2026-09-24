@@ -253,6 +253,8 @@ export type SearchSuggestion =
   | { title: string; year?: number; type?: string; id: string; source: 'library'; poster?: string | null }
   | { title: string; description: string; source: 'web' };
 
+export interface BulkIndexers { state: 'idle' | 'running' | 'done' | 'failed'; total: number; checked: number; added: number; message?: string }
+
 export interface PullStatus {
   model: string;
   status: 'running' | 'done' | 'error' | 'unknown';
@@ -560,6 +562,8 @@ export const api = {
   request: (id: string) => getJSON<RequestItem>(`/api/requests/${encodeURIComponent(id)}`),
   indexers: () => getJSON<{ indexers: Indexer[] }>('/api/indexers'),
   indexerCatalog: (q: string, adult = false) => getJSON<{ indexers: IndexerDefinition[]; totalPublic: number; totalAdult: number }>(`/api/indexers/catalog?q=${encodeURIComponent(q)}${adult ? '&adult=1' : ''}`),
+  enableAllPublicIndexers: () => postJSON<BulkIndexers>('/api/indexers/enable-public', {}),
+  bulkIndexerStatus: () => getJSON<BulkIndexers>('/api/indexers/enable-public/status'),
   addIndexer: (definitionName: string) => postJSON<{ success: boolean; message: string }>('/api/indexers', { definitionName }),
   testIndexer: (id: number) => postJSON<{ success: boolean; message: string }>(`/api/indexers/${id}/test`),
   removeIndexer: (id: number) => requestJSON<{ success: boolean; message: string }>('DELETE', `/api/indexers/${id}`),

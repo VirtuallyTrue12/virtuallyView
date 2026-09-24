@@ -20,12 +20,13 @@ const RADARR = { name: 'Radarr', url: process.env.RADARR_URL, key: process.env.R
 const SONARR = { name: 'Sonarr', url: process.env.SONARR_URL, key: process.env.SONARR_API_KEY, rootFolder: '/media/tv', category: 'sonarr', apiVersion: 'v3' };
 const LIDARR = { name: 'Lidarr', url: process.env.LIDARR_URL, key: process.env.LIDARR_API_KEY, rootFolder: '/media/music', category: 'lidarr', apiVersion: 'v1' };
 const PROWLARR = { url: process.env.PROWLARR_URL, key: process.env.PROWLARR_API_KEY };
-// Several sources, not one: Internet Archive is legal but sometimes throttles
-// automated tools (see docs/troubleshooting.md), so two general-purpose public
-// sources are added alongside it, so a request can still be found when one
-// source is slow or unavailable. Comma-separated; PROWLARR_AUTO_INDEXER
-// (singular, older installs) still works and is used in place of this.
-const AUTO_INDEXERS = (process.env.PROWLARR_AUTO_INDEXER ?? process.env.PROWLARR_AUTO_INDEXERS ?? 'all-public')
+// A short starting set of sources that are legal to use as they are (the
+// Internet Archive, Linux distributions, live-music trading): a request can
+// find something on a fresh install, and nothing broad is added without being
+// asked. Comma-separated; PROWLARR_AUTO_INDEXER (singular, older installs) still
+// works. "all-public" opts in to every public, non-adult source that answers
+// (also one click in Settings > Indexers); "none" adds nothing.
+const AUTO_INDEXERS = (process.env.PROWLARR_AUTO_INDEXER ?? process.env.PROWLARR_AUTO_INDEXERS ?? 'internetarchive,linuxtracker,btetree')
   .split(',').map(s => s.trim()).filter(Boolean);
 const QBIT = {
   host: process.env.QBITTORRENT_HOST ?? 'qbittorrent',
