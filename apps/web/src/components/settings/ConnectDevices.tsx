@@ -70,6 +70,16 @@ export default function ConnectDevices({ settings, onSaved }: { settings: Server
         />
         <span>Let people create their own account from the sign-in screen (off = you add every account)</span>
       </label>
+      <label className="settings-row" style={{ gap: 8 }}>
+        <input
+          type="checkbox"
+          checked={settings?.trustLocalNetwork === true}
+          disabled={busy}
+          onChange={e => void save({ trustLocalNetwork: e.target.checked }, e.target.checked ? 'Services on your home network (192.168.x.x, 10.x.x.x) can now be connected under Settings > Services.' : 'Only services on this server\'s own stack can be connected.')}
+          aria-label="Trust services on my home network"
+        />
+        <span>Trust services on my home network, so Radarr, Sonarr and others running on another machine can be connected (off = only this stack's own services)</span>
+      </label>
       {note && <div className={`notice notice--${note.tone}`}>{note.text}</div>}
     </div>
   );

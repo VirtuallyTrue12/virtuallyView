@@ -638,6 +638,26 @@ describe('e2e: bulk public indexers', () => {
   }, 20_000);
 });
 
+describe('e2e: trusting the home network', () => {
+  it('home-network service addresses need an explicit opt-in, and the machine itself never qualifies', async () => {
+    const config = (url: string) => req('POST', '/api/integrations/radarr/config', { body: { url, apiKey: 'k' }, cookieOverride: cookieAdmin });
+    const refused = await config('http://192.168.1.50:7878');
+    expect(refused.status).toBe(400);
+    expect(refused.json.message).toMatch(/Trust services on my home network/);
+
+    expect((await req('POST', '/api/server-settings', { body: { trustLocalNetwork: true }, cookieOverride: cookieAdmin })).json.trustLocalNetwork).toBe(true);
+    try {
+      // Allowed to try now; nothing is listening there, so it is a connection failure, not a policy refusal.
+      expect((await config('http://192.168.1.50:7878')).status).toBe(422);
+      expect((await config('http://127.0.0.1:7878')).status).toBe(400);
+      expect((await config('http://169.254.169.254/latest')).status).toBe(400);
+    } finally {
+      await req('POST', '/api/server-settings', { body: { trustLocalNetwork: false }, cookieOverride: cookieAdmin });
+    }
+    expect((await config('http://192.168.1.50:7878')).status).toBe(400);
+  }, 60_000);
+});
+
 describe('e2e: kiwix', () => {
   it('reports unconfigured by default, rejects a bad address, saves a good one, and blocks non-admins', async () => {
     const status = await req('GET', '/api/kiwix/status');

@@ -16,6 +16,8 @@ export interface ServerSettings {
   onboardingComplete: boolean;
   /** When true, anyone who can reach the server may create their own account. */
   allowSignup: boolean;
+  /** An administrator says services on this private network (192.168.x.x, 10.x.x.x) are theirs to connect to. */
+  trustLocalNetwork: boolean;
   /** Address other devices should use (shown in Settings > Server). */
   publicUrl: string;
   /** Preferred quality profile name per media type; blank = HD-1080p. */
@@ -49,6 +51,7 @@ const DEFAULTS: ServerSettings = {
   outboundProxy: { enabled: false, kind: 'tor', host: '127.0.0.1', port: 9050 },
   onboardingComplete: false,
   allowSignup: false,
+  trustLocalNetwork: false,
   publicUrl: '',
   defaultQuality: { movie: '', series: '', artist: '' },
   requests: { approval: 'off', limit: 0, window: 'week' },
@@ -67,6 +70,7 @@ function parse(value: unknown): ServerSettings {
     outboundProxy: { ...DEFAULTS.outboundProxy, ...(raw.outboundProxy ?? {}) },
     onboardingComplete: raw.onboardingComplete === true,
     allowSignup: raw.allowSignup === true,
+    trustLocalNetwork: raw.trustLocalNetwork === true,
     publicUrl: typeof raw.publicUrl === 'string' ? raw.publicUrl : '',
     defaultQuality: { ...DEFAULTS.defaultQuality, ...(raw.defaultQuality ?? {}) },
     requests: { ...DEFAULTS.requests, ...(raw.requests ?? {}) },

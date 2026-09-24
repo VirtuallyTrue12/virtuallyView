@@ -373,6 +373,7 @@ export interface ServerSettings {
   coverSource: 'tmdb' | 'duckduckgo' | 'wikipedia';
   outboundProxy: { enabled: boolean; kind: 'tor' | 'socks5' | 'http'; host: string; port: number };
   allowSignup?: boolean;
+  trustLocalNetwork?: boolean;
   publicUrl?: string;
   defaultQuality?: { movie: string; series: string; artist: string };
   requests?: { approval: 'off' | 'users'; limit: number; window: 'day' | 'week' };

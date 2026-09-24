@@ -195,10 +195,26 @@ const REQUIRED_COLOR_KEYS = [
   'textMuted', 'accent', 'accentSoft', 'border', 'borderFocus', 'success', 'warning', 'danger'
 ] as const;
 
+const BAD_CSS = /[;{}@<>\\]|\/\*|url\s*\(|var\s*\(|expression|javascript|import|behavior|-moz-binding/i;
+const SIZE = /^(0|\d*\.?\d+(px|rem|em|%))$/;
+const DURATION = /^\d*\.?\d+m?s$/;
+const COLOR = /^(#[0-9a-fA-F]{3,8}|(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\([0-9a-zA-Z.,%/\s+-]{1,100}\)|[a-zA-Z]{3,30})$/;
+const SPACING = /^-?(0|\d*\.?\d+(em|px|rem)?)$/;
+const WEIGHT = /^(\d{3}|normal|bold)$/;
+
+const each = (group: unknown, ok: (key: string, value: string) => boolean): boolean =>
+  group === undefined || (typeof group === 'object' && group !== null &&
+    Object.entries(group as Record<string, unknown>).every(([key, value]) => typeof value === 'string' && value.length <= 1500 && !BAD_CSS.test(value) && ok(key, value)));
+
 export function validateManifest(manifest: unknown): manifest is ThemeManifest {
   if (typeof manifest !== 'object' || manifest === null) return false;
   const m = manifest as Record<string, unknown>;
-  return REQUIRED_MANIFEST_FIELDS.every(field => typeof m[field] === 'string' && m[field] !== '');
+  if (!REQUIRED_MANIFEST_FIELDS.every(field => typeof m[field] === 'string' && m[field] !== '')) return false;
+  // Shared themes are untrusted input: keep identifiers and text plain and bounded.
+  return /^[a-z0-9][a-z0-9-]{0,63}$/.test(m.id as string)
+    && (m.name as string).length <= 80 && (m.author as string).length <= 120 && (m.description as string).length <= 500
+    && /^\d+(\.\d+){0,2}([-+][0-9A-Za-z.-]+)?$/.test(m.version as string)
+    && !/[<>]/.test(`${m.name}${m.author}${m.description}`);
 }
 
 export function validateTokens(tokens: unknown): tokens is ThemeTokens {
@@ -212,31 +228,17 @@ export function validateTokens(tokens: unknown): tokens is ThemeTokens {
   if (!['small', 'medium', 'large'].every(key => typeof radius[key] === 'string')) return false;
   if (!['fast', 'normal', 'slow'].every(key => typeof animation[key] === 'string')) return false;
 
-  // Optional depth groups: when present every provided value must be a plain
-  // literal string. Missing keys fall back to the app defaults.
-  const optionalGroups: Array<Record<string, unknown> | undefined> = [
-    t.typography as Record<string, unknown> | undefined,
-    t.density as Record<string, unknown> | undefined,
-    t.effects as Record<string, unknown> | undefined
-  ];
-  for (const group of optionalGroups) {
-    if (group === undefined) continue;
-    if (typeof group !== 'object' || group === null) return false;
-    if (!Object.values(group).every(value => typeof value === 'string')) return false;
-  }
-
-  // Token depth is deliberately one level: a token value is a literal color or
-  // size, never a reference to another variable. Cross-token references would
-  // make theme layering (custom theme over light/dark mode) ambiguous and
-  // defeat validation, so they are rejected here rather than silently applied.
-  const values = [
-    ...REQUIRED_COLOR_KEYS.map(k => colors[k]),
-    ...['small', 'medium', 'large'].map(k => radius[k]),
-    ...['fast', 'normal', 'slow'].map(k => animation[k]),
-    ...optionalGroups.flatMap(group => (group ? Object.values(group) : []))
-  ];
-  if (!values.every(value => typeof value === 'string' && !value.includes('var('))) return false;
+  // Every value must be a plain literal of the right kind: a colour is a colour,
+  // a size is a size, a duration is a duration. Nothing can reference another
+  // variable, load a file, or break out of a declaration.
+  if (!each(colors, (_k, v) => COLOR.test(v.trim()))) return false;
+  if (!each(radius, (_k, v) => SIZE.test(v.trim()))) return false;
+  if (!each(animation, (_k, v) => DURATION.test(v.trim()))) return false;
+  if (!each(t.density, (_k, v) => SIZE.test(v.trim()))) return false;
+  if (!each(t.typography, (k, v) =>
+    k === 'headingWeight' || k === 'bodyWeight' ? WEIGHT.test(v.trim())
+      : k === 'letterSpacing' ? SPACING.test(v.trim())
+        : v.length <= 300)) return false;
   // Effects carry gradients and shadows: keep them declarative and contained.
-  const effectValues = Object.values((t.effects as Record<string, string> | undefined) ?? {});
-  return effectValues.every(value => value.length <= 1500 && !/[;{}@<>\\]|url\s*\(|expression|javascript|import/i.test(value));
+  return each(t.effects, () => true);
 }

@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { pingService } from '@virtuallyview/integrations';
 import { currentActor } from '../services/user-context.js';
+import { getServerSettings } from '../services/server-settings.js';
 import type { IntegrationStatus } from '@virtuallyview/types';
 import {
   getManagedAdapters, loadServiceConfig, configureIntegration, toggleIntegration,
@@ -127,13 +128,20 @@ export default async function integrationsRoutes(server: FastifyInstance) {
       const host = parsed.hostname.toLowerCase();
       const trustedServiceHost = /^(radarr|sonarr|prowlarr|lidarr|bazarr|qbittorrent|nzbget|ollama)$/.test(host);
       const address = isIP(host) ? host : trustedServiceHost ? undefined : (await lookup(host)).address;
-      const privateAddress = address && (
-        address === '127.0.0.1' || address === '::1' || address.startsWith('10.') ||
-        address.startsWith('192.168.') || /^172\.(1[6-9]|2\d|3[0-1])\./.test(address) ||
-        address.startsWith('169.254.') || address === '0.0.0.0' || address === '::'
+      // Never allowed: this machine itself, link-local (cloud metadata lives there) and "any".
+      const neverAllowed = address && (
+        address.startsWith('127.') || address === '::1' || address.startsWith('169.254.') || address === '0.0.0.0' || address === '::'
       );
-      if (privateAddress && !trustedServiceHost) throw new Error('private');
-    } catch {
+      // A home network is where most people's services live: allowed once an administrator says so.
+      const homeNetwork = address && (
+        address.startsWith('10.') || address.startsWith('192.168.') || /^172\.(1[6-9]|2\d|3[0-1])\./.test(address) || /^f[cd][0-9a-f]{2}:/i.test(address)
+      );
+      if (neverAllowed && !trustedServiceHost) throw new Error('private');
+      if (homeNetwork && !trustedServiceHost && !getServerSettings().trustLocalNetwork) throw new Error('lan');
+    } catch (error) {
+      if (error instanceof Error && error.message === 'lan') {
+        return reply.code(400).send({ message: 'That address is on your home network. If it is one of your own services, turn on "Trust services on my home network" under Settings > Server, then try again.' });
+      }
       return reply.code(400).send({ message: 'That address is invalid or points to a private network. Check it and try again.' });
     }
     try {
