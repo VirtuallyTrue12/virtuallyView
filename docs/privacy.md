@@ -65,7 +65,7 @@ Two ways, both use [gluetun](https://github.com/qdm12/gluetun), an open-source V
 docker compose -f docker-compose.yml -f docker-compose.vpn-free.yml up -d
 ```
 
-Uses [VPN Gate](https://www.vpngate.net), an open academic project of the University of Tsukuba: free public relays, no sign-up. Every start picks the best available relay; set `VPN_SERVER_COUNTRY_CODE=NL` (any two-letter code) in `.env` to choose a country.
+Uses [VPN Gate](https://www.vpngate.net), an open academic project of the University of Tsukuba: free public relays, no sign-up. Every start picks the best reachable relay, and a small watcher swaps in a fresh one when the current relay stops answering (volunteer relays come and go; one dropped after about six hours in testing). After a swap, restart `qbittorrent` so it rejoins the new tunnel; set `VPN_SERVER_COUNTRY_CODE=NL` (any two-letter code) in `.env` to choose a country.
 
 **Read this before relying on it.** The relays are run by volunteers, and VPN Gate keeps connection logs. This hides your downloads from your internet provider; it is not anonymity, and speed and availability vary. If that matters, use a provider below.
 
