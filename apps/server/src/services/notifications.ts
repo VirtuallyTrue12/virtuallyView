@@ -11,6 +11,7 @@ export const EVENTS = [
   { key: 'request.failed', label: 'A request failed' },
   { key: 'user.signup', label: 'Someone created an account' },
   { key: 'backup', label: 'A backup finished or failed' },
+  { key: 'system.updated', label: 'The apps were updated to their latest versions' },
   { key: 'ai.digest', label: 'Assistant activity summary (every few hours, only when something happened)' }
 ] as const;
 

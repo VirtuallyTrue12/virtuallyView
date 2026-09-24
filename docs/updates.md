@@ -6,7 +6,8 @@ background. You update by pulling new images and running
 
 If you'd rather not think about it, there's an optional profile that checks
 for new images and applies them automatically, using
-[Watchtower](https://github.com/containrrr/watchtower) (open source).
+[Watchtower](https://github.com/nickfedor/watchtower) (open source, the
+maintained fork of the original).
 
 ## Turning it on
 
@@ -14,9 +15,26 @@ for new images and applies them automatically, using
 docker compose --profile auto-update up -d
 ```
 
-That's it. Watchtower checks once a day (configurable, see below) and, if a
-newer image is available for any of virtuallyView's own containers, pulls it,
-stops the old container, and starts the new one in its place.
+That's it. If a newer image is available for any of virtuallyView's own
+containers, Watchtower pulls it, stops the old container, and starts the new
+one in its place.
+
+**When it runs:**
+
+- **As soon as the internet is reachable.** The dashboard notices when the
+  connection comes back (or when it starts up online) and asks Watchtower to
+  update right then, instead of waiting for the next timer. Radarr, Sonarr,
+  Lidarr, Prowlarr, Bazarr, FlareSolverr and qBittorrent go first; everything
+  else follows. Admins get a notification when something was updated.
+- **On a timer as a fallback**, every 6 hours by default (see below), in case
+  the dashboard itself is down.
+
+Nothing is contacted unless this profile is running: without it the
+dashboard never checks for updates on its own.
+
+The apps themselves need frequent updates less than you might think:
+Prowlarr refreshes its search-source definitions on its own, and Radarr,
+Sonarr and Lidarr release every few weeks to a few months.
 
 ## What this does and doesn't do
 
@@ -43,8 +61,9 @@ stops the old container, and starts the new one in its place.
 
 ## Changing the check interval
 
-Set `WATCHTOWER_INTERVAL_SECONDS` in `.env` (seconds). Default is 86400 (once
-a day).
+Set `WATCHTOWER_INTERVAL_SECONDS` in `.env` (seconds). Default is 21600 (every
+6 hours). This is only the fallback; the moment the internet is reachable an
+update is triggered regardless.
 
 ## Rootless Podman
 

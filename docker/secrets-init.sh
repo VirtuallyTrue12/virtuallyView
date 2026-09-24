@@ -30,3 +30,11 @@ if [ ! -s "$file" ]; then
   chmod 644 "$file"
   echo "secrets: bazarr key ready"
 fi
+
+# Shared secret between the dashboard and Watchtower (only used with the auto-update profile).
+file=/secrets/watchtower
+if [ ! -s "$file" ]; then
+  gen > "$file"
+  chmod 644 "$file"
+  echo "secrets: watchtower token ready"
+fi

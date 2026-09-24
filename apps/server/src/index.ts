@@ -43,6 +43,7 @@ import { redactUrl } from './lib/redact.js';
 import { all } from './db/app-db.js';
 import { startAutoBackup } from './services/backup.js';
 import { startAiDigest } from './services/ai-digest.js';
+import { startAutoUpdate } from './services/auto-update.js';
 import { startRequestSync } from './services/requests.js';
 import { getAuthBackdrop } from './services/backdrop.js';
 import { getServerSettings } from './services/server-settings.js';
@@ -453,6 +454,7 @@ const start = async () => {
   startRequestSync();
   startAutoBackup();
   startAiDigest();
+  startAutoUpdate();
   try {
     const port = Number(process.env.PORT ?? 3000);
     await server.listen({ port, host: '0.0.0.0' });

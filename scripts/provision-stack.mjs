@@ -389,6 +389,32 @@ async function ensureAllPublicIndexers(headers, existing) {
   log(`Prowlarr: ${added} of ${todo.length} public sources are working and were added (${viaFlare} through FlareSolverr). The rest are retried on the next start.`);
 }
 
+/**
+ * FlareSolverr only routes the sources that carry its tag. It steps in solely
+ * when a site shows a Cloudflare challenge, so tagging every source costs
+ * nothing and stops Cloudflare sites (1337x, EZTV, ...) failing for good.
+ * Sources sent over Tor keep the Tor tag instead (a source uses one proxy).
+ */
+async function tagSourcesForFlareSolverr(headers) {
+  const tagId = await ensureFlareSolverr(headers);
+  if (!tagId) return;
+  const api = (path, init) => fetch(`${PROWLARR.url}/api/v1${path}`, { headers, signal: AbortSignal.timeout(60000), ...init });
+  const tags = await (await api('/tag')).json();
+  const tor = tags.filter(t => t.label === 'vv-tor' || t.label === 'vv-tor-off').map(t => t.id);
+  const todo = (await (await api('/indexer')).json()).filter(ix => !(ix.tags ?? []).includes(tagId) && !(ix.tags ?? []).some(t => tor.includes(t)));
+  let done = 0;
+  for (const ix of todo) {
+    try {
+      const r = await api(`/indexer/${ix.id}?forceSave=true`, { method: 'PUT', body: JSON.stringify({ ...ix, tags: [...(ix.tags ?? []), tagId] }) });
+      if (r.ok) done++;
+    } catch { /* one source failing to save must not stop the rest */ }
+  }
+  if (todo.length) log(`Prowlarr: ${done} of ${todo.length} search sources now use FlareSolverr when a site shows a Cloudflare check`);
+  // Clear any stale "proxy unavailable" mark left from before the sources were tagged.
+  const proxies = await (await api('/indexerProxy')).json();
+  for (const p of proxies.filter(p => p.implementation === 'FlareSolverr')) await api('/indexerProxy/test', { method: 'POST', body: JSON.stringify(p) }).catch(() => undefined);
+}
+
 async function ensureFlareSolverr(headers) {
   const host = process.env.FLARESOLVERR_URL ?? 'http://flaresolverr:8191';
   try {
@@ -605,6 +631,7 @@ async function main() {
   await step('Prowlarr link to Sonarr', () => ensureProwlarrApplication(SONARR, 'Sonarr'));
   await step('Prowlarr link to Lidarr', () => ensureProwlarrApplication(LIDARR, 'Lidarr'));
   await step('Prowlarr search sources', () => ensureProwlarrIndexer());
+  await step('Prowlarr FlareSolverr routing', () => tagSourcesForFlareSolverr({ 'X-Api-Key': PROWLARR.key, 'Content-Type': 'application/json' }));
   await step('Prowlarr search over Tor', () => ensureSearchViaTor({ 'X-Api-Key': PROWLARR.key, 'Content-Type': 'application/json' }));
   await step('Prowlarr sync', () => syncProwlarrApplications());
   await step('Bazarr subtitles', () => ensureBazarr());

@@ -359,6 +359,8 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:0.5b}
       - SEARCH_VIA_TOR=${SEARCH_VIA_TOR:-false}
+      - WATCHTOWER_URL=http://watchtower:8080
+      - WATCHTOWER_TOKEN_FILE=/secrets/watchtower
       - VV_HELPER_URL=http://helper:8099
       - VV_SECRET_KEY=${VV_SECRET_KEY:-}
       - TRUST_PROXY=${TRUST_PROXY:-}
@@ -573,14 +575,23 @@ services:
   # Turn it on with: docker compose --profile auto-update up -d
   # See docs/updates.md, including the extra step rootless Podman needs.
   watchtower:
-    image: containrrr/watchtower:latest
+    image: nickfedor/watchtower:latest
     profiles: ["auto-update"]
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
     volumes:
       - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
+      - secrets:/secrets:ro
     environment:
       - WATCHTOWER_LABEL_ENABLE=true
       - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_INTERVAL_SECONDS:-86400}
+      # Fallback schedule. The dashboard also triggers a run the moment the
+      # internet is reachable (priority apps first) through the token API below.
+      - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_INTERVAL_SECONDS:-21600}
+      - WATCHTOWER_HTTP_API_ENDPOINTS=update
+      - WATCHTOWER_HTTP_API_TOKEN=/secrets/watchtower
+      - WATCHTOWER_HTTP_API_PERIODIC_POLLS=true
     restart: unless-stopped
 
 volumes:

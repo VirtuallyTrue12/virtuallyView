@@ -10,6 +10,8 @@ Security, install and reliability release. Read the notes marked **Upgrade** bef
 - **Fixed.** Downloads never imported when qBittorrent saved into its own config volume; it now saves to the shared downloads folder and existing installs are corrected on the next setup run.
 - **Fixed.** The VPN overlay was rejected by Compose and hid qBittorrent from the other services; both fixed, and a no-account option (VPN Gate) was added with automatic relay replacement.
 - **Install.** A version-pinned `docker-compose.release.yml` pulls the published image; release publishing now runs the same checks as CI plus a smoke test. Node.js 22.5 or newer is required (the README said 20).
+- **Fixed.** Search sources behind Cloudflare (1337x, EZTV, DaMagNet, LimeTorrents and others) never worked: FlareSolverr was set up but no source was routed through it. Setup now routes every source through it (it only acts when a site shows a Cloudflare check) and clears the stale "proxy unavailable" mark.
+- **Changed.** The optional auto-update profile now uses the maintained Watchtower fork, checks every 6 hours, and additionally updates the moment the internet is reachable (download and search apps first).
 - **Added.** Seek-bar preview thumbnails, live TV record-now, Kiwix offline libraries, an Apps page for Immich, Audiobookshelf and Kavita, opt-in automatic updates (Watchtower), paranoid mode (all searching over Tor), model browser and progressive replies in the assistant, and a background activity indicator.
 
 ## 0.1.0
