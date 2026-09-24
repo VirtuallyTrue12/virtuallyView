@@ -792,42 +792,6 @@ export default function Settings() {
               )}
             </div>
           </div>
-          <div className="settings-section" style={{ marginTop: 'var(--spacing-md)' }}>
-            <h3 className="section-title">Logging</h3>
-            <div className="settings-row">
-              <select className="settings-input" defaultValue="info" aria-label="Log level">
-                <option value="error">Error only</option>
-                <option value="warn">Warnings</option>
-                <option value="info" selected>Info</option>
-                <option value="debug">Debug</option>
-              </select>
-              <span className="settings-status settings-status--ok">Level</span>
-            </div>
-          </div>
-          <div className="settings-section" style={{ marginTop: 'var(--spacing-md)' }}>
-            <h3 className="section-title">Cache</h3>
-            <div className="settings-row">
-              <span className="settings-status settings-status--ok">Integrations cached in integrations.json</span>
-            </div>
-            <div className="settings-row">
-              <span className="settings-status settings-status--ok">Themes cached on filesystem</span>
-            </div>
-            <div className="settings-row">
-              <span className="settings-status settings-status--ok">AI settings in ai-settings.json</span>
-            </div>
-            <button className="btn btn-danger btn-sm" type="button" style={{ marginTop: 'var(--spacing-md)' }}>
-              Clear all cache
-            </button>
-          </div>
-          <div className="settings-section" style={{ marginTop: 'var(--spacing-md)' }}>
-            <h3 className="section-title">Developer tools</h3>
-            <div className="settings-row">
-              <span className="settings-status settings-status--ok">API docs at /api/health</span>
-            </div>
-            <div className="settings-row">
-              <span className="settings-status settings-status--ok">Theme engine: tokens mapped to CSS vars</span>
-            </div>
-          </div>
         </section>
       )}
 

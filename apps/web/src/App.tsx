@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Link, Navigate } from 'react-router-dom';
 import { Navigation } from './components/layout/Navigation';
 import CommandPalette from './components/layout/CommandPalette';
@@ -7,33 +7,33 @@ import RequestActivityPill from './components/requests/RequestActivityPill';
 import LoginScreen from './components/auth/LoginScreen';
 import OnboardingWizard from './components/onboarding/OnboardingWizard';
 import Home from './pages/Home';
-import Movies from './pages/Movies';
-import MovieDetails from './pages/MovieDetails';
-import Player from './pages/Player';
-import Series from './pages/Series';
-import SeriesDetail from './pages/SeriesDetail';
-import EpisodePlayer from './pages/EpisodePlayer';
-import Music from './pages/Music';
-import ArtistDetails from './pages/ArtistDetails';
-import AlbumDetails from './pages/AlbumDetails';
-import PlaylistDetail from './pages/PlaylistDetail';
-import Requests from './pages/Requests';
-import Search from './pages/Search';
-import Downloads from './pages/Downloads';
-import Settings from './pages/Settings';
-import Person from './pages/Person';
-import LiveTV from './pages/LiveTV';
-import Photos from './pages/Photos';
-import Books from './pages/Books';
-import Wiki from './pages/Wiki';
-import HomeLabApps from './pages/HomeLabApps';
-import PartyJoin from './pages/PartyJoin';
-import Account from './pages/Account';
-import Themes from './pages/Themes';
-import ThemeCreator from './pages/ThemeCreator';
-import Statistics from './pages/Statistics';
-import Diagnostics from './pages/Diagnostics';
-import Activity from './pages/Activity';
+const Movies = lazy(() => import('./pages/Movies'));
+const MovieDetails = lazy(() => import('./pages/MovieDetails'));
+const Player = lazy(() => import('./pages/Player'));
+const Series = lazy(() => import('./pages/Series'));
+const SeriesDetail = lazy(() => import('./pages/SeriesDetail'));
+const EpisodePlayer = lazy(() => import('./pages/EpisodePlayer'));
+const Music = lazy(() => import('./pages/Music'));
+const ArtistDetails = lazy(() => import('./pages/ArtistDetails'));
+const AlbumDetails = lazy(() => import('./pages/AlbumDetails'));
+const PlaylistDetail = lazy(() => import('./pages/PlaylistDetail'));
+const Requests = lazy(() => import('./pages/Requests'));
+const Search = lazy(() => import('./pages/Search'));
+const Downloads = lazy(() => import('./pages/Downloads'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Person = lazy(() => import('./pages/Person'));
+const LiveTV = lazy(() => import('./pages/LiveTV'));
+const Photos = lazy(() => import('./pages/Photos'));
+const Books = lazy(() => import('./pages/Books'));
+const Wiki = lazy(() => import('./pages/Wiki'));
+const HomeLabApps = lazy(() => import('./pages/HomeLabApps'));
+const PartyJoin = lazy(() => import('./pages/PartyJoin'));
+const Account = lazy(() => import('./pages/Account'));
+const Themes = lazy(() => import('./pages/Themes'));
+const ThemeCreator = lazy(() => import('./pages/ThemeCreator'));
+const Statistics = lazy(() => import('./pages/Statistics'));
+const Diagnostics = lazy(() => import('./pages/Diagnostics'));
+const Activity = lazy(() => import('./pages/Activity'));
 import NotFound from './pages/NotFound';
 import { api, type AuthUser } from './lib/api';
 import { paintCachedTheme, syncTheme } from './lib/appearance';
@@ -143,6 +143,7 @@ export default function App() {
     <MusicProvider>
       <div className="app" data-theme="midnight">
       <Navigation user={auth.user} onSignOut={() => void signOut()} />
+      <Suspense fallback={<div className="loading-state">Loading...</div>}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/movies" element={<Movies />} />
@@ -177,6 +178,7 @@ export default function App() {
         <Route path="/diagnostics" element={<Diagnostics />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </Suspense>
       <footer className="app-footer">
         <span>virtuallyView</span>
         <span><Link to="/requests">Requests</Link> · <Link to="/downloads">Downloads</Link> · <Link to="/settings">Settings</Link></span>

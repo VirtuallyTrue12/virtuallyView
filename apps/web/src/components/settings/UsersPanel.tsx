@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type AuthSession, type AuthUser } from '../../lib/api';
 
@@ -22,9 +22,9 @@ export default function UsersPanel() {
   const [resetPw, setResetPw] = useState('');
   const [sessions, setSessions] = useState<AuthSession[]>([]);
 
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try { setSessions((await api.sessions()).sessions); } catch { setSessions([]); }
-  };
+  }, []);
 
   const resetPassword = async (user: AuthUser) => {
     setBusy(user.id);
@@ -55,7 +55,7 @@ export default function UsersPanel() {
     }
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const status = await api.authStatus();
       setMe(status.user);
@@ -73,9 +73,9 @@ export default function UsersPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadSessions]);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const addUser = async (event: FormEvent) => {
     event.preventDefault();
