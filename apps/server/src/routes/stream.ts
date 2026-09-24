@@ -7,6 +7,7 @@ import { getAdapter } from '../services/registry.js';
 import { getMediaRoots, isAllowedMediaFile } from '../services/media-roots.js';
 import { extractSubtitleVtt, ffmpegAvailable, probeMedia, startTranscode, type TranscodeOptions } from '../services/transcode.js';
 import { ratingAllowed } from '../services/parental.js';
+import { currentActor } from '../services/user-context.js';
 import { trickplayFor } from '../services/trickplay.js';
 
 type Streamable = Media & { streamUrl?: string; fileInfo?: { path?: string; size?: number } };
@@ -315,7 +316,30 @@ async function resolveEpisodeFile(id: string): Promise<string | null> {
   }
 }
 
+/**
+ * Every playback route for an episode is judged by the parent series' age
+ * rating, the same rule the series page uses. Knowing an episode id is not
+ * enough. A restricted viewer with a rating that cannot be confirmed is
+ * refused (unknown is not safe).
+ */
+async function episodeAllowed(id: string): Promise<boolean> {
+  const actor = currentActor();
+  if (actor.role !== 'user' || !actor.maxRating) return true;
+  try {
+    return ratingAllowed(await getAdapter<SonarrAdapter>('sonarr').getEpisodeCertification(id));
+  } catch {
+    return false;
+  }
+}
+
 export default async function streamRoutes(server: FastifyInstance) {
+  server.addHook('preHandler', async (request, reply) => {
+    const match = /^\/api\/stream\/episode\/([^/?]+)/.exec(request.url);
+    if (match && !(await episodeAllowed(decodeURIComponent(match[1]!)))) {
+      return reply.code(403).send({ error: 'age_restricted', message: 'This is above the age limit set for your account.' });
+    }
+  });
+
   server.get<{ Params: { id: string } }>('/api/stream/episode/:id', async (request, reply) => {
     const filePath = await resolveEpisodeFile(request.params.id);
     if (!isServable(filePath)) {

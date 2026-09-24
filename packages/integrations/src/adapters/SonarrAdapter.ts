@@ -201,6 +201,20 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     return { path: file.path, size: file.size };
   }
 
+  /** The age rating of an episode's parent series. Throws when it cannot be determined. */
+  async getEpisodeCertification(episodeId: string): Promise<string | undefined> {
+    const { url, apiKey } = this.requireConfig();
+    const numeric = episodeId.startsWith('episode-') ? episodeId.slice('episode-'.length) : episodeId;
+    const epRes = await fetch(`${url}/api/v3/episode/${encodeURIComponent(numeric)}`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(4000) });
+    if (!epRes.ok) throw new Error('episode not found');
+    const { seriesId } = (await epRes.json()) as { seriesId?: number };
+    if (!seriesId) throw new Error('episode has no series');
+    const seriesRes = await fetch(`${url}/api/v3/series/${seriesId}`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(4000) });
+    if (!seriesRes.ok) throw new Error('series not found');
+    const { certification } = (await seriesRes.json()) as { certification?: string };
+    return certification;
+  }
+
   async lookupCandidates(title: string) {
     return lookupRequestCandidates(this.requireConfig(), 'sonarr', title);
   }
