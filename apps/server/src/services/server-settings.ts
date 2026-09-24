@@ -1,3 +1,4 @@
+import { openSecret, sealSecret } from '../lib/secrets.js';
 import { all, run } from '../db/app-db.js';
 
 export interface ServerSettings {
@@ -61,6 +62,11 @@ const DEFAULTS: ServerSettings = {
 
 const KEY = 'server';
 
+/** Channel settings hold webhook URLs, tokens and passwords: seal them when a key is configured. */
+function mapChannelSecrets<T extends { config?: Record<string, string> }>(channel: T, fn: (text: string) => string): T {
+  return { ...channel, config: Object.fromEntries(Object.entries(channel.config ?? {}).map(([k, v]) => [k, fn(v)])) };
+}
+
 function parse(value: unknown): ServerSettings {
   const raw = (typeof value === 'string' ? JSON.parse(value) : value ?? {}) as Partial<ServerSettings>;
   return {
@@ -74,7 +80,7 @@ function parse(value: unknown): ServerSettings {
     publicUrl: typeof raw.publicUrl === 'string' ? raw.publicUrl : '',
     defaultQuality: { ...DEFAULTS.defaultQuality, ...(raw.defaultQuality ?? {}) },
     requests: { ...DEFAULTS.requests, ...(raw.requests ?? {}) },
-    notifications: { channels: Array.isArray(raw.notifications?.channels) ? raw.notifications!.channels : [] },
+    notifications: { channels: Array.isArray(raw.notifications?.channels) ? raw.notifications!.channels.map(channel => mapChannelSecrets(channel, openSecret)) : [] },
     autoBackup: raw.autoBackup !== false
   };
 }
@@ -103,7 +109,7 @@ export function saveServerSettings(patch: Partial<ServerSettings>): ServerSettin
   run(
     `INSERT INTO server_settings (key, value, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    KEY, JSON.stringify(next), next.updatedAt ?? new Date().toISOString()
+    KEY, JSON.stringify({ ...next, notifications: { channels: next.notifications.channels.map(channel => mapChannelSecrets(channel, sealSecret)) } }), next.updatedAt ?? new Date().toISOString()
   );
   return getServerSettings();
 }

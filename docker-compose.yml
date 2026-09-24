@@ -315,6 +315,8 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:0.5b}
       - SEARCH_VIA_TOR=${SEARCH_VIA_TOR:-false}
       - VV_HELPER_URL=http://helper:8099
+      - VV_SECRET_KEY=${VV_SECRET_KEY:-}
+      - TRUST_PROXY=${TRUST_PROXY:-}
     volumes:
       - helper-shared:/shared:ro
       - app-data:/app/apps/server/data

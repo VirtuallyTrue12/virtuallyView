@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, rmSync 
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { DATA_DIR } from '../lib/paths.js';
+import { openSecret, sealSecret } from '../lib/secrets.js';
 import {
   RadarrAdapter,
   SonarrAdapter,
@@ -37,7 +38,8 @@ const CONFIG_PATH = resolve(DATA_DIR, 'integrations.json');
 export function loadServiceConfig(): Record<string, ServiceConfig> {
   try {
     if (!existsSync(CONFIG_PATH)) return {};
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) as Record<string, ServiceConfig>;
+    const stored = JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) as Record<string, ServiceConfig>;
+    return Object.fromEntries(Object.entries(stored).map(([key, entry]) => [key, { ...entry, apiKey: openSecret(entry.apiKey) }]));
   } catch {
     return {};
   }
@@ -229,7 +231,8 @@ function writeConfig(config: Record<string, ServiceConfig>): void {
   mkdirSync(DATA_DIR, { recursive: true });
   const temporary = `${CONFIG_PATH}.${randomUUID()}.tmp`;
   try {
-    writeFileSync(temporary, JSON.stringify(config, null, 2), { encoding: 'utf8', mode: 0o600 });
+    const sealed = Object.fromEntries(Object.entries(config).map(([key, entry]) => [key, { ...entry, apiKey: sealSecret(entry.apiKey) }]));
+    writeFileSync(temporary, JSON.stringify(sealed, null, 2), { encoding: 'utf8', mode: 0o600 });
     renameSync(temporary, CONFIG_PATH);
   } finally {
     // A cleanup error after a successful rename must not report a failed

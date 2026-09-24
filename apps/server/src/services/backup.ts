@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DATA_DIR } from '../lib/paths.js';
@@ -54,6 +54,8 @@ export async function createBackup(kind: 'manual' | 'auto' | 'pre-restore' = 'ma
     const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
     const name = `${kind === 'manual' ? 'virtuallyview' : kind}-${stamp}.tar.gz`;
     await run('tar', ['-czf', join(backupsDir(), name), '-C', work, '.']);
+    // A backup holds accounts and service keys: readable by the server only.
+    chmodSync(join(backupsDir(), name), 0o600);
     if (kind === 'auto') for (const old of listBackups().filter(b => b.kind === 'auto').slice(AUTO_KEEP)) deleteBackup(old.name);
     const st = statSync(join(backupsDir(), name));
     return { name, size: st.size, createdAt: st.mtime.toISOString(), kind };
