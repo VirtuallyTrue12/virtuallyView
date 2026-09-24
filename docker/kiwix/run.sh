@@ -23,12 +23,17 @@ fetch() {
   if [ -z "$file" ]; then echo "kiwix: nothing found for $1"; return 1; fi
   [ -f "/data/$file" ] && return 1
   echo "kiwix: downloading $file"
-  if wget -c -q -O "/data/$file.part" "https://download.kiwix.org/zim/$folder/$file"; then
-    mv "/data/$file.part" "/data/$file"
-    for old in /data/${prefix}_*.zim; do [ "$old" != "/data/$file" ] && [ -f "$old" ] && rm -f "$old"; done
-    echo "kiwix: $file ready"
-    return 0
-  fi
+  attempt=0
+  while [ $attempt -lt 30 ]; do
+    attempt=$((attempt + 1))
+    if wget -c -q -T 60 -O "/data/$file.part" "https://download.kiwix.org/zim/$folder/$file"; then
+      mv "/data/$file.part" "/data/$file"
+      for old in /data/${prefix}_*.zim; do [ "$old" != "/data/$file" ] && [ -f "$old" ] && rm -f "$old"; done
+      echo "kiwix: $file ready"
+      return 0
+    fi
+    sleep 10
+  done
   echo "kiwix: download of $file failed; it will be retried on the next start"
   return 1
 }
