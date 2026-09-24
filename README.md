@@ -10,6 +10,10 @@
   <a href="LICENSE">MIT</a> &middot; <a href="docs/getting-started.md">Getting started</a> &middot; <a href="CONTRIBUTING.md">Contributing</a> &middot; <a href="#feed-the-keep">Feed the keep</a>
 </p>
 
+<p align="center">
+  <a href="https://www.producthunt.com/products/virtuallyview?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-virtuallyview" target="_blank" rel="noopener noreferrer"><img alt="virtuallyView - Your Radarr/Sonarr/Lidarr stack, one clean interface | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1258258&amp;theme=light&amp;t=1790240850191"></a>
+</p>
+
 A self-hosted home for your movies, TV shows and music. One command, one page, and it sets itself up: no technical knowledge needed, and nothing to install or configure by hand. Everything underneath (the search engines, the download manager, the subtitle finder) wires itself together automatically on first start. You never touch them unless you want to.
 
 **Host it. Change it. Keep the keys.**
