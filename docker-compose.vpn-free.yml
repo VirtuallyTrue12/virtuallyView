@@ -16,7 +16,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["node", "scripts/vpngate.mjs", "/gluetun/custom.ovpn"]
+    command: ["node", "scripts/vpngate.mjs", "/gluetun/custom.ovpn", "--watch"]
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -24,7 +24,13 @@ services:
       - VPN_SERVER_COUNTRY_CODE=${VPN_SERVER_COUNTRY_CODE:-}
     volumes:
       - gluetun-config:/gluetun
-    restart: "no"
+    # Stays running: swaps in a fresh relay when the current one goes away.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "test", "-s", "/gluetun/custom.ovpn"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
 
   gluetun:
     image: qmcgaw/gluetun:latest
@@ -49,7 +55,7 @@ services:
       - gluetun-config:/gluetun
     depends_on:
       vpngate-config:
-        condition: service_completed_successfully
+        condition: service_healthy
     networks:
       default:
         aliases:
