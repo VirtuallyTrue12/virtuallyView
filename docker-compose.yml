@@ -236,6 +236,8 @@ services:
     volumes:
       - qbittorrent-config:/config
       - downloads:/downloads
+      # Concerts and music videos are filed under their artist here.
+      - media-music:/media/music
     ports:
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:6881:6881"

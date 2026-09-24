@@ -471,7 +471,14 @@ function deleteJSON<T>(path: string): Promise<T> {
   return requestJSON<T>('DELETE', path);
 }
 
+export interface MusicVideoItem { id: string; title: string; kind: 'Concerts' | 'Videos'; sizeBytes: number; folder: string }
+export interface MusicVideoJob { hash: string; name: string; status: string; kind: 'Concerts' | 'Videos'; artistId: number | null; artistName: string | null; message: string; updatedAt: string }
+
 export const api = {
+  artistVideos: (id: string) => getJSON<{ concerts: MusicVideoItem[]; videos: MusicVideoItem[] }>(`/api/artists/${encodeURIComponent(id)}/videos`),
+  pendingMusicVideos: () => getJSON<{ jobs: MusicVideoJob[] }>('/api/music-videos/pending'),
+  fileMusicVideo: (hash: string, artist: string, kind?: 'Concerts' | 'Videos') => postJSON<{ ok: boolean; message: string; artistId?: number }>('/api/music-videos/file', { hash, artist, kind }),
+  sweepMusicVideos: () => postJSON<{ outcomes: Array<{ status: string; message: string }> }>('/api/music-videos/sweep'),
   authStatus: () => getJSON<AuthStatus>('/api/auth/status'),
   login: (username: string, password: string, stayLoggedIn?: boolean) => postJSON<AuthStatus>('/api/auth/login', { username, password, stayLoggedIn }),
   signup: (username: string, password: string, stayLoggedIn?: boolean) => postJSON<AuthStatus>('/api/auth/signup', { username, password, stayLoggedIn }),

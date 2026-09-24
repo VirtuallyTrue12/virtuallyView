@@ -7,6 +7,18 @@ import { Media, Download } from '@virtuallyview/types';
  * "URL + API key" integration config shape, the API key field is expected to
  * hold "username:password".
  */
+export interface TorrentInfo {
+  hash: string;
+  name: string;
+  category: string;
+  state: string;
+  /** 0 to 100. */
+  progress: number;
+  savePath: string;
+  contentPath: string;
+  size: number;
+}
+
 export class QBittorrentAdapter implements IntegrationAdapter<{ url: string; apiKey: string }> {
   id = 'qbittorrent';
   name = 'qBittorrent';
@@ -171,6 +183,33 @@ export class QBittorrentAdapter implements IntegrationAdapter<{ url: string; api
       savePath: t.save_path,
       title: t.name
     } as Download & { title?: string })) as Download[];
+  }
+
+  /** Every torrent with the fields needed to tell whose it is (category) and where it lives. */
+  async listTorrents(): Promise<TorrentInfo[]> {
+    const res = await this.authedFetch('/api/v2/torrents/info');
+    if (!res.ok) throw new Error(`qBittorrent returned ${res.status} while listing torrents.`);
+    const data = (await res.json()) as Array<Record<string, unknown>>;
+    return data.map(t => ({
+      hash: String(t.hash ?? ''), name: String(t.name ?? ''), category: String(t.category ?? ''), state: String(t.state ?? ''),
+      progress: Math.round(Number(t.progress ?? 0) * 100), savePath: String(t.save_path ?? ''), contentPath: String(t.content_path ?? ''), size: Number(t.size ?? 0)
+    })).filter(t => t.hash);
+  }
+
+  /** File names inside one torrent, relative to its folder. */
+  async torrentFiles(hash: string): Promise<string[]> {
+    const res = await this.authedFetch(`/api/v2/torrents/files?hash=${encodeURIComponent(hash)}`);
+    if (!res.ok) throw new Error(`qBittorrent returned ${res.status} while listing files.`);
+    return ((await res.json()) as Array<{ name?: string }>).map(f => String(f.name ?? '')).filter(Boolean);
+  }
+
+  /** Moves the torrent's data to another folder. It keeps seeding from the new place. */
+  async setLocation(hash: string, location: string): Promise<{ success: boolean; message: string }> {
+    const res = await this.authedFetch('/api/v2/torrents/setLocation', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ hashes: hash, location })
+    });
+    return res.ok ? { success: true, message: 'Moved.' } : { success: false, message: res.status === 409 ? 'qBittorrent cannot write to that folder.' : `qBittorrent returned ${res.status}.` };
   }
 
   async refreshMetadata(): Promise<{ success: boolean; message: string }> {

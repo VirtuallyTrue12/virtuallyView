@@ -224,6 +224,46 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     };
   }
 
+  /** Artists as Lidarr holds them: id, name and the folder on disk. */
+  async listArtistFolders(): Promise<Array<{ id: number; name: string; path: string }>> {
+    const { url, apiKey } = this.requireConfig();
+    const res = await fetch(`${url}/api/v1/artist`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`Lidarr returned ${res.status} while listing artists.`);
+    return ((await res.json()) as Array<{ id: number; artistName: string; path?: string }>)
+      .map(a => ({ id: a.id, name: a.artistName, path: a.path ?? '' })).filter(a => a.path);
+  }
+
+  /**
+   * Adds an artist to the library without downloading anything: not monitored,
+   * no album search. Used when a concert or video arrives for someone the
+   * library has never had, so they get a page (with a cover) to sit under.
+   */
+  async addArtistQuietly(name: string): Promise<{ id: number; name: string; path: string } | { failure: string }> {
+    const { url, apiKey } = this.requireConfig();
+    const candidates = await this.lookupCandidates(name).catch(() => []);
+    const match = candidates[0];
+    if (!match) return { failure: `No artist called "${name}" was found.` };
+    const targets = await resolveAddTargets({ url, apiKey }, 'lidarr').catch(error => ({ failure: {
+      success: false, message: error instanceof Error ? error.message : 'Lidarr could not read its add settings.'
+    } }));
+    if ('failure' in targets) return { failure: targets.failure.message };
+    const res = await fetch(`${url}/api/v1/artist`, {
+      method: 'POST', headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        foreignArtistId: match.providerId, artistName: match.title,
+        qualityProfileId: targets.qualityProfileId,
+        ...(targets.metadataProfileId !== undefined ? { metadataProfileId: targets.metadataProfileId } : {}),
+        rootFolderPath: targets.rootFolderPath, monitored: false,
+        addOptions: { monitor: 'none', searchForMissingAlbums: false }
+      }),
+      signal: AbortSignal.timeout(45_000)
+    });
+    this.artistCache = null;
+    if (!res.ok) return { failure: `Lidarr rejected the artist (status ${res.status}).` };
+    const added = await res.json() as { id: number; artistName: string; path?: string };
+    return { id: added.id, name: added.artistName, path: added.path ?? `${targets.rootFolderPath}/${added.artistName}` };
+  }
+
   async remove(mediaId: string, deleteFiles = false): Promise<{ success: boolean; message: string }> {
     this.artistCache = null;
     const { url, apiKey } = this.requireConfig();

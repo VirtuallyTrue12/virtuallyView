@@ -6,6 +6,7 @@ import { FavoriteButton } from '../components/media/UserFlagButtons';
 import { RemoveTitle } from '../components/media/RemoveTitle';
 import { TitleQuality } from '../components/media/TitleQuality';
 import { SearchAgain } from '../components/media/SearchAgain';
+import { ArtistVideos } from '../components/media/ArtistVideos';
 import { useMusicPlayer } from '../components/media/MusicProvider';
 import { artistMix } from '../lib/instant-mix';
 import { api, type AlbumItem, type ApiError, type CoverCandidate, type MediaItem } from '../lib/api';
@@ -185,6 +186,8 @@ export default function ArtistDetails() {
               </div>
             )}
           </div>
+
+          {/^lidarr-/.test(artist.id) && <ArtistVideos artistId={artist.id} artistName={artist.title} />}
         </>
       )}
     </main>

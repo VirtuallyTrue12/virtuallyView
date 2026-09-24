@@ -80,6 +80,17 @@ function open(): DatabaseSync {
       fetched_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS music_video_jobs (
+      hash TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'Concerts',
+      artist_id INTEGER,
+      artist_name TEXT,
+      message TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS artist_covers (
       artist_id TEXT PRIMARY KEY,
       covers TEXT NOT NULL,

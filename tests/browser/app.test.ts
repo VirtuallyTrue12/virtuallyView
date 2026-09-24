@@ -213,3 +213,44 @@ describe('refresh button', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('concerts and videos', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('shows Concerts and Videos on the artist page and opens the player', async () => {
+    await page.route('**/api/artists/lidarr-9', r => r.fulfill(json({ id: 'lidarr-9', title: 'Scorpions', type: 'artist', status: 'missing', genres: ['Rock'] })));
+    await page.route('**/api/artists/lidarr-9/albums', r => r.fulfill(json({ artistId: 'lidarr-9', albums: [] })));
+    await page.route('**/api/artists/lidarr-9/covers', r => r.fulfill(json({ candidates: [], chosen: null })));
+    await page.route('**/api/artists/lidarr-9/videos', r => r.fulfill(json({
+      concerts: [{ id: 'musicvideo-9~Q29uY2VydHMvYS5ta3Y', title: 'Live in Berlin', kind: 'Concerts', sizeBytes: 3_800_000_000, folder: '' }],
+      videos: [{ id: 'musicvideo-9~VmlkZW9zL2IubXA0', title: 'Wind of Change', kind: 'Videos', sizeBytes: 90_000_000, folder: '' }]
+    })));
+    await page.goto(base + '/music/lidarr-9');
+    await page.waitForSelector('.mv-card');
+    expect(await page.locator('section[aria-label="Concerts"] .mv-card-title').innerText()).toBe('Live in Berlin');
+    expect(await page.locator('section[aria-label="Videos"] .mv-card-title').innerText()).toBe('Wind of Change');
+    expect(await page.locator('section[aria-label="Concerts"] .mv-card-sub').innerText()).toBe('3.8 GB');
+
+    await page.route('**/api/stream/musicvideo-9~Q29uY2VydHMvYS5ta3Y/info', r => r.fulfill(json({ playable: true, transcodingAvailable: false, durationSeconds: 100 })));
+    await page.route('**/api/progress/**', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await page.locator('section[aria-label="Concerts"] .mv-card').click();
+    await page.waitForURL(/\/music\/lidarr-9\/watch\//);
+    await page.waitForSelector('.player-title');
+    expect(await page.locator('.player-title').innerText()).toBe('Live in Berlin');
+  });
+
+  it('asks an administrator which artist a download belongs to', async () => {
+    let filed: unknown = null;
+    let pending = [{ hash: 'c'.repeat(40), name: 'Rock Concert 2019 1080p', status: 'needs_artist', kind: 'Concerts', artistId: null, artistName: null, message: 'x', updatedAt: '' }];
+    await page.route('**/api/music-videos/pending', r => r.fulfill(json({ jobs: pending })));
+    await page.route('**/api/music-videos/file', async r => { filed = r.request().postDataJSON(); pending = []; await r.fulfill(json({ ok: true, message: 'Filed under Kiss / Concerts (new artist added to the library).', artistId: 4 })); });
+    await page.goto(base + '/music');
+    await page.waitForSelector('.mv-pending-row');
+    await page.locator('.mv-pending-row input').fill('Kiss');
+    await page.locator('.mv-pending-row button').click();
+    await page.waitForSelector('.mv-pending-note');
+    expect(filed).toMatchObject({ hash: 'c'.repeat(40), artist: 'Kiss', kind: 'Concerts' });
+    expect(await page.locator('.mv-pending-note').innerText()).toMatch(/Filed under Kiss/);
+    expect(errors).toEqual([]);
+  });
+});

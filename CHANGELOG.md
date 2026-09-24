@@ -12,6 +12,7 @@ Security, install and reliability release. Read the notes marked **Upgrade** bef
 - **Install.** A version-pinned `docker-compose.release.yml` pulls the published image; release publishing now runs the same checks as CI plus a smoke test. Node.js 22.5 or newer is required (the README said 20).
 - **Fixed.** Search sources behind Cloudflare (1337x, EZTV, DaMagNet, LimeTorrents and others) never worked: FlareSolverr was set up but no source was routed through it. Setup now routes every source through it (it only acts when a site shows a Cloudflare check) and clears the stale "proxy unavailable" mark.
 - **Changed.** The optional auto-update profile now uses the maintained Watchtower fork, checks every 6 hours, and additionally updates the moment the internet is reachable (download and search apps first).
+- **Added.** Concerts and music videos file themselves under the artist (the artist is created if new), with Concerts and Videos sections on the artist page. See docs/concerts-and-videos.md. **Upgrade:** run `docker compose up -d` once so qBittorrent gets the music volume.
 - **Added.** Seek-bar preview thumbnails, live TV record-now, Kiwix offline libraries, an Apps page for Immich, Audiobookshelf and Kavita, opt-in automatic updates (Watchtower), paranoid mode (all searching over Tor), model browser and progressive replies in the assistant, and a background activity indicator.
 
 ## 0.1.0

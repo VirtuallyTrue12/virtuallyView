@@ -5,6 +5,6 @@ export { SonarrAdapter } from './adapters/SonarrAdapter.js';
 export { ProwlarrAdapter, type ProwlarrIndexer, type ProwlarrIndexerDefinition } from './adapters/ProwlarrAdapter.js';
 export { LidarrAdapter } from './adapters/LidarrAdapter.js';
 export { BazarrAdapter, type SubtitleWantedItem } from './adapters/BazarrAdapter.js';
-export { QBittorrentAdapter } from './adapters/QBittorrentAdapter.js';
+export { QBittorrentAdapter, type TorrentInfo } from './adapters/QBittorrentAdapter.js';
 export { NZBGetAdapter } from './adapters/NZBGetAdapter.js';
 export { artProxyUrl, ART_HOST } from './art-proxy.js';

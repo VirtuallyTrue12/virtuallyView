@@ -689,6 +689,29 @@ describe('e2e: refresh', () => {
   }, 30_000);
 });
 
+describe('e2e: concerts and videos', () => {
+  it('validates ids, keeps the filing tools to administrators, and never serves a made-up video id', async () => {
+    expect((await req('GET', '/api/artists/not-a-number/videos', { cookieOverride: cookieAdmin })).status).toBe(400);
+
+    const cookieViewer = await viewerCookie();
+    expect((await req('GET', '/api/music-videos/pending', { cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('POST', '/api/music-videos/file', { body: { hash: 'a'.repeat(40), artist: 'Queen' }, cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('POST', '/api/music-videos/sweep', { cookieOverride: cookieViewer })).status).toBe(403);
+
+    const pending = await req('GET', '/api/music-videos/pending', { cookieOverride: cookieAdmin });
+    expect(pending.status).toBe(200);
+    expect(pending.json.jobs).toEqual([]);
+
+    expect((await req('POST', '/api/music-videos/file', { body: { hash: 'nope', artist: 'Queen' }, cookieOverride: cookieAdmin })).status).toBe(400);
+    expect((await req('POST', '/api/music-videos/file', { body: { hash: 'a'.repeat(40), artist: '' }, cookieOverride: cookieAdmin })).status).toBe(400);
+
+    // Ids that point outside an artist's Concerts/Videos folders are just "not found".
+    for (const id of ['musicvideo-1~' + Buffer.from('../../etc/passwd').toString('base64url'), 'musicvideo-x~abc', 'musicvideo-']) {
+      expect([404, 400]).toContain((await req('GET', `/api/stream/${encodeURIComponent(id)}`, { cookieOverride: cookieAdmin })).status);
+    }
+  }, 30_000);
+});
+
 describe('e2e: kiwix', () => {
   it('reports unconfigured by default, rejects a bad address, saves a good one, and blocks non-admins', async () => {
     const status = await req('GET', '/api/kiwix/status');

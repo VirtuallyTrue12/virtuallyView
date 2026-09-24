@@ -4,6 +4,7 @@ import { MediaCard } from '../components/media/MediaCard';
 import { api, type MediaItem, type PlaylistItem } from '../lib/api';
 import { BackButton } from '../components/layout/BackButton';
 import { ScanButton } from '../components/media/ScanButton';
+import { PendingMusicVideos } from '../components/media/PendingMusicVideos';
 import { AddArtist } from '../components/media/AddArtist';
 import { LibraryControls, useLibraryView } from '../components/media/LibraryControls';
 import { useMusicPlayer } from '../components/media/MusicProvider';
@@ -19,6 +20,8 @@ export default function Music() {
   const [creating, setCreating] = useState(false);
   const [playlistError, setPlaylistError] = useState<string | null>(null);
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
   const { playQueue } = useMusicPlayer();
   const [mixing, setMixing] = useState(false);
   const lib = useLibraryView(items, 'music');
@@ -79,6 +82,8 @@ export default function Music() {
       </div>
 
       <AddArtist onAdded={() => { api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />
+
+      {isAdmin && <PendingMusicVideos onFiled={() => { api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />}
 
       <section className="playlists-section" aria-label="Playlists">
         <div className="playlists-head">

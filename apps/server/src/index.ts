@@ -26,6 +26,7 @@ import userDataRoutes from './routes/user-data.js';
 import notificationRoutes from './routes/notifications.js';
 import indexerRoutes from './routes/indexers.js';
 import backupRoutes from './routes/backup.js';
+import musicVideoRoutes from './routes/music-videos.js';
 import lyricsRoutes from './routes/lyrics.js';
 import subtitleRoutes from './routes/subtitles.js';
 import watchPartyRoutes from './routes/watch-party.js';
@@ -44,6 +45,7 @@ import { all } from './db/app-db.js';
 import { startAutoBackup } from './services/backup.js';
 import { startAiDigest } from './services/ai-digest.js';
 import { startAutoUpdate } from './services/auto-update.js';
+import { startMusicVideoFiler } from './services/music-video-library.js';
 import { startRequestSync } from './services/requests.js';
 import { getAuthBackdrop } from './services/backdrop.js';
 import { getServerSettings } from './services/server-settings.js';
@@ -321,11 +323,11 @@ server.addHook('onRequest', (request, _reply, done) => {
 // reconfigures the server or its services is administrator-only.
 const ADMIN_ONLY_WRITE = [
   '/api/server-settings', '/api/integrations', '/api/services', '/api/onboarding', '/api/downloads/',
-  '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists', '/api/live/record', '/api/live/recordings', '/api/setup/', '/api/kiwix/config', '/api/apps/'
+  '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists', '/api/live/record', '/api/live/recordings', '/api/setup/', '/api/kiwix/config', '/api/apps/', '/api/music-videos/'
 ];
 // Reading how the server is wired (service addresses, what is reachable on the
 // network, how to control containers) is administrator-only too.
-const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status'];
+const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/'];
 server.addHook('preHandler', async (request, reply) => {
   if (request.method !== 'GET') return;
   const path = request.url.split('?')[0] ?? '';
@@ -423,6 +425,7 @@ const start = async () => {
   await server.register(notificationRoutes);
   await server.register(indexerRoutes);
   await server.register(backupRoutes);
+  await server.register(musicVideoRoutes);
 
   // In production (Docker, `npm start`) the built web app ships alongside the
   // server, so one process serves both the API and the UI on one port. In
@@ -455,6 +458,7 @@ const start = async () => {
   startAutoBackup();
   startAiDigest();
   startAutoUpdate();
+  startMusicVideoFiler();
   try {
     const port = Number(process.env.PORT ?? 3000);
     await server.listen({ port, host: '0.0.0.0' });

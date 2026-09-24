@@ -5,6 +5,7 @@ import type { Media } from '@virtuallyview/types';
 import type { SonarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from '../services/registry.js';
 import { getMediaRoots, isAllowedMediaFile } from '../services/media-roots.js';
+import { resolveMusicVideoPath } from '../services/music-video-library.js';
 import { extractSubtitleVtt, ffmpegAvailable, probeMedia, startTranscode, type TranscodeOptions } from '../services/transcode.js';
 import { ratingAllowed } from '../services/parental.js';
 import { currentActor } from '../services/user-context.js';
@@ -297,6 +298,10 @@ function listSubtitleTracks(mediaFilePath: string, baseStreamUrl: string) {
 }
 
 async function resolveStreamable(id: string): Promise<Streamable | null> {
+  if (id.startsWith('musicvideo-')) {
+    const file = await resolveMusicVideoPath(id);
+    return file ? { fileInfo: { path: file } } as unknown as Streamable : null;
+  }
   const radarr = getAdapter('radarr');
   const sonarr = getAdapter('sonarr');
   try {

@@ -15,6 +15,7 @@ const SeriesDetail = lazy(() => import('./pages/SeriesDetail'));
 const EpisodePlayer = lazy(() => import('./pages/EpisodePlayer'));
 const Music = lazy(() => import('./pages/Music'));
 const ArtistDetails = lazy(() => import('./pages/ArtistDetails'));
+const ConcertPlayer = lazy(() => import('./pages/ConcertPlayer'));
 const AlbumDetails = lazy(() => import('./pages/AlbumDetails'));
 const PlaylistDetail = lazy(() => import('./pages/PlaylistDetail'));
 const Requests = lazy(() => import('./pages/Requests'));
@@ -170,6 +171,7 @@ export default function App() {
         <Route path="/party/:code" element={<PartyJoin />} />
         <Route path="/music" element={<Music />} />
         <Route path="/music/:id" element={<ArtistDetails />} />
+        <Route path="/music/:id/watch/:videoId" element={<ConcertPlayer />} />
         <Route path="/albums/:id" element={<AlbumDetails />} />
         <Route path="/playlists/:id" element={<PlaylistDetail />} />
         <Route path="/themes" element={<Themes />} />
