@@ -3,6 +3,8 @@ import { Readable } from 'node:stream';
 import { addPlaylist, channelById, channelsFor, listPlaylists, removePlaylist, rewriteHls, verifyRelay } from '../services/live-tv.js';
 import { outboundFetch } from '../services/outbound.js';
 import { startTranscode } from '../services/transcode.js';
+import { acquireConversion, CONVERSION_MAX_MS } from '../lib/limits.js';
+import { currentActor } from '../services/user-context.js';
 import { deleteRecording, listRecordings, recordingFile, startRecording, stopRecording } from '../services/recordings.js';
 import { createReadStream, statSync } from 'node:fs';
 
@@ -50,17 +52,21 @@ export default async function liveRoutes(server: FastifyInstance) {
     } catch (error) {
       return reply.code(502).send({ message: error instanceof Error ? error.message : 'The channel could not be reached.' });
     }
+    const release = acquireConversion(currentActor().userId);
+    if (!release) return reply.code(429).header('Retry-After', '30').send({ message: 'Too many videos are being converted right now. Try again in a moment.' });
     const handle = startTranscode(channel.url, 0, {});
-    if (!handle?.process.stdout) return reply.code(503).send({ message: 'This channel needs ffmpeg, which is not installed.' });
+    if (!handle?.process.stdout) { release(); return reply.code(503).send({ message: 'This channel needs ffmpeg, which is not installed.' }); }
     const child = handle.process;
+    const limit = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* gone */ } }, CONVERSION_MAX_MS);
+    child.on('close', () => { clearTimeout(limit); release(); });
     request.raw.on('close', () => { try { child.kill('SIGKILL'); } catch { /* gone */ } });
     child.stderr?.on('data', () => undefined);
     return reply.header('Content-Type', 'video/mp4').header('Cache-Control', 'no-store').send(child.stdout);
   });
 
-  server.get<{ Querystring: { u?: string; s?: string } }>('/api/live/relay', async (request, reply) => {
+  server.get<{ Querystring: { u?: string; s?: string; e?: string } }>('/api/live/relay', async (request, reply) => {
     const url = request.query.u ?? '';
-    if (!verifyRelay(url, request.query.s ?? '')) return reply.code(403).send({ message: 'That link is not valid.' });
+    if (!verifyRelay(url, request.query.s ?? '', request.query.e)) return reply.code(403).send({ message: 'That link is not valid.' });
     try {
       const upstream = await outboundFetch(url, { timeoutMs: 20_000 });
       if (!upstream.ok) return reply.code(502).send({ message: `The stream answered ${upstream.status}.` });

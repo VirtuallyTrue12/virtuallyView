@@ -37,6 +37,7 @@ import libraryFolderRoutes from './routes/library-folders.js';
 import artRoutes from './routes/art.js';
 import setupRoutes from './routes/setup.js';
 import { VERSION } from './lib/version.js';
+import { redactUrl } from './lib/redact.js';
 import { startAutoBackup } from './services/backup.js';
 import { startAiDigest } from './services/ai-digest.js';
 import { startRequestSync } from './services/requests.js';
@@ -69,7 +70,31 @@ import {
 import { verifyStreamToken, signStreamPath, isStreamPath, shareOrigin } from './services/stream-token.js';
 import { startQuickConnect, pollQuickConnect, approveQuickConnect } from './services/quick-connect.js';
 
-const server = Fastify({ logger: true, trustProxy: true, bodyLimit: 2 * 1024 * 1024 });
+/**
+ * Whether to believe X-Forwarded-For. Off by default: with it on and no proxy in
+ * front, anyone can claim any address and dodge the sign-in rate limit. Set
+ * TRUST_PROXY to a hop count or to addresses/keywords (for example
+ * "loopback,uniquelocal") when a reverse proxy such as Caddy sits in front.
+ */
+function trustProxySetting(): boolean | number | string[] {
+  const raw = (process.env.TRUST_PROXY ?? '').trim();
+  if (!raw || /^(false|0|no|off)$/i.test(raw)) return false;
+  if (/^(true|yes|on)$/i.test(raw)) return true;
+  if (/^\d+$/.test(raw)) return Number(raw);
+  return raw.split(',').map(part => part.trim()).filter(Boolean);
+}
+
+const server = Fastify({
+  logger: {
+    redact: { paths: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'], censor: '[redacted]' },
+    serializers: {
+      req: request => ({ method: request.method, url: redactUrl(request.url), host: request.headers?.host, remoteAddress: request.ip, remotePort: request.socket?.remotePort })
+    }
+  },
+  // A hop count is accepted at runtime even though the type omits it.
+  trustProxy: trustProxySetting() as boolean | string[],
+  bodyLimit: 2 * 1024 * 1024
+});
 const rateWindowMs = 60_000;
 // Counts API calls per address. Pages, assets and media streams are exempt:
 // a video makes hundreds of range requests and a household shares one address.
@@ -77,6 +102,14 @@ const rateLimit = Number(process.env.API_RATE_LIMIT ?? 1500);
 const loginRateLimit = Number(process.env.LOGIN_RATE_LIMIT ?? 30);
 const loginCounts = new Map<string, { started: number; count: number }>();
 const requestCounts = new Map<string, { started: number; count: number }>();
+// Counters are per address and only matter for a minute: forget the old ones so a
+// stream of different addresses cannot grow the maps without bound.
+setInterval(() => {
+  const cutoff = Date.now() - rateWindowMs;
+  for (const map of [loginCounts, requestCounts]) {
+    for (const [address, bucket] of map) if (bucket.started < cutoff) map.delete(address);
+  }
+}, 30_000).unref();
 const metrics = { requests: 0, errors: 0, timeouts: 0, startedAt: new Date().toISOString() };
 
 /** Session cookie; marked Secure whenever the request arrived over HTTPS (directly or via a reverse proxy). */
@@ -279,6 +312,17 @@ const ADMIN_ONLY_WRITE = [
   '/api/server-settings', '/api/integrations', '/api/services', '/api/onboarding', '/api/downloads/',
   '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists', '/api/live/record', '/api/live/recordings', '/api/setup/', '/api/kiwix/config', '/api/apps/'
 ];
+// Reading how the server is wired (service addresses, what is reachable on the
+// network, how to control containers) is administrator-only too.
+const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status'];
+server.addHook('preHandler', async (request, reply) => {
+  if (request.method !== 'GET') return;
+  const path = request.url.split('?')[0] ?? '';
+  if (!ADMIN_ONLY_READ.some(prefix => path.startsWith(prefix))) return;
+  const me = currentUser(readSessionCookie(request.headers.cookie));
+  if (me && me.role !== 'admin') return reply.code(403).send({ message: 'Only an administrator can see that.' });
+});
+
 server.addHook('preHandler', async (request, reply) => {
   if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') return;
   const path = request.url.split('?')[0] ?? '';
@@ -329,7 +373,7 @@ server.setErrorHandler((error, request, reply) => {
   if (err.code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
     return reply.code(413).send({ error: 'payload_too_large', message: 'Request body is too large.' });
   }
-  request.log.error({ err: error, url: request.url }, 'request failed');
+  request.log.error({ err: error, url: redactUrl(request.url) }, 'request failed');
   return reply.code(err.statusCode ?? 500).send({ error: 'request_failed', message: err.statusCode ? err.message : 'Internal server error.' });
 });
 

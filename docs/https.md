@@ -14,7 +14,7 @@ VV_DOMAIN=media.example.com docker compose -f docker-compose.yml -f docker-compo
 - **`localhost` (the default).** Caddy makes a certificate from its own authority. Browsers warn until you trust it (`docker compose exec caddy caddy trust`, or import `/data/caddy/pki/authorities/local/root.crt`).
 - The overlay publishes the app only on `127.0.0.1:3000`, so the only way in from outside is through Caddy. It needs Docker Compose 2.24 or newer. On older versions or podman-compose, remove the `ports` line for `app` in `docker-compose.yml` yourself.
 
-The app marks its session cookie `Secure` whenever the request arrives over HTTPS (it reads `X-Forwarded-Proto`, which Caddy sets), so nothing needs configuring.
+The app marks its session cookie `Secure` whenever the request arrives over HTTPS (it reads `X-Forwarded-Proto`, which Caddy sets). The app only believes forwarded headers from a proxy you name: the Caddy overlay sets `TRUST_PROXY=loopback,uniquelocal` for you. With any other proxy, set `TRUST_PROXY` on the app to the proxy's address, a hop count such as `1`, or keywords like `loopback,uniquelocal`. Left unset (the default), forwarded headers are ignored, so nobody can fake their address to dodge the sign-in limit.
 
 ## Another proxy
 

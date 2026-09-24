@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { DATA_DIR } from '../lib/paths.js';
@@ -108,9 +108,20 @@ function key(): Buffer {
   else { relayKey = randomBytes(32); mkdirSync(DATA_DIR, { recursive: true }); writeFileSync(file, relayKey.toString('hex'), { encoding: 'utf8', mode: 0o600 }); }
   return relayKey;
 }
-const sign = (url: string) => createHmac('sha256', key()).update(url).digest('hex').slice(0, 32);
-export const verifyRelay = (url: string, sig: string) => /^https?:\/\//i.test(url) && sign(url) === sig;
-const relayLink = (url: string) => `/api/live/relay?u=${encodeURIComponent(url)}&s=${sign(url)}`;
+// A relay link works for the address it names, for a limited time, and nowhere else.
+const RELAY_LIFETIME_MS = 12 * 3_600_000;
+const sign = (url: string, expires: number) => createHmac('sha256', key()).update(`relay|${expires}|${url}`).digest('hex').slice(0, 32);
+export function verifyRelay(url: string, sig: string, expires: string | number | undefined): boolean {
+  const at = Number(expires);
+  if (!/^https?:\/\//i.test(url) || !Number.isFinite(at) || at < Date.now()) return false;
+  const expected = Buffer.from(sign(url, at));
+  const given = Buffer.from(String(sig));
+  return expected.length === given.length && timingSafeEqual(expected, given);
+}
+const relayLink = (url: string) => {
+  const expires = Date.now() + RELAY_LIFETIME_MS;
+  return `/api/live/relay?u=${encodeURIComponent(url)}&e=${expires}&s=${sign(url, expires)}`;
+};
 
 export function rewriteHls(body: string, base: string): string {
   const abs = (ref: string) => relayLink(new URL(ref, base).toString());

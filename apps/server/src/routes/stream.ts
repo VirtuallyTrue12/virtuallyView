@@ -9,6 +9,7 @@ import { extractSubtitleVtt, ffmpegAvailable, probeMedia, startTranscode, type T
 import { ratingAllowed } from '../services/parental.js';
 import { currentActor } from '../services/user-context.js';
 import { trickplayFor } from '../services/trickplay.js';
+import { acquireConversion, CONVERSION_MAX_MS } from '../lib/limits.js';
 
 type Streamable = Media & { streamUrl?: string; fileInfo?: { path?: string; size?: number } };
 
@@ -159,8 +160,13 @@ async function streamTranscode(
   if (request.query.burn !== undefined && Number.isInteger(burn) && probe.subtitleStreams?.[burn] && !probe.subtitleStreams[burn]?.text) {
     options.burn = burn;
   }
+  const release = acquireConversion(currentActor().userId);
+  if (!release) {
+    return reply.code(429).header('Retry-After', '30').send({ error: 'too_many_conversions', message: 'Too many videos are being converted right now. Close another player or try again in a moment.' });
+  }
   const handle = startTranscode(filePath, start, options);
   if (!handle) {
+    release();
     return reply.code(503).header('Access-Control-Allow-Origin', '*').send({
       error: 'transcode_unavailable',
       message: 'This file needs conversion, but ffmpeg is not installed on the server.'
@@ -168,8 +174,11 @@ async function streamTranscode(
   }
   const child = handle.process;
   if (!child.stdout) {
+    release();
     return reply.code(503).header('Access-Control-Allow-Origin', '*').send({ error: 'transcode_unavailable', message: 'The converter could not start.' });
   }
+  const limit = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* already exited */ } }, CONVERSION_MAX_MS);
+  child.on('close', () => { clearTimeout(limit); release(); });
   request.raw.on('close', () => {
     try { child.kill('SIGKILL'); } catch { /* already exited */ }
   });

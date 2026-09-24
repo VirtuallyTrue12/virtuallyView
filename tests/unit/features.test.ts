@@ -181,10 +181,11 @@ describe('live tv playlists', () => {
   });
   it('sends every stream address back through the server, signed', () => {
     const out = rewriteHls('#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="key.bin"\n#EXTINF:4,\nseg1.ts\n', 'http://h/live/index.m3u8');
-    const link = /\/api\/live\/relay\?u=([^&]+)&s=(\w+)/.exec(out.split('\n')[3] ?? '')!;
+    const link = /\/api\/live\/relay\?u=([^&]+)&e=(\d+)&s=(\w+)/.exec(out.split('\n')[3] ?? '')!;
     expect(decodeURIComponent(link[1]!)).toBe('http://h/live/seg1.ts');
-    expect(verifyRelay('http://h/live/seg1.ts', link[2]!)).toBe(true);
-    expect(verifyRelay('http://evil/x', link[2]!)).toBe(false);
+    expect(verifyRelay('http://h/live/seg1.ts', link[3]!, link[2]!)).toBe(true);
+    expect(verifyRelay('http://evil/x', link[3]!, link[2]!)).toBe(false);
+    expect(verifyRelay('http://h/live/seg1.ts', link[3]!, String(Date.now() - 1000))).toBe(false);
     expect(out).toMatch(/URI="\/api\/live\/relay\?u=http%3A%2F%2Fh%2Flive%2Fkey\.bin/);
   });
 });

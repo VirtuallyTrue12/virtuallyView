@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { isIP } from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { pingService } from '@virtuallyview/integrations';
+import { currentActor } from '../services/user-context.js';
 import type { IntegrationStatus } from '@virtuallyview/types';
 import {
   getManagedAdapters, loadServiceConfig, configureIntegration, toggleIntegration,
@@ -58,7 +59,8 @@ export default async function integrationsRoutes(server: FastifyInstance) {
       const healthStatus = extra.enabled ? (await pingService(extra.url, 2500)).status : 'offline';
       out.push({ ...extra, healthStatus, lastSync: healthStatus === 'online' ? new Date() : undefined });
     }
-    return out;
+    // Everyone can see whether a service is up; only administrators see where it lives.
+    return currentActor().role === 'user' ? out.map(item => ({ ...item, url: '' })) : out;
   });
 
   // Scans the usual local addresses for each managed service so the UI can

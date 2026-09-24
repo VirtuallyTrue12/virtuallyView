@@ -23,6 +23,9 @@ services:
   app:
     ports: !override
       - "127.0.0.1:3000:3000"
+    environment:
+      # Caddy is the proxy in front: believe the address it forwards (and HTTPS for the Secure cookie).
+      - TRUST_PROXY=loopback,uniquelocal
 
 volumes:
   caddy-data:

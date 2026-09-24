@@ -19,7 +19,9 @@ export default async function serverSettingsRoutes(server: FastifyInstance) {
   server.get('/api/server-settings', async () => {
     const settings = getServerSettings();
     // Channel URLs and tokens are secrets: only administrators see them.
-    return currentActor().role === 'user' ? { ...settings, notifications: { channels: [] }, outboundProxy: { ...settings.outboundProxy, host: '' } } : settings;
+    return currentActor().role === 'user'
+      ? { ...settings, notifications: { channels: [] }, outboundProxy: { ...settings.outboundProxy, host: '' }, mediaRoots: { movies: '', tv: '', music: '', staging: '' } }
+      : settings;
   });
 
   server.post<{ Body: Partial<ServerSettings> & { confirm?: string } }>(

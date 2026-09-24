@@ -96,6 +96,7 @@ beforeAll(async () => {
       ...process.env,
       VV_DATA_DIR: dataDir,
       PORT: String(port),
+      TRUST_PROXY: 'loopback',
       API_RATE_LIMIT: '1000000'
     },
     stdio: ['ignore', 'pipe', 'pipe']
