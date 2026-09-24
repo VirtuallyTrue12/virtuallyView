@@ -21,7 +21,7 @@ export interface ServerSettings {
   trustLocalNetwork: boolean;
   /** Address other devices should use (shown in Settings > Server). */
   publicUrl: string;
-  /** Preferred quality profile name per media type; blank = HD-1080p. */
+  /** Preferred quality profile name per media type; blank = Standard for music, HD-1080p for movies and TV. */
   defaultQuality: { movie: string; series: string; artist: string };
   /** Who may request what: optional admin approval and a per-person limit. */
   requests: { approval: 'off' | 'users'; limit: number; window: 'day' | 'week' };

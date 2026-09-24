@@ -41,7 +41,7 @@ export default function DefaultQuality({ settings, onSaved }: { settings: Server
         <div className="settings-row" key={key} style={{ gap: 12 }}>
           <span style={{ minWidth: 90 }}>{label}</span>
           <select className="settings-input" value={settings?.defaultQuality?.[key] ?? ''} onChange={e => void save(key, e.target.value)} disabled={!profiles[key]?.length} aria-label={`Default quality for ${label}`}>
-            <option value="">HD-1080p (built-in default)</option>
+            <option value="">{key === 'artist' ? 'Standard' : 'HD-1080p'} (built-in default)</option>
             {(profiles[key] ?? []).map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>

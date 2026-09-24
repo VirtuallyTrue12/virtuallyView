@@ -173,8 +173,8 @@ export async function resolveAddTargets(
   if (strict && preferredProfile && !named) {
     throw new Error(`${service} has no quality profile called "${preferredProfile}". Available: ${usable.map(p => p.name).join(', ') || 'none'}. Nothing was added.`);
   }
-  // Music: an unknown name falls back to "Best available", then "Lossless", never plain "Any".
-  const profile = named ?? (service === 'lidarr' ? usable.find(p => /best available/i.test(p.name!)) ?? usable.find(p => /lossless/i.test(p.name!)) : undefined) ?? usable[0];
+  // Music: an unknown name falls back to "Standard", then "Best available", then "Lossless", never plain "Any".
+  const profile = named ?? (service === 'lidarr' ? usable.find(p => /^standard$/i.test(p.name!)) ?? usable.find(p => /best available/i.test(p.name!)) ?? usable.find(p => /lossless/i.test(p.name!)) : undefined) ?? usable[0];
   if (!profile) throw new Error(`${service} has no quality profiles configured. Create one in ${service} before requesting titles.`);
   const folder = folders.find(f => typeof f.path === 'string' && f.path.length > 0 && f.accessible !== false);
   if (!folder) throw new Error(`${service} has no accessible root folder configured. Add one in ${service} before requesting titles.`);
