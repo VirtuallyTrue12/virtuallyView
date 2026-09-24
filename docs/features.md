@@ -75,7 +75,7 @@ virtuallyView is an interface over Radarr, Sonarr, Lidarr and friends, so it doe
 | Backups: daily automatic, download, restore, command line recovery | Built |
 | One-click public indexers | Built |
 | Themes | Built (15, plus a creator; three unofficial look-alikes of popular streaming apps) |
-| Live TV from M3U playlists (TV tuner boxes, providers, free public lists), played through the server | Built. Recording (DVR) and a programme guide are phase 2 ([roadmap](roadmap.md)) |
+| Live TV from M3U playlists (TV tuner boxes, providers, free public lists), played through the server | Built. Record now for a chosen time (stream copy, no scheduling yet); a programme guide is phase 2 ([roadmap](roadmap.md)) |
 | Photos from a mounted folder: grid, viewer, slideshow | Built |
 | Books and comics from a mounted folder | Built: PDFs open in the browser, EPUB and comic files download; an EPUB reader is phase 2 |
 | Plugins | Phase 2, after a sandbox exists: a plugin runs someone else's code with access to your server |

@@ -68,13 +68,13 @@ It does not supply media and it does not replace the tools behind it. It is the 
 - **Notifications.** A bell in the top bar, desktop pop-ups, and channels for Discord, Slack, Telegram, ntfy, Gotify, webhooks and email.
 - **Backups.** Daily automatic backup, one-click download and restore, and an admin command line for when you are locked out.
 - **Themes.** Fifteen themes with live previews, chosen per device, plus a theme creator. Light, dark or follow the system.
-- **Live TV, photos and books.** Live channels from any M3U playlist, a photo browser with slideshow, and a book shelf. Cast to a TV with Chromecast, AirPlay or DLNA, no account needed ([casting](docs/casting.md)).
+- **Live TV, photos and books.** Live channels from any M3U playlist with record-now, seek-bar preview thumbnails in the player, a photo browser with slideshow, and a book shelf. Cast to a TV with Chromecast, AirPlay or DLNA, no account needed ([casting](docs/casting.md)).
 - **Optional assistant.** A local model through Ollama that can answer questions and act on your library, with confirmation for anything destructive.
 - **Optional proxy.** Route the server's public lookups (metadata, covers, trailers) through Tor, SOCKS5 or HTTP.
 
 ### Limits
 
-SABnzbd, Plex and Emby are not supported. virtuallyView plays files itself and needs no other media server. Live TV recording, a programme guide, an EPUB reader and plugins are planned for [phase 2](docs/roadmap.md). Picture subtitles (PGS, VobSub) are drawn onto the video, so they only work while the file is being converted. Missing metadata or an offline service limits what a page can show, and the pages say so.
+SABnzbd, Plex and Emby are not supported. virtuallyView plays files itself and needs no other media server. Scheduled live TV recording, a programme guide, an EPUB reader and plugins are planned for [phase 2](docs/roadmap.md). Picture subtitles (PGS, VobSub) are drawn onto the video, so they only work while the file is being converted. Missing metadata or an offline service limits what a page can show, and the pages say so.
 
 ## Privacy
 

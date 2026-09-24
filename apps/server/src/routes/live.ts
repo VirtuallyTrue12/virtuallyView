@@ -3,6 +3,8 @@ import { Readable } from 'node:stream';
 import { addPlaylist, channelById, channelsFor, listPlaylists, removePlaylist, rewriteHls, verifyRelay } from '../services/live-tv.js';
 import { outboundFetch } from '../services/outbound.js';
 import { startTranscode } from '../services/transcode.js';
+import { deleteRecording, listRecordings, recordingFile, startRecording, stopRecording } from '../services/recordings.js';
+import { createReadStream, statSync } from 'node:fs';
 
 const isPlaylistType = (type: string | null, url: string) => /mpegurl/i.test(type ?? '') || /\.m3u8?(\?|$)/i.test(url);
 
@@ -72,5 +74,29 @@ export default async function liveRoutes(server: FastifyInstance) {
     } catch (error) {
       return reply.code(502).send({ message: error instanceof Error ? error.message : 'The stream could not be reached.' });
     }
+  });
+
+  server.post<{ Body: { channelId?: string; minutes?: number } }>('/api/live/record', async (request, reply) => {
+    const channel = await channelById(request.body?.channelId ?? '');
+    if (!channel) return reply.code(404).send({ message: 'That channel is no longer in your playlists. Reload the page to refresh the channel list.' });
+    const result = startRecording(channel.url, channel.name, Number(request.body?.minutes));
+    return result.ok ? result.recording : reply.code(400).send({ message: result.message });
+  });
+  server.get('/api/live/recordings', async () => ({ recordings: listRecordings() }));
+  server.post<{ Params: { id: string } }>('/api/live/record/:id/stop', async (request, reply) =>
+    stopRecording(request.params.id) ? { ok: true } : reply.code(404).send({ message: 'That recording is not running.' }));
+  server.delete<{ Params: { id: string } }>('/api/live/recordings/:id', async (request, reply) =>
+    deleteRecording(request.params.id) ? { ok: true } : reply.code(404).send({ message: 'Recording not found.' }));
+  server.get<{ Params: { id: string } }>('/api/live/recordings/:id/file', async (request, reply) => {
+    const file = recordingFile(request.params.id);
+    if (!file) return reply.code(404).send({ message: 'Recording not found.' });
+    const size = statSync(file).size;
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(request.headers.range ?? ''));
+    reply.header('Accept-Ranges', 'bytes').header('Cache-Control', 'no-store').type('video/mp4');
+    if (!range) return reply.header('Content-Length', size).send(createReadStream(file));
+    const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+    const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    if (start > end || start >= size) return reply.code(416).header('Content-Range', `bytes */${size}`).send();
+    return reply.code(206).header('Content-Range', `bytes ${start}-${end}/${size}`).header('Content-Length', end - start + 1).send(createReadStream(file, { start, end }));
   });
 }

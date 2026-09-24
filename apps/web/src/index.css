@@ -4848,6 +4848,8 @@ body.has-music-bar {
   position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
   background: var(--color-accent, #d4a24e); box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.35);
 }
+.vp-bar-thumb-img { border-radius: 4px; background-repeat: no-repeat; background-color: #000; }
+.vp-bar-tip { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .vp-bar-tip {
   position: absolute; bottom: 26px; transform: translateX(-50%); padding: 2px 8px; border-radius: 6px;
   background: rgba(0, 0, 0, 0.85); font-size: 0.78rem; pointer-events: none; white-space: nowrap;
@@ -5352,3 +5354,6 @@ html[data-theme='apple-tv-style'] .nav-link { padding: 0.35rem 0.55rem; font-siz
 .indexer-adult { margin-top: var(--spacing-md); border-top: 1px solid var(--color-border); padding-top: var(--spacing-sm); }
 .indexer-adult summary { cursor: pointer; font-weight: 600; color: var(--color-text-secondary); padding: 6px 0; }
 .indexer-adult-badge { margin-left: 8px; padding: 0 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; color: #fff; background: var(--color-danger); vertical-align: middle; }
+
+.live-record { display: inline-flex; align-items: center; gap: 8px; margin-left: 16px; }
+.live-record .settings-input { width: auto; padding: 4px 8px; }

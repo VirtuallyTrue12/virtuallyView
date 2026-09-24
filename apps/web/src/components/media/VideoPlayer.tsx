@@ -108,6 +108,8 @@ export default function VideoPlayer({
   const [fullscreen, setFullscreen] = useState(false);
   const [scrub, setScrub] = useState<number | null>(null);
   const [hover, setHover] = useState<{ x: number; t: number } | null>(null);
+  const [trick, setTrick] = useState<{ interval: number; width: number; height: number; cols: number; rows: number; count: number } | null>(null);
+  const trickBase = src.split('?')[0];
   const [failed, setFailed] = useState<string | null>(null);
   const [upNext, setUpNext] = useState<number | null>(null);
 
@@ -117,6 +119,24 @@ export default function VideoPlayer({
     : src;
   // A cast receiver has no login cookie: it gets an absolute address with a signed, expiring token.
   const videoSrc = cast ? `${cast.origin}${baseSrc}${baseSrc.includes('?') ? '&' : '?'}st=${cast.token}` : baseSrc;
+  // Seek-bar preview pictures: made once per file on the server, so ask again
+  // every so often until they are ready.
+  useEffect(() => {
+    setTrick(null);
+    if (!trickBase.startsWith('/api/stream/')) return;
+    let cancelled = false;
+    let timer: number | undefined;
+    const load = async (tries: number) => {
+      try {
+        const j = (await (await fetch(`${trickBase}/trickplay`)).json()) as { state?: string; interval: number; width: number; height: number; cols: number; rows: number; count: number };
+        if (cancelled) return;
+        if (j.state === 'ready') setTrick(j);
+        else if (j.state === 'pending' && tries < 60) timer = window.setTimeout(() => void load(tries + 1), 15000);
+      } catch { /* no previews; the bar still works */ }
+    };
+    void load(0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [trickBase]);
   const total = isTranscode ? (durationSeconds ?? 0) : mediaDuration;
   const position = isTranscode ? offset + time : time;
   positionRef.current = position;
@@ -485,7 +505,22 @@ export default function VideoPlayer({
             {total > 0 && chapters.slice(1).map(c => <span key={c.start} className="vp-bar-tick" style={{ left: `${(c.start / total) * 100}%` }} />)}
             <div className="vp-bar-thumb" style={{ left: `${pct}%` }} />
           </div>
-          {hover && <div className="vp-bar-tip" style={{ left: `${hover.x}%` }}>{fmt(hover.t)}{chapters.find(c => hover.t >= c.start && hover.t < c.end) ? `, ${chapters.find(c => hover.t >= c.start && hover.t < c.end)!.title}` : ''}</div>}
+          {hover && (() => {
+            const chapter = chapters.find(c => hover.t >= c.start && hover.t < c.end);
+            const idx = trick ? Math.min(trick.count - 1, Math.max(0, Math.floor(hover.t / trick.interval))) : 0;
+            return (
+              <div className="vp-bar-tip" style={{ left: `${Math.min(92, Math.max(8, hover.x))}%` }}>
+                {trick && (
+                  <div className="vp-bar-thumb-img" style={{
+                    width: trick.width, height: trick.height, backgroundImage: `url(${trickBase}/trickplay.jpg)`,
+                    backgroundSize: `${trick.cols * trick.width}px ${trick.rows * trick.height}px`,
+                    backgroundPosition: `-${(idx % trick.cols) * trick.width}px -${Math.floor(idx / trick.cols) * trick.height}px`
+                  }} />
+                )}
+                <span>{fmt(hover.t)}{chapter ? `, ${chapter.title}` : ''}</span>
+              </div>
+            );
+          })()}
         </div>
 
         <div className="vp-row">

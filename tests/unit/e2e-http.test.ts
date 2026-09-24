@@ -506,6 +506,29 @@ describe('e2e: streaming + transcode fallback', () => {
   }, 30_000);
 });
 
+describe('e2e: seek-bar previews', () => {
+  it('say unavailable when there is no local file, for movies and episodes', async () => {
+    for (const path of ['/api/stream/radarr-999/trickplay', '/api/stream/radarr-999/trickplay.jpg', '/api/stream/episode/sonarr-999/trickplay']) {
+      const res = await req('GET', path);
+      expect(res.status).toBe(404);
+      expect(res.json.state).toBe('unavailable');
+    }
+  }, 20_000);
+});
+
+describe('e2e: live tv recording', () => {
+  it('lists nothing at first, refuses unknown channels and non-admins', async () => {
+    expect((await req('GET', '/api/live/recordings')).json.recordings).toEqual([]);
+    expect((await req('POST', '/api/live/record', { body: { channelId: 'nope', minutes: 30 }, cookieOverride: cookieAdmin })).status).toBe(404);
+    const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
+    const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+    expect((await req('POST', '/api/live/record', { body: { channelId: 'nope', minutes: 30 }, cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('DELETE', '/api/live/recordings/nope', { cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('DELETE', '/api/live/recordings/nope', { cookieOverride: cookieAdmin })).status).toBe(404);
+    expect((await req('GET', '/api/live/recordings/nope/file')).status).toBe(404);
+  }, 20_000);
+});
+
 describe('e2e: music', () => {
   it('validates ids and reports missing artists/tracks', async () => {
     expect((await req('GET', '/api/artists/not-a-number/albums')).status).toBe(400);

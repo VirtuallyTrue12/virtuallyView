@@ -4,6 +4,8 @@ import { BackButton } from '../components/layout/BackButton';
 
 interface Playlist { id: string; name: string; url: string }
 interface Channel { id: string; name: string; logo?: string; group?: string; playlist: string }
+interface Recording { id: string; title: string; channel: string; startedAt: string; endsAt: string; state: 'recording' | 'done' | 'failed' | 'stopped'; message?: string; sizeBytes: number }
+const mb = (b: number) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : `${Math.max(1, Math.round(b / 1024 ** 2))} MB`);
 
 const PUBLIC_LIST = 'https://iptv-org.github.io/iptv/index.m3u';
 
@@ -27,6 +29,30 @@ export default function LiveTV() {
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
+  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [minutes, setMinutes] = useState(60);
+  const [watching, setWatching] = useState<Recording | null>(null);
+
+  const loadRecordings = async () => {
+    try { setRecordings((await json<{ recordings: Recording[] }>('/api/live/recordings')).recordings); } catch { /* offline */ }
+  };
+  useEffect(() => { void loadRecordings(); }, []);
+  useEffect(() => {
+    if (!recordings.some(r => r.state === 'recording')) return;
+    const t = window.setInterval(() => void loadRecordings(), 5000);
+    return () => window.clearInterval(t);
+  }, [recordings]);
+  const record = async () => {
+    if (!current) return;
+    setProblem('');
+    try { await json('/api/live/record', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: current.id, minutes }) }); await loadRecordings(); }
+    catch (err) { setProblem((err as Error).message); }
+  };
+  const recAction = async (path: string, method: 'POST' | 'DELETE') => {
+    await json(path, { method }).catch(err => setProblem((err as Error).message));
+    if (method === 'DELETE') setWatching(null);
+    await loadRecordings();
+  };
 
   const load = async () => {
     try {
@@ -114,7 +140,14 @@ export default function LiveTV() {
       {current && (
         <section className="live-player">
           <video ref={video} controls autoPlay playsInline className="live-video" />
-          <div className="live-now"><strong>{current.name}</strong>{current.group ? ` · ${current.group}` : ''}</div>
+          <div className="live-now"><strong>{current.name}</strong>{current.group ? ` · ${current.group}` : ''}
+            <span className="live-record">
+              <select className="settings-input" value={minutes} onChange={e => setMinutes(Number(e.target.value))} aria-label="Record for">
+                {[15, 30, 60, 120, 180, 240].map(m => <option key={m} value={m}>{m >= 60 ? `${m / 60} h` : `${m} min`}</option>)}
+              </select>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => void record()}>Record</button>
+            </span>
+          </div>
           {error && <div className="notice notice--err" role="alert">{error}</div>}
         </section>
       )}
@@ -142,6 +175,30 @@ export default function LiveTV() {
           </button>
         ))}
       </div>
+
+      {(recordings.length > 0 || watching) && (
+        <section className="settings-section">
+          <h3>Recordings</h3>
+          {watching && <video className="live-video" controls autoPlay playsInline src={`/api/live/recordings/${watching.id}/file`} />}
+          <ul className="users-list">
+            {recordings.map(r => (
+              <li key={r.id} className="users-row">
+                <span className="users-name">{r.title}
+                  <small style={{ display: 'block', opacity: 0.7 }}>
+                    {r.state === 'recording' ? `Recording until ${new Date(r.endsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : r.state === 'done' ? 'Finished' : r.state === 'stopped' ? 'Stopped' : `Failed${r.message ? `: ${r.message}` : ''}`}
+                    {r.sizeBytes ? ` · ${mb(r.sizeBytes)}` : ''}
+                  </small>
+                </span>
+                <span className="users-actions">
+                  {r.sizeBytes > 0 && r.state !== 'failed' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setWatching(r)}>Watch</button>}
+                  {r.state === 'recording' && <button type="button" className="btn btn-secondary btn-sm" onClick={() => void recAction(`/api/live/record/${r.id}/stop`, 'POST')}>Stop</button>}
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => void recAction(`/api/live/recordings/${r.id}`, 'DELETE')}>Delete</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="settings-section">
         <h3>Playlists</h3>

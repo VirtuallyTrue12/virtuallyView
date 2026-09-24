@@ -7,6 +7,7 @@ import { getAdapter } from '../services/registry.js';
 import { getMediaRoots, isAllowedMediaFile } from '../services/media-roots.js';
 import { extractSubtitleVtt, ffmpegAvailable, probeMedia, startTranscode, type TranscodeOptions } from '../services/transcode.js';
 import { ratingAllowed } from '../services/parental.js';
+import { trickplayFor } from '../services/trickplay.js';
 
 type Streamable = Media & { streamUrl?: string; fileInfo?: { path?: string; size?: number } };
 
@@ -465,4 +466,17 @@ export default async function streamRoutes(server: FastifyInstance) {
       return streamTranscode(request, reply, filePath);
     }
   );
+
+  // Seek-bar preview thumbnails: JSON while they are being made, then a sprite image.
+  const trickplay = async (filePath: string | null | undefined, reply: FastifyReply, wantImage: boolean) => {
+    if (!isServable(filePath)) return reply.code(404).send({ state: 'unavailable' });
+    const t = trickplayFor(filePath);
+    if (!wantImage) return t.state === 'ready' ? { state: 'ready', ...t.meta } : { state: t.state };
+    if (t.state !== 'ready') return reply.code(404).send({ state: t.state });
+    return reply.header('Cache-Control', 'public, max-age=31536000, immutable').type('image/jpeg').send(createReadStream(t.image));
+  };
+  server.get<{ Params: { id: string } }>('/api/stream/:id/trickplay', async (request, reply) => trickplay((await resolveStreamable(request.params.id))?.fileInfo?.path, reply, false));
+  server.get<{ Params: { id: string } }>('/api/stream/:id/trickplay.jpg', async (request, reply) => trickplay((await resolveStreamable(request.params.id))?.fileInfo?.path, reply, true));
+  server.get<{ Params: { id: string } }>('/api/stream/episode/:id/trickplay', async (request, reply) => trickplay(await resolveEpisodeFile(request.params.id), reply, false));
+  server.get<{ Params: { id: string } }>('/api/stream/episode/:id/trickplay.jpg', async (request, reply) => trickplay(await resolveEpisodeFile(request.params.id), reply, true));
 }
