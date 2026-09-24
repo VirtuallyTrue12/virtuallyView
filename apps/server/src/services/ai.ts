@@ -11,6 +11,8 @@ import { createRequest, getRequests, cancelRequest, type RequestItem } from './r
 import { OllamaProvider } from './ollama-provider.js';
 import { isAllowed, type PermissionLevel } from './ai-permissions.js';
 import { recordAiAction } from './ai-history.js';
+import { issuePending, takePending } from './ai-pending.js';
+import { currentActor } from './user-context.js';
 import { listThemes, setActiveThemeId } from './themes.js';
 import { detectIntent, inScope, isConversational, OFF_TOPIC_TEXT } from './ai-router.js';
 import { answerIntent } from './ai-answers.js';
@@ -23,7 +25,7 @@ export interface ChatMessage {
 export type AgentReply =
   | { kind: 'message'; text: string }
   | { kind: 'tool-result'; tool: string; text: string; summary?: unknown }
-  | { kind: 'confirmation'; tool: string; arguments: Record<string, unknown>; description: string }
+  | { kind: 'confirmation'; tool: string; arguments: Record<string, unknown>; description: string; confirmationId?: string }
   | { kind: 'error'; message: string };
 
 const TOOL_SPECS: {
@@ -196,6 +198,9 @@ const TOOL_SPECS: {
     permission: 'manage'
   }
 ];
+
+/** Tools a regular person may use for themselves; everything else that changes anything needs an administrator. */
+const USER_TOOLS = new Set(['request_movie', 'request_series', 'request_artist', 'cancel_request']);
 
 function normalizeDownloadId(id: string): string {
   const trimmed = String(id ?? '').trim();
@@ -496,7 +501,19 @@ export class Agent {
 
   async chat(
     message: string,
-    args: { history?: ChatMessage[]; confirm?: { tool: string; arguments: Record<string, unknown> } | null } = {}
+    args: { history?: ChatMessage[]; confirm?: { id: string } | null } = {}
+  ): Promise<AgentReply> {
+    const reply = await this.chatInner(message, args);
+    // Any confirmation leaves here as a server-issued, single-use record.
+    if (reply.kind === 'confirmation') {
+      return { ...reply, confirmationId: issuePending(currentActor(), reply.tool, reply.arguments) };
+    }
+    return reply;
+  }
+
+  private async chatInner(
+    message: string,
+    args: { history?: ChatMessage[]; confirm?: { id: string } | null }
   ): Promise<AgentReply> {
     // Rules answer the common questions and keep the assistant on topic. A small
     // model only sees what is left, so it cannot get the everyday cases wrong.
@@ -513,6 +530,12 @@ export class Agent {
       if (!inScope(message)) return { kind: 'message', text: OFF_TOPIC_TEXT };
     }
 
+    if (args.confirm) {
+      const taken = takePending(currentActor(), String(args.confirm.id ?? ''));
+      if (!taken) return { kind: 'error', message: 'That confirmation is no longer valid. Ask again to get a new one.' };
+      return this.runConfirmedTool(taken.tool, taken.arguments);
+    }
+
     if (!(await this.provider.healthCheck())) {
       return {
         kind: 'error',
@@ -520,9 +543,6 @@ export class Agent {
       };
     }
 
-    if (args.confirm) {
-      return this.runConfirmedTool(args.confirm.tool, args.confirm.arguments);
-    }
 
     const history: AIMessage[] = (args.history ?? []).map(h => ({ role: h.role, content: h.content }));
     if (isConversational(message)) return this.talk(message, history);
@@ -581,9 +601,18 @@ export class Agent {
     }
   }
 
-  private checkPermission(name: string): void {
+  private checkPermission(name: string, args: Record<string, unknown> = {}): void {
     const tool = this.registry.get(name);
     if (!tool) throw new Error(`Tool ${name} not found`);
+    // Who may use it is decided here, on the server, not by what the screen shows.
+    const actor = currentActor();
+    if (actor.role === 'user' && !USER_TOOLS.has(name) && tool.permission !== 'read') {
+      throw new Error('Only an administrator can do that. Ask the person who runs this server.');
+    }
+    if (actor.role === 'user' && name === 'cancel_request') {
+      const target = getRequests().find(r => r.id === normalizeRequestId(String(args.request_id ?? '')));
+      if (!target || target.requesterId !== actor.userId) throw new Error('You can only cancel your own requests.');
+    }
     if (!isAllowed(tool.permission as PermissionLevel)) {
       throw new Error(
         `This action needs the "${tool.permission}" permission level, but the assistant is currently limited below that. Raise it in Settings > AI > Permissions.`
@@ -604,7 +633,7 @@ export class Agent {
           description: tool.description
         };
       }
-      this.checkPermission(name);
+      this.checkPermission(name, validated);
       const result = await this.registry.execute(name, validated);
       recordAiAction({ tool: name, arguments: validated, success: true, requiredConfirmation: false, message: 'ok' });
       return { kind: 'tool-result', tool: name, text: summarizeToolResult(name, validated, result), summary: result };
@@ -618,8 +647,8 @@ export class Agent {
     try {
       const tool = this.registry.get(name);
       if (!tool) throw new Error(`Tool ${name} not found`);
-      this.checkPermission(name);
       const validated = this.validate(name, args);
+      this.checkPermission(name, validated);
       const result = await this.registry.execute(name, validated);
       recordAiAction({ tool: name, arguments: validated, success: true, requiredConfirmation: true, message: 'ok' });
       return { kind: 'tool-result', tool: name, text: summarizeToolResult(name, validated, result), summary: result };

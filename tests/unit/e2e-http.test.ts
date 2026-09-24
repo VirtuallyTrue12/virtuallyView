@@ -596,6 +596,37 @@ describe('e2e: AI assistant', () => {
   }, 40_000);
 });
 
+describe('e2e: assistant authorization', () => {
+  it('regular users cannot control downloads or themes through the assistant, and confirmations are single-use and personal', async () => {
+    const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
+    const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+    const chat = (message: string, cookieOverride: string, extra: Record<string, unknown> = {}) =>
+      req('POST', '/api/ai/chat', { body: { message, ...extra }, cookieOverride });
+
+    for (const message of ['pause the download of anything', 'retry Dune', 'switch to midnight theme', 'remove the download of anything']) {
+      const reply = await chat(message, cookieViewer);
+      expect(reply.json.kind).toBe('message');
+      expect(reply.json.text).toMatch(/only an administrator/i);
+    }
+
+    // A request is something anyone may ask for; it needs a server-issued confirmation.
+    const ask = await chat('request the movie Dune', cookieAdmin);
+    expect(ask.json.kind).toBe('confirmation');
+    const id = ask.json.confirmationId as string;
+    expect(typeof id).toBe('string');
+
+    // Not the browser's description: a made-up confirmation, or someone else's, does nothing.
+    expect((await chat('', cookieAdmin, { confirm: { tool: 'remove_download', arguments: { download_id: 'x' } } })).json.message).toMatch(/no longer valid/i);
+    expect((await chat('', cookieAdmin, { confirm: { id: 'not-real' } })).json.message).toMatch(/no longer valid/i);
+    expect((await chat('', cookieViewer, { confirm: { id } })).json.message).toMatch(/no longer valid/i);
+
+    // The owner can use it once, and altered arguments are ignored (it runs what the server stored).
+    const used = await chat('', cookieAdmin, { confirm: { id, tool: 'remove_download', arguments: { download_id: 'x' } } });
+    expect(JSON.stringify(used.json)).not.toMatch(/remove/i);
+    expect((await chat('', cookieAdmin, { confirm: { id } })).json.message).toMatch(/no longer valid/i);
+  }, 30_000);
+});
+
 describe('e2e: kiwix', () => {
   it('reports unconfigured by default, rejects a bad address, saves a good one, and blocks non-admins', async () => {
     const status = await req('GET', '/api/kiwix/status');

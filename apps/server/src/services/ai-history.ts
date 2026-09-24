@@ -1,5 +1,9 @@
+import { currentActor } from './user-context.js';
+
 export interface AiActionRecord {
   timestamp: string;
+  /** Who the assistant acted for; other people do not see this entry. */
+  userId: string;
   tool: string;
   arguments: Record<string, unknown>;
   success: boolean;
@@ -20,10 +24,13 @@ function redact(args: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-export function recordAiAction(entry: Omit<AiActionRecord, 'timestamp'>): void {
-  history = [{ ...entry, arguments: redact(entry.arguments), timestamp: new Date().toISOString() }, ...history].slice(0, MAX_ENTRIES);
+export function recordAiAction(entry: Omit<AiActionRecord, 'timestamp' | 'userId'>): void {
+  history = [{ ...entry, userId: currentActor().userId, arguments: redact(entry.arguments), timestamp: new Date().toISOString() }, ...history].slice(0, MAX_ENTRIES);
 }
 
+/** Administrators see everyone's; everyone else sees only their own. */
 export function getAiHistory(limit = 50): AiActionRecord[] {
-  return history.slice(0, limit);
+  const actor = currentActor();
+  const visible = actor.role === 'user' ? history.filter(entry => entry.userId === actor.userId) : history;
+  return visible.slice(0, limit);
 }

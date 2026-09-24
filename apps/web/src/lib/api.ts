@@ -382,7 +382,7 @@ export interface ServerSettings {
 export type AgentReply =
   | { kind: 'message'; text: string }
   | { kind: 'tool-result'; tool: string; text: string; summary?: unknown }
-  | { kind: 'confirmation'; tool: string; arguments: Record<string, unknown>; description: string }
+  | { kind: 'confirmation'; tool: string; arguments: Record<string, unknown>; description: string; confirmationId?: string }
   | { kind: 'error'; message: string };
 
 /** Carries the HTTP status and parsed body so callers can tell a real "not
@@ -610,10 +610,10 @@ export const api = {
   aiChat: (body: {
     message: string;
     history?: { role: 'user' | 'assistant'; content: string }[];
-    confirm?: { tool: string; arguments: Record<string, unknown> };
+    confirm?: { id: string };
   }) => postJSON<AgentReply>('/api/ai/chat', body),
   aiChatStream: async (
-    body: { message: string; history?: { role: 'user' | 'assistant'; content: string }[]; confirm?: { tool: string; arguments: Record<string, unknown> } },
+    body: { message: string; history?: { role: 'user' | 'assistant'; content: string }[]; confirm?: { id: string } },
     onDelta: (text: string) => void
   ): Promise<AgentReply> => {
     const res = await fetch('/api/ai/chat/stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

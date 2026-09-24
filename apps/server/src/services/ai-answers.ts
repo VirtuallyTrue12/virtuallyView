@@ -6,8 +6,11 @@ import { retryDownload, retryTitle } from './retry.js';
 import { listThemes } from './themes.js';
 import { bestMatch, HELP_TEXT, type Intent } from './ai-router.js';
 import type { AgentReply } from './ai.js';
+import { currentActor } from './user-context.js';
 
 const say = (text: string): AgentReply => ({ kind: 'message', text });
+const ADMIN_ONLY = 'Only an administrator can do that. Ask the person who runs this server.';
+const isAdminUser = () => currentActor().role !== 'user';
 const NAMES: Record<string, string> = {
   radarr: 'Radarr (movies)', sonarr: 'Sonarr (TV)', lidarr: 'Lidarr (music)', prowlarr: 'Prowlarr (indexers)',
   bazarr: 'Bazarr (subtitles)', qbittorrent: 'qBittorrent (downloads)', nzbget: 'NZBGet (downloads)'
@@ -126,6 +129,7 @@ async function describeTitle(subject: string, rows: QueueItem[]): Promise<string
 }
 
 export async function answerRetry(subject: string): Promise<AgentReply> {
+  if (!isAdminUser()) return say(ADMIN_ONLY);
   if (!subject) return say('Which one? Say for example "retry Mr Robot" or "retry Linkin Park".');
   const rows = await downloadsOrNull();
   const failed = rows?.filter(r => r.status === 'failed') ?? [];
@@ -145,6 +149,7 @@ export async function answerRetry(subject: string): Promise<AgentReply> {
 }
 
 export async function answerDownloadAction(action: 'pause' | 'resume' | 'remove', subject: string): Promise<AgentReply> {
+  if (!isAdminUser()) return say(ADMIN_ONLY);
   const rows = await downloadsOrNull();
   const hit = rows ? bestMatch(subject, rows, r => `${r.title} ${r.rawTitle ?? ''}`) : undefined;
   if (!hit) return say(`I could not find a download matching "${subject}". Ask "what is downloading?" to see the names.`);
@@ -188,6 +193,7 @@ export async function answerSubtitles(subject?: string): Promise<AgentReply> {
 
 export async function answerThemes(name?: string): Promise<AgentReply> {
   const themes = listThemes().map(t => t.manifest);
+  if (name && !isAdminUser()) return say(ADMIN_ONLY);
   if (!name) return say(`Installed themes: ${themes.map(t => t.name).join(', ')}. Say "switch to <name>" to change the server default.`);
   const hit = bestMatch(name, themes, t => `${t.name} ${t.id}`);
   if (!hit) return say(`No theme called "${name}". Installed: ${themes.map(t => t.name).join(', ')}.`);

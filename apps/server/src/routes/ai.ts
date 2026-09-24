@@ -170,7 +170,7 @@ export default async function aiRoutes(server: FastifyInstance) {
     Body: {
       message: string;
       history?: { role: 'user' | 'assistant'; content: string }[];
-      confirm?: { tool: string; arguments: Record<string, unknown> };
+      confirm?: { id: string };
     };
   }>('/api/ai/chat', async (request, reply) => {
     const { message, history, confirm } = request.body ?? {};
@@ -194,7 +194,7 @@ export default async function aiRoutes(server: FastifyInstance) {
     Body: {
       message: string;
       history?: { role: 'user' | 'assistant'; content: string }[];
-      confirm?: { tool: string; arguments: Record<string, unknown> };
+      confirm?: { id: string };
     };
   }>('/api/ai/chat/stream', async (request, reply) => {
     const { message, history, confirm } = request.body ?? {};

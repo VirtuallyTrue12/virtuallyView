@@ -10,6 +10,7 @@ interface ChatMessage {
 }
 
 interface PendingConfirmation {
+  id: string;
   tool: string;
   arguments: Record<string, unknown>;
   description: string;
@@ -58,7 +59,7 @@ export default function ChatWidget() {
         push({ role: 'assistant', content: reply.text, meta: `Ran ${reply.tool}` });
         break;
       case 'confirmation':
-        setPending({ tool: reply.tool, arguments: reply.arguments, description: reply.description });
+        setPending({ id: reply.confirmationId ?? '', tool: reply.tool, arguments: reply.arguments, description: reply.description });
         push({ role: 'assistant', content: `I can ${reply.tool.replace(/_/g, ' ')}. This is a moderate action, so nothing changes until you confirm.`, meta: 'Needs confirmation' });
         break;
       case 'error':
@@ -90,7 +91,7 @@ export default function ChatWidget() {
     if (confirm) {
       setPending(null);
       try {
-        await streamInto(api.aiChatStream({ message: '', history, confirm: { tool: confirm.tool, arguments: confirm.arguments } }, onDelta));
+        await streamInto(api.aiChatStream({ message: '', history, confirm: { id: confirm.id } }, onDelta));
       } catch (err) {
         setMessages(prev => (prev[prev.length - 1]?.meta === 'streaming' ? prev.slice(0, -1) : prev));
         push({ role: 'assistant', content: `Could not reach the assistant: ${(err as Error).message}`, meta: 'Error' });
