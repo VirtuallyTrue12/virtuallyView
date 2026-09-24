@@ -7,6 +7,7 @@ import { outboundFetch } from '../services/outbound.js';
 
 interface Bio { bio?: string; photo?: string; url?: string }
 const bios = new Map<string, { at: number; value: Bio }>();
+export const clearBioCache = (): void => bios.clear();
 const BIO_TTL = 24 * 60 * 60 * 1000;
 
 async function wikipedia(name: string): Promise<Bio> {

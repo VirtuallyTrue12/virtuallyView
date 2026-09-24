@@ -24,6 +24,7 @@ const SCAN_BUDGET_MS = 8000;
 const MAX_ENTRIES = 250_000;
 
 let cache: { at: number; value: StorageReport } | null = null;
+export const clearStorageCache = (): void => { cache = null; };
 
 function labeledRoots(): Array<{ name: string; root: string }> {
   const env = process.env.MEDIA_ROOTS;

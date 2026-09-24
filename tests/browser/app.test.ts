@@ -190,3 +190,26 @@ describe('empty library pages', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('refresh button', () => {
+  it('sits in the top bar of every page, reloads the page you are on, and is absent while playing', async () => {
+    for (const path of ['/', '/movies', '/requests', '/settings', '/wiki']) {
+      await page.goto(base + path);
+      await page.waitForSelector('.refresh-button');
+    }
+    // It asks the server to refresh, and the page fetches its data again.
+    await page.goto(base + '/requests');
+    await page.waitForSelector('.refresh-button');
+    const seen: string[] = [];
+    page.on('request', r => { if (/\/api\/(refresh|requests)(\?|$)/.test(r.url())) seen.push(`${r.method()} ${new URL(r.url()).pathname}`); });
+    await page.locator('.refresh-button').click();
+    await page.waitForSelector('.refresh-button:not(.is-busy)');
+    expect(seen).toContain('POST /api/refresh');
+    expect(seen).toContain('GET /api/requests');
+    // Playback pages have no button: reloading would stop the video.
+    await page.goto(base + '/movies/radarr-1/play');
+    await page.waitForSelector('main, .app');
+    expect(await page.locator('.refresh-button').count()).toBe(0);
+    expect(errors).toEqual([]);
+  });
+});

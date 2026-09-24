@@ -27,7 +27,9 @@ export function SystemActivity() {
     };
     void poll();
     const interval = setInterval(() => { if (!document.hidden) void poll(); }, 4000);
-    return () => { cancelled = true; clearInterval(interval); };
+    const now = () => void poll();
+    window.addEventListener('vv-refresh', now);
+    return () => { cancelled = true; clearInterval(interval); window.removeEventListener('vv-refresh', now); };
   }, []);
 
   useEffect(() => {

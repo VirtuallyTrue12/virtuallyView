@@ -5,6 +5,7 @@ import { VvLogo } from './VvLogo';
 import { UserMenu } from './UserMenu';
 import { NotificationBell } from './NotificationBell';
 import { SystemActivity } from './SystemActivity';
+import { RefreshButton } from './RefreshButton';
 import type { AuthUser } from '../../lib/api';
 
 const LINKS = [
@@ -85,7 +86,7 @@ function MoreMenu() {
   );
 }
 
-export function Navigation({ user, onSignOut }: { user?: AuthUser | null; onSignOut?: () => void }) {
+export function Navigation({ user, onSignOut, onRefresh }: { user?: AuthUser | null; onSignOut?: () => void; onRefresh?: () => void }) {
   return (
     <nav className="nav" aria-label="Primary">
       <NavLink to="/" className="nav-brand">
@@ -107,6 +108,7 @@ export function Navigation({ user, onSignOut }: { user?: AuthUser | null; onSign
         {MORE.map(link => <NavLink key={`m-${link.to}`} to={link.to} className={({ isActive }) => `nav-link nav-link--extra${isActive ? ' active' : ''}`}>{link.label}</NavLink>)}
         <MoreMenu />
       </div>
+      {user && onRefresh && <RefreshButton onRefresh={onRefresh} />}
       {user && <SystemActivity />}
       {user && <NotificationBell />}
       {user && onSignOut && <UserMenu user={user} onSignOut={onSignOut} />}

@@ -6,6 +6,7 @@ import { getRequests } from '../services/requests.js';
 type Health = { healthCheck: () => Promise<{ healthy: boolean }> };
 
 let catalogCache: { at: number; items: ProwlarrIndexerDefinition[] } | null = null;
+export const clearIndexerCatalogCache = (): void => { catalogCache = null; };
 
 interface BulkState { state: 'idle' | 'running' | 'done' | 'failed'; total: number; checked: number; added: number; message?: string }
 let bulk: BulkState = { state: 'idle', total: 0, checked: 0, added: 0 };

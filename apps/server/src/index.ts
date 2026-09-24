@@ -34,6 +34,7 @@ import castRoutes from './routes/cast.js';
 import liveRoutes from './routes/live.js';
 import kiwixRoutes from './routes/kiwix.js';
 import appsRoutes from './routes/apps.js';
+import refreshRoutes from './routes/refresh.js';
 import libraryFolderRoutes from './routes/library-folders.js';
 import artRoutes from './routes/art.js';
 import setupRoutes from './routes/setup.js';
@@ -408,6 +409,7 @@ const start = async () => {
   await server.register(liveRoutes);
   await server.register(kiwixRoutes);
   await server.register(appsRoutes);
+  await server.register(refreshRoutes);
   await server.register(libraryFolderRoutes);
   await server.register(artRoutes);
   await server.register(setupRoutes);

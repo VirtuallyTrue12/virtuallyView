@@ -356,6 +356,7 @@ async function searchTracks(query: string): Promise<SearchTrackHit[]> {
 }
 
 const searchAllCache = new Map<string, { at: number; value: SearchAllResult }>();
+export const clearSearchCache = (): void => searchAllCache.clear();
 
 export async function searchAll(rawQuery: string): Promise<SearchAllResult> {
   const query = rawQuery.trim();

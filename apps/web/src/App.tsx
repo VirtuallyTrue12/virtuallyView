@@ -41,6 +41,8 @@ import { MusicProvider } from './components/media/MusicProvider';
 
 export default function App() {
   const authedRef = useRef(false);
+  // Bumping this remounts the current page, so it loads its data again.
+  const [refreshKey, setRefreshKey] = useState(0);
   const [auth, setAuth] = useState<{ enabled: boolean; setupRequired: boolean; authenticated: boolean; user?: AuthUser | null } | null>(null);
   const [error, setError] = useState('');
   const [authLoading, setAuthLoading] = useState(true);
@@ -142,9 +144,9 @@ export default function App() {
   return (
     <MusicProvider>
       <div className="app" data-theme="midnight">
-      <Navigation user={auth.user} onSignOut={() => void signOut()} />
+      <Navigation user={auth.user} onSignOut={() => void signOut()} onRefresh={() => setRefreshKey(key => key + 1)} />
       <Suspense fallback={<div className="loading-state">Loading...</div>}>
-      <Routes>
+      <Routes key={refreshKey}>
         <Route path="/" element={<Home />} />
         <Route path="/movies" element={<Movies />} />
         <Route path="/movies/:id" element={<MovieDetails />} />

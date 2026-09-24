@@ -598,6 +598,7 @@ export const api = {
   aiModels: () => getJSON<{ models: AiModel[] }>('/api/ai/models'),
   aiPullModel: (model: string) => postJSON<{ success: boolean; model: string; status: string }>('/api/ai/pull', { model }),
   aiPullStatus: (model: string) => getJSON<PullStatus>(`/api/ai/pull/${encodeURIComponent(model)}/status`),
+  refresh: () => postJSON<{ refreshedAt: string; cleared: string[]; requestsChecked: boolean; queuesNudged: string[] }>('/api/refresh'),
   aiPullActive: () => getJSON<{ jobs: PullStatus[] }>('/api/ai/pull/active'),
   aiModelCatalog: (q: string) => getJSON<ModelCatalogResponse>(`/api/ai/models/catalog?q=${encodeURIComponent(q)}`),
   themes: () => getJSON<ThemeSummary[]>('/api/themes'),

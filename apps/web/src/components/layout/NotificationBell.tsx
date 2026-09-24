@@ -31,7 +31,9 @@ export function NotificationBell() {
   useEffect(() => {
     void load();
     const t = setInterval(() => { if (!document.hidden) void load(); }, 20000);
-    return () => clearInterval(t);
+    const now = () => void load();
+    window.addEventListener('vv-refresh', now);
+    return () => { clearInterval(t); window.removeEventListener('vv-refresh', now); };
   }, [load]);
 
   useEffect(() => {

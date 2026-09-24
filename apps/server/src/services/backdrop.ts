@@ -9,6 +9,7 @@ export interface AuthBackdrop {
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let cache: { at: number; value: AuthBackdrop | null } | null = null;
+export const clearBackdropCache = (): void => { cache = null; };
 
 async function safeItems(adapter: { getItems: () => Promise<Media[]> }): Promise<Media[]> {
   try {

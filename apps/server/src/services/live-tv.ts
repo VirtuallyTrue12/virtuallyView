@@ -16,6 +16,8 @@ const MAX_CHANNELS = 8000;
 const CACHE_MS = 30 * 60 * 1000;
 const parsed = new Map<string, { at: number; channels: Channel[] }>();
 const known = new Map<string, Channel>();
+/** Playlists are read again the next time they are needed. Channel ids already handed out stay valid. */
+export const clearPlaylistCache = (): void => parsed.clear();
 
 const shortId = (text: string) => createHash('sha1').update(text).digest('hex').slice(0, 12);
 

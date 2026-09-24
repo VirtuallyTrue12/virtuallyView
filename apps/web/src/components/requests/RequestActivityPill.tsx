@@ -32,7 +32,9 @@ export default function RequestActivityPill() {
     };
     void poll();
     const interval = setInterval(poll, 15000);
-    return () => { cancelled = true; clearInterval(interval); };
+    const now = () => void poll();
+    window.addEventListener('vv-refresh', now);
+    return () => { cancelled = true; clearInterval(interval); window.removeEventListener('vv-refresh', now); };
   }, []);
 
   const onRequestsPage = location.pathname === '/requests';

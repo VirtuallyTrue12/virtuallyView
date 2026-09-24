@@ -70,6 +70,16 @@ function captureCookie(res: Res): void {
   }
 }
 
+// Sign-in attempts are rate limited per address, so the regular user signs in once and every test reuses that session.
+let viewerCookieCache = '';
+async function viewerCookie(): Promise<string> {
+  if (!viewerCookieCache) {
+    const login = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
+    viewerCookieCache = /vv_session=[^;]+/.exec(login.setCookie!)![0];
+  }
+  return viewerCookieCache;
+}
+
 async function waitForHealth(timeoutMs = 45_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -521,8 +531,7 @@ describe('e2e: live tv recording', () => {
   it('lists nothing at first, refuses unknown channels and non-admins', async () => {
     expect((await req('GET', '/api/live/recordings')).json.recordings).toEqual([]);
     expect((await req('POST', '/api/live/record', { body: { channelId: 'nope', minutes: 30 }, cookieOverride: cookieAdmin })).status).toBe(404);
-    const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
-    const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+    const cookieViewer = await viewerCookie();
     expect((await req('POST', '/api/live/record', { body: { channelId: 'nope', minutes: 30 }, cookieOverride: cookieViewer })).status).toBe(403);
     expect((await req('DELETE', '/api/live/recordings/nope', { cookieOverride: cookieViewer })).status).toBe(403);
     expect((await req('DELETE', '/api/live/recordings/nope', { cookieOverride: cookieAdmin })).status).toBe(404);
@@ -599,8 +608,7 @@ describe('e2e: AI assistant', () => {
 
 describe('e2e: assistant authorization', () => {
   it('regular users cannot control downloads or themes through the assistant, and confirmations are single-use and personal', async () => {
-    const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
-    const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+    const cookieViewer = await viewerCookie();
     const chat = (message: string, cookieOverride: string, extra: Record<string, unknown> = {}) =>
       req('POST', '/api/ai/chat', { body: { message, ...extra }, cookieOverride });
 
@@ -630,8 +638,7 @@ describe('e2e: assistant authorization', () => {
 
 describe('e2e: bulk public indexers', () => {
   it('is administrator only and reports honestly when Prowlarr is not connected', async () => {
-    const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
-    const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+    const cookieViewer = await viewerCookie();
     expect((await req('POST', '/api/indexers/enable-public', { body: {}, cookieOverride: cookieViewer })).status).toBe(403);
     expect((await req('POST', '/api/indexers/enable-public', { body: {}, cookieOverride: cookieAdmin })).status).toBe(502);
     expect((await req('GET', '/api/indexers/enable-public/status')).json.state).toBe('idle');
@@ -658,6 +665,30 @@ describe('e2e: trusting the home network', () => {
   }, 60_000);
 });
 
+describe('e2e: refresh', () => {
+  it('needs a session, reports what it did, and is rate limited per person', async () => {
+    expect((await req('POST', '/api/refresh', { cookieOverride: null })).status).toBe(401);
+
+    const cookieViewer = await viewerCookie();
+    const first = await req('POST', '/api/refresh', { cookieOverride: cookieViewer });
+    expect(first.status).toBe(200);
+    expect(first.json.cleared).toContain('search suggestions');
+    expect(first.json.cleared).not.toContain('indexer catalog'); // administrators only
+    expect(first.json.queuesNudged).toEqual([]);
+    expect(typeof first.json.refreshedAt).toBe('string');
+
+    const again = await req('POST', '/api/refresh', { cookieOverride: cookieViewer });
+    expect(again.status).toBe(429);
+    expect(again.json.retryAfter).toBeGreaterThan(0);
+    expect(again.text).toMatch(/too_soon/);
+
+    // The limit is per person: an administrator is unaffected, and gets the extra work.
+    const admin = await req('POST', '/api/refresh', { cookieOverride: cookieAdmin });
+    expect(admin.status).toBe(200);
+    expect(admin.json.cleared).toContain('indexer catalog');
+  }, 30_000);
+});
+
 describe('e2e: kiwix', () => {
   it('reports unconfigured by default, rejects a bad address, saves a good one, and blocks non-admins', async () => {
     const status = await req('GET', '/api/kiwix/status');
@@ -668,8 +699,7 @@ describe('e2e: kiwix', () => {
     expect(badAddress.status).toBe(400);
 
     // e2eviewer's password was reset to this value earlier in the "accounts" suite.
-    const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
-    const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+    const cookieViewer = await viewerCookie();
     const nonAdmin = await req('POST', '/api/kiwix/config', { body: { url: 'http://192.168.1.50:8080' }, cookieOverride: cookieViewer });
     expect(nonAdmin.status).toBe(403);
 
@@ -706,8 +736,7 @@ describe('e2e: home lab apps', () => {
       expect((await req('POST', '/api/apps/nope/config', { body: { url }, cookieOverride: cookieAdmin })).status).toBe(400);
       expect((await req('POST', '/api/apps/immich/config', { body: { url: 'nope' }, cookieOverride: cookieAdmin })).status).toBe(400);
 
-      const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
-      const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+      const cookieViewer = await viewerCookie();
       expect((await req('POST', '/api/apps/immich/config', { body: { url }, cookieOverride: cookieViewer })).status).toBe(403);
 
       const saved = await req('POST', '/api/apps/immich/config', { body: { url, apiKey: 'secret-key' }, cookieOverride: cookieAdmin });
@@ -1190,8 +1219,7 @@ describe('e2e: service controls without the helper', () => {
     expect(stop.json.stopped).toBe(false);
     expect(stop.json.message).toMatch(/--profile helper/);
     expect((await req('POST', '/api/services/stop/app', { cookieOverride: cookieAdmin })).json.message).toMatch(/Unknown service/);
-    const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
-    const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+    const cookieViewer = await viewerCookie();
     expect((await req('POST', '/api/services/stop/radarr', { cookieOverride: cookieViewer })).status).toBe(403);
   }, 20_000);
 });

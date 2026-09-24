@@ -65,6 +65,15 @@ function subscribe(listener: (next: Map<string, TitleDownload>) => void) {
   };
 }
 
+if (typeof window !== 'undefined') {
+  // The top-bar refresh button asks for a fresh look right now.
+  window.addEventListener('vv-refresh', () => {
+    if (!listeners.size) return;
+    if (timer !== null) window.clearTimeout(timer);
+    void poll();
+  });
+}
+
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && listeners.size) { if (timer !== null) window.clearTimeout(timer); void poll(); }

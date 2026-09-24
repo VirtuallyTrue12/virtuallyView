@@ -9,6 +9,7 @@ export interface CastDevice { id: string; name: string; controlUrl: string }
 
 const SERVICE = 'urn:schemas-upnp-org:service:AVTransport:1';
 let cache: { at: number; devices: CastDevice[] } | null = null;
+export const clearDlnaCache = (): void => { cache = null; };
 const CACHE_MS = 60_000;
 
 const idOf = (location: string) => createHash('sha1').update(location).digest('hex').slice(0, 12);

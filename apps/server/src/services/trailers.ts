@@ -8,6 +8,7 @@ const HEADERS = {
 export type TrailerKind = 'movie' | 'series' | 'artist';
 
 const cache = new Map<string, { id: string | null; at: number }>();
+export const clearTrailerCache = (): void => cache.clear();
 const TTL_OK = 24 * 60 * 60 * 1000;
 const TTL_MISS = 30 * 60 * 1000;
 
