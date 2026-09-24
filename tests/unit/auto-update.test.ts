@@ -4,7 +4,7 @@ import { PRIORITY_IMAGES, internetReachable, runUpdates, startAutoUpdate, trigge
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
 describe('auto-update', () => {
-  it('asks Watchtower for the priority apps first, then everything', async () => {
+  it('updates the priority apps one image at a time, then everything else', async () => {
     const calls: string[] = [];
     const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push(decodeURIComponent(String(url)));
@@ -12,11 +12,19 @@ describe('auto-update', () => {
       return json({ summary: { updated: 1, failed: 0 } });
     }) as unknown as typeof fetch;
     const summary = await runUpdates({ fetchImpl, url: 'http://watchtower:8080/', token: 'secret' });
-    expect(summary).toEqual({ updated: 2, failed: 0 });
-    expect(calls).toHaveLength(2);
-    expect(calls[0]).toContain('/v1/update?image=');
-    for (const name of ['radarr', 'sonarr', 'lidarr', 'prowlarr']) expect(calls[0]).toContain(name);
-    expect(calls[1]).toBe('http://watchtower:8080/v1/update');
+    expect(calls).toHaveLength(PRIORITY_IMAGES.length + 1);
+    expect(calls[0]).toBe(`http://watchtower:8080/v1/update?image=${PRIORITY_IMAGES[0]}`);
+    expect(calls.slice(0, -1).every(c => c.includes('?image=') && !c.includes(','))).toBe(true);
+    expect(calls.at(-1)).toBe('http://watchtower:8080/v1/update');
+    expect(summary).toEqual({ updated: PRIORITY_IMAGES.length + 1, failed: 0 });
+  });
+
+  it('one image failing does not stop the others', async () => {
+    let n = 0;
+    const fetchImpl = vi.fn(async () => (++n === 2 ? json({}, 500) : json({ summary: { updated: 1, failed: 0 } }))) as unknown as typeof fetch;
+    const summary = await runUpdates({ fetchImpl, url: 'http://w', token: 't' });
+    expect(fetchImpl).toHaveBeenCalledTimes(PRIORITY_IMAGES.length + 1);
+    expect(summary).toEqual({ updated: PRIORITY_IMAGES.length, failed: 1 });
   });
 
   it('does nothing without a URL or token', async () => {
@@ -64,16 +72,34 @@ describe('auto-update', () => {
 
       online = true;
       await vi.advanceTimersByTimeAsync(60_000);
-      expect(updateCalls).toHaveLength(2); // priority call, then the rest
+      expect(updateCalls).toHaveLength(PRIORITY_IMAGES.length + 1); // each priority image, then the rest
 
       await vi.advanceTimersByTimeAsync(30 * 60_000);
-      expect(updateCalls).toHaveLength(2); // not again within the interval
+      expect(updateCalls).toHaveLength(PRIORITY_IMAGES.length + 1); // not again within the interval
 
       online = false;
       await vi.advanceTimersByTimeAsync(60_000);
       online = true;
       await vi.advanceTimersByTimeAsync(60_000);
-      expect(updateCalls).toHaveLength(4); // connection returned: run again straight away
+      expect(updateCalls).toHaveLength((PRIORITY_IMAGES.length + 1) * 2); // connection returned: run again straight away
+    });
+
+    it('retries a run that had failures after 30 minutes, not 6 hours', async () => {
+      const updateCalls: string[] = [];
+      let failing = true;
+      const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') { updateCalls.push(String(url)); return failing && String(url).includes('bazarr') ? json({}, 500) : json({ summary: { updated: 0, failed: 0 } }); }
+        return new Response('', { status: init?.method === 'HEAD' ? 401 : 405 });
+      }) as unknown as typeof fetch;
+      startAutoUpdate({ fetchImpl, url: 'http://w', token: 't', now: () => Date.now() });
+      await vi.advanceTimersByTimeAsync(80_000);
+      const first = updateCalls.length;
+      expect(first).toBe(PRIORITY_IMAGES.length + 1);
+      failing = false;
+      await vi.advanceTimersByTimeAsync(20 * 60_000);
+      expect(updateCalls).toHaveLength(first); // not yet
+      await vi.advanceTimersByTimeAsync(20 * 60_000);
+      expect(updateCalls.length).toBeGreaterThan(first); // after ~30 minutes
     });
 
     it('sends nothing at all when Watchtower is not running', async () => {

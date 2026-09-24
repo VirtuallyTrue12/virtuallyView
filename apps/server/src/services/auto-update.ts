@@ -16,6 +16,7 @@ export const PRIORITY_IMAGES = [
 
 const CHECK_EVERY_MS = 60_000;
 const RECHECK_UPDATES_MS = 6 * 3_600_000;
+const RETRY_FAILED_RUN_MS = 30 * 60_000;
 const RETRY_AFTER_FAILURE_MS = 5 * 60_000;
 const ABSENT_RETRY_MS = 3_600_000;
 
@@ -66,12 +67,28 @@ export async function triggerUpdate(deps: AutoUpdateDeps, images?: string[]): Pr
   return { updated: body.summary?.updated ?? 0, failed: body.summary?.failed ?? 0 };
 }
 
-/** Priority apps first, then the rest. */
+/**
+ * Priority apps first, one at a time, then the rest. Separate requests mean a
+ * slow or failed download of one image cannot stop the others from updating.
+ */
 export async function runUpdates(deps: AutoUpdateDeps): Promise<Summary | null> {
-  const first = await triggerUpdate(deps, deps.priority ?? PRIORITY_IMAGES);
-  if (!first) return null;
-  const rest = await triggerUpdate(deps);
-  return { updated: first.updated + (rest?.updated ?? 0), failed: first.failed + (rest?.failed ?? 0) };
+  const total: Summary = { updated: 0, failed: 0 };
+  let reached = false;
+  let lastError: unknown;
+  for (const image of deps.priority ?? PRIORITY_IMAGES) {
+    try {
+      const one = await triggerUpdate(deps, [image]);
+      if (!one) return null;
+      reached = true;
+      total.updated += one.updated; total.failed += one.failed;
+    } catch (error) { lastError = error; total.failed++; }
+  }
+  try {
+    const rest = await triggerUpdate(deps);
+    if (rest) { reached = true; total.updated += rest.updated; total.failed += rest.failed; }
+  } catch (error) { lastError = error; total.failed++; }
+  if (!reached && lastError) throw lastError;
+  return total;
 }
 
 export function startAutoUpdate(deps: AutoUpdateDeps = {}): void {
@@ -96,7 +113,8 @@ export function startAutoUpdate(deps: AutoUpdateDeps = {}): void {
     try {
       const summary = await runUpdates(deps);
       if (!summary) { pausedUntil = now() + ABSENT_RETRY_MS; wasOnline = false; return; }
-      lastRun = now();
+      // Anything that failed (usually a slow or dropped connection) is tried again in 30 minutes, not 6 hours.
+      lastRun = summary.failed > 0 ? now() - (RECHECK_UPDATES_MS - RETRY_FAILED_RUN_MS) : now();
       if (summary.updated > 0) {
         deps.onUpdated?.(summary);
         notify({ type: 'system.updated', role: 'admin', title: 'Apps were updated', body: `${summary.updated} app${summary.updated === 1 ? '' : 's'} updated to the latest version${summary.failed ? `, ${summary.failed} could not be updated` : ''}.` });

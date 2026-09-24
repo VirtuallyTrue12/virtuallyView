@@ -594,6 +594,8 @@ services:
       - WATCHTOWER_HTTP_API_ENDPOINTS=update
       - WATCHTOWER_HTTP_API_TOKEN=/secrets/watchtower
       - WATCHTOWER_HTTP_API_PERIODIC_POLLS=true
+      # Slow connections: give each pull time instead of cancelling the batch.
+      - WATCHTOWER_HTTP_API_UPDATE_TIMEOUT=30m
     restart: unless-stopped
 
 volumes:
