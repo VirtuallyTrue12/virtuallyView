@@ -12,7 +12,7 @@ import { OllamaProvider } from './ollama-provider.js';
 import { isAllowed, type PermissionLevel } from './ai-permissions.js';
 import { recordAiAction } from './ai-history.js';
 import { listThemes, setActiveThemeId } from './themes.js';
-import { detectIntent, inScope, OFF_TOPIC_TEXT } from './ai-router.js';
+import { detectIntent, inScope, isConversational, OFF_TOPIC_TEXT } from './ai-router.js';
 import { answerIntent } from './ai-answers.js';
 
 export interface ChatMessage {
@@ -525,6 +525,7 @@ export class Agent {
     }
 
     const history: AIMessage[] = (args.history ?? []).map(h => ({ role: h.role, content: h.content }));
+    if (isConversational(message)) return this.talk(message, history);
     const messages: AIMessage[] = [
       { role: 'system', content: buildSystemPrompt(this.registry) },
       ...history,
@@ -551,10 +552,33 @@ export class Agent {
           description
         };
       }
+      const missing = (tool.parameters.required ?? []).some(k => {
+        const v = (call.arguments ?? {})[k];
+        return v === undefined || v === null || v === '';
+      });
+      // A small model sometimes grabs a tool for a chatty message and gives it
+      // nothing to work with. Talk to the person instead of showing that error.
+      if (missing) return this.talk(message, history);
       return this.runTool(tool.name, call.arguments ?? {});
     }
 
     return { kind: 'message', text: reply.content.trim() || 'Done.' };
+  }
+
+  private async talk(message: string, history: AIMessage[]): Promise<AgentReply> {
+    const system = [
+      'You are the assistant inside virtuallyView, a self-hosted home media server.',
+      'Facts you may use: to add a movie, show or artist, open Search, pick the exact match and press Request; Requests shows progress. Downloads shows the queue.',
+      'Settings > Indexers controls where searches look. Settings > AI manages models. Wiki (under More) reads offline Wikipedia through Kiwix. Apps (under More) links to Immich, Audiobookshelf and Kavita.',
+      'Glossary: Radarr manages movies, Sonarr TV shows, Lidarr music, Bazarr subtitles, Prowlarr keeps the list of indexers (search sources) the others search through, qBittorrent and NZBGet do the downloading.',
+      'You cannot see the library in this mode, so never name specific movies or shows as recommendations; suggest browsing Movies or TV instead. Answer in one to three short sentences, plainly. If you do not know, say so. Do not invent menu names or features.'
+    ].join('\n');
+    try {
+      const text = await this.provider.sendPlain([{ role: 'system', content: system }, ...history.slice(-6), { role: 'user', content: message }]);
+      return { kind: 'message', text: text || 'I am not sure. Try "help" to see what I can do.' };
+    } catch (err) {
+      return { kind: 'error', message: `The assistant could not answer: ${(err as Error).message}` };
+    }
   }
 
   private checkPermission(name: string): void {

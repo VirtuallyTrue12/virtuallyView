@@ -92,6 +92,17 @@ export class OllamaProvider implements AIProvider {
     return { content };
   }
 
+  /** A plain-text answer: no JSON constraint, no tools. For talking things through. */
+  async sendPlain(messages: AIMessage[]): Promise<string> {
+    const res = await fetch(`${this.baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: this.model, messages, stream: false, options: { temperature: 0.4, num_ctx: 2048, num_predict: 300 } })
+    });
+    if (!res.ok) throw new Error(`Ollama request failed (${res.status}): ${await res.text()}`);
+    return (((await res.json()) as OllamaChatResponse)?.message?.content ?? '').trim();
+  }
+
   async *streamResponse(messages: AIMessage[], format: string = 'json'): AsyncIterable<{ content: string }> {
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',

@@ -35,6 +35,11 @@ function subjectOf(text: string): string {
   return raw;
 }
 
+/** "How do I...", "explain...", "recommend...": questions for the model to talk through, not commands or status checks. */
+export function isConversational(input: string): boolean {
+  return /^(?:please |hey |ok |so )?(?:how (?:do|can|could|would|should|does) |how to |what (?:is|are|does|do) (?!downloading|the queue|in the queue|missing|failing|failed|wrong|happening|new)|explain|tell me (?:about|a|how)|recommend|suggest|can you (?:explain|recommend|suggest|tell)|i want to |i'd like to |i need to |should i )/.test(norm(input));
+}
+
 export function detectIntent(input: string): Intent | null {
   const text = norm(input);
   if (!text) return null;
@@ -64,6 +69,8 @@ export function detectIntent(input: string): Intent | null {
     const named = /(?:to|use|switch to|change to|set to)\s+(?:the\s+)?(.+?)\s*(?:theme)?\s*$/.exec(text);
     return { kind: 'themes', ...(named?.[1] && !/^themes?$/.test(named[1]) ? { name: named[1] } : {}) };
   }
+
+  if (isConversational(text)) return null;
 
   const trouble = /\b(why|debug|diagnos\w*|troubleshoot|not (?:working|loading|showing|downloading|playing|found|appearing|importing)|isn'?t (?:working|loading|showing|downloading|playing|appearing|importing)|won'?t (?:play|load|download|import)|can'?t (?:see|find|play|watch|hear|access)|cannot|missing|stuck|broken|problem|issue|error|fail(?:ed|ing|s)?|wrong|fix|what'?s wrong|not available)\b/;
   if (trouble.test(text)) return { kind: 'diagnose', subject: subjectOf(text) };
