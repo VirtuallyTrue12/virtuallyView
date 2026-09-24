@@ -1159,3 +1159,18 @@ describe('e2e: request rules, notifications, backup, indexers, HTTPS cookie', ()
     expect(http.setCookie).not.toMatch(/Secure/);
   });
 });
+
+describe('e2e: service controls without the helper', () => {
+  it('say how to turn the helper on instead of failing, and stay administrator only', async () => {
+    const status = await req('GET', '/api/services/status');
+    expect(status.json.helper).toBe(false);
+    expect(status.json.error).toMatch(/--profile helper/);
+    const stop = await req('POST', '/api/services/stop/radarr', { cookieOverride: cookieAdmin });
+    expect(stop.json.stopped).toBe(false);
+    expect(stop.json.message).toMatch(/--profile helper/);
+    expect((await req('POST', '/api/services/stop/app', { cookieOverride: cookieAdmin })).json.message).toMatch(/Unknown service/);
+    const viewerLogin = await req('POST', '/api/auth/login', { body: { username: 'e2eviewer', password: 'reset-by-admin-123' } });
+    const cookieViewer = /vv_session=[^;]+/.exec(viewerLogin.setCookie!)![0];
+    expect((await req('POST', '/api/services/stop/radarr', { cookieOverride: cookieViewer })).status).toBe(403);
+  }, 20_000);
+});

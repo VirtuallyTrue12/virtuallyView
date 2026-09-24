@@ -203,6 +203,7 @@ scripts/                Setup and provisioning
 - [Privacy: anonymous search and downloads (Tor, VPN)](docs/privacy.md)
 - [Rights and acceptable use](docs/acceptable-use.md)
 - [Automatic updates](docs/updates.md)
+- [Start and stop buttons (the helper)](docs/services-helper.md)
 - [Wiki (offline Wikipedia via Kiwix)](docs/kiwix.md)
 - [Other apps (Immich, Audiobookshelf, Kavita)](docs/apps.md)
 - [Roadmap](docs/roadmap.md)

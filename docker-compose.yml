@@ -314,7 +314,9 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:0.5b}
       - SEARCH_VIA_TOR=${SEARCH_VIA_TOR:-false}
+      - VV_HELPER_URL=http://helper:8099
     volumes:
+      - helper-shared:/shared:ro
       - app-data:/app/apps/server/data
       - media-movies:/media/movies:ro
       - media-tv:/media/tv:ro
@@ -491,6 +493,23 @@ services:
     labels:
       - com.centurylinklabs.watchtower.enable=true
 
+  # Optional: real Start/Stop buttons in Settings. The only component with
+  # container access, so it is off unless you ask for it: docker compose
+  # --profile helper up -d. It can only start, stop or restart this stack's own
+  # services (a fixed list), for a caller holding the token it writes into a
+  # volume shared with the app. On rootless Podman, set DOCKER_SOCK (see
+  # docs/updates.md). Details in docs/services-helper.md.
+  helper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["helper"]
+    command: ["node", "scripts/host-helper.mjs"]
+    volumes:
+      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
+      - helper-shared:/shared
+    restart: unless-stopped
+
   # Optional automatic updates for the containers above (only the ones
   # labeled com.centurylinklabs.watchtower.enable=true, so it never touches
   # anything else on this Docker host). Fully automatic: no confirmation
@@ -527,6 +546,7 @@ volumes:
   app-data:
   ollama-data:
   kiwix-data:
+  helper-shared:
   audiobookshelf-config:
   audiobookshelf-metadata:
   audiobookshelf-books:

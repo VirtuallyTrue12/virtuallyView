@@ -1,24 +1,20 @@
 import type { FastifyInstance } from 'fastify';
-import { execFileSync, execSync } from 'node:child_process';
 import { VERSION } from '../lib/version.js';
 import { loadServiceConfig } from '../services/registry.js';
 import { outboundFetch } from '../services/outbound.js';
+import { helperAction, helperStartAll, helperStatus } from '../services/host-helper.js';
 
 const serviceMap: Record<string, string> = {
   radarr: 'radarr', sonarr: 'sonarr', prowlarr: 'prowlarr', lidarr: 'lidarr',
-  bazarr: 'bazarr', qbittorrent: 'qbittorrent', app: 'app', ollama: 'ollama'
+  bazarr: 'bazarr', qbittorrent: 'qbittorrent', nzbget: 'nzbget', ollama: 'ollama'
 };
 
 export default async function serviceLaunchRoutes(server: FastifyInstance) {
   server.get('/api/services/status', async () => {
-    try {
-      const output = execSync('docker-compose ps --format json 2>/dev/null || echo "[]"', { encoding: 'utf8', timeout: 5000 }).trim();
-      const lines = output.split('\n').filter(l => l.trim());
-      const running = lines.filter(l => l.includes('Up') || l.includes('running'));
-      return { running: running.length, services: ['radarr', 'sonarr', 'prowlarr', 'lidarr', 'bazarr', 'qbittorrent'] };
-    } catch {
-      return { running: 0, services: ['radarr', 'sonarr', 'prowlarr', 'lidarr', 'bazarr', 'qbittorrent'], error: 'Could not query docker-compose status.' };
-    }
+    const services = ['radarr', 'sonarr', 'prowlarr', 'lidarr', 'bazarr', 'qbittorrent'];
+    const result = await helperStatus();
+    if (!result.ok) return { running: 0, services, helper: false, error: result.message };
+    return { running: result.data!.services.filter(s => s.state === 'running').length, services, helper: true };
   });
 
   server.get('/api/services/config', async () => {
@@ -48,12 +44,10 @@ export default async function serviceLaunchRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/services/launch', async () => {
-    try {
-      execFileSync('docker-compose', ['up', '-d'], { timeout: 10000, stdio: 'pipe' });
-      return { launched: true, message: 'Service containers started or updated via docker-compose.' };
-    } catch (err) {
-      return { launched: false, message: (err as Error).message ?? 'Failed to start services.' };
-    }
+    const result = await helperStartAll();
+    if (!result.ok) return { launched: false, message: result.message };
+    const started = result.data?.started ?? [];
+    return { launched: true, message: started.length ? `Started ${started.join(', ')}.` : 'Everything is already running.' };
   });
 
   server.get('/api/services/check-update', async () => {
@@ -87,25 +81,17 @@ export default async function serviceLaunchRoutes(server: FastifyInstance) {
 
   server.post('/api/services/stop/:service', async (request) => {
     const { service } = request.params as { service: string };
-    try {
-      const name = serviceMap[service];
-      if (!name) return { stopped: false, message: `Unknown service "${service}".` };
-      execFileSync('docker-compose', ['stop', name], { timeout: 15000, stdio: 'pipe', env: process.env });
-      return { stopped: true, message: `${name} stopped.` };
-    } catch (err) {
-      return { stopped: false, message: (err as Error).message ?? 'Failed to stop.' };
-    }
+    const name = serviceMap[service];
+    if (!name) return { stopped: false, message: `Unknown service "${service}".` };
+    const result = await helperAction(name, 'stop');
+    return result.ok ? { stopped: true, message: `${name} stopped.` } : { stopped: false, message: result.message };
   });
 
   server.post('/api/services/start/:service', async (request) => {
     const { service } = request.params as { service: string };
-    try {
-      const name = serviceMap[service];
-      if (!name) return { started: false, message: `Unknown service "${service}".` };
-      execFileSync('docker-compose', ['up', '-d', name], { timeout: 15000, stdio: 'pipe', env: process.env });
-      return { started: true, message: `${name} started.` };
-    } catch (err) {
-      return { started: false, message: (err as Error).message ?? 'Failed to start.' };
-    }
+    const name = serviceMap[service];
+    if (!name) return { started: false, message: `Unknown service "${service}".` };
+    const result = await helperAction(name, 'start');
+    return result.ok ? { started: true, message: `${name} started.` } : { started: false, message: result.message };
   });
 }

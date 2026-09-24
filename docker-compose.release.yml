@@ -14,3 +14,7 @@ services:
     image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.2.0}
     build: !reset null
     pull_policy: missing
+  helper:
+    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.2.0}
+    build: !reset null
+    pull_policy: missing
