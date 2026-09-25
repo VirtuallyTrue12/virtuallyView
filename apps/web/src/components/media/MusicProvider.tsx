@@ -1,8 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { TrackItem } from '../../lib/api';
-import { SvgIcon } from '../ui/SvgIcon';
-import LyricsPanel from './LyricsPanel';
+import MusicPlayerUI from '../music/MusicPlayerUI';
 
 /**
  * One track in a play queue. Album/artist context is carried along so the
@@ -45,7 +44,18 @@ interface MusicContextValue {
   volume: number;
   muted: boolean;
   shuffle: boolean;
-  repeat: boolean;
+  repeat: RepeatMode;
+  /** How far the file has loaded, in seconds. */
+  buffered: number;
+  /** Waiting for data (the first bytes of a track, or after a seek). */
+  buffering: boolean;
+  /** The full-screen Now Playing view. */
+  expanded: boolean;
+  setExpanded: (open: boolean) => void;
+  /** The exact position right now, read from the audio element (state only updates a few times a second). */
+  getTime: () => number;
+  removeFromQueue: (i: number) => void;
+  clearUpcoming: () => void;
   eqEnabled: boolean;
   eqPreset: string;
   eqBands: number[];
@@ -64,6 +74,8 @@ interface MusicContextValue {
   setEqPreset: (preset: string) => void;
   setEqBand: (index: number, gain: number) => void;
 }
+
+export type RepeatMode = 'off' | 'all' | 'one';
 
 const MusicContext = createContext<MusicContextValue | null>(null);
 
@@ -109,7 +121,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   });
   const [muted, setMuted] = useState(() => load('vv-music-muted') === '1');
   const [shuffle, setShuffle] = useState(false);
-  const [repeat, setRepeat] = useState(false);
+  const [repeat, setRepeat] = useState<RepeatMode>('off');
+  const [buffered, setBuffered] = useState(0);
+  const [buffering, setBuffering] = useState(false);
+  const [expanded, setExpandedState] = useState(false);
   const [eqEnabled, setEqEnabledState] = useState(() => load('vv-eq-enabled') === '1');
   const [eqPreset, setEqPresetState] = useState(() => {
     const raw = load('vv-eq-preset');
@@ -144,6 +159,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   eqBandsRef.current = eqBands;
   const eqGraph = useRef<EqGraph | null>(null);
   const shuffleOrder = useRef<number[]>([]);
+  // True while the person wants sound: a new track then starts by itself instead of waiting for another press.
+  const wantPlay = useRef(false);
 
   /**
    * Wire the existing graph for the current mode. Enabled routes the media
@@ -212,6 +229,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     shuffleOrder.current = [];
     setError(null);
     if (nextQueue.length) {
+      wantPlay.current = true;
       audio.src = `/api/music/stream/${nextQueue[target].track.id}`;
       audio.currentTime = 0;
       setCurrentTime(0);
@@ -225,6 +243,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current;
     if (!audio || !audio.src) return;
     kickGraph();
+    wantPlay.current = audio.paused;
     if (audio.paused) {
       void audio.play().catch(() => setError('Could not play this track. Check that the file exists on the server.'));
     } else {
@@ -241,12 +260,15 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       audio.load();
     }
     shuffleOrder.current = [];
+    wantPlay.current = false;
     setQueue([]);
     setIndex(0);
     setPlaying(false);
     setCurrentTime(0);
     setDuration(0);
     setError(null);
+    setBuffered(0);
+    setExpandedState(false);
   }, []);
 
   const goNext = useCallback((auto: boolean) => {
@@ -269,8 +291,14 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       setIndex(nextIdx);
       return;
     }
-    if (auto && indexRef.current >= q.length - 1 && !repeatRef.current) {
+    if (auto && repeatRef.current === 'one') {
+      const audio = audioRef.current;
+      if (audio) { audio.currentTime = 0; void audio.play().catch(() => undefined); }
+      return;
+    }
+    if (auto && indexRef.current >= q.length - 1 && repeatRef.current === 'off') {
       // Queue finished and repeat is off: stop instead of looping forever.
+      wantPlay.current = false;
       setPlaying(false);
       return;
     }
@@ -327,7 +355,30 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const toggleRepeat = useCallback(() => setRepeat(prev => !prev), []);
+  const toggleRepeat = useCallback(() => setRepeat(prev => (prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off')), []);
+
+  const setExpanded = useCallback((open: boolean) => setExpandedState(open), []);
+  const getTime = useCallback(() => audioRef.current?.currentTime ?? 0, []);
+
+  // Take one track out of the queue. Removing the playing one moves on to the next.
+  const removeFromQueue = useCallback((i: number) => {
+    const q = queueRef.current;
+    if (i < 0 || i >= q.length) return;
+    if (q.length === 1) { stopPlayback(); return; }
+    const current = indexRef.current;
+    shuffleOrder.current = [];
+    setQueue(q.filter((_, at) => at !== i));
+    if (i < current) setIndex(current - 1);
+    else if (i === current) setIndex(Math.min(current, q.length - 2));
+  }, [stopPlayback]);
+
+  const clearUpcoming = useCallback(() => {
+    const q = queueRef.current;
+    const current = indexRef.current;
+    if (current >= q.length - 1) return;
+    shuffleOrder.current = [];
+    setQueue(q.slice(0, current + 1));
+  }, []);
 
   const setEqEnabled = useCallback((enabled: boolean) => {
     eqEnabledRef.current = enabled;
@@ -365,6 +416,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   // First play of any kind is a gesture: build the graph now if EQ is on.
   const handlePlay = useCallback(() => {
+    wantPlay.current = true;
     ensureGraph();
     setPlaying(true);
   }, [ensureGraph]);
@@ -391,10 +443,47 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const expected = `/api/music/stream/${current.track.id}`;
     if (!audio.src || !audio.src.endsWith(expected)) {
       audio.src = expected;
+      if (wantPlay.current) void audio.play().catch(() => undefined);
     }
   }, [index, queue]);
 
   const entry = queue.length ? queue[Math.min(index, queue.length - 1)] ?? queue[0] : null;
+
+  // Keyboard media keys, headphone buttons and the lock screen show and control what is playing.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const session = navigator.mediaSession;
+    if (!entry) { session.metadata = null; return; }
+    try {
+      session.metadata = new MediaMetadata({
+        title: entry.track.title, artist: entry.artistTitle ?? '', album: entry.albumTitle ?? '',
+        ...(entry.cover ? { artwork: [{ src: entry.cover, sizes: '512x512' }] } : {})
+      });
+    } catch { /* unsupported artwork type: the title still shows */ }
+  }, [entry]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const session = navigator.mediaSession;
+    const audio = () => audioRef.current;
+    const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
+      ['play', () => { wantPlay.current = true; void audio()?.play().catch(() => undefined); }],
+      ['pause', () => { wantPlay.current = false; audio()?.pause(); }],
+      ['previoustrack', () => prevTrack()],
+      ['nexttrack', () => nextTrack()],
+      ['seekbackward', d => seek(Math.max(0, (audio()?.currentTime ?? 0) - (d.seekOffset ?? 10)))],
+      ['seekforward', d => seek((audio()?.currentTime ?? 0) + (d.seekOffset ?? 10))],
+      ['seekto', d => { if (typeof d.seekTime === 'number') seek(d.seekTime); }],
+      ['stop', () => stopPlayback()]
+    ];
+    for (const [action, fn] of handlers) { try { session.setActionHandler(action, fn); } catch { /* not supported here */ } }
+    return () => { for (const [action] of handlers) { try { session.setActionHandler(action, null); } catch { /* ignore */ } } };
+  }, [prevTrack, nextTrack, seek, stopPlayback]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = queue.length ? (playing ? 'playing' : 'paused') : 'none';
+  }, [playing, queue.length]);
 
   const value: MusicContextValue = {
     queue,
@@ -408,6 +497,13 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     muted,
     shuffle,
     repeat,
+    buffered,
+    buffering,
+    expanded,
+    setExpanded,
+    getTime,
+    removeFromQueue,
+    clearUpcoming,
     eqEnabled,
     eqPreset,
     eqBands,
@@ -434,169 +530,20 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         ref={audioRef}
         preload="metadata"
         onPlay={handlePlay}
+        onPlaying={() => setBuffering(false)}
+        onWaiting={() => setBuffering(true)}
+        onProgress={e => {
+          const a = e.target as HTMLAudioElement;
+          const last = a.buffered.length ? a.buffered.end(a.buffered.length - 1) : 0;
+          setBuffered(last);
+        }}
         onPause={() => setPlaying(false)}
         onTimeUpdate={e => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
         onDurationChange={e => setDuration((e.target as HTMLAudioElement).duration)}
         onEnded={() => goNext(true)}
         onError={() => setError('This track could not be loaded. The file may be missing or unsupported.')}
       />
-      {queue.length > 0 && <MusicBar />}
+      {queue.length > 0 && <MusicPlayerUI />}
     </MusicContext.Provider>
-  );
-}
-
-function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-/**
- * Persistent playback bar. Lives inside the provider so it survives page
- * changes: the queue and the <audio> element are app-level, not page-local.
- */
-function MusicBar() {
-  const {
-    entry, playing, currentTime, duration, error, volume, muted,
-    shuffle, repeat, eqEnabled, eqPreset, eqBands,
-    toggle, stopPlayback, nextTrack, prevTrack, seek, setVolume, toggleMute,
-    toggleShuffle, toggleRepeat, setEqEnabled, setEqPreset, setEqBand
-  } = useMusicPlayer();
-  const [eqOpen, setEqOpen] = useState(false);
-  const [lyricsOpen, setLyricsOpen] = useState(false);
-  const max = duration || (entry?.track.durationMs ? entry.track.durationMs / 1000 : 0);
-
-  return (
-    <div className="music-bar" role="region" aria-label="Now playing">
-      <button type="button" className="music-bar-close" onClick={stopPlayback} aria-label="Close player" title="Close player"><SvgIcon name="close" size={14} /></button>
-      <div className="music-bar-main">
-        <div className={`music-bar-cover${entry?.cover ? '' : ' music-bar-cover--empty'}`} aria-hidden="true">
-          {entry?.cover && <img src={entry.cover} alt="" />}
-        </div>
-        <div className="music-bar-track">
-          <span className="music-bar-title">{entry?.track.title}</span>
-          <span className="music-bar-sub">
-            {entry ? [entry.artistTitle, entry.albumTitle].filter(Boolean).join(' · ') : ''}
-          </span>
-          {error && <span className="music-bar-error">{error}</span>}
-        </div>
-
-        <div className="music-bar-controls">
-          <button type="button" className={`music-bar-icon${shuffle ? ' is-on' : ''}`} onClick={toggleShuffle} aria-label="Shuffle" aria-pressed={shuffle} title="Shuffle"><SvgIcon name="shuffle" size={18} /></button>
-          <button type="button" className="music-bar-icon" onClick={prevTrack} aria-label="Previous track"><SvgIcon name="prev" size={18} /></button>
-          <button type="button" className="btn btn-primary btn-sm music-bar-toggle" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>
-            <SvgIcon name={playing ? 'pause' : 'play'} size={16} />
-          </button>
-          <button type="button" className="music-bar-icon" onClick={nextTrack} aria-label="Next track"><SvgIcon name="next" size={18} /></button>
-          <button type="button" className={`music-bar-icon${repeat ? ' is-on' : ''}`} onClick={toggleRepeat} aria-label="Repeat" aria-pressed={repeat} title="Repeat"><SvgIcon name="repeat" size={18} /></button>
-          <button type="button" className="music-bar-icon" onClick={stopPlayback} aria-label="Stop and close player" title="Stop and close"><SvgIcon name="stop" size={16} /></button>
-        </div>
-
-        <div className="music-bar-seek">
-          <input
-            className="music-bar-range"
-            type="range"
-            min={0}
-            max={max || 0}
-            step={0.5}
-            value={Math.min(currentTime, max || currentTime)}
-            onChange={e => seek(Number(e.target.value))}
-            aria-label="Seek"
-          />
-          <span className="music-bar-time">{formatTime(currentTime)} / {formatTime(max)}</span>
-        </div>
-
-        <div className="music-bar-side">
-          <button
-            type="button"
-            className={`music-bar-icon${lyricsOpen ? ' is-on' : ''}`}
-            onClick={() => setLyricsOpen(v => !v)}
-            aria-expanded={lyricsOpen}
-            aria-label="Lyrics"
-            title="Lyrics"
-          ><SvgIcon name="mic" size={18} /></button>
-          <button
-            type="button"
-            className={`music-bar-icon${eqEnabled ? ' is-on' : ''}`}
-            onClick={() => {
-              if (!eqEnabled) {
-                setEqEnabled(true);
-                setEqOpen(true);
-              } else {
-                setEqOpen(v => !v);
-              }
-            }}
-            aria-expanded={eqOpen}
-            aria-label="Equalizer"
-            title="Equalizer"
-          ><SvgIcon name="sliders" size={18} /></button>
-          <button type="button" className="music-bar-icon" onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'}>
-            <SvgIcon name={muted || volume === 0 ? 'volume-mute' : volume < 0.5 ? 'volume-low' : 'volume-high'} size={18} />
-          </button>
-          <input
-            className="music-bar-range music-bar-volume"
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={muted ? 0 : volume}
-            onChange={e => setVolume(Number(e.target.value))}
-            aria-label="Volume"
-          />
-        </div>
-      </div>
-
-      {lyricsOpen && entry && (
-        <LyricsPanel
-          artist={entry.artistTitle}
-          title={entry.track.title}
-          album={entry.albumTitle}
-          durationSeconds={entry.track.durationMs ? entry.track.durationMs / 1000 : undefined}
-          currentTime={currentTime}
-        />
-      )}
-
-      {eqOpen && (
-        <div className="equalizer">
-          <div className="equalizer-head">
-            <span className="equalizer-title">Equalizer</span>
-            <label className="equalizer-toggle">
-              <input type="checkbox" checked={eqEnabled} onChange={e => setEqEnabled(e.target.checked)} />
-              <span>Enabled</span>
-            </label>
-            <div className="equalizer-presets">
-              {Object.entries(EQ_PRESETS).map(([key, preset]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`btn btn-secondary btn-sm${eqPreset === key ? ' is-active' : ''}`}
-                  onClick={() => setEqPreset(key)}
-                >
-                  {preset.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="equalizer-bands">
-            {EQ_BANDS.map((band, i) => (
-              <label key={band.label} className="equalizer-band">
-                <span className="equalizer-band-gain">{eqBands[i] > 0 ? `+${eqBands[i]}` : eqBands[i]} dB</span>
-                <input
-                  type="range"
-                  min={-12}
-                  max={12}
-                  step={1}
-                  value={eqBands[i] ?? 0}
-                  onChange={e => setEqBand(i, Number(e.target.value))}
-                  aria-label={`${band.label} gain`}
-                />
-                <span className="equalizer-band-label">{band.label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
   );
 }

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 export type IconName =
   | 'close' | 'check' | 'star' | 'heart' | 'heart-outline' | 'arrow-left' | 'play' | 'pause' | 'prev' | 'next' | 'stop'
   | 'shuffle' | 'repeat' | 'volume-high' | 'volume-low' | 'volume-mute' | 'sliders' | 'dice' | 'film' | 'tv' | 'mic'
-  | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'plus' | 'pip';
+  | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'plus' | 'pip' | 'chevron-up' | 'queue' | 'repeat-one' | 'music-note';
 
 const speaker = <path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor" stroke="none" />;
 
@@ -32,6 +32,10 @@ const ICONS: Record<IconName, { fill?: boolean; body: ReactNode }> = {
   'chevron-left': { body: <path d="m15 6-6 6 6 6" /> },
   'chevron-right': { body: <path d="m9 6 6 6-6 6" /> },
   'chevron-down': { body: <path d="m6 9 6 6 6-6" /> },
+  'chevron-up': { body: <path d="m6 15 6-6 6 6" /> },
+  queue: { body: <path d="M4 6h12M4 11h12M4 16h7M17 14v6l5-3z" /> },
+  'repeat-one': { body: <><path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3" /><path d="M11 10h1.5v5" /></> },
+  'music-note': { body: <path d="M9 18V6l11-2v12M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3zm11-2a3 3 0 1 1-3-3 3 3 0 0 1 3 3z" /> },
   plus: { body: <path d="M12 5v14M5 12h14" /> },
   pip: { body: <><rect x="3" y="5" width="18" height="14" rx="2" /><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" /></> }
 };

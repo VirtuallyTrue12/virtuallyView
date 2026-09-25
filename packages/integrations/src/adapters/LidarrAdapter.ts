@@ -383,6 +383,15 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
 
   /** Track list (with file info) for one artist. */
+  /** Album titles with their MusicBrainz release-group ids, for looking up cover art elsewhere. */
+  async getAlbumMbids(artistId: string | number): Promise<Array<{ title: string; mbid: string }>> {
+    const { url, apiKey } = this.requireConfig();
+    const res = await fetch(`${url}/api/v1/album?artistId=${encodeURIComponent(String(artistId))}&pageSize=200`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`Lidarr returned ${res.status} while listing albums.`);
+    return ((await res.json()) as Array<{ title?: string; foreignAlbumId?: string }>)
+      .filter(a => a.foreignAlbumId).map(a => ({ title: String(a.title ?? 'Album'), mbid: String(a.foreignAlbumId) }));
+  }
+
   async getTracks(artistId: string | number): Promise<LidarrTrack[]> {
     const { url, apiKey } = this.requireConfig();
     const [tracksRes, filesRes] = await Promise.all([

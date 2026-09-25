@@ -3,7 +3,8 @@ import type { Media } from '@virtuallyview/types';
 import type { LidarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from '../services/registry.js';
 import { run } from '../db/app-db.js';
-import { gatherCoverCandidates, getArtistCover, chooseArtistCover } from '../services/artist-covers.js';
+import { gatherCoverCandidates, getArtistCover, chooseArtistCover, saveArtistCovers, servedCover, type ArtistCoverCandidate } from '../services/artist-covers.js';
+import { findMoreArtwork } from '../services/artist-artwork.js';
 
 /**
  * Artist artwork picker. Returns a handful of real cover candidates (Lidarr
@@ -27,22 +28,35 @@ export default async function artistCoversRoutes(server: FastifyInstance) {
     return [artist.artwork?.poster, artist.artwork?.backdrop].filter((u): u is string => !!u && u.startsWith('http'));
   }
 
+  // Pictures are shown through this server, so the browser never contacts the image sites.
+  const withPreview = (c: ArtistCoverCandidate) => ({ ...c, preview: servedCover(c.url) });
+
+  server.post<{ Params: { id: string } }>('/api/artists/:id/covers/more', async (request, reply) => {
+    const { id } = request.params;
+    const artist = await resolveArtist(id);
+    if (!artist) return reply.code(404).send({ error: 'not_found', message: `No artist found with id "${id}".` });
+    const numeric = id.replace(/^lidarr-/, '');
+    const albums = /^\d+$/.test(numeric) ? await lidarr.getAlbumMbids(numeric).catch(() => []) : [];
+    const found = await findMoreArtwork(artist.title, albums);
+    const saved = getArtistCover(id);
+    const existing = saved?.covers ?? [];
+    const fresh = found.filter(c => !existing.some(e => e.url === c.url));
+    saveArtistCovers(id, [...existing, ...fresh], saved?.chosen);
+    return { artistId: id, added: fresh.length, candidates: [...existing, ...fresh].map(withPreview), chosen: saved?.chosen ?? null };
+  });
+
   server.get<{ Params: { id: string } }>('/api/artists/:id/covers', async (request, reply) => {
     const { id } = request.params;
     const artist = await resolveArtist(id);
     if (!artist) {
       return reply.code(404).send({ error: 'not_found', message: `No artist found with id "${id}".` });
     }
-    // Foreign artist id IS the MusicBrainz id in Lidarr.
-    const musicBrainzId = typeof artist.musicBrainzId === 'string' ? artist.musicBrainzId
-      : typeof artist.provider?.metadata?.foreignArtistId === 'string' ? artist.provider.metadata.foreignArtistId
-      : undefined;
-    const result = await gatherCoverCandidates(id, artist.title, lidarrImagesOf(artist), musicBrainzId);
+    const result = await gatherCoverCandidates(id, artist.title, lidarrImagesOf(artist));
     const saved = getArtistCover(id);
     return {
       artistId: id,
       title: artist.title,
-      candidates: result.candidates,
+      candidates: result.candidates.map(withPreview),
       chosen: result.chosen ?? saved?.chosen ?? null
     };
   });

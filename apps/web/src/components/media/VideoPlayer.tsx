@@ -89,7 +89,11 @@ export default function VideoPlayer({
   const applyingUntil = useRef(0);
   const positionRef = useRef(0);
 
-  const isTranscode = !!transcodeSrc;
+  // Choosing another audio language in a file that plays directly switches it to live conversion.
+  const [converting, setConverting] = useState(false);
+  const [manualSkipUsed, setManualSkipUsed] = useState(false);
+  const conversionSrc = transcodeSrc ?? castTranscode;
+  const isTranscode = !!transcodeSrc || (converting && !!conversionSrc);
   const [offset, setOffset] = useState(isTranscode ? Math.floor(startAt) : 0);
   const [time, setTime] = useState(0);
   const [mediaDuration, setMediaDuration] = useState(0);
@@ -115,7 +119,7 @@ export default function VideoPlayer({
 
   const [cast, setCast] = useState<{ token: string; origin: string } | null>(null);
   const baseSrc = isTranscode
-    ? `${transcodeSrc}?start=${offset}${audioIndex ? `&audio=${audioIndex}` : ''}${quality ? `&height=${quality}` : ''}${burnIndex >= 0 ? `&burn=${burnIndex}` : ''}`
+    ? `${conversionSrc}?start=${offset}${audioIndex ? `&audio=${audioIndex}` : ''}${quality ? `&height=${quality}` : ''}${burnIndex >= 0 ? `&burn=${burnIndex}` : ''}`
     : src;
   // A cast receiver has no login cookie: it gets an absolute address with a signed, expiring token.
   const videoSrc = cast ? `${cast.origin}${baseSrc}${baseSrc.includes('?') ? '&' : '?'}st=${cast.token}` : baseSrc;
@@ -152,7 +156,8 @@ export default function VideoPlayer({
   const SKIP_RE = /^(intro|introduction|opening|op|recap|previously|prologue|title sequence|credits|end credits|ending|outro|ed)\b/i;
   const skipChapter = chapters.find(c => SKIP_RE.test(c.title.trim()) && position >= c.start && position < c.end - 1);
   const skipIsCredits = skipChapter ? /credit|ending|outro|^ed\b/i.test(skipChapter.title) : false;
-  const manualSkip = !skipChapter && isEpisode && chapters.length === 0 && position > 5 && position < 300;
+  // Without chapter marks the intro is a guess: offer a skip early on, once.
+  const manualSkip = !skipChapter && isEpisode && chapters.length === 0 && !manualSkipUsed && position > 5 && position < 150;
   const currentChapter = chapters.find(c => position >= c.start && position < c.end);
 
   const wake = useCallback(() => {
@@ -214,7 +219,7 @@ export default function VideoPlayer({
     const v = videoRef.current;
     if (!v) return;
     try {
-      const link = await sign((isTranscode ? (transcodeSrc ?? src) : src).split('?')[0] ?? src);
+      const link = await sign((isTranscode ? (conversionSrc ?? src) : src).split('?')[0] ?? src);
       const resumeAt = positionRef.current;
       if (!isTranscode) v.addEventListener('loadedmetadata', () => { v.currentTime = resumeAt; void v.play().catch(() => undefined); }, { once: true });
       setCast(link);
@@ -272,6 +277,8 @@ export default function VideoPlayer({
     setUpNext(null);
     setSubIndex(-1);
     setAudioIndex(0);
+    setConverting(false);
+    setManualSkipUsed(false);
     setQuality(0);
     setBurnIndex(-1);
     setOffset(isTranscode ? Math.floor(startAt) : 0);
@@ -471,14 +478,15 @@ export default function VideoPlayer({
         <button
           type="button"
           className="vp-skip"
+          title={skipChapter ? undefined : 'Skips ahead 90 seconds'}
           onClick={() => {
             if (skipChapter) {
               if (skipIsCredits && next) next.onSelect();
               else seekTo(skipChapter.end);
-            } else seekTo(position + 90);
+            } else { setManualSkipUsed(true); seekTo(position + 90); }
           }}
         >
-          {skipChapter ? (skipIsCredits ? (next ? 'Next episode' : 'Skip credits') : /recap|previously/i.test(skipChapter.title) ? 'Skip recap' : 'Skip intro') : 'Skip 90 s'}
+          {skipChapter ? (skipIsCredits ? (next ? 'Next episode' : 'Skip credits') : /recap|previously/i.test(skipChapter.title) ? 'Skip recap' : 'Skip intro') : 'Skip intro'}
         </button>
       )}
 
@@ -592,14 +600,14 @@ export default function VideoPlayer({
                 </div>
               )}
             </div>
-            {isTranscode && audioTracks.length > 1 && (
+            {audioTracks.length > 1 && !!conversionSrc && (
               <div className="vp-menu-wrap">
                 <button type="button" className={`vp-btn vp-btn--text${menu === 'audio' ? ' is-on' : ''}`} onClick={() => setMenu(m => (m === 'audio' ? null : 'audio'))} title="Audio track" aria-label="Audio track">Audio</button>
                 {menu === 'audio' && (
                   <div className="vp-menu" role="menu">
                     <div className="vp-menu-head">Audio</div>
                     {audioTracks.map(track => (
-                      <button key={track.index} type="button" role="menuitem" className={`vp-menu-item${audioIndex === track.index ? ' is-active' : ''}`} onClick={() => { setMenu(null); if (track.index !== audioIndex) restartWith(() => setAudioIndex(track.index)); }}>{track.label}</button>
+                      <button key={track.index} type="button" role="menuitem" className={`vp-menu-item${audioIndex === track.index ? ' is-active' : ''}`} onClick={() => { setMenu(null); if (track.index !== audioIndex) restartWith(() => { if (track.index !== 0) setConverting(true); setAudioIndex(track.index); }); }}>{track.label}</button>
                     ))}
                   </div>
                 )}

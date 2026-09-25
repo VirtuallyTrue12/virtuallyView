@@ -6,6 +6,8 @@ export interface ArtistCoverCandidate {
   url: string;
   source: string;
   label?: string;
+  /** A photo of the artist, or an album cover. */
+  kind?: 'artist' | 'album';
 }
 
 /**
@@ -73,38 +75,14 @@ export function chooseArtistCover(artistId: string, url: string): ArtistCoverCan
 export async function gatherCoverCandidates(
   artistId: string,
   title: string,
-  lidarrImages: string[],
-  musicBrainzId?: string
+  lidarrImages: string[]
 ): Promise<{ candidates: ArtistCoverCandidate[]; chosen?: string }> {
   const saved = getArtistCover(artistId);
   const candidates: ArtistCoverCandidate[] = [];
 
   for (const url of lidarrImages) {
     if (url && (url.startsWith('http') || url.startsWith('/api/art')) && !candidates.some(c => c.url === url)) {
-      candidates.push({ url, source: 'lidarr', label: 'Lidarr artwork' });
-    }
-  }
-
-  // MusicBrainz cover art archive: one candidate per release group, capped so
-  // the chooser stays a picker, not a gallery.
-  if (musicBrainzId) {
-    try {
-      const res = await outboundFetch(`https://coverartarchive.org/release-group/${encodeURIComponent(musicBrainzId)}`, {
-        headers: { 'User-Agent': 'virtuallyView/1.0' },
-        timeoutMs: 8000
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { images?: Array<{ image?: string; thumbnails?: Record<string, string>; comment?: string }> };
-        for (const image of data.images ?? []) {
-          const url = image.thumbnails?.['500'] ?? image.thumbnails?.['250'] ?? image.image;
-          if (url && !candidates.some(c => c.url === url)) {
-            candidates.push({ url, source: 'musicbrainz', label: image.comment ? `MusicBrainz: ${image.comment}` : 'MusicBrainz cover' });
-          }
-          if (candidates.length >= 12) break;
-        }
-      }
-    } catch {
-      // offline: choose from whatever Lidarr already provided
+      candidates.push({ url, source: 'lidarr', label: 'Lidarr artwork', kind: 'artist' });
     }
   }
 
@@ -119,7 +97,7 @@ export async function gatherCoverCandidates(
       if (res.ok) {
         const data = (await res.json()) as { thumbnail?: { source?: string } };
         if (data.thumbnail?.source && !candidates.some(c => c.url === data.thumbnail!.source)) {
-          candidates.push({ url: data.thumbnail.source, source: 'wikipedia', label: 'Wikipedia image' });
+          candidates.push({ url: data.thumbnail.source, source: 'wikipedia', label: 'Wikipedia image', kind: 'artist' });
         }
       }
     } catch {
@@ -127,6 +105,8 @@ export async function gatherCoverCandidates(
     }
   }
 
+  // Artwork found earlier with "Find more artwork" stays in the list.
+  for (const earlier of saved?.covers ?? []) if (!candidates.some(c => c.url === earlier.url)) candidates.push(earlier);
   const chosen = saved?.chosen && candidates.some(c => c.url === saved.chosen) ? saved.chosen : undefined;
   saveArtistCovers(artistId, candidates, chosen);
   return { candidates, chosen };

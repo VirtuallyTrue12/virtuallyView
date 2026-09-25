@@ -22,6 +22,9 @@ export default function ArtistDetails() {
   const [savingCover, setSavingCover] = useState(false);
   const [missing, setMissing] = useState(false);
   const [coversError, setCoversError] = useState<string | null>(null);
+  const [findingMore, setFindingMore] = useState(false);
+  const [moreNote, setMoreNote] = useState<string | null>(null);
+  const [brokenCovers, setBrokenCovers] = useState<Set<string>>(new Set());
   const { playQueue } = useMusicPlayer();
   const [mixing, setMixing] = useState(false);
   const [mixNote, setMixNote] = useState<string | null>(null);
@@ -68,6 +71,20 @@ export default function ArtistDetails() {
       setCoversError((err as Error).message);
     } finally {
       setSavingCover(false);
+    }
+  };
+
+  const findMoreCovers = async () => {
+    if (!id) return;
+    setFindingMore(true); setMoreNote(null); setCoversError(null);
+    try {
+      const r = await api.moreArtistCovers(id);
+      setCovers(r.candidates);
+      setMoreNote(r.added > 0 ? `Found ${r.added} more.` : 'Nothing new was found for this artist.');
+    } catch (err) {
+      setCoversError(err instanceof Error ? err.message : 'Could not look for more artwork.');
+    } finally {
+      setFindingMore(false);
     }
   };
 
@@ -138,26 +155,41 @@ export default function ArtistDetails() {
 
           {pickingCover && (
             <div className="cover-picker">
-              <h3 className="rail-title">Choose artwork</h3>
+              <div className="cover-picker-head">
+                <h3 className="rail-title">Choose artwork</h3>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void findMoreCovers()} disabled={findingMore}>
+                  {findingMore ? 'Looking...' : 'Find more artwork'}
+                </button>
+              </div>
+              {moreNote && <p className="cover-picker-empty" role="status">{moreNote}</p>}
               {covers.length === 0 ? (
                 <p className="cover-picker-empty">
-                  No artwork candidates could be found for this artist yet. Check that the server has internet access.
+                  No artwork was found for this artist yet. Press "Find more artwork" to look on Deezer, Apple Music, Wikipedia and MusicBrainz (needs internet access on the server).
                 </p>
               ) : (
-                <div className="cover-picker-grid">
-                  {covers.map(c => (
-                    <button
-                      key={c.url}
-                      type="button"
-                      className={`cover-picker-item${chosenCover === c.url ? ' is-chosen' : ''}`}
-                      onClick={() => void chooseCover(c.url)}
-                      disabled={savingCover}
-                    >
-                      <img src={c.url} alt={c.label ?? c.source} loading="lazy" />
-                      <span className="cover-picker-label">{c.label ?? c.source}</span>
-                    </button>
-                  ))}
-                </div>
+                (['artist', 'album'] as const).map(kind => {
+                  const group = covers.filter(c => (c.kind ?? 'artist') === kind && !brokenCovers.has(c.url));
+                  if (group.length === 0) return null;
+                  return (
+                    <div key={kind}>
+                      <h4 className="cover-picker-group">{kind === 'artist' ? 'Artist photos' : 'Album covers'}</h4>
+                      <div className="cover-picker-grid">
+                        {group.map(c => (
+                          <button
+                            key={c.url}
+                            type="button"
+                            className={`cover-picker-item${chosenCover === c.url ? ' is-chosen' : ''}`}
+                            onClick={() => void chooseCover(c.url)}
+                            disabled={savingCover}
+                          >
+                            <img src={c.preview ?? c.url} alt={c.label ?? c.source} loading="lazy" onError={() => setBrokenCovers(prev => new Set(prev).add(c.url))} />
+                            <span className="cover-picker-label">{c.label ?? c.source}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
               )}
               {coversError && <div className="notice notice--err">{coversError}</div>}
             </div>

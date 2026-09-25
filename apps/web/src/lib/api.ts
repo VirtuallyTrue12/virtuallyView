@@ -340,6 +340,9 @@ export interface CoverCandidate {
   url: string;
   source: string;
   label?: string;
+  /** How to load it in the page (through this server). */
+  preview?: string;
+  kind?: 'artist' | 'album';
 }
 
 /** One track saved inside a playlist. Snapshot kept so the playlist renders
@@ -542,6 +545,7 @@ export const api = {
   searchAlbum: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/albums/${encodeURIComponent(id)}/search`),
   album: (id: string) => getJSON<{ album: AlbumItem & { artistTitle?: string }; tracks: TrackItem[] }>(`/api/albums/${encodeURIComponent(id)}`),
   artistCovers: (id: string) => getJSON<{ artistId: string; title: string; candidates: CoverCandidate[]; chosen: string | null }>(`/api/artists/${encodeURIComponent(id)}/covers`),
+  moreArtistCovers: (id: string) => postJSON<{ artistId: string; added: number; candidates: CoverCandidate[]; chosen: string | null }>(`/api/artists/${encodeURIComponent(id)}/covers/more`),
   chooseArtistCover: (id: string, url: string) =>
     postJSON<{ artistId: string; chosen: string; candidates: CoverCandidate[] }>(`/api/artists/${encodeURIComponent(id)}/covers`, { url }),
   serie: (id: string) => getJSON<SeriesItem>(`/api/series/${encodeURIComponent(id)}`),

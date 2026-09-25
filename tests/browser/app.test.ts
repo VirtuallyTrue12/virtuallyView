@@ -307,3 +307,113 @@ describe('upgrade music quality', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('music player', () => {
+  const shots = process.env.VV_SHOTS;
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  /** 40 seconds of quiet audio: small, and it lets the browser really play and seek. */
+  const wav = (() => {
+    const rate = 8000, seconds = 40, data = Buffer.alloc(rate * seconds, 128);
+    const h = Buffer.alloc(44);
+    h.write('RIFF', 0); h.writeUInt32LE(36 + data.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22);
+    h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate, 28); h.writeUInt16LE(1, 32); h.writeUInt16LE(8, 34); h.write('data', 36); h.writeUInt32LE(data.length, 40);
+    return Buffer.concat([h, data]);
+  })();
+  const cover = '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c0392b"/><stop offset="1" stop-color="#2c3e50"/></linearGradient></defs><rect width="500" height="500" fill="url(#g)"/><circle cx="250" cy="250" r="120" fill="#e67e22" opacity=".8"/></svg>';
+
+  it('plays, shows a smooth progress bar you can drag, and opens a full Now Playing view with queue and controls', async () => {
+    await page.route('**/api/albums/album-7', r => r.fulfill(json({
+      album: { id: 7, title: 'Meteora', artistTitle: 'Linkin Park', artwork: { cover: '/test-cover.svg' }, releaseDate: '2003-03-25' },
+      tracks: [1, 2, 3].map(n => ({ id: n, title: ['Foreword', 'Don\'t Stay', 'Somewhere I Belong'][n - 1], albumId: 7, trackNumber: String(n), durationMs: 40_000, hasFile: true, quality: 'FLAC' }))
+    })));
+    await page.route('**/test-cover.svg', r => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: cover }));
+    await page.route('**/api/music/stream/*', async r => {
+      const range = /bytes=(\d+)-(\d*)/.exec(r.request().headers()['range'] ?? '');
+      if (!range) return r.fulfill({ status: 200, headers: { 'Content-Type': 'audio/wav', 'Accept-Ranges': 'bytes' }, body: wav });
+      const start = Number(range[1]), end = range[2] ? Number(range[2]) : wav.length - 1;
+      return r.fulfill({ status: 206, headers: { 'Content-Type': 'audio/wav', 'Accept-Ranges': 'bytes', 'Content-Range': `bytes ${start}-${end}/${wav.length}` }, body: wav.subarray(start, end + 1) });
+    });
+    await page.route('**/api/lyrics**', r => r.fulfill({ status: 404, contentType: 'application/json', body: '{}' }));
+
+    await page.goto(base + '/albums/album-7');
+    await page.locator('.album-track-row').first().waitFor();
+    await page.getByRole('button', { name: /play album|play all|play/i }).first().click();
+    await page.waitForSelector('.mp .mp-play');
+    if (shots) await page.screenshot({ path: `${shots}/player-mini.png` });
+
+    // The bar moves on its own, without waiting for a page update.
+    const now = () => page.locator('.mp-center .seek-track').getAttribute('aria-valuenow').then(Number);
+    await page.waitForFunction(() => Number(document.querySelector('.mp-center .seek-track')?.getAttribute('aria-valuenow')) >= 1, null, { timeout: 15_000 });
+    expect(await now()).toBeGreaterThanOrEqual(1);
+    const p1 = await page.locator('.mp-center .seek').evaluate(el => Number(getComputedStyle(el).getPropertyValue('--p')));
+    expect(p1).toBeGreaterThan(0);
+
+    // Clicking the bar seeks; the readout follows.
+    const box = (await page.locator('.mp-center .seek-track').boundingBox())!;
+    await page.mouse.click(box.x + box.width * 0.75, box.y + box.height / 2);
+    await page.waitForFunction(() => Number(document.querySelector('.mp-center .seek-track')?.getAttribute('aria-valuenow')) >= 28);
+    expect(await page.locator('.mp-center .seek-track').getAttribute('aria-valuetext')).toMatch(/^0:\d\d of 0:40$/);
+
+    await page.mouse.move(box.x + box.width * 0.4, box.y + box.height / 2);
+    await page.waitForTimeout(250);
+    if (shots) await page.screenshot({ path: `${shots}/player-mini-hover.png`, clip: { x: 300, y: 700, width: 700, height: 100 } });
+
+    // Keyboard: arrows nudge by five seconds.
+    await page.locator('.mp-center .seek-track').focus();
+    const before = await now();
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForFunction(b => Number(document.querySelector('.mp-center .seek-track')?.getAttribute('aria-valuenow')) < b, before);
+
+    // Pause and play.
+    await page.getByRole('button', { name: 'Pause' }).first().click();
+    await page.getByRole('button', { name: 'Play', exact: true }).first().waitFor();
+    await page.getByRole('button', { name: 'Play', exact: true }).first().click();
+
+    // Open the full view.
+    await page.locator('.mp-now').click();
+    await page.waitForSelector('.np.is-open');
+    await page.waitForTimeout(450);
+    expect(await page.locator('.np-title').innerText()).toBe('Foreword');
+    expect(await page.locator('.mp-queue-row').count()).toBe(3);
+    if (shots) await page.screenshot({ path: `${shots}/player-now-playing.png` });
+
+    // Repeat cycles through its three states; shuffle toggles.
+    const repeat = page.locator('.np .mp-transport .mp-icon').last();
+    expect(await repeat.getAttribute('aria-label')).toBe('Repeat: off');
+    await repeat.click(); expect(await repeat.getAttribute('aria-label')).toBe('Repeat: all tracks');
+    await repeat.click(); expect(await repeat.getAttribute('aria-label')).toBe('Repeat: this track');
+    await repeat.click(); expect(await repeat.getAttribute('aria-label')).toBe('Repeat: off');
+
+    // Jump to the third track from the queue, then take one out.
+    await page.locator('.mp-queue-row').nth(2).locator('.mp-queue-main').click();
+    await page.waitForFunction(() => document.querySelector('.np-title')?.textContent === 'Somewhere I Belong');
+    await page.locator('.mp-queue-row').nth(1).hover();
+    await page.getByRole('button', { name: /Remove Don't Stay/ }).click();
+    expect(await page.locator('.mp-queue-row').count()).toBe(2);
+
+    // The other tabs.
+    await page.getByRole('tab', { name: 'Equalizer' }).click();
+    await page.waitForSelector('.mp-eq');
+    await page.getByRole('tab', { name: 'Lyrics' }).click();
+    await page.getByText('No lyrics found for this track.').waitFor();
+    if (shots) await page.screenshot({ path: `${shots}/player-lyrics.png` });
+
+    // Escape closes it and playback carries on.
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.np:not(.is-open)');
+    expect(await page.locator('.mp-play').first().getAttribute('aria-label')).toBe('Pause');
+
+    // A phone: the bar shrinks to what matters and the view stacks.
+    await page.setViewportSize({ width: 390, height: 780 });
+    await page.waitForTimeout(200);
+    if (shots) await page.screenshot({ path: `${shots}/player-mini-phone.png` });
+    await page.locator('.mp-now').click();
+    await page.waitForSelector('.np.is-open');
+    await page.waitForTimeout(450);
+    if (shots) await page.screenshot({ path: `${shots}/player-now-playing-phone.png` });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    expect(errors).toEqual([]);
+  }, 90_000);
+});
