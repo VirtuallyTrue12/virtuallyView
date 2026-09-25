@@ -28,6 +28,7 @@ import indexerRoutes from './routes/indexers.js';
 import backupRoutes from './routes/backup.js';
 import musicVideoRoutes from './routes/music-videos.js';
 import releaseRoutes from './routes/releases.js';
+import youtubeRoutes from './routes/youtube.js';
 import lyricsRoutes from './routes/lyrics.js';
 import subtitleRoutes from './routes/subtitles.js';
 import watchPartyRoutes from './routes/watch-party.js';
@@ -324,11 +325,11 @@ server.addHook('onRequest', (request, _reply, done) => {
 // reconfigures the server or its services is administrator-only.
 const ADMIN_ONLY_WRITE = [
   '/api/server-settings', '/api/integrations', '/api/services', '/api/onboarding', '/api/downloads/',
-  '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists', '/api/live/record', '/api/live/recordings', '/api/setup/', '/api/kiwix/config', '/api/apps/', '/api/music-videos/', '/api/releases/'
+  '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists', '/api/live/record', '/api/live/recordings', '/api/setup/', '/api/kiwix/config', '/api/apps/', '/api/music-videos/', '/api/releases/', '/api/youtube/'
 ];
 // Reading how the server is wired (service addresses, what is reachable on the
 // network, how to control containers) is administrator-only too.
-const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/', '/api/releases/'];
+const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/', '/api/releases/', '/api/youtube/'];
 server.addHook('preHandler', async (request, reply) => {
   if (request.method !== 'GET') return;
   const path = request.url.split('?')[0] ?? '';
@@ -428,6 +429,7 @@ const start = async () => {
   await server.register(backupRoutes);
   await server.register(musicVideoRoutes);
   await server.register(releaseRoutes);
+  await server.register(youtubeRoutes);
 
   // In production (Docker, `npm start`) the built web app ships alongside the
   // server, so one process serves both the API and the UI on one port. In

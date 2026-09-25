@@ -54,6 +54,9 @@ describe('recognising concerts and videos', () => {
     expect(mv.artistGuesses('Foo.Fighters.Live.at.Wembley.2008.1080p.BluRay.x264')).toContain('Foo Fighters');
     expect(mv.artistGuesses('Metallica - S&M Symphony in Concert 1999 DVDRip')).toContain('Metallica');
     expect(mv.artistGuesses('Rock Concert 2019 1080p')).toEqual([]);
+    // Titles written the other way round.
+    expect(mv.artistGuesses('Live In Texas (Full) [HD UPGRADE] - Linkin Park')[0]).toBe('Linkin Park');
+    expect(mv.artistGuesses('Foo Fighters - Live at Wembley 2008')[0]).toBe('Foo Fighters');
   });
 });
 

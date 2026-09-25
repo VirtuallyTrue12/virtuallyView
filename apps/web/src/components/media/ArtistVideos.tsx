@@ -29,14 +29,13 @@ function Section({ title, items, artistId, initial }: { title: string; items: Mu
 }
 
 /** Concerts and music videos filed under this artist. Shows nothing when there are none. */
-export function ArtistVideos({ artistId, artistName }: { artistId: string; artistName: string }) {
+export function ArtistVideos({ artistId, artistName, refreshKey = 0 }: { artistId: string; artistName: string; refreshKey?: number }) {
   const [data, setData] = useState<{ concerts: MusicVideoItem[]; videos: MusicVideoItem[] } | null>(null);
   useEffect(() => {
     let cancelled = false;
-    setData(null);
     api.artistVideos(artistId).then(d => { if (!cancelled) setData(d); }).catch(() => {});
     return () => { cancelled = true; };
-  }, [artistId]);
+  }, [artistId, refreshKey]);
   if (!data) return null;
   const initial = artistName[0] ?? '';
   return (

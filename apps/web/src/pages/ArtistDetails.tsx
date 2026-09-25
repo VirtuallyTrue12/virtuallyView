@@ -7,6 +7,7 @@ import { RemoveTitle } from '../components/media/RemoveTitle';
 import { TitleQuality } from '../components/media/TitleQuality';
 import { SearchAgain } from '../components/media/SearchAgain';
 import { UpgradeQuality } from '../components/media/UpgradeQuality';
+import { YoutubeFinder } from '../components/media/YoutubeFinder';
 import { ArtistVideos } from '../components/media/ArtistVideos';
 import { useMusicPlayer } from '../components/media/MusicProvider';
 import { artistMix } from '../lib/instant-mix';
@@ -22,6 +23,10 @@ export default function ArtistDetails() {
   const [savingCover, setSavingCover] = useState(false);
   const [missing, setMissing] = useState(false);
   const [coversError, setCoversError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [ytOpen, setYtOpen] = useState(false);
+  const [videosKey, setVideosKey] = useState(0);
+  useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
   const [findingMore, setFindingMore] = useState(false);
   const [moreNote, setMoreNote] = useState<string | null>(null);
   const [brokenCovers, setBrokenCovers] = useState<Set<string>>(new Set());
@@ -221,7 +226,15 @@ export default function ArtistDetails() {
             )}
           </div>
 
-          {/^lidarr-/.test(artist.id) && <ArtistVideos artistId={artist.id} artistName={artist.title} />}
+          {/^lidarr-/.test(artist.id) && <ArtistVideos artistId={artist.id} artistName={artist.title} refreshKey={videosKey} />}
+          {/^lidarr-/.test(artist.id) && isAdmin && (
+            <div className="album-section">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setYtOpen(v => !v)} aria-expanded={ytOpen}>
+                {ytOpen ? 'Hide YouTube search' : 'Find concerts and videos on YouTube'}
+              </button>
+              {ytOpen && <YoutubeFinder initialQuery={`${artist.title} live concert`} fixedArtist={artist.title} onDownloaded={() => setVideosKey(k => k + 1)} />}
+            </div>
+          )}
         </>
       )}
     </main>

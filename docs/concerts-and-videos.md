@@ -26,3 +26,17 @@ A name like "Rock Concert 2019 1080p" has no artist in it. The download waits, a
 Concerts and unusual titles are often named differently from how Radarr searches for them, so a request can sit on "searching" forever. Administrators can open the request on the Requests page and press **Find a release myself**: search with your own words ("Linkin Park Rock am Ring 2004"), see everything the sources have (best-seeded first), and press Download. Choose what happens when it finishes: file it under the artist as a concert or a music video, let the name decide, or just download it. Searching every source can take up to a minute.
 
 Downloads started this way are not managed by Radarr, Sonarr or Lidarr. Concerts and videos file themselves under the artist; anything else stays in the downloads folder for you to import.
+
+## Concerts that only exist on YouTube
+
+Many concerts are only on YouTube. An optional service can search it and save a video under the artist:
+
+```
+docker compose --profile youtube up -d
+```
+
+Then, as an administrator, either open an artist and press **Find concerts and videos on YouTube**, or open a request and use the **YouTube** tab of **Find a release myself**. Pick a result and press Download. It is saved as a normal video file under `<artist>/Concerts` (or `/Videos`) in up to 1080p, in a format any browser plays, and the artist is created if the library has never had them. Progress shows right there, and you can cancel.
+
+- It uses [yt-dlp](https://github.com/yt-dlp/yt-dlp), kept up to date automatically. It only ever saves into an artist's Concerts or Videos folder and answers only to the dashboard.
+- Its traffic leaves from your home connection. To send it through Tor or a proxy instead, set `YTDLP_PROXY` (for example `socks5://tor:9050`) in `.env`.
+- **Only save what you have the right to keep.** Many concert uploads are unofficial, and YouTube's terms restrict downloading. This is off by default for that reason, and it is yours to decide (see [rights and acceptable use](acceptable-use.md)).

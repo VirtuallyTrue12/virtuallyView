@@ -362,6 +362,8 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:0.5b}
       - SEARCH_VIA_TOR=${SEARCH_VIA_TOR:-false}
       - WATCHTOWER_URL=http://watchtower:8080
+      - YTDLP_URL=http://ytdlp:8098
+      - YTDLP_TOKEN_FILE=/secrets/ytdlp
       - WATCHTOWER_TOKEN_FILE=/secrets/watchtower
       - VV_HELPER_URL=http://helper:8099
       - VV_SECRET_KEY=${VV_SECRET_KEY:-}
@@ -566,6 +568,31 @@ services:
     volumes:
       - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
       - helper-shared:/shared
+    restart: unless-stopped
+
+  # Optional: search YouTube and save concerts and music videos under the
+  # artist (docs/concerts-and-videos.md). Off unless you turn it on:
+  #   docker compose --profile youtube up -d
+  # It writes only inside the music library and answers only to the dashboard.
+  # Set YTDLP_PROXY (for example socks5://tor:9050) to send its traffic elsewhere.
+  ytdlp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["youtube"]
+    command: ["node", "scripts/ytdlp-worker.mjs"]
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - YTDLP_TOKEN_FILE=/secrets/ytdlp
+      - YTDLP_PROXY=${YTDLP_PROXY:-}
+    volumes:
+      - secrets:/secrets:ro
+      - media-music:/media/music
     restart: unless-stopped
 
   # Optional automatic updates for the containers above (only the ones

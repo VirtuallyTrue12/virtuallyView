@@ -479,7 +479,15 @@ export interface MusicVideoJob { hash: string; name: string; status: string; kin
 
 export interface ReleaseChoice { id: string; title: string; cleanTitle: string; indexer: string; sizeBytes: number; seeders: number; ageDays: number; quality: string; filesUnder: 'Concerts' | 'Videos' | null }
 
+export interface YoutubeResult { id: string; title: string; channel: string; durationSeconds: number; views: number; thumbnail: string; artistGuess: string; kind: 'Concerts' | 'Videos' }
+export interface YoutubeJob { id: string; videoId: string; title: string; dir: string; status: 'queued' | 'downloading' | 'merging' | 'done' | 'error' | 'cancelled'; percent: number; eta?: string; speed?: string; error?: string }
+
 export const api = {
+  youtubeStatus: () => getJSON<{ available: boolean }>('/api/youtube/status'),
+  youtubeSearch: (q: string) => getJSON<{ query: string; results: YoutubeResult[] }>(`/api/youtube/search?q=${encodeURIComponent(q)}`),
+  youtubeDownload: (r: { id: string; title: string; artist?: string; kind?: 'Concerts' | 'Videos' }) => postJSON<{ ok: boolean; message: string; artistId: number; artistName: string; kind: string }>('/api/youtube/download', r),
+  youtubeJobs: () => getJSON<{ jobs: YoutubeJob[] }>('/api/youtube/jobs'),
+  youtubeCancel: (id: string) => postJSON<{ ok: boolean }>(`/api/youtube/jobs/${encodeURIComponent(id)}/cancel`),
   searchReleases: (q: string) => getJSON<{ query: string; releases: ReleaseChoice[] }>(`/api/releases/search?q=${encodeURIComponent(q)}`),
   grabRelease: (id: string, fileAs: 'auto' | 'concert' | 'video' | 'none' = 'auto') => postJSON<{ ok: boolean; message: string; filesUnder: 'Concerts' | 'Videos' | null }>('/api/releases/grab', { id, fileAs }),
   artistVideos: (id: string) => getJSON<{ concerts: MusicVideoItem[]; videos: MusicVideoItem[] }>(`/api/artists/${encodeURIComponent(id)}/videos`),

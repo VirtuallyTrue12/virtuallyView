@@ -19,7 +19,7 @@ export const VIDEO_EXT = new Set(['.mkv', '.mp4', '.m4v', '.avi', '.mov', '.ts',
 const EXPLICIT_KIND: Record<string, VideoKind> = { 'vv-concerts': 'Concerts', 'vv-videos': 'Videos' };
 const MANAGED_CATEGORIES = new Set(['radarr', 'sonarr', 'lidarr', 'movies', 'tv', 'music', 'series']);
 
-const CONCERT_RE = /\b(live (?:at|in|from|on|@|aid|8)|live \d{4}|in concert|concert|unplugged|world tour|tour \d{4}|farewell tour|festival|rock in rio|glastonbury|wembley|acoustic sessions?)\b/i;
+const CONCERT_RE = /\b(full (?:show|concert|set)|live (?:at|in|from|on|@|aid|8)|live \d{4}|in concert|concert|unplugged|world tour|tour \d{4}|farewell tour|festival|rock in rio|glastonbury|wembley|acoustic sessions?)\b/i;
 const VIDEO_RE = /\b(music videos?|video (?:collection|anthology)|videography|greatest (?:hits )?videos?|the videos|mtv (?:unplugged|video))\b/i;
 const EPISODE_RE = /\bs\d{1,2}e\d{1,3}\b|\bseason \d+\b/i;
 
@@ -38,8 +38,13 @@ const GENERIC = new Set(['rock', 'pop', 'metal', 'live', 'concert', 'music', 'vi
 export function artistGuesses(rawName: string): string[] {
   const name = cleanReleaseName(rawName).replace(/\b(?:19|20)\d{2}\b/g, ' ').replace(/\s{2,}/g, ' ').trim();
   const out: string[] = [];
-  const dash = /^(.{2,60}?)\s+[-–—]\s+.+$/.exec(name);
-  if (dash) out.push(dash[1]!);
+  const dash = /^(.{2,60}?)\s+[-–—]\s+(.{2,60})$/.exec(name);
+  if (dash) {
+    // "Artist - Concert" is usual; "Concert - Artist" happens too. The side that reads like a title is not the artist.
+    const titleLike = (t: string) => CONCERT_RE.test(t) || VIDEO_RE.test(t) || /\b(full|hd|hq|remastered|official)\b/i.test(t);
+    const [left, right] = [dash[1]!, dash[2]!];
+    out.push(...(titleLike(left) && !titleLike(right) ? [right, left] : [left, right]));
+  }
   const live = /^(.{2,60}?)\s+(?:live\b|in concert\b|unplugged\b|concert\b|world tour\b|farewell tour\b|tour\b|music videos?\b|video collection\b|videography\b|the videos?\b)/i.exec(name);
   if (live) out.push(live[1]!);
   const seen = new Set<string>();

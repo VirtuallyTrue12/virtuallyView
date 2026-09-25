@@ -417,3 +417,58 @@ describe('music player', () => {
     expect(errors).toEqual([]);
   }, 90_000);
 });
+
+describe('concerts from YouTube', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const result = { id: '9PSo4PjbDbs', title: 'Linkin Park - Rock am Ring 2004 (Full Show)', channel: 'Phoenix LPLive220', durationSeconds: 4262, views: 1_921_185, thumbnail: '/thumb.jpg', artistGuess: 'Linkin Park', kind: 'Concerts' };
+
+  it('finds a concert on YouTube from the artist page and shows the download until it is done', async () => {
+    await page.route('**/thumb.jpg', r => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9"/>' }));
+    await page.route('**/api/artists/lidarr-4', r => r.fulfill(json({ id: 'lidarr-4', title: 'Linkin Park', type: 'artist', status: 'available', trackFileCount: 5, totalTrackCount: 5, albumCount: 1 })));
+    await page.route('**/api/artists/lidarr-4/albums', r => r.fulfill(json({ artistId: 'lidarr-4', albums: [] })));
+    await page.route('**/api/artists/lidarr-4/covers', r => r.fulfill(json({ candidates: [], chosen: null })));
+    let videosCalls = 0;
+    await page.route('**/api/artists/lidarr-4/videos', r => { videosCalls++; return r.fulfill(json({ concerts: [], videos: [] })); });
+    await page.route('**/api/youtube/status', r => r.fulfill(json({ available: true })));
+    let searched = '';
+    await page.route('**/api/youtube/search**', r => { searched = new URL(r.request().url()).searchParams.get('q') ?? ''; return r.fulfill(json({ query: searched, results: [result] })); });
+    let posted: unknown = null;
+    await page.route('**/api/youtube/download', r => { posted = r.request().postDataJSON(); return r.fulfill(json({ ok: true, message: 'Downloading. It will appear under Linkin Park / Concerts.', artistId: 4, artistName: 'Linkin Park', kind: 'Concerts' })); });
+    let phase = 0;
+    await page.route('**/api/youtube/jobs', r => {
+      const status = phase === 0 ? 'queued' : phase === 1 ? 'downloading' : 'done';
+      return r.fulfill(json({ jobs: phase === 0 && !posted ? [] : [{ id: 'j1', videoId: result.id, title: result.title, dir: '/media/music/Linkin Park/Concerts', status, percent: status === 'done' ? 100 : 40, speed: '1.2MiB/s', eta: '00:30' }] }));
+    });
+
+    await page.goto(base + '/music/lidarr-4');
+    await page.getByRole('button', { name: 'Find concerts and videos on YouTube' }).click();
+    await page.getByLabel('Search YouTube').waitFor();
+    expect(await page.getByLabel('Search YouTube').inputValue()).toBe('Linkin Park live concert');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.waitForSelector('.yt-row');
+    expect(searched).toBe('Linkin Park live concert');
+    expect(await page.locator('.yt-row .release-row-meta').innerText()).toMatch(/1:11:02.*1\.9M views.*concert/);
+
+    await page.locator('.yt-row').getByRole('button', { name: 'Download' }).click();
+    await page.waitForSelector('.yt-job');
+    expect(posted).toEqual({ id: '9PSo4PjbDbs', title: result.title, artist: 'Linkin Park', kind: 'Concerts' });
+    const before = videosCalls;
+    phase = 1;
+    await page.waitForFunction(() => /40%/.test(document.querySelector('.yt-job-state')?.textContent ?? ''), null, { timeout: 8000 });
+    phase = 2;
+    // When it finishes the artist's Concerts list is loaded again.
+    await page.waitForFunction(() => /Done/.test(document.querySelector('.yt-job-state')?.textContent ?? ''), null, { timeout: 8000 });
+    await page.waitForTimeout(300);
+    expect(videosCalls).toBeGreaterThan(before);
+    expect(errors).toEqual([]);
+  });
+
+  it('says how to turn it on when the YouTube service is off', async () => {
+    await page.unroute('**/api/youtube/status');
+    await page.route('**/api/youtube/status', r => r.fulfill(json({ available: false })));
+    await page.goto(base + '/music/lidarr-4');
+    await page.getByRole('button', { name: 'Find concerts and videos on YouTube' }).click();
+    await page.getByText('docker compose --profile youtube up -d').waitFor();
+    expect(errors).toEqual([]);
+  });
+});

@@ -723,6 +723,20 @@ describe('e2e: pick a release', () => {
   }, 30_000);
 });
 
+describe('e2e: youtube', () => {
+  it('is administrator-only, validates input, and explains itself when the service is off', async () => {
+    const cookieViewer = await viewerCookie();
+    expect((await req('GET', '/api/youtube/search?q=queen', { cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('POST', '/api/youtube/download', { body: { id: '9PSo4PjbDbs', title: 'x' }, cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('GET', '/api/youtube/search?q=a', { cookieOverride: cookieAdmin })).status).toBe(400);
+    expect((await req('POST', '/api/youtube/download', { body: { id: 'https://evil', title: 'x' }, cookieOverride: cookieAdmin })).status).toBe(400);
+    const off = await req('GET', '/api/youtube/search?q=queen', { cookieOverride: cookieAdmin });
+    expect(off.status).toBe(503);
+    expect(off.text).toMatch(/--profile youtube/);
+    expect((await req('GET', '/api/youtube/status', { cookieOverride: cookieAdmin })).json.available).toBe(false);
+  }, 30_000);
+});
+
 describe('e2e: kiwix', () => {
   it('reports unconfigured by default, rejects a bad address, saves a good one, and blocks non-admins', async () => {
     const status = await req('GET', '/api/kiwix/status');

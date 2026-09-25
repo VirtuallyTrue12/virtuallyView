@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, type ReleaseChoice } from '../../lib/api';
+import { YoutubeFinder } from './YoutubeFinder';
 
 const size = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`);
 const age = (days: number) => (days < 1 ? 'today' : days < 60 ? `${Math.round(days)} d` : days < 730 ? `${Math.round(days / 30)} mo` : `${Math.round(days / 365)} y`);
@@ -11,6 +12,7 @@ const age = (days: number) => (days < 1 ? 'today' : days < 60 ? `${Math.round(da
  */
 export function ReleasePicker({ initialQuery }: { initialQuery: string }) {
   const [open, setOpen] = useState(false);
+  const [source, setSource] = useState<'torrents' | 'youtube'>('torrents');
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<ReleaseChoice[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -37,6 +39,12 @@ export function ReleasePicker({ initialQuery }: { initialQuery: string }) {
 
   return (
     <div className="release-picker">
+      <div className="np-tabs" role="tablist" aria-label="Where to look">
+        <button type="button" role="tab" aria-selected={source === 'torrents'} className={`np-tab${source === 'torrents' ? ' is-active' : ''}`} onClick={() => setSource('torrents')}>Torrents</button>
+        <button type="button" role="tab" aria-selected={source === 'youtube'} className={`np-tab${source === 'youtube' ? ' is-active' : ''}`} onClick={() => setSource('youtube')}>YouTube</button>
+      </div>
+      {source === 'youtube' && <YoutubeFinder initialQuery={initialQuery} />}
+      {source === 'torrents' && <>
       <div className="release-picker-search">
         <input className="settings-input" value={query} maxLength={200} aria-label="Search words"
           onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void search(); }} />
@@ -73,6 +81,7 @@ export function ReleasePicker({ initialQuery }: { initialQuery: string }) {
           ))}
         </ul>
       )}
+      </>}
     </div>
   );
 }

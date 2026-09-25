@@ -1,5 +1,5 @@
 /** Hosts whose cover art the server may fetch on a viewer's behalf. */
-export const ART_HOST = /^(images\.lidarr\.audio|coverartarchive\.org|(?:[\w-]+\.)?archive\.org|assets\.fanart\.tv|fanart\.tv|upload\.wikimedia\.org|image\.tmdb\.org|artworks\.thetvdb\.com|(?:[\w-]+\.)?dzcdn\.net|(?:[\w-]+\.)?mzstatic\.com|thumb\.wikimedia\.org|commons\.wikimedia\.org)$/i;
+export const ART_HOST = /^(images\.lidarr\.audio|coverartarchive\.org|(?:[\w-]+\.)?archive\.org|assets\.fanart\.tv|fanart\.tv|upload\.wikimedia\.org|image\.tmdb\.org|artworks\.thetvdb\.com|(?:[\w-]+\.)?dzcdn\.net|(?:[\w-]+\.)?mzstatic\.com|i\.ytimg\.com|thumb\.wikimedia\.org|commons\.wikimedia\.org)$/i;
 
 /**
  * Cover art goes through this server: the media manager's own copies are only

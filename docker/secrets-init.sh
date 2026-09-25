@@ -31,6 +31,14 @@ if [ ! -s "$file" ]; then
   echo "secrets: bazarr key ready"
 fi
 
+# Shared secret between the dashboard and the optional YouTube service.
+file=/secrets/ytdlp
+if [ ! -s "$file" ]; then
+  gen > "$file"
+  chmod 644 "$file"
+  echo "secrets: ytdlp token ready"
+fi
+
 # Shared secret between the dashboard and Watchtower (only used with the auto-update profile).
 file=/secrets/watchtower
 if [ ! -s "$file" ]; then

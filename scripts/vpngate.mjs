@@ -12,8 +12,11 @@
  * re-reads the file when it restarts the tunnel). VPN Gate keeps connection
  * logs: this hides your traffic from your internet provider; it is not anonymity.
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import net from 'node:net';
+import dgram from 'node:dgram';
+import { randomBytes } from 'node:crypto';
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const watch = process.argv.includes('--watch');
@@ -33,7 +36,7 @@ async function pick(avoid = new Set()) {
   servers.sort((a, b) => tcp(b) - tcp(a) || b.score - a.score);
   for (const s of servers.slice(0, 15)) {
     const { host, port } = remoteOf(s.config);
-    if (await answers(host, port)) return s;
+    if (await answers(host, port, protoOf(s.config))) return s;
   }
   throw new Error('VPN Gate has no reachable relay right now');
 }
@@ -42,12 +45,38 @@ const remoteOf = config => {
   const m = /^remote\s+(\S+)\s+(\d+)/m.exec(config) ?? [];
   return { host: m[1] ?? '', port: Number(m[2] ?? 0) };
 };
-const answers = (host, port) => new Promise(ok => {
+/**
+ * The first packet of every OpenVPN connection (a "hard reset") and the reply a
+ * working server gives. A relay that only accepts the connection and then drops
+ * it, which volunteer servers do when overloaded, fails this and is replaced.
+ */
+export function helloPacket(tcp) {
+  const body = Buffer.concat([Buffer.from([0x38]), randomBytes(8), Buffer.from([0, 0, 0, 0, 0])]);
+  return tcp ? Buffer.concat([Buffer.from([0, body.length]), body]) : body;
+}
+export const isServerHello = (data, tcp) => data.length > (tcp ? 2 : 0) && (data[tcp ? 2 : 0] >> 3) === 8;
+
+export const answers = (host, port, proto = 'tcp') => new Promise(ok => {
   if (!host || !port) return ok(false);
-  const socket = net.connect({ host, port, timeout: 4000 }, () => { socket.destroy(); ok(true); });
-  socket.on('error', () => ok(false));
-  socket.on('timeout', () => { socket.destroy(); ok(false); });
+  if (proto === 'udp') {
+    const socket = dgram.createSocket('udp4');
+    const done = value => { clearTimeout(timer); try { socket.close(); } catch { /* already closed */ } ok(value); };
+    const timer = setTimeout(() => done(false), 5000);
+    socket.on('message', data => done(isServerHello(data, false)));
+    socket.on('error', () => done(false));
+    socket.send(helloPacket(false), port, host, err => { if (err) done(false); });
+    return;
+  }
+  let settled = false;
+  const finish = value => { if (settled) return; settled = true; socket.destroy(); ok(value); };
+  const socket = net.connect({ host, port, timeout: 6000 }, () => socket.write(helloPacket(true)));
+  socket.on('data', data => finish(isServerHello(data, true)));
+  socket.on('error', () => finish(false));
+  socket.on('close', () => finish(false));
+  socket.on('timeout', () => finish(false));
 });
+
+const protoOf = config => (/^proto\s+udp/m.test(config) ? 'udp' : 'tcp');
 
 async function choose(avoid) {
   const s = await pick(avoid);
@@ -56,6 +85,7 @@ async function choose(avoid) {
   return s.ip;
 }
 
+async function main() {
 let current = '';
 if (!existsSync(out) || !watch) current = await choose();
 else current = remoteOf(readFileSync(out, 'utf8')).host;
@@ -64,8 +94,9 @@ if (!watch) process.exit(0);
 let misses = 0;
 setInterval(async () => {
   try {
-    const { host, port } = remoteOf(readFileSync(out, 'utf8'));
-    if (await answers(host, port)) { misses = 0; return; }
+    const config = readFileSync(out, 'utf8');
+    const { host, port } = remoteOf(config);
+    if (await answers(host, port, protoOf(config))) { misses = 0; return; }
     if (++misses < 2) return;
     console.log(`vpngate: relay ${host} stopped answering, choosing another`);
     misses = 0;
@@ -74,3 +105,7 @@ setInterval(async () => {
     console.log(`vpngate: ${err instanceof Error ? err.message : err}`);
   }
 }, 60_000);
+}
+
+// Run only when started directly, not when a test imports the helpers.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) await main();

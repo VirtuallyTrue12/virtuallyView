@@ -11,6 +11,8 @@ FROM node:24-alpine
 # ffmpeg converts MKV/HEVC/DTS files that browsers cannot decode natively.
 # tar is used for backups; curl carries the optional Tor/SOCKS5 proxy calls.
 RUN apk add --no-cache ffmpeg tar curl
+# yt-dlp is used only by the optional YouTube service (docker compose --profile youtube).
+RUN curl -fsSL -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux && chmod 755 /usr/local/bin/yt-dlp
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/package.json /app/package-lock.json ./
