@@ -4,6 +4,7 @@ import { getAdapter } from './registry.js';
 import { scrapeMovie, tmdbArt } from './tmdb.js';
 import { cleanReleaseName, releaseQualityLabel } from './names.js';
 import { fetchWebCover } from './web-covers.js';
+import { STALLED_RE } from './queue-state.js';
 
 export type DownloadAction = 'pause' | 'resume' | 'remove' | 'delete-files';
 export interface QueueItem {
@@ -34,8 +35,9 @@ export interface QueueItem {
 const sources = ['radarr', 'sonarr', 'lidarr', 'qbittorrent', 'nzbget'] as const;
 type Source = typeof sources[number];
 
-function normalizeStatus(source: Source, status: string, progress: number): string {
+export function normalizeStatus(source: Source, status: string, progress: number, message?: string): string {
   const value = status.toLowerCase();
+  if (['warning', 'error', 'failed'].includes(value) && message && STALLED_RE.test(message) && progress < 100) return 'stalled';
   if (['error', 'missingfiles', 'failed', 'warning'].includes(value)) return 'failed';
   if (value.includes('paused') || value.startsWith('stopped')) return 'paused';
   if (['importing', 'imported', 'postprocessing', 'unpacking', 'verifying', 'moving'].includes(value)) return 'importing';
@@ -59,15 +61,25 @@ function normalize(source: Source, row: Download): QueueItem {
       source === 'nzbget' ? ['remove', 'delete-files'] :
       source === 'lidarr' ? [] : ['remove'],
     progress,
-    status: normalizeStatus(source, row.status, progress),
+    status: normalizeStatus(source, row.status, progress, row.statusMessage),
     mediaId: row.mediaId ?? row.associatedMedia?.id,
-    mediaType: row.associatedMedia?.type ?? ({ radarr: 'movie', sonarr: 'series', lidarr: 'artist' } as Partial<Record<Source, string>>)[source],
+    mediaType: row.associatedMedia?.type ?? ({ radarr: 'movie', sonarr: 'series', lidarr: 'artist' } as Partial<Record<Source, string>>)[source] ?? mediaTypeOfCategory(row.category),
     savePath: row.savePath,
     size: row.size === undefined ? undefined : `${(row.size / 1024 ** 3).toFixed(1)} GB`,
     ...(row.statusMessage ? { message: row.statusMessage } : {}),
     speed: row.speed === undefined ? undefined : `${(row.speed / 1024 ** 2).toFixed(1)} MB/s`,
     eta: row.timeleft ?? (row.eta ? new Date(row.eta).toISOString() : undefined)
   };
+}
+
+/** The label the media services put on their downloads (and the picker on ours) says what a torrent is. */
+export function mediaTypeOfCategory(category?: string): string | undefined {
+  switch ((category ?? '').toLowerCase()) {
+    case 'radarr': return 'movie';
+    case 'sonarr': return 'series';
+    case 'lidarr': case 'vv-concerts': case 'vv-videos': return 'artist';
+    default: return undefined;
+  }
 }
 
 function titleKey(value: string): string {
@@ -115,6 +127,26 @@ async function artworkFallback(
 }
 
 /**
+ * A torrent name is a release name, not a title: "How I Met Your Mother S07 (1080p ...)" belongs to the
+ * series "How I Met Your Mother". Picks the library title the name starts with (the longest one), among
+ * the kind the download is known to be when the client says so. Short titles must match exactly.
+ */
+export function matchLibraryTitle<T extends { title: string; type?: string; year?: number }>(rawName: string, items: T[], type?: string): T | undefined {
+  const name = titleKey(cleanReleaseName(rawName));
+  if (!name) return undefined;
+  let best: T | undefined;
+  let bestLength = 0;
+  for (const item of items) {
+    if (type && item.type && item.type !== type) continue;
+    const key = titleKey(item.title);
+    if (!key) continue;
+    const fits = name === key || (key.length >= 4 && name.startsWith(`${key} `));
+    if (fits && key.length > bestLength) { best = item; bestLength = key.length; }
+  }
+  return best;
+}
+
+/**
  * Attach cover art and a stable media identity to every queue row. Download
  * clients (qBittorrent/NZBGet) report raw torrent titles, not library entries,
  * so a row is matched by normalized title against the connected libraries.
@@ -142,7 +174,7 @@ async function enrichWithLibrary(rows: QueueItem[]): Promise<QueueItem[]> {
   }
   return Promise.all(rows.map(async row => {
     const byIdMatch = row.mediaId ? byId.get(row.mediaId) : undefined;
-    const likely = byIdMatch ?? byTitle.get(titleKey(row.title));
+    const likely = byIdMatch ?? byTitle.get(titleKey(row.title)) ?? matchLibraryTitle(row.title, all, row.mediaType);
     if (!likely) {
       // No library match yet (still "searching" or a raw client torrent):
       // fall back to provider artwork so the tile is not a blank placeholder.
@@ -199,7 +231,7 @@ export async function getDownloads(): Promise<QueueItem[]> {
     byMediaId.mediaType ??= manager.mediaType;
     // Imported/failed state belongs to the manager; transfer progress and
     // controls belong to the client. Keep the client ID so actions stay real.
-    if (manager.status === 'importing' || manager.status === 'failed') byMediaId.status = manager.status;
+    if (manager.status === 'importing' || manager.status === 'failed' || manager.status === 'stalled') byMediaId.status = manager.status;
     if (manager.message) byMediaId.message = manager.message;
   }
   // Names are cleaned last, after library matching used the raw ones.

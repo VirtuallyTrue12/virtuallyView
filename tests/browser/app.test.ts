@@ -472,3 +472,38 @@ describe('concerts from YouTube', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('search, requests and downloads agree', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('search marks what is already requested and links to the request instead of offering it again', async () => {
+    await page.route('**/api/search/all**', r => r.fulfill(json({
+      query: 'dune', library: [], series: [], artists: [], tracks: [],
+      movies: [
+        { provider: 'tmdb', providerId: '1', title: 'Dune', year: 2021, type: 'movie', requestId: 'request-1', requestStatus: 'downloading' },
+        { provider: 'tmdb', providerId: '2', title: 'Dune', year: 1984, type: 'movie' }
+      ]
+    })));
+    await page.goto(base + '/search?q=dune');
+    await page.waitForSelector('.result-card');
+    const cards = page.locator('.result-card');
+    expect(await cards.nth(0).getByRole('link', { name: 'Requested · downloading' }).count()).toBe(1);
+    expect(await cards.nth(0).getByRole('button', { name: 'Request', exact: true }).count()).toBe(0);
+    expect(await cards.nth(1).getByRole('button', { name: 'Request', exact: true }).count()).toBe(1);
+    expect(errors).toEqual([]);
+  });
+
+  it('a stalled download is called stalled and offers another release', async () => {
+    await page.route(/\/api\/downloads(\?.*)?$/, r => r.fulfill(json([
+      { id: 'queue-radarr-1', title: 'I Am Legend 2007 Theatrical', progress: 0, status: 'stalled', message: 'The download is stalled with no connections', sourceClient: 'qbittorrent', reportedBy: ['qbittorrent', 'radarr'], mediaType: 'movie', mediaId: 'radarr-1', actions: ['pause', 'remove'] },
+      { id: 'queue-qbittorrent-2', title: 'How I Met Your Mother S07', progress: 100, status: 'completed', sourceClient: 'qbittorrent', mediaType: 'series', mediaId: 'sonarr-1', actions: ['remove'] }
+    ])));
+    await page.goto(base + '/downloads');
+    await page.getByText('I Am Legend 2007 Theatrical').waitFor();
+    expect(await page.getByRole('button', { name: 'Try another release' }).count()).toBe(1);
+    expect(await page.locator('.download-message').first().innerText()).toMatch(/stalled/);
+    // A finished season pack links to its series.
+    expect(await page.getByRole('link', { name: 'View in library' }).getAttribute('href')).toBe('/series/sonarr-1');
+    expect(errors).toEqual([]);
+  });
+});

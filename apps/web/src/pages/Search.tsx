@@ -38,9 +38,15 @@ function CandidateCard({ c, requested, busy, onRequest }: { c: SearchCandidate; 
         <span className="result-kind">{KIND_LABEL[c.type]}</span>
         <h3 className="result-title">{c.title}{c.year ? <span className="result-year"> {c.year}</span> : null}</h3>
         {c.overview && <p className="result-overview">{c.overview}</p>}
-        <button className={`btn ${requested ? 'btn-secondary' : 'btn-primary'} btn-sm`} type="button" disabled={busy || requested} onClick={onRequest}>
-          {requested ? 'Requested' : busy ? 'Requesting…' : c.type === 'artist' ? 'Add to Music' : 'Request'}
-        </button>
+        {c.requestStatus ? (
+          <Link className="btn btn-secondary btn-sm" to="/requests" title="See this request">
+            {c.requestStatus === 'available' ? 'In your library' : `Requested · ${c.requestStatus}`}
+          </Link>
+        ) : (
+          <button className={`btn ${requested ? 'btn-secondary' : 'btn-primary'} btn-sm`} type="button" disabled={busy || requested} onClick={onRequest}>
+            {requested ? 'Requested' : busy ? 'Requesting…' : c.type === 'artist' ? 'Add to Music' : 'Request'}
+          </button>
+        )}
       </div>
     </article>
   );

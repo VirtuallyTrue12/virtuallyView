@@ -1,3 +1,4 @@
+import { completenessOf, isPartial, isQueueNote, isStalled, leadRow, partlyMessage, STALLED_HELP } from './queue-state.js';
 import { getServerSettings } from './server-settings.js';
 import { notify } from './notifications.js';
 import { currentActor } from './user-context.js';
@@ -104,7 +105,8 @@ function matchesMetadata(item: LibraryItem, provider: RequestCandidate['provider
  * What a download-queue row means for the request behind it. Every status the
  * queue can report is handled on purpose; nothing unknown is called "downloading".
  */
-export function requestStateForQueue(queueStatus: string | undefined, queueMessage?: string): { status: RequestStatus; message?: string } {
+export function requestStateForQueue(queueStatus: string | undefined, queueMessage?: string, progress = 0): { status: RequestStatus; message?: string } {
+  if (isStalled(queueStatus, queueMessage, progress)) return { status: 'downloading', message: STALLED_HELP };
   switch (queueStatus) {
     case 'downloading':
     case undefined: return { status: 'downloading' };
@@ -114,7 +116,11 @@ export function requestStateForQueue(queueStatus: string | undefined, queueMessa
     case 'completed': return { status: 'importing' };
     case 'failed': return { status: 'searching', message: `The last download failed${queueMessage ? `: ${queueMessage}` : ''}. Another release is searched for.` };
     // Anything else (warning, delay, ...): it is in the queue, so it is not searching, but say what the queue said.
-    default: return { status: 'downloading', message: `The download queue reports "${queueStatus}".${queueMessage ? ` ${queueMessage}` : ''}` };
+    default: {
+      // Finished downloading but stuck: the trouble is the import, not the download.
+      const finished = progress >= 100 && (queueStatus === 'warning' || queueStatus === 'error');
+      return { status: finished ? 'importing' : 'downloading', message: queueMessage ? `Needs attention: ${queueMessage}` : `The download queue reports "${queueStatus}".` };
+    }
   }
 }
 
@@ -167,7 +173,7 @@ function loadRequests(): void {
 
 loadRequests();
 
-function normalizeTitle(value: string): string {
+export function normalizeTitle(value: string): string {
   return value.normalize('NFC').trim().toLowerCase();
 }
 
@@ -602,7 +608,8 @@ async function syncDownload(req: RequestItem, completedMovieId?: string) {
  * grouped by media type so each connected service is only queried once.
  */
 export async function syncRequestsWithServices(): Promise<void> {
-  const active = requests.filter(r => ['pending', 'searching', 'downloading', 'importing'].includes(r.status));
+  // Requests carrying a note (partly available, or an old queue message) are looked at again until it clears.
+  const active = requests.filter(r => ['pending', 'searching', 'downloading', 'importing'].includes(r.status) || (r.status === 'available' && !!r.message));
   if (!active.length) return;
 
   const byType = new Map<MediaKind, RequestItem[]>();
@@ -614,11 +621,12 @@ export async function syncRequestsWithServices(): Promise<void> {
 
   for (const [mediaType, reqs] of byType) {
     const adapter = adapterFor(mediaType);
-    let library: LibraryItem[] = [];
+    let library: Array<LibraryItem & Parameters<typeof completenessOf>[0]> = [];
     let queue: Array<{ title?: string; mediaId?: string; progress?: number; status?: string; message?: string }> = [];
     try {
       library = (await adapter.getItems()) as unknown as typeof library;
-      queue = (await adapter.getQueue()) as unknown as typeof queue;
+      // The services report the reason in statusMessage; keep it, so the request says why.
+      queue = ((await adapter.getQueue()) as unknown as Array<typeof queue[number] & { statusMessage?: string }>).map(q => ({ ...q, message: q.message ?? q.statusMessage }));
     } catch {
       continue;
     }
@@ -631,25 +639,37 @@ export async function syncRequestsWithServices(): Promise<void> {
         normalizeTitle(m.title) === normalizeTitle(req.title) && m.year === req.year);
       const inLibrary = libraryMatches.length === 1 ? libraryMatches[0] : undefined;
       if (inLibrary && !req.providerId) patch(req.id, { providerId: inLibrary.id });
-      if (inLibrary?.status === 'available') {
+      // Release titles are not identities. Never attach a homonym's progress.
+      const localId = req.providerId ?? inLibrary?.id;
+      const queuedRows = localId ? queue.filter(q => q.mediaId === localId) : [];
+      const partial = inLibrary ? completenessOf(inLibrary) : null;
+      // Some of it is here, but more is on the way: it is not "available" yet, and the page must not say so.
+      const stillArriving = isPartial(partial) && queuedRows.length > 0;
+      if (inLibrary?.status === 'available' && !stillArriving) {
         logStatusChange(req.id, before, 'available');
         logEvent(req.id, 'Imported into the library and ready to play');
         lastLoggedProgress.delete(req.id);
-        patch(req.id, { status: 'available', progress: 100 });
+        // A music request with tracks missing that nothing is fetching keeps saying so, instead of claiming all of it.
+        const note = inLibrary && (inLibrary as { type?: string }).type === 'artist' && isPartial(partial)
+          ? `${partlyMessage(partial)} Some tracks could not be found. Use "Search missing albums" on the artist page.` : undefined;
+        patch(req.id, { status: 'available', progress: isPartial(partial) ? Math.round((partial.have / partial.total) * 100) : 100, message: note });
         const mediaId = (inLibrary as unknown as { id: string }).id;
         await syncDownload(getRequest(req.id)!, mediaId);
         continue;
       }
-      // Release titles are not identities. Never attach a homonym's progress.
-      const localId = req.providerId ?? inLibrary?.id;
-      const queued = localId ? queue.find(q => q.mediaId === localId) : undefined;
+      const queued = leadRow(queuedRows);
       if (queued) {
-        const mapped = requestStateForQueue(queued.status, queued.message);
+        const mapped = requestStateForQueue(queued.status, queued.message, queued.progress ?? 0);
         logStatusChange(req.id, before, mapped.status);
-        const progress = queued.progress ?? req.progress ?? 0;
+        const active = queuedRows.filter(q => !['warning', 'failed', 'completed'].includes(q.status ?? ''));
+        const measured = (active.length ? active : queuedRows).map(q => q.progress ?? 0);
+        const progress = measured.length ? Math.round(measured.reduce((a, b) => a + b, 0) / measured.length) : (req.progress ?? 0);
         if (mapped.status === 'downloading') logProgress(req.id, progress);
-        const keepNothingFound = mapped.message === undefined && getRequest(req.id)?.message?.startsWith(NOTHING_FOUND_PREFIX);
-        patch(req.id, { status: mapped.status, progress, message: mapped.message ?? (keepNothingFound ? undefined : getRequest(req.id)?.message) });
+        // A note the queue put there earlier goes once the queue stops saying it; other notes stay.
+        const old = getRequest(req.id)?.message;
+        const keepNothingFound = mapped.message === undefined && (old?.startsWith(NOTHING_FOUND_PREFIX) || isQueueNote(old));
+        const message = stillArriving && partial.have > 0 ? `${partlyMessage(partial)} ${mapped.message ?? 'Still fetching the rest.'}` : mapped.message ?? (keepNothingFound ? undefined : getRequest(req.id)?.message);
+        patch(req.id, { status: mapped.status, progress, message });
         await syncDownload(getRequest(req.id)!);
       }
     }
@@ -686,7 +706,7 @@ export async function reviewStuckSearches(now = Date.now()): Promise<void> {
       sources ??= await workingSources();
       const message = sources === 0
         ? `${NOTHING_FOUND_PREFIX}: none of your places to search is answering. Add one under Settings > Indexers. It is searched again automatically.`
-        : `${NOTHING_FOUND_PREFIX}: none of your places to search has it. Add more under Settings > Indexers. It is searched again automatically every 6 hours.`;
+        : `${NOTHING_FOUND_PREFIX}: none of your places to search has it under that name. It is searched again automatically every 6 hours. Administrators can also pick a release by hand: open this request and press "Find a release myself".`;
       patch(req.id, { message });
       logEvent(req.id, 'No source has it yet');
     }

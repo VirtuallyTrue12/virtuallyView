@@ -227,7 +227,7 @@ function DownloadRow({ item, busy, onPause, onResume, onRemove, onDeleteFiles }:
             View in library
           </Link>
         )}
-        {item.status === 'failed' && <SearchAgain label="Retry" run={() => api.retryDownload(item.id)} />}
+        {(item.status === 'failed' || item.status === 'stalled') && <SearchAgain label={item.status === 'stalled' ? 'Try another release' : 'Retry'} run={() => api.retryDownload(item.id)} />}
         {showRemove && <button className="btn btn-secondary btn-sm" type="button" onClick={onRemove} disabled={busy}>
           Remove
         </button>}

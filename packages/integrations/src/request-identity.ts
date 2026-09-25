@@ -272,6 +272,10 @@ function explainMessage(text: string): string {
 export function queueProblem(q: Record<string, unknown>): { status?: 'warning'; message?: string } {
   const state = String(q.trackedDownloadState ?? '').toLowerCase();
   const tracked = String(q.trackedDownloadStatus ?? '').toLowerCase();
+  // Still downloading, but nobody is sending it ("stalled with no connections"): a problem worth saying so.
+  const said = (Array.isArray(q.statusMessages) ? (q.statusMessages as Array<{ messages?: string[] }>).flatMap(m => m.messages ?? []) : []).find(Boolean)
+    ?? (typeof q.errorMessage === 'string' ? q.errorMessage : '');
+  if (state === 'downloading' && /stalled|no connections|no seeders/i.test(said)) return { status: 'warning', message: said };
   if (!IMPORT_FAILED.has(state) && tracked !== 'error' && !(tracked === 'warning' && state !== 'downloading')) return {};
   const messages = Array.isArray(q.statusMessages) ? q.statusMessages as Array<{ title?: string; messages?: string[] }> : [];
   const first = messages.flatMap(m => m.messages ?? []).find(Boolean) ?? (typeof q.errorMessage === 'string' ? q.errorMessage : '');

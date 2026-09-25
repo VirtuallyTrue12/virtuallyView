@@ -45,6 +45,8 @@ services:
       - OPENVPN_CUSTOM_CONFIG=/gluetun/custom.ovpn
       - OPENVPN_USER=vpn
       - OPENVPN_PASSWORD=vpn
+      # Some free relays block DNS-over-TLS (port 853) and the tunnel then looks dead. DNS-over-HTTPS uses port 443.
+      - DNS_UPSTREAM_RESOLVER_TYPE=DoH
       - FIREWALL_OUTBOUND_SUBNETS=10.89.0.0/16,172.16.0.0/12
       - FIREWALL_INPUT_PORTS=8080
     ports:

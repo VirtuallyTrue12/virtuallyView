@@ -283,7 +283,7 @@ export default function Requests() {
                       </div>
                     )}
                     <RequestActivityFeed events={item.events} status={item.status} />
-                    {isAdmin && (item.status === 'searching' || item.status === 'failed') && <ReleasePicker initialQuery={item.title} />}
+                    {isAdmin && (item.status === 'searching' || item.status === 'failed' || !!item.message?.startsWith('Stalled')) && <ReleasePicker initialQuery={item.title} />}
                     {item.status === 'searching' && (
                       item.message?.startsWith('Nothing found yet')
                         ? <p className="request-detail request-detail--warn">{item.message}</p>

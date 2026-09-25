@@ -412,6 +412,9 @@ export interface SearchCandidate {
   type: 'movie' | 'series' | 'artist';
   overview?: string;
   poster?: string;
+  /** Set when this title already has a request: its id and where it stands. */
+  requestId?: string;
+  requestStatus?: string;
 }
 
 export interface SearchAll {

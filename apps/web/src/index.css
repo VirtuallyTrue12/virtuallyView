@@ -530,6 +530,7 @@ a { color: inherit; text-decoration: none; }
 .status-downloading::before, .status-importing::before { background: var(--color-accent); box-shadow: 0 0 6px rgba(212, 162, 78, 0.7); }
 .status-missing::before, .status-requested::before { background: var(--color-danger); box-shadow: 0 0 6px rgba(224, 106, 106, 0.7); }
 .status-pending::before, .status-searching::before { background: var(--color-accent); box-shadow: 0 0 6px rgba(212, 162, 78, 0.7); }
+.status-stalled::before { background: var(--color-warning); box-shadow: 0 0 6px rgba(212, 162, 78, 0.7); }
 .status-failed::before { background: var(--color-danger); box-shadow: 0 0 6px rgba(224, 106, 106, 0.7); }
 .status-cancelled::before { background: var(--color-text-muted); }
 

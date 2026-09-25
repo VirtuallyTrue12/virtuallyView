@@ -15,6 +15,7 @@ const fake = join(root, 'fake-yt-dlp');
 writeFileSync(fake, `#!/usr/bin/env node
 const args = process.argv.slice(2);
 const fs = require('fs'), path = require('path');
+if (args.includes('-U')) process.exit(0); // the worker's daily self-update
 if (args.includes('-J')) {
   const q = args.at(-1);
   if (q.includes('boom')) { process.stderr.write('ERROR: blocked\\n'); process.exit(1); }

@@ -20,10 +20,25 @@ describe('what a queue row means for its request', () => {
     expect(mapped.message).toMatch(/failed: No files found/);
   });
 
-  test('unknown statuses are shown as reported rather than pretending to be progress', () => {
+  test('a warning is shown with what the queue said, rather than pretending to be progress', () => {
     const mapped = requestStateForQueue('warning', 'Sample file');
     expect(mapped.status).toBe('downloading');
-    expect(mapped.message).toMatch(/reports "warning"/);
+    expect(mapped.message).toBe('Needs attention: Sample file');
+    expect(requestStateForQueue('delay').message).toMatch(/reports "delay"/);
     expect(requestStateForQueue(undefined).status).toBe('downloading');
+  });
+
+  test('a finished download that cannot be imported is an import problem, not a download', () => {
+    const mapped = requestStateForQueue('warning', "Couldn't find similar album", 100);
+    expect(mapped.status).toBe('importing');
+    expect(mapped.message).toBe("Needs attention: Couldn't find similar album");
+  });
+
+  test('a download nobody is sending is called stalled, the same word the Downloads page uses', () => {
+    for (const status of ['warning', 'error']) {
+      const mapped = requestStateForQueue(status, 'The download is stalled with no connections');
+      expect(mapped.status).toBe('downloading');
+      expect(mapped.message).toMatch(/^Stalled: nobody is sharing this release/);
+    }
   });
 });

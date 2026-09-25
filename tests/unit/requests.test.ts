@@ -225,4 +225,40 @@ describe('request pipeline', () => {
       rootFolderPath: '/media/movies'
     });
   });
+
+  test('a music request with more on the way is not called available, and says how much is here', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const instance = instanceFixture(url);
+      if (instance) return instance;
+      if (init?.method === 'POST') return json({ id: 5 });
+      return json(String(url).includes('/artist/lookup') ? [{ foreignArtistId: uuid, artistName: 'Some Artist' }] : []);
+    }));
+    const created = await createRequest({ title: 'Some Artist', mediaType: 'artist', selectedProviderId: uuid });
+    const id = created.request!.id;
+    const lidarr = getAdapter<LidarrAdapter>('lidarr');
+    const artist = { id: 'lidarr-5', title: 'Some Artist', type: 'artist', status: 'available', trackFileCount: 39, totalTrackCount: 107, provider: { metadata: { foreignArtistId: uuid } } };
+    const items = vi.spyOn(lidarr, 'getItems').mockResolvedValue([artist] as never);
+    const queue = vi.spyOn(lidarr, 'getQueue').mockResolvedValue([
+      { mediaId: 'lidarr-5', status: 'downloading', progress: 40 }, { mediaId: 'lidarr-5', status: 'queued', progress: 0 }, { mediaId: 'lidarr-5', status: 'warning', progress: 100, statusMessage: 'x', message: 'x' }
+    ] as never);
+
+    await syncRequestsWithServices();
+    expect(getRequest(id)?.status).toBe('downloading');
+    expect(getRequest(id)?.message).toMatch(/^Partly available: 39 of 107 tracks\./);
+
+    // Nothing left in the queue, still missing tracks: usable, and honest about it.
+    queue.mockResolvedValue([] as never);
+    await syncRequestsWithServices();
+    expect(getRequest(id)?.status).toBe('available');
+    expect(getRequest(id)?.message).toMatch(/Partly available: 39 of 107 tracks\..*Search missing albums/);
+    expect(getRequest(id)?.progress).toBe(36);
+
+    // Once everything is there, the note goes away.
+    items.mockResolvedValue([{ ...artist, trackFileCount: 107 }] as never);
+    await syncRequestsWithServices();
+    expect(getRequest(id)?.status).toBe('available');
+    expect(getRequest(id)?.message).toBeUndefined();
+    expect(getRequest(id)?.progress).toBe(100);
+    items.mockRestore(); queue.mockRestore();
+  });
 });

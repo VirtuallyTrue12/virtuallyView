@@ -172,6 +172,7 @@ export class QBittorrentAdapter implements IntegrationAdapter<{ url: string; api
       dlspeed?: number;
       eta?: number;
       save_path?: string;
+      category?: string;
     }>;
     return data.map(t => ({
       id: t.hash ?? '',
@@ -181,6 +182,7 @@ export class QBittorrentAdapter implements IntegrationAdapter<{ url: string; api
       speed: t.dlspeed,
       size: t.size,
       savePath: t.save_path,
+      category: t.category ?? '',
       title: t.name
     } as Download & { title?: string })) as Download[];
   }

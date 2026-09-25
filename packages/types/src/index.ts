@@ -103,6 +103,8 @@ export interface Download {
   /** Where the download client stores this item on disk (when it reports one). */
   savePath?: string;
   associatedMedia?: { type: string; title: string; id: string };
+  /** The download client's own label (qBittorrent category), such as radarr, sonarr or lidarr. */
+  category?: string;
 }
 
 export interface ActivityEvent {

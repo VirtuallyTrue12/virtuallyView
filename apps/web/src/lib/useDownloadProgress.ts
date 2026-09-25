@@ -3,7 +3,7 @@ import { api, type DownloadItem } from './api';
 
 /** What a title's downloads look like right now, merged when a show downloads several episodes. */
 export interface TitleDownload {
-  state: 'downloading' | 'importing' | 'queued' | 'paused' | 'failed';
+  state: 'downloading' | 'importing' | 'queued' | 'paused' | 'stalled' | 'failed';
   progress: number;
   count: number;
   eta?: string;
@@ -13,14 +13,14 @@ export interface TitleDownload {
 
 const ACTIVE_MS = 4000;
 const IDLE_MS = 20000;
-const RANK: Record<TitleDownload['state'], number> = { downloading: 5, importing: 4, queued: 3, paused: 2, failed: 1 };
+const RANK: Record<TitleDownload['state'], number> = { downloading: 6, importing: 5, queued: 4, stalled: 3, paused: 2, failed: 1 };
 
 let snapshot = new Map<string, TitleDownload>();
 const listeners = new Set<(next: Map<string, TitleDownload>) => void>();
 let timer: number | null = null;
 
 function toState(status: string): TitleDownload['state'] | null {
-  if (status === 'downloading' || status === 'importing' || status === 'queued' || status === 'paused' || status === 'failed') return status;
+  if (status === 'downloading' || status === 'importing' || status === 'queued' || status === 'paused' || status === 'stalled' || status === 'failed') return status;
   return null;
 }
 
@@ -121,6 +121,7 @@ export function downloadLabel(d: TitleDownload): string {
     case 'importing': return 'Adding to library';
     case 'queued': return `Waiting to download${many}`;
     case 'paused': return `Paused at ${pct}`;
+    case 'stalled': return `Stalled at ${pct}`;
     case 'failed': return 'Download failed';
   }
 }
