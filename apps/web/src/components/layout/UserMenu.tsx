@@ -20,7 +20,7 @@ export function UserMenu({ user, onSignOut }: { user: AuthUser; onSignOut: () =>
 
   return (
     <div className="user-menu" ref={ref}>
-      <button type="button" className="user-menu-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+      <button type="button" className="user-menu-button" title={user.username} aria-label={`Account menu for ${user.username}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>
         <Avatar user={user} />
         <span className="user-menu-name">{user.username}</span>
         <SvgIcon name="chevron-down" size={14} />

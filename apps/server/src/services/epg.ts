@@ -41,7 +41,8 @@ export function parseXmltv(xml: string, wanted: Set<string>, from: number, to: n
     const stop = xmltvTime(attr(m[1]!, 'stop'));
     if (start === null || stop === null || stop <= from || start >= to) continue;
     const title = /<title\b[^>]*>([\s\S]*?)<\/title>/.exec(m[2]!)?.[1];
-    if (!title) continue;
+    // Some guides pad gaps with placeholder entries; they carry no information.
+    if (!title || /^\s*(no data|no information|no programme information|to be announced)\s*$/i.test(decode(title))) continue;
     const desc = /<desc\b[^>]*>([\s\S]*?)<\/desc>/.exec(m[2]!)?.[1];
     const list = out.get(channel) ?? [];
     list.push({ start, stop, title: decode(title).slice(0, 160), ...(desc ? { desc: decode(desc).slice(0, 400) } : {}) });

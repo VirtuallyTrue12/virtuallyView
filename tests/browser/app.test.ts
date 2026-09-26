@@ -78,7 +78,7 @@ describe('first run and accounts', () => {
     await ctx.request.post(`${base}/api/onboarding`, { data: { complete: true } });
     await page.goto(base + '/');
     await page.waitForSelector('.user-menu-button');
-    expect(await page.locator('.user-menu-button').innerText()).toMatch(/owner/);
+    expect(await page.locator('.user-menu-button').getAttribute('title')).toMatch(/owner/);
   });
 
   it('shows the setup checklist while nothing is connected', async () => {
@@ -269,7 +269,8 @@ describe('pick a release by hand', () => {
     ] }) }); });
     await page.route('**/api/releases/grab', r => { grabbed = r.request().postDataJSON(); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, message: "Downloading. It will be filed under the artist's Concerts when it finishes.", filesUnder: 'Concerts' }) }); });
     await page.goto(base + '/requests');
-    await page.locator('.request-card-head').first().click();
+    await page.getByRole('button', { name: 'More for Linkin Park - Live at Rock am Ring' }).click();
+    await page.getByRole('menuitem', { name: /Pick a release by hand/ }).click();
     await page.getByRole('button', { name: 'Find a release myself' }).click();
     await page.getByLabel('Search words').fill('Linkin Park Rock am Ring 2004');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
@@ -660,6 +661,117 @@ describe('phones, band members and troubleshooting', () => {
     expect(restarted).toContain('flaresolverr');
     await page.getByRole('button', { name: /Show what is fine/ }).click();
     await page.getByText('Reachable.').waitFor();
+    expect(errors).toEqual([]);
+  });
+});
+
+describe('settings, photos, live tv and requests', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="40" height="30" fill="#446"/></svg>';
+
+  it('settings opens on a guided overview, finds a setting by search, and keeps old links working', async () => {
+    await page.goto(base + '/settings');
+    await page.getByRole('heading', { name: 'What do you want to do?' }).waitFor();
+    expect(await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button').count()).toBeGreaterThanOrEqual(10);
+    await page.getByLabel('Find a setting').fill('backup');
+    await page.getByRole('region', { name: 'Search results' }).getByRole('button', { name: /Back up or restore/ }).click();
+    await page.getByRole('heading', { name: 'Backup and restore', level: 2 }).waitFor();
+    // Links from before the makeover still land in the right place.
+    await page.goto(base + '/settings?cat=users');
+    await page.getByRole('heading', { name: 'People and requests', level: 2 }).waitFor();
+    expect(errors).toEqual([]);
+  });
+
+  it('photos: timeline, viewer with favorite and keys, and adding to a new album', async () => {
+    const items = ['a.jpg', 'Trip/b.jpg', 'Trip/c.jpg'].map((path, i) => ({ path, name: path.split('/').pop(), size: 2_000_000, modified: Date.UTC(2026, 8, 20 - i) }));
+    const favPosts: unknown[] = [];
+    const albumPosts: unknown[] = [];
+    await page.route('**/api/photos/all', r => r.fulfill(json({ items, truncated: false })));
+    await page.route('**/api/photos/favorites', r => r.fulfill(json({ paths: [] })));
+    await page.route('**/api/photos/favorite', r => { favPosts.push(r.request().postDataJSON()); return r.fulfill(json({ ok: true })); });
+    await page.route('**/api/photos/thumb**', r => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg }));
+    await page.route('**/api/photos/file**', r => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg }));
+    await page.route('**/api/photo-albums', r => { if (r.request().method() === 'POST') { albumPosts.push(r.request().postDataJSON()); return r.fulfill(json({ id: 'al1', name: 'Trip', count: 2, cover: 'a.jpg', updatedAt: '' })); } return r.fulfill(json({ albums: [] })); });
+    await page.goto(base + '/photos');
+    await page.getByRole('heading', { name: 'September 2026' }).waitFor();
+    expect(await page.locator('.ph-tile').count()).toBe(3);
+
+    await page.getByRole('button', { name: 'Open a.jpg' }).click();
+    const viewer = page.getByRole('dialog', { name: 'Photo viewer' });
+    await viewer.getByText('1 of 3').waitFor();
+    await page.keyboard.press('ArrowRight');
+    await viewer.getByText('2 of 3').waitFor();
+    await page.keyboard.press('f');
+    await page.waitForTimeout(150);
+    expect(favPosts).toEqual([{ path: 'Trip/b.jpg', favorite: true }]);
+    expect(await viewer.getByRole('link', { name: 'Download the original' }).getAttribute('href')).toContain('download=1');
+    await page.keyboard.press('Escape');
+    await viewer.waitFor({ state: 'detached' });
+
+    await page.getByRole('button', { name: 'Select', exact: true }).click();
+    await page.getByRole('button', { name: 'Select a.jpg' }).click();
+    await page.getByRole('button', { name: 'Select Trip/b.jpg'.split('/').pop()! }).click();
+    await page.getByRole('button', { name: /Add to album/ }).click();
+    await page.getByLabel('New album name').fill('Trip');
+    await page.getByRole('button', { name: 'Create and add' }).click();
+    await page.getByText('Added 2 photos to "Trip".').waitFor();
+    expect(albumPosts).toEqual([{ name: 'Trip', paths: ['a.jpg', 'Trip/b.jpg'] }]);
+    expect(errors).toEqual([]);
+  });
+
+  it('live tv: favorites first, a guide grid, and a heart that remembers', async () => {
+    const now = Date.now();
+    const channels = [
+      { id: '000000000001', name: 'News One', group: 'News', playlist: 'p', guide: true },
+      { id: '000000000002', name: 'Sport Two', group: 'Sports', playlist: 'p', guide: true },
+      { id: '000000000003', name: 'Kids Three', group: 'Kids', playlist: 'p' }
+    ];
+    const hearts: unknown[] = [];
+    await page.route('**/api/live/playlists', r => r.request().method() === 'GET' ? r.fulfill(json({ playlists: [{ id: 'p', name: 'Test', url: 'http://x/list.m3u' }] })) : r.continue());
+    await page.route('**/api/live/channels', r => r.fulfill(json({ channels, problems: [] })));
+    await page.route('**/api/live/me', r => r.fulfill(json({ favorites: ['000000000002'], recent: [], dead: ['000000000003'] })));
+    await page.route('**/api/live/recordings', r => r.fulfill(json({ recordings: [] })));
+    await page.route('**/api/live/guide**', r => r.fulfill(json({ ready: true, now, programmes: {
+      '000000000001': [{ start: now - 600_000, stop: now + 1_800_000, title: 'Evening Bulletin' }, { start: now + 1_800_000, stop: now + 5_400_000, title: 'Panel Show' }],
+      '000000000002': [{ start: now - 600_000, stop: now + 3_000_000, title: 'League Match' }]
+    } })));
+    await page.route('**/api/live/favorite', r => { hearts.push(r.request().postDataJSON()); return r.fulfill(json({ ok: true })); });
+    await page.route('**/api/live/stream/**', r => r.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"offline in a test"}' }));
+    await page.goto(base + '/live');
+    // Favorites are the first view when there are any.
+    await page.getByRole('button', { name: 'Watch Sport Two' }).waitFor();
+    expect(await page.locator('.lv-row').count()).toBe(1);
+    await page.getByRole('radio', { name: /All channels/ }).click();
+    // The offline channel is hidden until asked for.
+    await page.getByRole('button', { name: 'Watch News One' }).waitFor();
+    expect(await page.locator('.lv-row').count()).toBe(2);
+    await page.getByText('Evening Bulletin').waitFor();
+    await page.getByRole('button', { name: 'Favorite News One' }).click();
+    await page.waitForTimeout(120);
+    expect(hearts).toEqual([{ channelId: '000000000001', favorite: true }]);
+    await page.getByRole('radio', { name: 'Guide' }).click();
+    await page.getByRole('table', { name: 'Program guide' }).waitFor();
+    expect(await page.locator('.gg-prog').count()).toBeGreaterThanOrEqual(3);
+    await page.getByRole('button', { name: /Evening Bulletin/ }).click();
+    await page.getByRole('region', { name: 'Playing News One' }).waitFor();
+    expect(errors).toEqual([]);
+  });
+
+  it('requests: one card per request with its step, what needs attention, and the right action', async () => {
+    const now = new Date().toISOString();
+    await page.route(/\/api\/requests(\?.*)?$/, r => r.fulfill(json({ items: [
+      { id: 'r1', title: 'Dune: Part Two', year: 2024, status: 'downloading', service: 'radarr', mediaType: 'movie', progress: 40, download: { count: 1, progress: 40, status: 'downloading', speed: '4 MB/s', eta: '10m' }, createdAt: now, updatedAt: now },
+      { id: 'r2', title: 'Chandni', year: 1989, status: 'failed', message: 'No release matched.', service: 'radarr', mediaType: 'movie', createdAt: now, updatedAt: now },
+      { id: 'r3', title: 'Pink Floyd', status: 'available', providerId: 'lidarr-7', service: 'lidarr', mediaType: 'artist', createdAt: now, updatedAt: now }
+    ], total: 3 })));
+    await page.goto(base + '/requests');
+    await page.getByRole('article', { name: 'Dune: Part Two' }).waitFor();
+    expect(await page.getByRole('list', { name: /Step 3 of 5: Downloading/ }).count()).toBe(1);
+    await page.getByRole('radio', { name: /Needs attention/ }).click();
+    expect(await page.getByRole('article').count()).toBe(1);
+    expect(await page.getByRole('article', { name: 'Chandni' }).getByRole('button', { name: 'Choose match' }).count()).toBe(1);
+    await page.getByRole('radio', { name: /Finished/ }).click();
+    expect(await page.getByRole('article', { name: 'Pink Floyd' }).getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('/music/lidarr-7');
     expect(errors).toEqual([]);
   });
 });

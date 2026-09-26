@@ -72,7 +72,8 @@ export function parseM3u(text: string, playlist: string): Channel[] {
       const name = line.slice(line.lastIndexOf(',') + 1).trim() || attr('tvg-name') || 'Channel';
       const logo = attr('tvg-logo');
       const group = attr('group-title');
-      const tvgId = attr('tvg-id');
+      // iptv-org style ids carry a feed suffix ("BBCOne.uk@HD"); guides know the channel without it.
+      const tvgId = attr('tvg-id')?.replace(/@.*$/, '') || undefined;
       pending = { name, ...(logo ? { logo } : {}), ...(group ? { group } : {}), ...(tvgId ? { tvgId } : {}) };
     } else if (line && !line.startsWith('#') && pending && /^https?:\/\//i.test(line)) {
       out.push({ id: shortId(`${playlist}|${line}`), playlist, url: line, ...pending });

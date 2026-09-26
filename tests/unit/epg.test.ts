@@ -8,6 +8,7 @@ const XML = `<?xml version="1.0"?><tv>
 <programme start="20260926110000 +0000" stop="20260926120000 +0000" channel="bbc.one"><title><![CDATA[Cooking <Live>]]></title></programme>
 <programme start="20260926100000 +0000" stop="20260926110000 +0000" channel="other.tv"><title>Not wanted</title></programme>
 <programme start="20260920100000 +0000" stop="20260920110000 +0000" channel="bbc.one"><title>Long ago</title></programme>
+<programme start="20260926120000 +0000" stop="20260926130000 +0000" channel="bbc.one"><title>No Data</title></programme>
 <programme start="20260926130000 +0200" stop="20260926140000 +0200" channel="bbc.one"><title>With offset</title></programme>
 </tv>`;
 
@@ -35,5 +36,6 @@ describe('program guide (XMLTV)', () => {
     const channels = parseM3u(m3u, 'p');
     expect(channels.map(c => c.tvgId)).toEqual(['bbc.one', undefined]);
     expect(epgUrlsOf('#EXTM3U\n')).toEqual([]);
+    expect(parseM3u('#EXTINF:-1 tvg-id="4TVNews.in@SD",4TV\nhttp://x/c.m3u8\n', 'p')[0]!.tvgId).toBe('4TVNews.in');
   });
 });

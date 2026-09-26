@@ -75,7 +75,8 @@ virtuallyView is an interface over Radarr, Sonarr, Lidarr and friends, so it doe
 | Backups: daily automatic, download, restore, command line recovery | Built |
 | One-click public indexers | Built |
 | Themes | Built (15, plus a creator; three unofficial look-alikes of popular streaming apps) |
-| Live TV from M3U playlists (TV tuner boxes, providers, free public lists), played through the server | Built. Record now for a chosen time (stream copy, no scheduling yet); a programme guide is phase 2 ([roadmap](roadmap.md)) |
-| Photos from a mounted folder: grid, viewer, slideshow | Built |
-| Books and comics from a mounted folder | Built: PDFs open in the browser, EPUB and comic files download; an EPUB reader is phase 2 |
+| Live TV from M3U playlists (TV tuner boxes, providers, free public lists), played through the server | Built: several sources, a programme guide from XMLTV (now and next, and a timeline grid), favorites and recently watched per person, categories, channel numbers and zapping (arrow keys, digits), a small picture-in-picture window, a check that hides channels that do not answer, and record now for a chosen time. Scheduled recording is phase 2 ([roadmap](roadmap.md)) |
+| Photos from a mounted folder (read only) | Built: timeline by month, folders, search, your own albums and favorites, a full-screen viewer with swipe, zoom, slideshow, details and download of the original |
+| Books and comics from a mounted folder | Built: search the whole shelf, format filters, sort, favorites; PDFs and text open in the browser, EPUB and comic files download; an EPUB reader is phase 2 |
+| Settings | One guided overview (what works, what to do next), a sidebar of sections, a search box, and a trail of who changed what |
 | Plugins | Phase 2, after a sandbox exists: a plugin runs someone else's code with access to your server |

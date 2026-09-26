@@ -204,3 +204,15 @@ Your accounts, settings and library stay in Docker volumes. Take a backup first 
 ## Still stuck
 
 Open **Diagnostics**, press **Copy safe report** (it leaves out keys and passwords), and open an issue on GitHub with it and the steps that led to the problem.
+
+---
+
+## Live TV
+
+- **The guide tab says there is no guide.** The guide needs an XMLTV file. Many playlists name one in their first line (`url-tvg="..."`); if yours does not, open **Live TV, Sources**, choose your playlist's row, remove and add it again with a **Program guide address**. Big guides can take a minute to read the first time.
+- **A channel shows a spinner and then "not answering".** Free public channels go offline often. Administrators can press **Check which channels work** (the button with three dots) to test what is on screen and hide the ones that fail.
+- **Channel numbers.** The number is the channel's place in the list you are looking at. Type digits on the keyboard to jump, Up and Down to zap.
+
+## Photos and books
+
+Both folders are mounted read only on purpose: nothing here can change or delete your files. Favorites and albums are saved in the server's own database for each person, not in the photo folder.

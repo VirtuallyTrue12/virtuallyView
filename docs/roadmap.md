@@ -8,7 +8,7 @@ Everything in [features](features.md) marked Built.
 
 Not started. Listed so nobody wonders whether they were forgotten.
 
-- Scheduled recording (record now already works) and a programme guide (XMLTV).
+- Scheduled recording (record now already works; the programme guide is built).
 - An EPUB and comic reader inside the app.
 - Plugins. This needs a sandbox first: a plugin runs someone else's code next to your library and your accounts.
 - Quick Connect for signing in from a TV app, once a TV app exists.

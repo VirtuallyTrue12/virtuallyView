@@ -1175,6 +1175,7 @@ describe('e2e: photos, favorites and albums', () => {
     const all = await req('GET', '/api/photos/all', { cookieOverride: cookieAdmin });
     expect(all.status).toBe(200);
     expect(all.json.items.map((p: { path: string }) => p.path).sort()).toEqual(['Trip/hike.png', 'beach.jpg']);
+    expect(Object.keys(all.json).sort()).toEqual(['items', 'truncated']);
     expect(all.json.items[0]).toMatchObject({ name: expect.any(String), size: expect.any(Number), modified: expect.any(Number) });
     const dl = await fetch(`${base}/api/photos/file?path=beach.jpg&download=1`, { headers: { Cookie: cookieAdmin } });
     expect(dl.headers.get('content-disposition')).toMatch(/attachment; filename\*=UTF-8''beach\.jpg/);

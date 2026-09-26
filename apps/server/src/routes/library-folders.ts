@@ -35,7 +35,7 @@ export default async function libraryFolderRoutes(server: FastifyInstance) {
   });
 
   // The whole collection, newest first, for the timeline and for searching by name.
-  server.get('/api/photos/all', async () => allPhotos());
+  server.get('/api/photos/all', async () => { const { items, truncated } = allPhotos(); return { items, truncated }; });
 
   server.get('/api/photos/favorites', async () => {
     const known = new Set(allPhotos().items.map(p => p.path));
@@ -99,7 +99,7 @@ export default async function libraryFolderRoutes(server: FastifyInstance) {
     return listing ?? reply.code(404).send({ message: 'No book folder here. Mount one at /media/books (see the docs).' });
   });
 
-  server.get('/api/books/all', async () => allBooks());
+  server.get('/api/books/all', async () => { const { items, truncated } = allBooks(); return { items, truncated }; });
   server.get('/api/books/favorites', async () => {
     const known = new Set(allBooks().items.map(b => b.path));
     return { paths: favoriteBooks().filter(p => known.has(p)) };
