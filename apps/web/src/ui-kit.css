@@ -595,3 +595,17 @@
 .tsc-card:hover .tsc-poster { transform: var(--card-hover); }
 .ts-help { justify-items: start; }
 .ts-help .btn { width: auto; justify-self: start; }
+
+/* "A new version is ready" */
+.update-banner { position: fixed; left: 50%; bottom: calc(var(--dock-bottom, var(--tabbar-h, 0px)) + 18px); transform: translateX(-50%); z-index: 350; display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0.6rem 0.55rem 1rem; max-width: calc(100vw - 24px); border: 1px solid var(--color-accent); border-radius: 999px; background: var(--color-background); color: var(--color-text-primary); font-size: 0.9rem; box-shadow: var(--shadow-large); animation: menu-in 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+.update-banner .svg-icon { color: var(--color-accent); flex: 0 0 auto; }
+
+/* Live badge */
+.lv-live { display: inline-flex; align-items: center; gap: 0.35rem; flex: 0 0 auto; padding: 0.15rem 0.6rem; border: 1px solid color-mix(in srgb, #ff4d4d 55%, transparent); border-radius: 999px; background: rgba(255, 77, 77, 0.12); color: #ff8a8a; font: inherit; font-size: 0.72rem; font-weight: 750; letter-spacing: 0.06em; }
+.lv-live i { width: 7px; height: 7px; border-radius: 50%; background: #ff4d4d; animation: lv-pulse 1.4s ease-in-out infinite; }
+button.lv-live--behind { cursor: pointer; letter-spacing: 0.02em; color: var(--color-text-primary); background: var(--color-accent-soft); border-color: var(--color-accent); }
+.lv-live--vod { color: var(--color-text-secondary); background: var(--color-surface-elevated); border-color: var(--color-border); }
+.lv-hint { margin: 0; padding: 0.55rem 0.75rem; border-radius: 10px; background: var(--color-surface-elevated); color: var(--color-text-secondary); font-size: 0.8rem; line-height: 1.5; }
+.lv-title span.lv-live { font-size: 0.72rem; color: #ff8a8a; }
+.lv-title span.lv-live--vod { color: var(--color-text-secondary); }
+.lv-title button.lv-live--behind { color: var(--color-text-primary); }

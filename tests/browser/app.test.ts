@@ -779,6 +779,21 @@ describe('settings, photos, live tv and requests', () => {
 describe('stuck downloads, menus and the theme creator', () => {
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
+  it('an open tab is told when the server has been updated, and reloads with one click', async () => {
+    let build = 'aaaaaaaaaaaa';
+    await page.route('**/api/health', r => r.fulfill(json({ status: 'ok', version: '0.2.0', build })));
+    await page.goto(base + '/movies');
+    await page.getByRole('heading', { name: 'Movies', level: 1 }).waitFor();
+    expect(await page.getByText('A new version of virtuallyView is ready.').count()).toBe(0);
+    // The server is updated while the tab stays open; coming back to the tab notices.
+    build = 'bbbbbbbbbbbb';
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.getByText('A new version of virtuallyView is ready.').waitFor();
+    await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Reload' }).click()]);
+    await page.unroute('**/api/health');
+    expect(errors).toEqual([]);
+  });
+
   it('a three-dots menu is drawn above the page, never cut off, and opens upward when the row is at the bottom', async () => {
     const now = new Date().toISOString();
     const items = Array.from({ length: 8 }, (_, i) => ({ id: `r${i}`, title: `Title ${i}`, year: 2000 + i, status: 'failed', message: 'No release matched.', service: 'radarr', mediaType: 'movie', createdAt: now, updatedAt: now }));

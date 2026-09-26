@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Link, Navigate } from 'react-router-dom';
 import { MobileTabs } from './components/layout/MobileTabs';
+import { UpdateBanner } from './components/layout/UpdateBanner';
 import { Navigation } from './components/layout/Navigation';
 import CommandPalette from './components/layout/CommandPalette';
 import ChatWidget from './components/ai/ChatWidget';
@@ -145,6 +146,7 @@ export default function App() {
   return (
     <MusicProvider>
       <div className="app" data-theme="midnight">
+      <UpdateBanner />
       <Navigation user={auth.user} onSignOut={() => void signOut()} onRefresh={() => setRefreshKey(key => key + 1)} />
       <Suspense fallback={<div className="loading-state">Loading...</div>}>
       <Routes key={refreshKey}>

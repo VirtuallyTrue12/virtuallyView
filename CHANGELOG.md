@@ -89,4 +89,6 @@ First public release.
 - **Added.** The theme creator shows a live copy of the app that updates as you change anything, and can paint the whole app with the theme while you edit (yours comes back when you leave).
 - **Fixed.** The three-dots menu was cut off inside a hero or card, and its dots sat off-centre. The menu is now drawn above the page, opens upward when there is no room below, and the dots are centred in a round button everywhere.
 - **Changed.** Live TV's player pane is larger (and has a Bigger player button); the theme creator's preview stays in view while you scroll the settings; the Restart buttons' "helper is off" message now says plainly what it is and how to turn it on, and docs/services-helper.md explains the Podman sleep case.
+- **Added.** A tab that stays open across an update now says "A new version of virtuallyView is ready" with a Reload button, instead of quietly running the old page.
+- **Changed.** Live TV shows a LIVE badge when the picture is at the live edge, "N s behind · Go live" when it is not, and "Recording" when a stream is not live at all. Sport channels say that free public sport channels usually replay classic events, and that a race weekend happening right now is normally on a paid broadcaster.
 

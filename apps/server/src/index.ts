@@ -1,5 +1,7 @@
 import './lib/env-files.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 
@@ -136,7 +138,17 @@ function deviceLabel(ua: string | undefined): string {
   return `${browser} on ${os}`;
 }
 
-server.get('/api/health', async () => ({ status: 'ok', version: VERSION }));
+// The web app's own build (a hash of its entry page), so an open tab can tell it is out of date after an update.
+let webBuild: { mtime: number; id: string } | null = null;
+function webBuildId(): string {
+  try {
+    const file = resolve(WEB_DIST_DIR, 'index.html');
+    const mtime = statSync(file).mtimeMs;
+    if (webBuild?.mtime !== mtime) webBuild = { mtime, id: createHash('sha1').update(readFileSync(file)).digest('hex').slice(0, 12) };
+    return webBuild.id;
+  } catch { return ''; }
+}
+server.get('/api/health', async (_request, reply) => reply.header('Cache-Control', 'no-store').send({ status: 'ok', version: VERSION, build: webBuildId() }));
 // Ready means the app can actually serve: its database answers. Nothing about
 // services or configuration is exposed, so container healthchecks can use it.
 server.get('/api/ready', async (_request, reply) => {

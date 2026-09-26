@@ -5887,3 +5887,7 @@ a.person:hover, a.person:focus-visible { transform: none; }
   .more-menu--portal { left: 12px; right: 12px; top: auto; bottom: calc(var(--tabbar-h, 0px) + 12px); width: auto; max-width: none; min-width: 0; max-height: 65vh; transform-origin: bottom center; }
   .more-menu--portal.is-measuring { visibility: visible; }
 }
+
+/* Centre the dots by position, whatever spacing a theme or parent rule gives icons. */
+.btn.more-trigger { position: relative; }
+.btn.more-trigger > .svg-icon { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: 0; transform: translate(-50%, -50%); }
