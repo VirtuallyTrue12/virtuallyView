@@ -122,6 +122,15 @@ function open(): DatabaseSync {
       PRIMARY KEY (user_id, channel_id)
     );
 
+    CREATE TABLE IF NOT EXISTS radio_stations (
+      user_id TEXT NOT NULL,
+      station_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      snapshot TEXT NOT NULL,
+      at TEXT NOT NULL,
+      PRIMARY KEY (user_id, station_id, kind)
+    );
+
     CREATE TABLE IF NOT EXISTS live_health (
       channel_id TEXT PRIMARY KEY,
       ok INTEGER NOT NULL,

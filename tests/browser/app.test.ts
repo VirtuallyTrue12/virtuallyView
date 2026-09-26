@@ -871,3 +871,85 @@ describe('stuck downloads, menus and the theme creator', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('radio, one-press repair and live highlights', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  it('radio: pick a country and region, play a station from the bar, keep a favorite', async () => {
+    const hearts: unknown[] = [];
+    const station = { id: '6b36ba4f-6d29-4272-b3c0-9aeeb64e61ec', name: 'Mirchi Top 20', country: 'India', countryCode: 'IN', state: 'Delhi', tags: ['bollywood'], codec: 'MP3', bitrate: 128, votes: 5, logo: false };
+    const asked: string[] = [];
+    await page.route('**/api/radio/countries', r => r.fulfill(json({ countries: [{ name: 'India', code: 'IN', stations: 900 }, { name: 'Norway', code: 'NO', stations: 300 }] })));
+    await page.route('**/api/radio/regions**', r => r.fulfill(json({ regions: r.request().url().includes('country=IN') ? [{ name: 'Delhi', code: 'Delhi', stations: 6 }] : [] })));
+    await page.route('**/api/radio/tags', r => r.fulfill(json({ tags: [{ name: 'news', stations: 10 }] })));
+    await page.route('**/api/radio/stations**', r => { asked.push(new URL(r.request().url()).search); return r.fulfill(json({ stations: [station], more: false })); });
+    await page.route('**/api/radio/me', r => r.fulfill(json({ favorites: [], recent: [] })));
+    await page.route('**/api/radio/favorite', r => { hearts.push(r.request().postDataJSON()); return r.fulfill(json({ ok: true })); });
+    await page.route('**/api/radio/played', r => r.fulfill(json({ ok: true })));
+    await page.route('**/api/radio/now/**', r => r.fulfill(json({ title: 'Artist - Song' })));
+    await page.route('**/api/radio/stream/**', r => r.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"off in a test"}' }));
+    await page.goto(base + '/radio');
+    await page.getByRole('heading', { name: 'Radio' }).waitFor();
+    await page.getByRole('button', { name: 'Play Mirchi Top 20' }).waitFor();
+    await page.getByLabel('Country').selectOption('IN');
+    await page.getByLabel('Region').selectOption('Delhi');
+    await page.waitForTimeout(300);
+    expect(asked.some(q => q.includes('country=IN') && q.includes('region=Delhi'))).toBe(true);
+    await page.getByRole('button', { name: 'Add Mirchi Top 20 to favorites' }).click();
+    await page.waitForTimeout(150);
+    expect(hearts).toEqual([{ id: station.id, favorite: true }]);
+    await page.getByRole('button', { name: 'Play Mirchi Top 20' }).click();
+    const bar = page.getByRole('region', { name: 'Radio player' });
+    await bar.waitFor();
+    await bar.getByText('Mirchi Top 20').waitFor();
+    // Navigating away keeps the player; closing it removes it.
+    await page.getByRole('link', { name: 'Movies' }).first().click();
+    await bar.waitFor();
+    await bar.getByRole('button', { name: 'Close radio' }).click();
+    await bar.waitFor({ state: 'detached' });
+    expect(errors).toEqual([]);
+  });
+
+  it('fix everything: one press shows each step and, when the server itself is needed, the one command', async () => {
+    let started = 0;
+    const steps = [
+      { id: 'look', label: 'Looking at everything', status: 'ok', message: '2 things found.' },
+      { id: 'helper', label: 'Checking the repair helper', status: 'needs-host', message: 'The helper is not running.' },
+      { id: 'verify', label: 'Checking again', status: 'needs-host', message: '2 things still need you (listed below).' }
+    ];
+    const done = { id: 'j1', startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), steps, before: 2, after: 2, hostCommand: './scripts/repair.sh' };
+    await page.route('**/api/troubleshoot/fix', r => {
+      if (r.request().method() === 'POST') { started++; return r.fulfill(json({ ...done, finishedAt: undefined, steps: [steps[0]] })); }
+      return r.fulfill(json({ job: started ? done : null }));
+    });
+    await page.route('**/api/troubleshoot', r => r.fulfill(json({ checkedAt: new Date().toISOString(), checks: [], summary: { ok: 0, warn: 0, fail: 0 } })));
+    await page.goto(base + '/settings?s=health');
+    await page.getByRole('button', { name: 'Fix everything' }).click();
+    await page.getByText('Checking the repair helper').waitFor({ timeout: 10_000 });
+    await page.getByText('./scripts/repair.sh').waitFor();
+    await page.getByRole('button', { name: 'Fix again' }).waitFor();
+    expect(started).toBe(1);
+    expect(errors).toEqual([]);
+  });
+
+  it('live tv highlights: a live match shows the channel of yours that carries it, and pressing it plays', async () => {
+    const now = Date.now();
+    await page.route('**/api/live/playlists', r => r.request().method() === 'GET' ? r.fulfill(json({ playlists: [{ id: 'p', name: 'Test', url: 'http://x/list.m3u' }] })) : r.continue());
+    await page.route('**/api/live/channels', r => r.fulfill(json({ channels: [{ id: '000000000001', name: 'Sky Sports F1', group: 'Sports', playlist: 'p' }], problems: [] })));
+    await page.route('**/api/live/me', r => r.fulfill(json({ favorites: [], recent: [], dead: [] })));
+    await page.route('**/api/live/recordings', r => r.fulfill(json({ recordings: [] })));
+    await page.route('**/api/live/highlights**', r => r.fulfill(json({ now, highlights: [
+      { id: 'e1', title: 'Azerbaijan Grand Prix', sport: 'Motorsport', league: 'Formula 1', start: now - 600_000, end: now + 5_400_000, live: true, channels: [{ id: '000000000001', name: 'Sky Sports F1' }], elsewhere: [], score: 20 },
+      { id: 'e2', title: 'Real Madrid vs Barcelona', sport: 'Soccer', league: 'La Liga', start: now + 7_200_000, end: now + 14_400_000, live: false, channels: [], elsewhere: ['DAZN'], score: 15 }
+    ] })));
+    await page.route('**/api/live/guide**', r => r.fulfill(json({ ready: true, now, programmes: {} })));
+    await page.route('**/api/live/stream/**', r => r.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"offline in a test"}' }));
+    await page.goto(base + '/live?v=channels');
+    const panel = page.getByRole('region', { name: 'Highlights' });
+    await panel.getByText('Azerbaijan Grand Prix').waitFor();
+    await panel.getByText('Live now').waitFor();
+    await panel.getByText(/On DAZN/).waitFor();
+    await panel.getByRole('button', { name: 'Watch Azerbaijan Grand Prix on Sky Sports F1' }).click();
+    await page.getByRole('region', { name: 'Playing Sky Sports F1' }).waitFor();
+    expect(errors).toEqual([]);
+  });
+});

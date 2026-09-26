@@ -80,7 +80,7 @@ done
 if [ "$state" = "exited" ] && $COMPOSE logs provision 2>/dev/null | tail -20 | grep -q "Done\."; then
   ok "services are connected to each other"
 else
-  warn "first-time wiring did not finish cleanly. Run it again with: $COMPOSE run --rm provision"
+  warn "first-time wiring did not finish cleanly. Run it again with: $COMPOSE run --rm --no-deps provision"
   echo "  and see what it says: $COMPOSE logs provision | tail -30"
 fi
 

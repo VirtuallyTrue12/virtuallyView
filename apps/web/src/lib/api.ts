@@ -110,6 +110,15 @@ export interface SeriesItem extends MediaItem {
 /** What is arriving for one episode, track or album right now. */
 export interface ItemDownload { progress: number; status: string; message?: string; timeleft?: string }
 
+export interface FixStep { id: string; label: string; status: 'pending' | 'running' | 'fixed' | 'ok' | 'failed' | 'needs-host'; message?: string }
+export interface FixJob { id: string; startedAt: string; finishedAt?: string; steps: FixStep[]; before?: number; after?: number; hostCommand?: string }
+
+export interface RadioStation {
+  id: string; name: string; country: string; countryCode: string; state?: string; language?: string; tags: string[];
+  codec?: string; bitrate?: number; homepage?: string; votes: number; logo: boolean; hls?: boolean;
+}
+export interface RadioPlace { name: string; code: string; stations: number }
+
 export interface EpisodeItem {
   download?: ItemDownload;
   id: string;
@@ -390,6 +399,7 @@ export interface ServerSettings {
   notifications?: { channels: NotificationChannel[] };
   autoBackup?: boolean;
   autoFixDownloads?: boolean;
+  autoRepair?: boolean;
   updatedAt?: string;
 }
 
@@ -499,6 +509,10 @@ export interface PhotoEntry { path: string; name: string; size: number; modified
 export interface PhotoAlbum { id: string; name: string; count: number; cover: string | null; updatedAt: string }
 export interface PhotoFolder { path: string; folders: string[]; files: Array<{ name: string; size: number; modified?: number }> }
 export interface LiveChannel { id: string; name: string; logo?: string; group?: string; playlist: string; guide?: boolean }
+export interface LiveHighlight {
+  id: string; title: string; sport: string; league: string; start: number; end: number; live: boolean; thumb?: string;
+  channels: Array<{ id: string; name: string; logo?: string }>; elsewhere: string[]; score: number;
+}
 export interface LiveProgramme { start: number; stop: number; title: string; desc?: string }
 export interface LivePlaylist { id: string; name: string; url: string; epgUrl?: string }
 export interface DoctorEntry { id: string; title: string; kind: 'stalled' | 'metadata' | 'import' | 'other'; since: string; fixAt: string | null; gaveUp: boolean; needsYou: string | null }
@@ -524,9 +538,22 @@ export const api = {
   photoAlbum: (id: string) => getJSON<{ id: string; name: string; photos: PhotoEntry[] }>(`/api/photo-albums/${encodeURIComponent(id)}`),
   changePhotoAlbum: (id: string, body: { name?: string; add?: string[]; remove?: string[] }) => postJSON<{ ok: boolean }>(`/api/photo-albums/${encodeURIComponent(id)}`, body),
   deletePhotoAlbum: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/photo-albums/${encodeURIComponent(id)}`),
+  radioCountries: () => getJSON<{ countries: RadioPlace[] }>('/api/radio/countries'),
+  radioRegions: (country: string) => getJSON<{ regions: RadioPlace[] }>(`/api/radio/regions?country=${encodeURIComponent(country)}`),
+  radioTags: () => getJSON<{ tags: Array<{ name: string; stations: number }> }>('/api/radio/tags'),
+  radioStations: (p: { country?: string; region?: string; tag?: string; q?: string; offset?: number }) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(p)) if (v !== undefined && v !== '') qs.set(k, String(v));
+    return getJSON<{ stations: RadioStation[]; more: boolean }>(`/api/radio/stations?${qs}`);
+  },
+  radioMe: () => getJSON<{ favorites: RadioStation[]; recent: RadioStation[] }>('/api/radio/me'),
+  radioFavorite: (id: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/radio/favorite', { id, favorite }),
+  radioPlayed: (id: string) => postJSON<{ ok: boolean }>('/api/radio/played', { id }),
+  radioNow: (id: string) => getJSON<{ title: string | null }>(`/api/radio/now/${id}`),
   livePlaylists: () => getJSON<{ playlists: LivePlaylist[] }>('/api/live/playlists'),
   liveChannels: () => getJSON<{ channels: LiveChannel[]; problems: string[] }>('/api/live/channels'),
   liveGuide: (ids: string[], hours = 3) => getJSON<{ ready: boolean; now: number; programmes: Record<string, LiveProgramme[]> }>(`/api/live/guide?channels=${ids.join(',')}&hours=${hours}`),
+  liveHighlights: (country?: string) => getJSON<{ highlights: LiveHighlight[]; now: number }>(`/api/live/highlights${country ? `?country=${encodeURIComponent(country)}` : ''}`),
   liveMe: () => getJSON<{ favorites: string[]; recent: string[]; dead: string[] }>('/api/live/me'),
   liveFavorite: (channelId: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/live/favorite', { channelId, favorite }),
   liveWatched: (channelId: string) => postJSON<{ ok: boolean }>('/api/live/watched', { channelId }),
@@ -543,6 +570,8 @@ export const api = {
   importFolders: (kind: 'movies' | 'series' | 'artists', items: Array<{ path: string; providerId: string; title: string; year?: number }>) => postJSON<{ results: Array<{ path: string; success: boolean; message: string }> }>('/api/library/import', { kind, items }),
   settingsOverview: () => getJSON<SettingsOverview>('/api/settings/overview'),
   settingsHistory: () => getJSON<{ changes: SettingsChange[] }>('/api/settings/history?limit=40'),
+  startFix: () => postJSON<FixJob>('/api/troubleshoot/fix'),
+  currentFix: () => getJSON<{ job: FixJob | null }>('/api/troubleshoot/fix'),
   restartService: (service: string) => postJSON<{ ok: boolean; message: string }>('/api/troubleshoot/restart', { service }),
   seriesCast: (id: string) => getJSON<{ cast: PersonInfo[] }>(`/api/series/${encodeURIComponent(id)}/cast`).then(r => r.cast),
   editMember: (artistId: string, body: { name: string; action: 'set' | 'remove' | 'add'; role?: string; years?: string; current?: boolean }) => postJSON<{ ok: boolean }>(`/api/member-edits/${encodeURIComponent(artistId)}`, body),

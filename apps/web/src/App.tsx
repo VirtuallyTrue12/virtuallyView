@@ -25,6 +25,7 @@ const Downloads = lazy(() => import('./pages/Downloads'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Person = lazy(() => import('./pages/Person'));
 const LiveTV = lazy(() => import('./pages/LiveTV'));
+const Radio = lazy(() => import('./pages/Radio'));
 const Photos = lazy(() => import('./pages/Photos'));
 const Books = lazy(() => import('./pages/Books'));
 const Wiki = lazy(() => import('./pages/Wiki'));
@@ -40,6 +41,7 @@ import NotFound from './pages/NotFound';
 import { api, type AuthUser } from './lib/api';
 import { paintCachedTheme, syncTheme } from './lib/appearance';
 import { MusicProvider } from './components/media/MusicProvider';
+import { RadioProvider } from './components/radio/RadioProvider';
 
 export default function App() {
   const authedRef = useRef(false);
@@ -145,6 +147,7 @@ export default function App() {
 
   return (
     <MusicProvider>
+      <RadioProvider>
       <div className="app" data-theme="midnight">
       <UpdateBanner />
       <Navigation user={auth.user} onSignOut={() => void signOut()} onRefresh={() => setRefreshKey(key => key + 1)} />
@@ -166,6 +169,7 @@ export default function App() {
         <Route path="/account" element={<Account />} />
         <Route path="/people/:name" element={<Person />} />
         <Route path="/live" element={<LiveTV />} />
+        <Route path="/radio" element={<Radio />} />
         <Route path="/photos" element={<Photos />} />
         <Route path="/books" element={<Books />} />
         <Route path="/wiki" element={<Wiki />} />
@@ -193,6 +197,7 @@ export default function App() {
       <ChatWidget />
       <CommandPalette />
       </div>
+      </RadioProvider>
     </MusicProvider>
   );
 }

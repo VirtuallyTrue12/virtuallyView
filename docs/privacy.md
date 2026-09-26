@@ -43,7 +43,7 @@ SEARCH_VIA_TOR=true
 COMPOSE_PROFILES=tor
 ```
 
-then `docker compose up -d` and run the setup again (Settings, or `docker compose run --rm provision`). It starts the bundled Tor proxy and:
+then `docker compose up -d` and run the setup again (Settings, or `docker compose run --rm --no-deps provision`). It starts the bundled Tor proxy and:
 
 - routes every Prowlarr search source through it;
 - tests each source over Tor, and **switches off** the ones that do not answer, instead of letting them search directly (many sites block Tor exit nodes);
@@ -57,7 +57,7 @@ Pair it with a VPN for downloads (below): your searches and your downloads then 
 
 ## VPN for downloads
 
-With either VPN below running, **searching goes through it as well** (gluetun's built-in web proxy, reachable only inside the compose network). Setup does this by itself; `SEARCH_VIA_VPN=false` in `.env` opts out. Sources that do not answer through the VPN are switched off rather than searching directly, and are tried again on the next setup run. If Tor search is on, Tor is used instead.
+With either VPN below running, **searching goes through it as well** (gluetun's built-in web proxy, reachable only inside the compose network). Setup does this by itself; `SEARCH_VIA_VPN=false` in `.env` opts out. A source never searches outside the VPN: if the tunnel is down, searches wait or fail (the Health panel says so) instead of leaking. If Tor search is on, Tor is used instead.
 
 Two ways, both use [gluetun](https://github.com/qdm12/gluetun), an open-source VPN client container. Either one routes only qBittorrent's traffic; search, browsing and every other service are untouched.
 

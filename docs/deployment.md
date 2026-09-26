@@ -25,7 +25,7 @@ The app has a readiness check (`/api/ready`) and a Compose healthcheck; `docker 
 To re-run the one-time wiring if it did not finish on first boot:
 
 ```bash
-docker compose run --rm provision
+docker compose run --rm --no-deps provision
 ```
 
 ## Services you already run

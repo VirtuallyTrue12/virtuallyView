@@ -8,6 +8,7 @@ import { SvgIcon } from '../components/ui/SvgIcon';
 import { ScrollRow } from '../components/ui/ScrollRow';
 import { LivePlayer } from '../components/live/LivePlayer';
 import { GuideGrid } from '../components/live/GuideGrid';
+import { Highlights } from '../components/live/Highlights';
 
 interface Recording { id: string; title: string; channel: string; startedAt: string; endsAt: string; state: 'recording' | 'done' | 'failed' | 'stopped'; message?: string; sizeBytes: number }
 type View = 'favorites' | 'recent' | 'channels' | 'guide' | 'recordings';
@@ -231,6 +232,7 @@ export default function LiveTV() {
       {playlists && playlists.length > 0 && (
         <div className="lv">
           <div className="lv-main">
+            {view !== 'recordings' && <Highlights channels={byId} playingId={current?.id} onWatch={play} />}
             <div className="rq-toolbar">
               <Seg<View> label="Live TV views" value={view} onChange={setView} options={[
                 { value: 'favorites', label: 'Favorites', count: favs.size }, { value: 'recent', label: 'Recent' }, { value: 'channels', label: 'All channels' },

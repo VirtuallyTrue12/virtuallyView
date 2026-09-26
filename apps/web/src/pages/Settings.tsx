@@ -106,7 +106,7 @@ export default function Settings() {
               {current === 'network' && <NetworkSection settings={settings} onSaved={setSettings} />}
               {current === 'backup' && <BackupPanel settings={settings} onSaved={setSettings} />}
               {current === 'ai' && <AiSection />}
-              {current === 'health' && <HealthSection />}
+              {current === 'health' && <HealthSection settings={settings} onSaved={setSettings} />}
               {current === 'server' && <ServerSection settings={settings} onSaved={setSettings} version={version} />}
               {isAdmin === false && <p className="ui-help">More settings are available to administrators. Your own profile is under <Link to="/account">Account</Link>.</p>}
             </>

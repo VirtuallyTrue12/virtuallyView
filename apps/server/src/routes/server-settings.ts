@@ -97,6 +97,7 @@ export default async function serverSettingsRoutes(server: FastifyInstance) {
           ...(channels ? { notifications: { channels } } : {}),
           ...(typeof body.autoBackup === 'boolean' ? { autoBackup: body.autoBackup } : {}),
           ...(typeof body.autoFixDownloads === 'boolean' ? { autoFixDownloads: body.autoFixDownloads } : {}),
+          ...(typeof body.autoRepair === 'boolean' ? { autoRepair: body.autoRepair } : {}),
           ...(body.defaultQuality && typeof body.defaultQuality === 'object' ? { defaultQuality: body.defaultQuality } : {}),
           ...(typeof body.allowSignup === 'boolean' ? { allowSignup: body.allowSignup } : {}),
           ...(typeof body.trustLocalNetwork === 'boolean' ? { trustLocalNetwork: body.trustLocalNetwork } : {}),

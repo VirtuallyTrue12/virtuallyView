@@ -363,7 +363,7 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
   }
   const { key: service, rootFolder } = SERVICE_BY_TYPE[mediaType];
   const chosenQuality = typeof input.qualityProfile === 'string' ? input.qualityProfile.trim() : '';
-  const quality = chosenQuality || getServerSettings().defaultQuality?.[mediaType]?.trim() || (mediaType === 'artist' ? 'Standard' : 'HD-1080p');
+  const quality = chosenQuality || getServerSettings().defaultQuality?.[mediaType]?.trim() || 'Standard';
   const request: RequestItem = {
     id: `request-${seq++}`, title, year: input.year, overview: input.overview,
     ...(typeof input.poster === 'string' && /^(https?:\/\/|\/)/.test(input.poster) && input.poster.length < 600 ? { poster: input.poster } : {}),

@@ -2,6 +2,11 @@
 - **Added.** "Find my existing media": on Movies, TV and Music, administrators get an "Import N found" button when the library folder holds titles the apps do not know yet. It matches each folder to the right title and adds it without downloading anything.
 - **Added.** Each episode, album and track that is on its way shows its own state ("Downloading 42% · 10 min left", "Waiting to download", "Download stuck") on the TV, artist and album pages, and turns playable by itself when done.
 - **Added.** With the VPN running, searches go through it too (SEARCH_VIA_VPN, automatic when the VPN is up, `false` to opt out); Tor keeps priority when SEARCH_VIA_TOR is on.
+- **Changed.** New movie and TV requests use a "Standard" quality profile: take whatever is available (720p or 1080p, 1080p preferred), then keep upgrading until it is 1080p. Music was already "Standard". Existing titles keep their profile.
+- **Added.** Radio by region: any country and region, genre or name, favorites and recents, a player bar that keeps playing as you browse, and what is playing now ([radio](docs/radio.md)).
+- **Added.** "Fix everything" in Settings > Health and repair: one press starts what stopped, restarts what is stuck, reconnects the apps and replaces dead downloads, step by step, and `scripts/repair.sh` fixes what needs the machine itself (asks for a password only when needed). Stopped services are also started again by themselves.
+- **Added.** Live TV highlights: the big matches and races on now and soon, with the channels from your playlists that show them.
+- **Fixed.** `docker compose run --rm provision` tried to recreate qBittorrent outside the VPN and failed on port 6881; setup now runs without touching it (`--no-deps`), and the setup step no longer starts by itself with the stopped services.
 
 ## 0.2.0
 

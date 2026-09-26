@@ -125,3 +125,16 @@ describe('resolveAddTargets HTML handling', () => {
       .toThrow(/HTML page instead of JSON/);
   });
 });
+
+describe('default quality profile', () => {
+  const profiles = [{ id: 1, name: 'Any' }, { id: 4, name: 'HD-1080p' }, { id: 6, name: 'HD - 720p/1080p' }, { id: 9, name: 'Standard' }];
+  const serve = (list: unknown[]) => vi.stubGlobal('fetch', vi.fn(async (url: unknown) => String(url).includes('/qualityprofile') ? json(list) : json([{ path: '/m', accessible: true }])));
+  test.each(['radarr', 'sonarr'] as const)('%s uses Standard, then the stock 720p/1080p profile, then HD-1080p', async service => {
+    serve(profiles);
+    expect((await resolveAddTargets({ url: 'http://x.invalid', apiKey: 'k' }, service)).qualityProfileName).toBe('Standard');
+    serve(profiles.filter(p => p.name !== 'Standard'));
+    expect((await resolveAddTargets({ url: 'http://x.invalid', apiKey: 'k' }, service)).qualityProfileName).toBe('HD - 720p/1080p');
+    serve(profiles.filter(p => p.name === 'HD-1080p' || p.name === 'Any'));
+    expect((await resolveAddTargets({ url: 'http://x.invalid', apiKey: 'k' }, service)).qualityProfileName).toBe('HD-1080p');
+  });
+});

@@ -127,7 +127,7 @@ async function downloadChecks(): Promise<Check[]> {
     out.push(check({
       id: `wiring-${arr.key}`, area: 'Downloads', label: `${arr.label} connections`, status: hasClient && hasIndexers ? 'ok' : 'fail',
       detail: !hasClient ? 'It has no download client, so it cannot download anything.' : !hasIndexers ? 'It has no search sources, so it cannot find anything.' : 'It is connected to a download client and to search sources.',
-      fixes: hasClient && hasIndexers ? [] : ['Run "Set up for me" from Home: it connects everything automatically.', 'Or run "docker compose run --rm provision" on the server.']
+      fixes: hasClient && hasIndexers ? [] : ['Run "Set up for me" from Home: it connects everything automatically.', 'Or run "docker compose run --rm --no-deps provision" on the server.']
     }));
   }
   try {

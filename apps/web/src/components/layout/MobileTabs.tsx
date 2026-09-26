@@ -12,7 +12,7 @@ const TABS: Array<{ to: string; label: string; icon: IconName; end?: boolean }> 
 
 const MORE: Array<{ to: string; label: string; icon: IconName }> = [
   { to: '/requests', label: 'Requests', icon: 'plus' }, { to: '/downloads', label: 'Downloads', icon: 'queue' }, { to: '/search', label: 'Search', icon: 'search' },
-  { to: '/live', label: 'Live TV', icon: 'tv' }, { to: '/photos', label: 'Photos', icon: 'image' }, { to: '/books', label: 'Books', icon: 'grid' },
+  { to: '/live', label: 'Live TV', icon: 'tv' }, { to: '/radio', label: 'Radio', icon: 'radio' }, { to: '/photos', label: 'Photos', icon: 'image' }, { to: '/books', label: 'Books', icon: 'grid' },
   { to: '/wiki', label: 'Wiki', icon: 'grid' }, { to: '/apps', label: 'Apps', icon: 'grid' }, { to: '/settings', label: 'Settings', icon: 'sliders-h' },
   { to: '/statistics', label: 'Stats', icon: 'grid' }, { to: '/diagnostics', label: 'Diagnostics', icon: 'sparkle' }, { to: '/themes', label: 'Themes', icon: 'sparkle' }
 ];

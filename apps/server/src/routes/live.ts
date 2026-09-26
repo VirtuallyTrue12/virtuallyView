@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { Readable } from 'node:stream';
 import { addPlaylist, channelById, channelsFor, guideSources, knownChannel, listPlaylists, removePlaylist, rewriteHls, verifyRelay } from '../services/live-tv.js';
+import { liveHighlights } from '../services/live-highlights.js';
 import { ensureGuide, programmesFor, type Programme } from '../services/epg.js';
 import { checkChannels, deadChannels, favoriteChannels, recentChannels, setChannelFavorite, touchRecent } from '../services/live-user.js';
 import { outboundFetch } from '../services/outbound.js';
@@ -67,6 +68,12 @@ export default async function liveRoutes(server: FastifyInstance) {
       if (list.length) programmes[w.id] = list.sort((a, b) => a.start - b.start).slice(0, 40);
     }
     return { ready, now, programmes };
+  });
+
+  // The big matches and races on now and soon, and which of your channels show them.
+  server.get<{ Querystring: { country?: string } }>('/api/live/highlights', async request => {
+    const country = /^[A-Za-z ]{2,40}$/.test(request.query.country ?? '') ? request.query.country : undefined;
+    return { highlights: await liveHighlights({ country }).catch(() => []), now: Date.now() };
   });
 
   // Each person's favorites and recently watched channels, and which channels were found dead.

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { helperAction } from '../services/host-helper.js';
+import { currentFix, startFix } from '../services/auto-repair.js';
 import { RESTARTABLE, runTroubleshooting } from '../services/troubleshoot.js';
 
 /** Administrators only (registered under the admin lists in index.ts): what is wrong, and a restart for what the helper can. */
@@ -13,6 +14,10 @@ export default async function troubleshootRoutes(server: FastifyInstance) {
     }
     try { return await inFlight; } catch { return reply.code(503).send({ message: 'The checks could not run. Try again in a moment.' }); }
   });
+
+  // One press: start what stopped, restart what is stuck, reconnect the apps, replace dead downloads. Poll GET for progress.
+  server.post('/api/troubleshoot/fix', async () => startFix());
+  server.get('/api/troubleshoot/fix', async () => ({ job: currentFix() ?? null }));
 
   server.post<{ Body: { service?: string } }>('/api/troubleshoot/restart', async (request, reply) => {
     const service = request.body?.service ?? '';

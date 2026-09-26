@@ -21,7 +21,7 @@ export interface ServerSettings {
   trustLocalNetwork: boolean;
   /** Address other devices should use (shown in Settings > Server). */
   publicUrl: string;
-  /** Preferred quality profile name per media type; blank = Standard for music, HD-1080p for movies and TV. */
+  /** Preferred quality profile name per media type; blank = Standard (take whatever is available, then upgrade: 720p or 1080p for movies and TV, up to 1080p). */
   defaultQuality: { movie: string; series: string; artist: string };
   /** Who may request what: optional admin approval and a per-person limit. */
   requests: { approval: 'off' | 'users'; limit: number; window: 'day' | 'week' };
@@ -30,6 +30,8 @@ export interface ServerSettings {
   autoBackup: boolean;
   /** Replace downloads that nobody is sharing, or that cannot be matched to the title, by themselves. */
   autoFixDownloads: boolean;
+  /** Start services that stopped (after a reboot or sleep) without being asked. */
+  autoRepair: boolean;
   updatedAt?: string;
 }
 
@@ -60,7 +62,8 @@ const DEFAULTS: ServerSettings = {
   requests: { approval: 'off', limit: 0, window: 'week' },
   notifications: { channels: [] },
   autoBackup: true,
-  autoFixDownloads: true
+  autoFixDownloads: true,
+  autoRepair: true
 };
 
 const KEY = 'server';
@@ -85,7 +88,8 @@ function parse(value: unknown): ServerSettings {
     requests: { ...DEFAULTS.requests, ...(raw.requests ?? {}) },
     notifications: { channels: Array.isArray(raw.notifications?.channels) ? raw.notifications!.channels.map(channel => mapChannelSecrets(channel, openSecret)) : [] },
     autoBackup: raw.autoBackup !== false,
-    autoFixDownloads: raw.autoFixDownloads !== false
+    autoFixDownloads: raw.autoFixDownloads !== false,
+    autoRepair: raw.autoRepair !== false
   };
 }
 

@@ -20,7 +20,9 @@ const TOKEN_FILE = process.env.HELPER_TOKEN_FILE ?? '/shared/token';
 const ALLOWED = new Set([
   'radarr', 'sonarr', 'prowlarr', 'lidarr', 'bazarr', 'qbittorrent', 'nzbget', 'flaresolverr',
   'ollama', 'tor', 'kiwix', 'audiobookshelf', 'kavita', 'immich-server', 'immich-machine-learning',
-  'gluetun', 'vpngate-config', 'ytdlp', 'watchtower'
+  'gluetun', 'vpngate-config', 'ytdlp', 'watchtower',
+  // The one-shot setup run: starting it again re-wires the apps (downloads folder, search sources, profiles).
+  'provision'
 ]);
 const ACTIONS = new Set(['start', 'stop', 'restart']);
 
@@ -87,7 +89,8 @@ http.createServer(async (req, res) => {
       return send(res, r.status < 300 || r.status === 304 ? 200 : 502, { ok: r.status < 300 || r.status === 304, service, action: verb });
     }
     if (req.method === 'POST' && url.pathname === '/start-all') {
-      const stopped = (await containers()).filter(c => c.state !== 'running');
+      // The setup run is a one-shot that is meant to be stopped; it is started on purpose, never here.
+      const stopped = (await containers()).filter(c => c.state !== 'running' && c.service !== 'provision');
       for (const c of stopped) await docker('POST', `/containers/${c.id}/start`);
       return send(res, 200, { ok: true, started: stopped.map(c => c.service) });
     }

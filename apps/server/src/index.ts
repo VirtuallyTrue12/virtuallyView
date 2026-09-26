@@ -41,6 +41,7 @@ import watchPartyRoutes from './routes/watch-party.js';
 import peopleRoutes from './routes/people.js';
 import castRoutes from './routes/cast.js';
 import liveRoutes from './routes/live.js';
+import radioRoutes from './routes/radio.js';
 import kiwixRoutes from './routes/kiwix.js';
 import appsRoutes from './routes/apps.js';
 import refreshRoutes from './routes/refresh.js';
@@ -54,6 +55,7 @@ import { startAutoBackup } from './services/backup.js';
 import { startAiDigest } from './services/ai-digest.js';
 import { startAutoUpdate } from './services/auto-update.js';
 import { startDownloadDoctor } from './services/download-doctor.js';
+import { startAutoHeal } from './services/auto-repair.js';
 import { startMusicVideoFiler } from './services/music-video-library.js';
 import { startRequestSync } from './services/requests.js';
 import { getAuthBackdrop } from './services/backdrop.js';
@@ -432,6 +434,7 @@ const start = async () => {
   await server.register(peopleRoutes);
   await server.register(castRoutes);
   await server.register(liveRoutes);
+  await server.register(radioRoutes);
   await server.register(kiwixRoutes);
   await server.register(appsRoutes);
   await server.register(refreshRoutes);
@@ -486,6 +489,7 @@ const start = async () => {
   startAiDigest();
   startAutoUpdate();
   startDownloadDoctor();
+  startAutoHeal();
   startMusicVideoFiler();
   try {
     const port = Number(process.env.PORT ?? 3000);

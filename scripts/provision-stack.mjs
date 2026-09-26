@@ -198,6 +198,33 @@ async function ensureBestAvailableMusicProfile(app) {
 }
 
 /**
+ * "Standard" for movies and TV: take whatever is available (720p or 1080p) so a
+ * request is never left waiting, then keep upgrading until it is 1080p. The
+ * order of qualities is the stock one (1080p ranks above 720p), so a 1080p
+ * release is always chosen when one exists. Existing titles keep their profile.
+ */
+async function ensureStandardVideoProfile(app) {
+  const headers = { 'X-Api-Key': app.key, 'Content-Type': 'application/json' };
+  const res = await fetch(`${app.url}/api/v3/qualityprofile`, { headers });
+  if (!res.ok) return;
+  const profiles = await res.json();
+  const template = profiles.find(p => p.name === 'HD - 720p/1080p') ?? profiles.find(p => p.name === 'HD-1080p');
+  if (!template) return;
+  const nameOf = i => (i.items?.length ? i.name : i.quality?.name) ?? '';
+  const isHd = i => /(720p|1080p)$/i.test(nameOf(i)) && !/remux/i.test(nameOf(i)) || /^remux-1080p$/i.test(nameOf(i));
+  const items = template.items.map(i => ({ ...i, allowed: isHd(i) }));
+  const flat = items.flatMap(i => (i.items?.length ? [i, ...i.items] : [i]));
+  const goal = flat.find(i => nameOf(i) === 'WEB 1080p') ?? flat.find(i => nameOf(i) === 'Bluray-1080p') ?? flat.find(i => nameOf(i) === 'HDTV-1080p');
+  const cutoff = goal ? (goal.id ?? goal.quality?.id) : template.cutoff;
+  const existing = profiles.find(p => p.name === 'Standard');
+  const body = { ...template, id: existing?.id, name: 'Standard', items, cutoff, upgradeAllowed: true };
+  if (existing && JSON.stringify(existing.items.map(i => i.allowed)) === JSON.stringify(items.map(i => i.allowed)) && existing.cutoff === cutoff && existing.upgradeAllowed) return;
+  if (!existing) delete body.id;
+  const put = await fetch(`${app.url}/api/v3/qualityprofile${existing ? `/${existing.id}` : ''}`, { method: existing ? 'PUT' : 'POST', headers, body: JSON.stringify(body) });
+  log(put.ok ? `${app.name}: the "Standard" quality profile takes 720p or 1080p and upgrades to 1080p` : `${app.name}: could not set up the "Standard" profile (${put.status})`);
+}
+
+/**
  * "Standard" is what music requests use, and it means "anything is fine": every
  * quality except trash, including unlabelled releases and FLAC when one turns
  * up quickly. It aims for high-quality lossy and upgrades toward that.
@@ -560,7 +587,7 @@ async function ensureProwlarrIndexer() {
  * so that turning it off later, or a later run when the proxy is back, switches
  * them on again. A source uses one proxy, so the other route's tags are dropped.
  */
-async function ensureSearchViaProxy(headers, { on, required, name, implementation, host, port, via: viaLabel, off: offLabel, other, notRunning, label }) {
+async function ensureSearchViaProxy(headers, { on, required, name, implementation, host, port, via: viaLabel, off: offLabel, other, notRunning, label, switchOffFailing = true }) {
   const api = (path, init) => fetch(`${PROWLARR.url}/api/v1${path}`, { headers, signal: AbortSignal.timeout(120000), ...init });
   const tags = await (await api('/tag')).json();
   const ensureTag = async text => tags.find(t => t.label === text) ?? await (await api('/tag', { method: 'POST', body: JSON.stringify({ label: text }) })).json();
@@ -612,6 +639,13 @@ async function ensureSearchViaProxy(headers, { on, required, name, implementatio
       const ix = todo[next++];
       // FlareSolverr is dropped in favour of this proxy (one proxy per source).
       const base = (ix.tags ?? []).filter(t => t !== flare?.id && t !== off.id && !otherIds.includes(t));
+      // A route that is often briefly down (a free VPN relay) keeps its sources on: Prowlarr rests a failing one and
+      // retries it, and nothing is ever searched outside the proxy.
+      if (!switchOffFailing) {
+        await api(`/indexer/${ix.id}?forceSave=true`, { method: 'PUT', body: JSON.stringify({ ...ix, enable: ix.enable || (ix.tags ?? []).includes(off.id), tags: [...base, via.id] }) });
+        working++;
+        continue;
+      }
       try {
         const tested = await api(`/indexer/${ix.id}`, { method: 'PUT', body: JSON.stringify({ ...ix, enable: true, tags: [...base, via.id] }) });
         if (tested.ok) { working++; continue; }
@@ -621,7 +655,9 @@ async function ensureSearchViaProxy(headers, { on, required, name, implementatio
     }
   };
   await Promise.all(Array.from({ length: 4 }, worker));
-  log(`Prowlarr: search over ${label} is on. ${working} source(s) work through it; ${disabled} do not and are switched off rather than searching directly.`);
+  log(switchOffFailing
+    ? `Prowlarr: search over ${label} is on. ${working} source(s) work through it; ${disabled} do not and are switched off rather than searching directly.`
+    : `Prowlarr: search over ${label} is on for ${working} source(s). One that does not answer is retried by itself, never searched directly.`);
 }
 
 const flag = value => /^(1|true|yes|on)$/i.test(value ?? '');
@@ -649,7 +685,7 @@ async function ensureSearchViaVpn(headers) {
   const port = Number(process.env.VPN_PROXY_PORT ?? 8888);
   return ensureSearchViaProxy(headers, {
     on: !torOn && setting !== 'false' && setting !== '0' && setting !== 'off' && setting !== 'no', required: flag(setting), label: 'the VPN',
-    name: 'VPN (virtuallyView)', implementation: 'Http', host, port, via: 'vv-vpn', off: 'vv-vpn-off', other: ['vv-tor', 'vv-tor-off'],
+    name: 'VPN (virtuallyView)', implementation: 'Http', switchOffFailing: false, host, port, via: 'vv-vpn', off: 'vv-vpn-off', other: ['vv-tor', 'vv-tor-off'],
     notRunning: `SEARCH_VIA_VPN is on but the VPN's web proxy at ${host}:${port} is not running. Start the VPN overlay (docker-compose.vpn-free.yml or docker-compose.vpn.yml), or set SEARCH_VIA_VPN=false`
   });
 }
@@ -684,7 +720,7 @@ async function main() {
   log('Waiting for Radarr, Sonarr, Lidarr, and Prowlarr to come online...');
   const ready = await Promise.all([...APPS.map(a => waitForReady(a)), waitForProwlarr()]);
   if (ready.some(r => !r)) {
-    log('One or more services did not come online in time. Nothing was configured; they will still work if you set them up manually in Settings. Run "docker compose run --rm provision" once they are up.');
+    log('One or more services did not come online in time. Nothing was configured; they will still work if you set them up manually in Settings. Run "docker compose run --rm --no-deps provision" once they are up.');
     process.exitCode = 2;
     return;
   }
@@ -709,6 +745,7 @@ async function main() {
   for (const app of APPS) {
     await step(`${app.name} root folder`, () => ensureRootFolder(app));
     await step(`${app.name} file renaming`, () => ensureNaming(app));
+    if (app !== LIDARR) await step(`${app.name} Standard quality`, () => ensureStandardVideoProfile(app));
     if (app === LIDARR) await step('Lidarr audio preferences', () => ensureMusicPreferences(app));
     if (app === LIDARR) await step('Lidarr best-available profile', () => ensureBestAvailableMusicProfile(app));
     for (const client of DOWNLOAD_CLIENTS) await step(`${app.name} download client`, () => ensureDownloadClient(app, client));

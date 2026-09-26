@@ -116,7 +116,7 @@ Open http://localhost:3000 and create the first account. It becomes the administ
 If a root folder or download client is missing after first boot:
 
 ```bash
-docker compose run --rm provision
+docker compose run --rm --no-deps provision
 ```
 
 To run only the app against services you already have:

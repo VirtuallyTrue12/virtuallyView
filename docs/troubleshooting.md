@@ -12,6 +12,16 @@ Find what you see, then follow the fix. Every item here is a problem someone act
 
 ---
 
+## One button first
+
+Open **Settings > Health and repair** and press **Fix everything**. It starts what stopped, restarts what is stuck (the VPN before the download client that shares its network), re-runs the setup that wires the apps together, and replaces dead downloads, showing each step as it goes. If something needs the machine itself (the optional helper container is off, a media folder is not writable, the Podman socket is off) it says so and gives one command:
+
+```
+./scripts/repair.sh
+```
+
+Run it in the project folder. It works out how the stack was started (Docker or Podman, which VPN overlay, which profiles), repairs what it finds, asks for your password only when a step needs it, and is safe to run again. Services that stopped (after a reboot or sleep) are also started by themselves every few minutes while the helper is on; turn that off in the same panel.
+
 ## The page does not load on my TV
 
 Older TV browsers (most LG webOS 4-5 and Samsung Tizen 4-5 sets) cannot run modern web pages. virtuallyView ships a second, older-style build that the browser picks automatically, fonts load without blocking the page, and a plain message appears if the browser is too old to start the app at all.
