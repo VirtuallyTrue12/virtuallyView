@@ -15,6 +15,7 @@ import { outboundFetch } from '../services/outbound.js';
 import { filterByRating, ratingAllowed } from '../services/parental.js';
 import { warningsFor } from '../services/release-check.js';
 import { retryMovie, retrySeries, retryArtist } from '../services/retry.js';
+import { removeTitle } from '../services/remove-title.js';
 
 type LibraryItem = Media & {
   streamUrl?: string;
@@ -55,14 +56,15 @@ const REQUEST_STATUS_TO_MEDIA: Record<string, string> = {
  * Requests ledger but not yet imported into the *arr library appears here with
  * the same state the Requests page shows, on every device.
  */
-function mergeRequests<T extends LibraryItem>(items: T[], mediaType: 'movie' | 'series' | 'artist'): T[] {
+export function mergeRequests<T extends LibraryItem>(items: T[], mediaType: 'movie' | 'series' | 'artist'): T[] {
   const inFlight = getRequests().filter(
     r => r.mediaType === mediaType && ['pending', 'searching', 'downloading', 'importing'].includes(r.status)
   );
   if (!inFlight.length) return items;
 
+  // "The Vampire Diaries" and "Vampire Diaries" are one show.
   const titleKey = (title: string | undefined, year: number | undefined) =>
-    `${(title ?? '').trim().toLowerCase()}::${year ?? ''}`;
+    `${(title ?? '').trim().toLowerCase().replace(/^(the|a|an)\s+/, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()}::${year ?? ''}`;
 
   const merged: T[] = items.map(i => ({ ...i }));
   const byProvider = new Map<string, T>();
@@ -76,6 +78,7 @@ function mergeRequests<T extends LibraryItem>(items: T[], mediaType: 'movie' | '
   for (const r of inFlight) {
     const status = REQUEST_STATUS_TO_MEDIA[r.status] ?? 'requested';
     const match =
+      (r.providerId ? byProvider.get(r.providerId) : undefined) ??
       (r.selectedProviderId ? byProvider.get(r.selectedProviderId) : undefined) ??
       byTitle.get(titleKey(r.title, r.year));
     if (match) {
@@ -343,7 +346,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
       const { id } = request.params;
       const deleteFiles = request.query.deleteFiles === 'true';
       try {
-        const result = await moviesAdapter.remove(id, deleteFiles);
+        const result = await removeTitle(moviesAdapter as unknown as Parameters<typeof removeTitle>[0], id, deleteFiles);
         if (!result.success) return reply.code(422).send(result);
         return { success: true, id, deleteFiles, message: result.message };
       } catch (error) {
@@ -358,7 +361,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
       const { id } = request.params;
       const deleteFiles = request.query.deleteFiles === 'true';
       try {
-        const result = await seriesAdapter.remove(id, deleteFiles);
+        const result = await removeTitle(seriesAdapter as unknown as Parameters<typeof removeTitle>[0], id, deleteFiles);
         if (!result.success) return reply.code(422).send(result);
         return { success: true, id, deleteFiles, message: result.message };
       } catch (error) {
@@ -373,7 +376,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
       const { id } = request.params;
       const deleteFiles = request.query.deleteFiles === 'true';
       try {
-        const result = await artistsAdapter.remove(id, deleteFiles);
+        const result = await removeTitle(artistsAdapter as unknown as Parameters<typeof removeTitle>[0], id, deleteFiles);
         if (!result.success) return reply.code(422).send(result);
         return { success: true, id, deleteFiles, message: result.message };
       } catch (error) {
