@@ -98,6 +98,23 @@ function open(): DatabaseSync {
       checked_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS photo_albums (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      paths TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS settings_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      area TEXT NOT NULL,
+      summary TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS artist_member_edits (
       artist_id TEXT NOT NULL,
       name TEXT NOT NULL,

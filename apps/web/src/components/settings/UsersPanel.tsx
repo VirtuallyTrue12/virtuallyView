@@ -152,32 +152,6 @@ export default function UsersPanel() {
 
           {!denied && (
           <section className="settings-section">
-            <h3>Signed-in devices</h3>
-            <p className="settings-help">Every device signed in to this server. Sign one out if you do not recognise it.</p>
-            <ul className="users-list">
-              {sessions.map(session => (
-                <li key={session.id} className="users-row">
-                  <span className="users-name">
-                    {session.device}
-                    {session.current && <span className="users-you">this device</span>}
-                    <small style={{ display: 'block', opacity: 0.7 }}>
-                      {`${session.username} · `}{session.ip || 'unknown address'} · {session.createdAt ? `signed in ${new Date(session.createdAt).toLocaleString()}` : 'signed in earlier'}
-                    </small>
-                  </span>
-                  <span className="users-actions">
-                    <button type="button" className="btn btn-secondary btn-sm" disabled={busy === session.id} onClick={() => void signOutDevice(session)}>
-                      Sign out
-                    </button>
-                  </span>
-                </li>
-              ))}
-              {sessions.length === 0 && <li className="users-row"><span className="users-name">No active sessions listed.</span></li>}
-            </ul>
-          </section>
-          )}
-
-          {denied ? null : (<>
-          <section className="settings-section">
             <h3>Accounts</h3>
             <ul className="users-list">
               {users.map(user => (
@@ -297,6 +271,32 @@ export default function UsersPanel() {
 
           </>)}
 
+          <details className="settings-section st-details">
+            <summary><span>Signed-in devices</span><span className="ui-badge">{sessions.length}</span></summary>
+            <p className="settings-help">Every device signed in to this server. Sign one out if you do not recognise it.</p>
+            <ul className="users-list">
+              {sessions.map(session => (
+                <li key={session.id} className="users-row">
+                  <span className="users-name">
+                    {session.device}
+                    {session.current && <span className="users-you">this device</span>}
+                    <small style={{ display: 'block', opacity: 0.7 }}>
+                      {`${session.username} · `}{session.ip || 'unknown address'} · {session.createdAt ? `signed in ${new Date(session.createdAt).toLocaleString()}` : 'signed in earlier'}
+                    </small>
+                  </span>
+                  <span className="users-actions">
+                    <button type="button" className="btn btn-secondary btn-sm" disabled={busy === session.id} onClick={() => void signOutDevice(session)}>
+                      Sign out
+                    </button>
+                  </span>
+                </li>
+              ))}
+              {sessions.length === 0 && <li className="users-row"><span className="users-name">No active sessions listed.</span></li>}
+            </ul>
+          </details>
+          )}
+
+          {denied ? null : (<>
           {notice && <div className={`notice notice--${notice.tone === 'ok' ? 'ok' : 'err'}`}>{notice.text}</div>}
         </>
       )}

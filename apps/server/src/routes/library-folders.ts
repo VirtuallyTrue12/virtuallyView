@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { DATA_DIR } from '../lib/paths.js';
 import { booksRoot, inside, listFolder, photosRoot } from '../services/library-folders.js';
 import { resolveBinary } from '../services/transcode.js';
+import { albumPhotos, allPhotos, changeAlbum, createAlbum, deleteAlbum, favoritePhotos, listAlbums, setPhotoFavorite, validPhotoPath } from '../services/photos.js';
 
 const PHOTO = /\.(jpe?g|png|webp|gif|avif|bmp)$/i;
 const BOOK = /\.(pdf|epub|cbz|cbr|txt|mobi)$/i;
@@ -25,11 +26,52 @@ export default async function libraryFolderRoutes(server: FastifyInstance) {
     return listing ?? reply.code(404).send({ message: 'No photo folder here. Mount one at /media/photos (see the docs).' });
   });
 
-  server.get<{ Querystring: { path?: string } }>('/api/photos/file', async (request, reply) => {
+  server.get<{ Querystring: { path?: string; download?: string } }>('/api/photos/file', async (request, reply) => {
     const file = inside(photosRoot(), request.query.path ?? '');
     if (!file || !PHOTO.test(file) || !statSync(file).isFile()) return reply.code(404).send({ message: 'Photo not found.' });
+    const name = file.split('/').pop() ?? 'photo';
+    if (request.query.download) reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
     return reply.header('Content-Type', MIME[extOf(file)] ?? 'application/octet-stream').header('Cache-Control', 'private, max-age=86400').send(createReadStream(file));
   });
+
+  // The whole collection, newest first, for the timeline and for searching by name.
+  server.get('/api/photos/all', async () => allPhotos());
+
+  server.get('/api/photos/favorites', async () => {
+    const known = new Set(allPhotos().items.map(p => p.path));
+    return { paths: favoritePhotos().filter(p => known.has(p)) };
+  });
+  server.post<{ Body: { path?: string; favorite?: boolean } }>('/api/photos/favorite', async (request, reply) => {
+    const rel = validPhotoPath(request.body?.path);
+    if (!rel) return reply.code(404).send({ message: 'Photo not found.' });
+    setPhotoFavorite(rel, request.body?.favorite !== false);
+    return { ok: true };
+  });
+
+  server.get('/api/photo-albums', async () => ({ albums: listAlbums() }));
+  server.post<{ Body: { name?: string; paths?: string[] } }>('/api/photo-albums', async (request, reply) => {
+    const album = createAlbum(String(request.body?.name ?? ''));
+    if (!album) return reply.code(400).send({ message: 'Give the album a name.' });
+    const paths = (request.body?.paths ?? []).map(validPhotoPath).filter((p): p is string => !!p);
+    if (paths.length) changeAlbum(album.id, { add: paths });
+    return { ...album, count: paths.length, cover: paths[0] ?? null };
+  });
+  server.get<{ Params: { id: string } }>('/api/photo-albums/:id', async (request, reply) => {
+    const album = albumPhotos(request.params.id);
+    if (!album) return reply.code(404).send({ message: 'Album not found.' });
+    const known = new Map(allPhotos().items.map(p => [p.path, p]));
+    return { id: album.id, name: album.name, photos: album.paths.map(p => known.get(p)).filter(Boolean) };
+  });
+  server.post<{ Params: { id: string }; Body: { name?: string; add?: string[]; remove?: string[] } }>('/api/photo-albums/:id', async (request, reply) => {
+    const b = request.body ?? {};
+    const ok = changeAlbum(request.params.id, {
+      ...(typeof b.name === 'string' ? { name: b.name } : {}),
+      ...(Array.isArray(b.add) ? { add: b.add.map(validPhotoPath).filter((p): p is string => !!p) } : {}),
+      ...(Array.isArray(b.remove) ? { remove: b.remove.filter((p): p is string => typeof p === 'string') } : {})
+    });
+    return ok ? { ok: true } : reply.code(404).send({ message: 'Album not found.' });
+  });
+  server.delete<{ Params: { id: string } }>('/api/photo-albums/:id', async (request, reply) => (deleteAlbum(request.params.id) ? { ok: true } : reply.code(404).send({ message: 'Album not found.' })));
 
   // Small previews made once with ffmpeg and kept in the data folder.
   server.get<{ Querystring: { path?: string } }>('/api/photos/thumb', async (request, reply) => {

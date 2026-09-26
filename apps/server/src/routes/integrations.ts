@@ -4,6 +4,7 @@ import { lookup } from 'node:dns/promises';
 import { pingService } from '@virtuallyview/integrations';
 import { currentActor } from '../services/user-context.js';
 import { getServerSettings } from '../services/server-settings.js';
+import { recordChange } from '../services/settings-history.js';
 import type { IntegrationStatus } from '@virtuallyview/types';
 import {
   getManagedAdapters, loadServiceConfig, configureIntegration, toggleIntegration,
@@ -92,7 +93,9 @@ export default async function integrationsRoutes(server: FastifyInstance) {
     if (Object.hasOwn(getManagedAdapters(), adapter)) {
       try {
         await toggleIntegration(adapter, fallbackUrl(adapter));
-        return await statusFor(adapter);
+        const after = await statusFor(adapter);
+        recordChange('Services', `${displayNames[adapter] ?? adapter} turned ${after.enabled ? 'on' : 'off'}`);
+        return after;
       } catch (error) {
         if (error instanceof IntegrationConfigError) return reply.code(error.statusCode).send({ message: error.message });
         return reply.code(500).send({ message: 'Could not update integration settings.' });
@@ -140,12 +143,13 @@ export default async function integrationsRoutes(server: FastifyInstance) {
       if (homeNetwork && !trustedServiceHost && !getServerSettings().trustLocalNetwork) throw new Error('lan');
     } catch (error) {
       if (error instanceof Error && error.message === 'lan') {
-        return reply.code(400).send({ message: 'That address is on your home network. If it is one of your own services, turn on "Trust services on my home network" under Settings > Server, then try again.' });
+        return reply.code(400).send({ message: 'That address is on your home network. If it is one of your own services, turn on "Trust services on my home network" under Settings > Network and devices, then try again.' });
       }
       return reply.code(400).send({ message: 'That address is invalid or points to a private network. Check it and try again.' });
     }
     try {
       await configureIntegration(adapter, url, apiKey);
+      recordChange('Services', `Connected ${displayNames[adapter] ?? adapter}`);
       return { ...(await statusFor(adapter)), connected: true };
     } catch (error) {
       if (error instanceof IntegrationConfigError) return reply.code(error.statusCode).send({ message: error.message });

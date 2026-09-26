@@ -30,6 +30,8 @@ import musicVideoRoutes from './routes/music-videos.js';
 import releaseRoutes from './routes/releases.js';
 import youtubeRoutes from './routes/youtube.js';
 import troubleshootRoutes from './routes/troubleshoot.js';
+import settingsOverviewRoutes from './routes/settings-overview.js';
+import { recordChange } from './services/settings-history.js';
 import lyricsRoutes from './routes/lyrics.js';
 import subtitleRoutes from './routes/subtitles.js';
 import watchPartyRoutes from './routes/watch-party.js';
@@ -250,6 +252,7 @@ server.post<{ Body: { username?: string; password?: string; role?: string } }>('
   const role: Role = request.body?.role === 'admin' ? 'admin' : 'user';
   const created = createAccount(request.body?.username ?? '', request.body?.password ?? '', role);
   if (!created.ok) return reply.code(400).send({ message: created.message });
+  recordChange('People', `Added the ${role === 'admin' ? 'administrator' : 'account'} "${request.body?.username ?? ''}"`);
   return { users: listUsers() };
 });
 server.post<{ Params: { id: string }; Body: { role?: string } }>('/api/auth/users/:id/role', async (request, reply) => {
@@ -258,6 +261,7 @@ server.post<{ Params: { id: string }; Body: { role?: string } }>('/api/auth/user
   }
   const result = setUserRole(request.params.id, request.body?.role === 'admin' ? 'admin' : 'user');
   if (!result.ok) return reply.code(400).send({ message: result.message });
+  recordChange('People', `An account was made ${request.body?.role === 'admin' ? 'an administrator' : 'a regular user'}`);
   return { users: listUsers() };
 });
 server.delete<{ Params: { id: string } }>('/api/auth/users/:id', async (request, reply) => {
@@ -270,6 +274,7 @@ server.delete<{ Params: { id: string } }>('/api/auth/users/:id', async (request,
   }
   const result = deleteUser(request.params.id);
   if (!result.ok) return reply.code(400).send({ message: result.message });
+  recordChange('People', 'An account was removed');
   return { users: listUsers() };
 });
 server.post<{ Params: { id: string }; Body: { password?: string } }>('/api/auth/users/:id/password', async (request, reply) => {
@@ -330,7 +335,7 @@ const ADMIN_ONLY_WRITE = [
 ];
 // Reading how the server is wired (service addresses, what is reachable on the
 // network, how to control containers) is administrator-only too.
-const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/troubleshoot'];
+const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/troubleshoot', '/api/settings/'];
 server.addHook('preHandler', async (request, reply) => {
   if (request.method !== 'GET') return;
   const path = request.url.split('?')[0] ?? '';
@@ -432,6 +437,7 @@ const start = async () => {
   await server.register(releaseRoutes);
   await server.register(youtubeRoutes);
   await server.register(troubleshootRoutes);
+  await server.register(settingsOverviewRoutes);
 
   // In production (Docker, `npm start`) the built web app ships alongside the
   // server, so one process serves both the API and the UI on one port. In

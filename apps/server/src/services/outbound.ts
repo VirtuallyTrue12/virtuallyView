@@ -47,7 +47,7 @@ const HTTP_STATUS_RE = /^HTTP\/\S+\s+(\d{3})/m;
 /**
  * Outbound fetch for PUBLIC internet calls (Wikipedia, MusicBrainz, web covers).
  *
- * When Settings > Outbound proxy is enabled, requests are tunneled through it
+ * When Settings > Network and devices > Outbound proxy is enabled, requests are tunneled through it
  * via curl, which supports both HTTP and SOCKS5 proxies with DNS inside the
  * tunnel and needs no native addon. Local *arr services are NOT routed through
  * this helper - they stay on plain fetch so a proxy outage can never take down

@@ -78,7 +78,7 @@ export async function answerDiagnose(subject?: string): Promise<AgentReply> {
 
   try {
     const indexers = await within(getAdapter<ProwlarrAdapter>('prowlarr').listIndexers(), 4000, null);
-    if (indexers && indexers.length === 0) issues.push('No indexers are set up, so searches find nothing. Fix: Settings > Indexers > add public indexers.');
+    if (indexers && indexers.length === 0) issues.push('No indexers are set up, so searches find nothing. Fix: Settings > Search sources > add public sources.');
   } catch { /* Prowlarr offline is reported above */ }
   try {
     const bazarr = getAdapter<BazarrAdapter>('bazarr');

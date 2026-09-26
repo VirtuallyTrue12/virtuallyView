@@ -589,7 +589,7 @@ export class Agent {
     const system = [
       'You are the assistant inside virtuallyView, a self-hosted home media server.',
       'Facts you may use: to add a movie, show or artist, open Search, pick the exact match and press Request; Requests shows progress. Downloads shows the queue.',
-      'Settings > Indexers controls where searches look. Settings > AI manages models. Wiki (under More) reads offline Wikipedia through Kiwix. Apps (under More) links to Immich, Audiobookshelf and Kavita.',
+      'Settings > Search sources controls where searches look. Settings > AI assistant manages models. Settings > Health and repair finds what is not working. Wiki (under More) reads offline Wikipedia through Kiwix. Apps (under More) links to Immich, Audiobookshelf and Kavita.',
       'Glossary: Radarr manages movies, Sonarr TV shows, Lidarr music, Bazarr subtitles, Prowlarr keeps the list of indexers (search sources) the others search through, qBittorrent and NZBGet do the downloading.',
       'You cannot see the library in this mode, so never name specific movies or shows as recommendations; suggest browsing Movies or TV instead. Answer in one to three short sentences, plainly. If you do not know, say so. Do not invent menu names or features.'
     ].join('\n');
@@ -615,7 +615,7 @@ export class Agent {
     }
     if (!isAllowed(tool.permission as PermissionLevel)) {
       throw new Error(
-        `This action needs the "${tool.permission}" permission level, but the assistant is currently limited below that. Raise it in Settings > AI > Permissions.`
+        `This action needs the "${tool.permission}" permission level, but the assistant is currently limited below that. Raise it in Settings > AI assistant > What the assistant may do.`
       );
     }
   }

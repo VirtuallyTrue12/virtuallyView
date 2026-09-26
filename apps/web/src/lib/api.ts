@@ -488,10 +488,19 @@ export interface YoutubeJob { id: string; videoId: string; title: string; dir: s
 
 export interface PersonInfo { edited?: boolean; name: string; role?: string; photo?: string; years?: string; current?: boolean; group?: 'main' | 'supporting'; episodes?: number }
 
+export interface SettingsChange { id: number; at: string; actor: string; area: string; summary: string }
+export interface SettingsOverview {
+  serverName: string;
+  areas: Array<{ id: string; tone: 'ok' | 'warn' | 'bad' | 'off'; line: string }>;
+  suggestions: Array<{ id: string; title: string; detail: string; section: string; tone: 'warn' | 'info' }>;
+  changes: SettingsChange[];
+}
 export interface TroubleCheck { id: string; area: string; label: string; status: 'ok' | 'warn' | 'fail' | 'skipped'; detail: string; fixes: string[]; restart?: string }
 
 export const api = {
   troubleshoot: () => getJSON<{ checkedAt: string; checks: TroubleCheck[]; summary: { ok: number; warn: number; fail: number } }>('/api/troubleshoot'),
+  settingsOverview: () => getJSON<SettingsOverview>('/api/settings/overview'),
+  settingsHistory: () => getJSON<{ changes: SettingsChange[] }>('/api/settings/history?limit=40'),
   restartService: (service: string) => postJSON<{ ok: boolean; message: string }>('/api/troubleshoot/restart', { service }),
   seriesCast: (id: string) => getJSON<{ cast: PersonInfo[] }>(`/api/series/${encodeURIComponent(id)}/cast`).then(r => r.cast),
   editMember: (artistId: string, body: { name: string; action: 'set' | 'remove' | 'add'; role?: string; years?: string; current?: boolean }) => postJSON<{ ok: boolean }>(`/api/member-edits/${encodeURIComponent(artistId)}`, body),

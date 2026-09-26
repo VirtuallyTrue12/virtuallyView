@@ -3,6 +3,7 @@ import { getServerSettings, saveServerSettings, type ServerSettings } from '../s
 import { probeOutboundProxy } from '../services/outbound.js';
 import { sanitizeChannels } from '../services/notifications.js';
 import { currentActor } from '../services/user-context.js';
+import { recordSettingsDiff } from '../services/settings-history.js';
 
 const VALID_LOG_LEVELS = new Set(['error', 'warn', 'info', 'debug']);
 const VALID_COVER_SOURCES = new Set(['tmdb', 'duckduckgo', 'wikipedia']);
@@ -100,6 +101,7 @@ export default async function serverSettingsRoutes(server: FastifyInstance) {
           ...(typeof body.trustLocalNetwork === 'boolean' ? { trustLocalNetwork: body.trustLocalNetwork } : {}),
           ...(typeof body.publicUrl === 'string' ? { publicUrl: body.publicUrl.trim().replace(/\/+$/, '') } : {})
         });
+        recordSettingsDiff(current, settings);
         return settings;
       } catch {
         return reply.code(500).send({ message: 'Could not save server settings.' });

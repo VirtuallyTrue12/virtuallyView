@@ -16,7 +16,7 @@ export function inside(root: string, relative: string): string | null {
   }
 }
 
-export interface Listing { path: string; folders: string[]; files: Array<{ name: string; size: number }> }
+export interface Listing { path: string; folders: string[]; files: Array<{ name: string; size: number; modified?: number }> }
 
 /** One folder level: sub-folders and the files whose extension is allowed. */
 export function listFolder(root: string, relative: string, extensions: RegExp): Listing | null {
@@ -28,7 +28,7 @@ export function listFolder(root: string, relative: string, extensions: RegExp): 
     if (entry.name.startsWith('.')) continue;
     if (entry.isDirectory()) folders.push(entry.name);
     else if (extensions.test(entry.name)) {
-      try { files.push({ name: entry.name, size: statSync(path.join(dir, entry.name)).size }); } catch { /* vanished */ }
+      try { const st = statSync(path.join(dir, entry.name)); files.push({ name: entry.name, size: st.size, modified: Math.round(st.mtimeMs) }); } catch { /* vanished */ }
     }
   }
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });

@@ -2,11 +2,11 @@
 
 ## Indexers
 
-Requests only download something if Prowlarr has at least one indexer. The first-run checklist on the Home page tells you when it has none. Settings > Indexers lists what you have (with a test button), and lets you add any public indexer in one click. Indexers that need an account are added in Prowlarr itself so you can enter your own login. Choose only sources you are entitled to use.
+Requests only download something if Prowlarr has at least one indexer. The first-run checklist on the Home page tells you when it has none. Settings > Search sources lists what you have (with a test button), and lets you add any public indexer in one click. Indexers that need an account are added in Prowlarr itself so you can enter your own login. Choose only sources you are entitled to use.
 
 ## Requests from other people
 
-Settings > Server > Requests from other people:
+Settings > People and requests > Requests from other people:
 
 - **Approval.** Requests from regular accounts wait for an administrator. Administrators see Approve and Decline on the Requests page and get a notification; the requester is told the outcome.
 - **Limit.** Each regular account may make a number of requests per day or per week. Administrators are never limited.

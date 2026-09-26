@@ -15,7 +15,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -26,6 +26,7 @@ const TSX_BIN = resolve(REPO_ROOT, 'node_modules/.bin/tsx');
 let child: ChildProcess;
 let base = '';
 let dataDir = '';
+let photosDir = '';
 let childLog = '';
 let cookie = ''; // default session cookie (vv_session=token)
 let cookieAdmin = ''; // administrator session, kept separate from user sessions
@@ -98,6 +99,11 @@ async function waitForHealth(timeoutMs = 45_000): Promise<void> {
 
 beforeAll(async () => {
   dataDir = mkdtempSync(resolve(tmpdir(), 'vv-e2e-'));
+  photosDir = mkdtempSync(resolve(tmpdir(), 'vv-photos-'));
+  mkdirSync(resolve(photosDir, 'Trip'));
+  writeFileSync(resolve(photosDir, 'beach.jpg'), 'not really a jpeg');
+  writeFileSync(resolve(photosDir, 'Trip', 'hike.png'), 'not really a png');
+  writeFileSync(resolve(photosDir, 'notes.txt'), 'ignored');
   const port = 40000 + Math.floor(Math.random() * 9000);
   base = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, [TSX_BIN, 'src/index.ts'], {
@@ -105,6 +111,7 @@ beforeAll(async () => {
     env: {
       ...process.env,
       VV_DATA_DIR: dataDir,
+      VV_PHOTOS_DIR: photosDir,
       PORT: String(port),
       TRUST_PROXY: 'loopback',
       API_RATE_LIMIT: '1000000'
@@ -120,6 +127,7 @@ afterAll(async () => {
   if (child && !child.killed) child.kill('SIGTERM');
   await new Promise(r => setTimeout(r, 200));
   rmSync(dataDir, { recursive: true, force: true });
+  rmSync(photosDir, { recursive: true, force: true });
 }, 30_000);
 
 describe('e2e: public endpoints', () => {
@@ -1159,6 +1167,67 @@ describe('e2e: cast links, live tv, photos, books', () => {
     expect([200, 404]).toContain(photos.status);
     expect((await req('GET', '/api/photos/file?path=../../etc/passwd', { cookieOverride: cookieAdmin })).status).toBe(404);
     expect((await req('GET', '/api/books/file?path=/etc/passwd', { cookieOverride: cookieAdmin })).status).toBe(404);
+  }, 30_000);
+});
+
+describe('e2e: photos, favorites and albums', () => {
+  it('lists every photo across folders, newest first, and ignores other files', async () => {
+    const all = await req('GET', '/api/photos/all', { cookieOverride: cookieAdmin });
+    expect(all.status).toBe(200);
+    expect(all.json.items.map((p: { path: string }) => p.path).sort()).toEqual(['Trip/hike.png', 'beach.jpg']);
+    expect(all.json.items[0]).toMatchObject({ name: expect.any(String), size: expect.any(Number), modified: expect.any(Number) });
+    const dl = await fetch(`${base}/api/photos/file?path=beach.jpg&download=1`, { headers: { Cookie: cookieAdmin } });
+    expect(dl.headers.get('content-disposition')).toMatch(/attachment; filename\*=UTF-8''beach\.jpg/);
+  }, 30_000);
+
+  it('keeps favorites and albums per person, and only for photos that exist', async () => {
+    expect((await req('POST', '/api/photos/favorite', { body: { path: '../../etc/passwd.jpg' }, cookieOverride: cookieAdmin })).status).toBe(404);
+    expect((await req('POST', '/api/photos/favorite', { body: { path: 'missing.jpg' }, cookieOverride: cookieAdmin })).status).toBe(404);
+    expect((await req('POST', '/api/photos/favorite', { body: { path: 'beach.jpg', favorite: true }, cookieOverride: cookieAdmin })).status).toBe(200);
+    expect((await req('GET', '/api/photos/favorites', { cookieOverride: cookieAdmin })).json.paths).toEqual(['beach.jpg']);
+
+    const album = await req('POST', '/api/photo-albums', { body: { name: 'Summer', paths: ['beach.jpg', 'nope.jpg', '../x.jpg'] }, cookieOverride: cookieAdmin });
+    expect(album.status).toBe(200);
+    expect(album.json).toMatchObject({ name: 'Summer', count: 1, cover: 'beach.jpg' });
+    expect((await req('POST', '/api/photo-albums', { body: { name: '  ' }, cookieOverride: cookieAdmin })).status).toBe(400);
+    expect((await req('POST', `/api/photo-albums/${album.json.id}`, { body: { add: ['Trip/hike.png'] }, cookieOverride: cookieAdmin })).status).toBe(200);
+    const opened = await req('GET', `/api/photo-albums/${album.json.id}`, { cookieOverride: cookieAdmin });
+    expect(opened.json.photos.map((p: { path: string }) => p.path)).toEqual(['beach.jpg', 'Trip/hike.png']);
+    expect((await req('POST', `/api/photo-albums/${album.json.id}`, { body: { remove: ['beach.jpg'], name: 'Trips' }, cookieOverride: cookieAdmin })).status).toBe(200);
+    expect((await req('GET', '/api/photo-albums', { cookieOverride: cookieAdmin })).json.albums[0]).toMatchObject({ name: 'Trips', count: 1 });
+
+    // Someone else does not see or change it.
+    const made = await req('POST', '/api/auth/users', { body: { username: 'photoguest', password: 'photopass', role: 'user' }, cookieOverride: cookieAdmin });
+    expect(made.status).toBe(200);
+    const login = await req('POST', '/api/auth/login', { body: { username: 'photoguest', password: 'photopass' } });
+    const guest = /vv_session=[^;]+/.exec(login.setCookie!)![0];
+    expect((await req('GET', '/api/photo-albums', { cookieOverride: guest })).json.albums).toEqual([]);
+    expect((await req('GET', `/api/photo-albums/${album.json.id}`, { cookieOverride: guest })).status).toBe(404);
+    expect((await req('DELETE', `/api/photo-albums/${album.json.id}`, { cookieOverride: guest })).status).toBe(404);
+    expect((await req('GET', '/api/photos/favorites', { cookieOverride: guest })).json.paths).toEqual([]);
+
+    expect((await req('DELETE', `/api/photo-albums/${album.json.id}`, { cookieOverride: cookieAdmin })).status).toBe(200);
+    expect((await req('GET', '/api/photo-albums', { cookieOverride: cookieAdmin })).json.albums).toEqual([]);
+  }, 30_000);
+});
+
+describe('e2e: settings overview and history', () => {
+  it('gives administrators an overview and a trail of changes, and nobody else', async () => {
+    const saved = await req('POST', '/api/server-settings', { body: { serverName: 'Test Home', autoBackup: false }, cookieOverride: cookieAdmin });
+    expect(saved.status).toBe(200);
+    const overview = await req('GET', '/api/settings/overview', { cookieOverride: cookieAdmin });
+    expect(overview.status).toBe(200);
+    expect(overview.json.serverName).toBe('Test Home');
+    expect(overview.json.areas.map((a: { id: string }) => a.id)).toEqual(expect.arrayContaining(['services', 'sources', 'people', 'notifications', 'backup', 'network']));
+    expect(Array.isArray(overview.json.suggestions)).toBe(true);
+    const history = await req('GET', '/api/settings/history', { cookieOverride: cookieAdmin });
+    expect(history.json.changes.map((c: { summary: string }) => c.summary).join('|')).toMatch(/Server name changed to "Test Home"/);
+    expect(history.json.changes.map((c: { summary: string }) => c.summary).join('|')).toMatch(/Automatic backups turned off/);
+    expect((await req('GET', '/api/settings/overview', { cookieOverride: null })).status).toBe(401);
+    const login = await req('POST', '/api/auth/login', { body: { username: 'photoguest', password: 'photopass' } });
+    const guest = /vv_session=[^;]+/.exec(login.setCookie!)![0];
+    expect((await req('GET', '/api/settings/overview', { cookieOverride: guest })).status).toBe(403);
+    expect((await req('GET', '/api/settings/history', { cookieOverride: guest })).status).toBe(403);
   }, 30_000);
 });
 

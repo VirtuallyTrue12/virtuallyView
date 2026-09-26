@@ -56,7 +56,7 @@ export default function ConnectDevices({ settings, onSaved }: { settings: Server
       </div>
       <ol className="model-suggest-meta" style={{ margin: 'var(--spacing-sm) 0', paddingLeft: '1.2rem' }}>
         <li>On the other device, join the same Wi-Fi/network and open <strong>{shown}</strong> in a browser.</li>
-        <li>Sign in with an account you created under <strong>Settings, then Users</strong>, or turn on sign-up below.</li>
+        <li>Sign in with an account you created under <strong>Settings, then People and requests</strong>, or turn on sign-up below.</li>
         <li>Tick <em>Stay signed in</em> on personal devices so it remembers them for 30 days.</li>
         <li>Can't connect? Allow port {settings?.port ?? 3000} through this computer's firewall.</li>
       </ol>
