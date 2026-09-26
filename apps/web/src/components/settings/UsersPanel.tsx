@@ -137,12 +137,7 @@ export default function UsersPanel() {
 
   return (
     <>
-      <div className="page-head" style={{ marginTop: '0.5rem' }}>
-        <h2 className="rail-title">Users</h2>
-        <span className="page-count">
-          {me ? `Signed in as ${me.username} (${me.role})` : 'Account management'}
-        </span>
-      </div>
+      {me && <p className="ui-help">Signed in as {me.username} ({me.role}).</p>}
 
       {loading ? (
         <div className="empty-state">Loading accounts...</div>
@@ -150,7 +145,7 @@ export default function UsersPanel() {
         <>
           {denied && <div className="empty-state">Only an administrator manages accounts. <Link to="/account">Open your own account</Link> to change your password or sign out devices.</div>}
 
-          {!denied && (
+          {denied ? null : (<>
           <section className="settings-section">
             <h3>Accounts</h3>
             <ul className="users-list">
@@ -269,8 +264,6 @@ export default function UsersPanel() {
             </form>
           </section>
 
-          </>)}
-
           <details className="settings-section st-details">
             <summary><span>Signed-in devices</span><span className="ui-badge">{sessions.length}</span></summary>
             <p className="settings-help">Every device signed in to this server. Sign one out if you do not recognise it.</p>
@@ -294,9 +287,9 @@ export default function UsersPanel() {
               {sessions.length === 0 && <li className="users-row"><span className="users-name">No active sessions listed.</span></li>}
             </ul>
           </details>
-          )}
 
-          {denied ? null : (<>
+          </>)}
+
           {notice && <div className={`notice notice--${notice.tone === 'ok' ? 'ok' : 'err'}`}>{notice.text}</div>}
         </>
       )}

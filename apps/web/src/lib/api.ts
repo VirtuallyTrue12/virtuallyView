@@ -488,6 +488,9 @@ export interface YoutubeJob { id: string; videoId: string; title: string; dir: s
 
 export interface PersonInfo { edited?: boolean; name: string; role?: string; photo?: string; years?: string; current?: boolean; group?: 'main' | 'supporting'; episodes?: number }
 
+export interface PhotoEntry { path: string; name: string; size: number; modified: number }
+export interface PhotoAlbum { id: string; name: string; count: number; cover: string | null; updatedAt: string }
+export interface PhotoFolder { path: string; folders: string[]; files: Array<{ name: string; size: number; modified?: number }> }
 export interface SettingsChange { id: number; at: string; actor: string; area: string; summary: string }
 export interface SettingsOverview {
   serverName: string;
@@ -499,6 +502,15 @@ export interface TroubleCheck { id: string; area: string; label: string; status:
 
 export const api = {
   troubleshoot: () => getJSON<{ checkedAt: string; checks: TroubleCheck[]; summary: { ok: number; warn: number; fail: number } }>('/api/troubleshoot'),
+  photosAll: () => getJSON<{ items: PhotoEntry[]; truncated: boolean }>('/api/photos/all'),
+  photosFolder: (dir: string) => getJSON<PhotoFolder>(`/api/photos?dir=${encodeURIComponent(dir)}`),
+  photoFavorites: () => getJSON<{ paths: string[] }>('/api/photos/favorites'),
+  setPhotoFavorite: (path: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/photos/favorite', { path, favorite }),
+  photoAlbums: () => getJSON<{ albums: PhotoAlbum[] }>('/api/photo-albums'),
+  createPhotoAlbum: (name: string, paths: string[] = []) => postJSON<PhotoAlbum>('/api/photo-albums', { name, paths }),
+  photoAlbum: (id: string) => getJSON<{ id: string; name: string; photos: PhotoEntry[] }>(`/api/photo-albums/${encodeURIComponent(id)}`),
+  changePhotoAlbum: (id: string, body: { name?: string; add?: string[]; remove?: string[] }) => postJSON<{ ok: boolean }>(`/api/photo-albums/${encodeURIComponent(id)}`, body),
+  deletePhotoAlbum: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/photo-albums/${encodeURIComponent(id)}`),
   settingsOverview: () => getJSON<SettingsOverview>('/api/settings/overview'),
   settingsHistory: () => getJSON<{ changes: SettingsChange[] }>('/api/settings/history?limit=40'),
   restartService: (service: string) => postJSON<{ ok: boolean; message: string }>('/api/troubleshoot/restart', { service }),

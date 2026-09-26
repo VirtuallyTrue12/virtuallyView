@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { RequestActivityFeed } from '../components/requests/RequestActivityFeed';
 import { ACTIVE, RequestCard, RequestsEmpty, needsAttention } from '../components/requests/RequestCard';
 import { EmptyState, PageHeader, Seg, SubNav } from '../components/ui/Page';
@@ -23,7 +23,6 @@ export default function Requests() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>('all');
@@ -134,15 +133,6 @@ export default function Requests() {
     void load();
   };
 
-  const toggle = (id: string) => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const action = async (id: string, kind: 'approve' | 'cancel') => {
     setBusyId(id);
     const target = items.find(item => item.id === id);
@@ -175,11 +165,6 @@ export default function Requests() {
     setBusyId(id);
     try {
       await api.removeRequest(id);
-      setExpanded(prev => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
       load();
     } catch (err) {
       flash('err', (err as Error).message);
