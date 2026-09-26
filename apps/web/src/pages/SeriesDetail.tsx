@@ -6,10 +6,10 @@ import { MediaCard } from '../components/media/MediaCard';
 import { SourceCheck } from '../components/media/SourceCheck';
 import { StatusPill } from '../components/media/StatusPill';
 import { BackButton } from '../components/layout/BackButton';
-import { ManageSection } from '../components/ui/ManageSection';
+import { Dialog } from '../components/ui/Dialog';
+import { MenuDivider, MenuItem, MoreMenu } from '../components/ui/MoreMenu';
 import { CastRow } from '../components/media/CastRow';
 import { TitleQuality } from '../components/media/TitleQuality';
-import { RemoveTitle } from '../components/media/RemoveTitle';
 import { FavoriteButton } from '../components/media/UserFlagButtons';
 import { api, type PersonInfo, type EpisodeItem, type MediaDescription, type SeriesItem } from '../lib/api';
 import { SvgIcon } from '../components/ui/SvgIcon';
@@ -27,6 +27,12 @@ export default function SeriesDetail() {
   const [season, setSeason] = useState<number | null>(null);
   const [cast, setCast] = useState<PersonInfo[]>([]);
   const [castLoading, setCastLoading] = useState(false);
+  const [dialog, setDialog] = useState<null | 'checks' | 'remove'>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -84,6 +90,15 @@ export default function SeriesDetail() {
     return <main className="page"><div className="loading-state">Loading series...</div></main>;
   }
 
+  const isSonarr = /^sonarr-/.test(series.id);
+  const showStory = !!description?.description && description.source !== 'library' && description.description.trim() !== (series.overview ?? '').trim();
+  const searchMissing = async () => {
+    try { const r = await api.searchSeries(series.id); setNotice({ tone: r.success ? 'ok' : 'err', text: r.message }); } catch (err) { setNotice({ tone: 'err', text: (err as Error).message }); }
+  };
+  const removeSeries = async (deleteFiles: boolean) => {
+    setRemoving(true);
+    try { await api.deleteSeries(series.id, deleteFiles); setDialog(null); navigate('/series'); } catch (err) { setDialog(null); setNotice({ tone: 'err', text: (err as Error).message }); setRemoving(false); }
+  };
   const similar = library
     .filter(s => s.id !== series.id)
     .filter(s => s.genres?.some(g => series.genres?.includes(g)) ?? false)
@@ -145,34 +160,36 @@ export default function SeriesDetail() {
 
               <div className="hero-actions">
                 {nextEpisode ? (
-                  <button className="btn btn-primary" type="button" onClick={() => watch(nextEpisode)}>
-                    {resumeEpisode ? 'Resume' : (nextEpisode.watchProgress ?? 0) >= 96 || playable[0] === nextEpisode ? 'Play' : 'Play next'}
+                  <button className="btn btn-primary btn-lg" type="button" onClick={() => watch(nextEpisode)}>
+                    <SvgIcon name="play" size={18} /> {resumeEpisode ? 'Resume' : (nextEpisode.watchProgress ?? 0) >= 96 || playable[0] === nextEpisode ? 'Play' : 'Play next'}
                     {' '}S{nextEpisode.seasonNumber}E{nextEpisode.episodeNumber}
                   </button>
                 ) : (
-                  <button className="btn btn-primary" type="button" disabled title={episodesError ?? 'No episodes are downloaded yet'}>
+                  <button className="btn btn-primary btn-lg" type="button" disabled title={episodesError ?? 'No episodes are downloaded yet'}>
                     {episodesLoading ? 'Loading episodes...' : episodesError ? 'Episodes unavailable' : 'No episodes downloaded'}
                   </button>
                 )}
                 <FavoriteButton mediaType="series" mediaId={series.id} initial={series.favorite} />
-                <RemoveTitle kind="series" id={series.id} title={series.title} />
+                {isAdmin && (
+                  <MoreMenu label="More for this show">
+                    {isSonarr && series.status !== 'available' && <MenuItem icon="search" label="Search for missing episodes" onSelect={() => void searchMissing()} />}
+                    {isSonarr && <MenuItem icon="sliders-h" label="Download quality and checks" onSelect={() => setDialog('checks')} />}
+                    <MenuDivider />
+                    <MenuItem icon="trash" label="Remove show" danger onSelect={() => setDialog('remove')} />
+                  </MoreMenu>
+                )}
+                {notice && <div className={`notice notice--${notice.tone}`}>{notice.text}</div>}
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {(description?.description || series.overview) && (
+      {showStory && (
         <section className="page detail-story-section">
-          <div className="rail-head">
-            <h2 className="rail-title">Storyline</h2>
-          </div>
-          <p className="detail-story">
-            {description?.description || series.overview}
-          </p>
-          {description && description.source !== 'library' && (
-            <span className="detail-story-source">Description pulled from {description.source}</span>
-          )}
+          <div className="rail-head"><h2 className="rail-title">Storyline</h2></div>
+          <p className="detail-story">{description?.description}</p>
+          <span className="detail-story-source">Description pulled from {description?.source}</span>
         </section>
       )}
 
@@ -283,10 +300,19 @@ export default function SeriesDetail() {
           </div>
         </section>
       )}
-      <ManageSection title="Download settings and checks">
-        {/^sonarr-/.test(series.id) && <TitleQuality mediaType="series" id={series.id} bare />}
+      <Dialog open={dialog === 'checks'} onClose={() => setDialog(null)} title="Download quality and checks" wide>
+        <TitleQuality mediaType="series" id={series.id} bare />
         <SourceCheck id={series.id} />
-      </ManageSection>
+      </Dialog>
+
+      <Dialog open={dialog === 'remove'} onClose={() => !removing && setDialog(null)} title="Remove this show?">
+        <p className="dlg-help">{`"${series.title}" will leave your library. You can keep the files on disk or delete them too.`}</p>
+        <div className="dlg-actions">
+          <button type="button" className="btn btn-danger" disabled={removing} onClick={() => void removeSeries(false)}>Remove, keep files</button>
+          <button type="button" className="btn btn-danger" disabled={removing} onClick={() => void removeSeries(true)}>Remove and delete files</button>
+          <button type="button" className="btn btn-secondary" disabled={removing} onClick={() => setDialog(null)}>Cancel</button>
+        </div>
+      </Dialog>
     </main>
   );
 }

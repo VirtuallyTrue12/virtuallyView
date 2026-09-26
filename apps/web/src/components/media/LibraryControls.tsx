@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { MediaItem } from '../../lib/api';
 import { SvgIcon } from '../ui/SvgIcon';
+import { Dialog } from '../ui/Dialog';
 
 export type SortKey = 'title' | 'added' | 'year' | 'rating' | 'runtime';
 export type StateFilter = 'all' | 'available' | 'missing' | 'unwatched' | 'progress' | 'watched' | 'favorites';
@@ -82,6 +83,8 @@ export function useLibraryView(items: MediaItem[], key: string) {
   return { view, setView, shown, genres, letters, studios, collections };
 }
 
+const QUICK: StateFilter[] = ['all', 'available', 'missing', 'favorites'];
+
 export function LibraryControls({ view, setView, genres, letters, total, shown, onSurprise, showRuntime = true, studios = [], collections = [], studioLabel = 'Studio' }: {
   view: View;
   setView: (updater: (prev: View) => View) => void;
@@ -95,58 +98,74 @@ export function LibraryControls({ view, setView, genres, letters, total, shown, 
   showRuntime?: boolean;
   studioLabel?: string;
 }) {
+  const [open, setOpen] = useState(false);
   const patch = (p: Partial<View>) => setView(prev => ({ ...prev, ...p }));
-  const filtered = view.query !== '' || view.state !== 'all' || view.genre !== '' || view.letter !== '' || view.studio !== '' || view.collection !== '';
+  const clear = () => patch({ query: '', state: 'all', genre: '', letter: '', studio: '', collection: '' });
+  // What the Filters dialog holds (the search box and quick chips are always visible).
+  const inDialog = (view.genre ? 1 : 0) + (view.letter ? 1 : 0) + (view.studio ? 1 : 0) + (view.collection ? 1 : 0) + (QUICK.includes(view.state) ? 0 : 1);
+  const filtered = view.query !== '' || view.state !== 'all' || inDialog > 0;
   return (
     <div className="lib-controls">
       <div className="lib-row">
-        <input
-          className="settings-input lib-search"
-          type="search"
-          placeholder="Filter this library…"
-          value={view.query}
-          onChange={e => patch({ query: e.target.value })}
-          aria-label="Filter this library"
-        />
+        <input className="settings-input lib-search" type="search" placeholder="Filter this library…" value={view.query} onChange={e => patch({ query: e.target.value })} aria-label="Filter this library" />
         <select className="settings-input" value={view.sort} onChange={e => patch({ sort: e.target.value as SortKey })} aria-label="Sort by">
           {SORTS.filter(s => showRuntime || s.key !== 'runtime').map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
-        {genres.length > 0 && (
-          <select className="settings-input" value={view.genre} onChange={e => patch({ genre: e.target.value })} aria-label="Genre">
-            <option value="">All genres</option>
-            {genres.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
-        )}
-        {collections.length > 0 && (
-          <select className="settings-input" value={view.collection} onChange={e => patch({ collection: e.target.value })} aria-label="Collection">
-            <option value="">All collections</option>
-            {collections.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        )}
-        {studios.length > 0 && (
-          <select className="settings-input" value={view.studio} onChange={e => patch({ studio: e.target.value })} aria-label={studioLabel}>
-            <option value="">{`All ${studioLabel.toLowerCase()}s`}</option>
-            {studios.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        )}
-        {onSurprise && <button className="btn btn-secondary btn-sm" type="button" onClick={onSurprise} disabled={shown === 0}><SvgIcon name="dice" size={16} /> Surprise me</button>}
-        {filtered && <button className="btn btn-secondary btn-sm" type="button" onClick={() => patch({ query: '', state: 'all', genre: '', letter: '', studio: '', collection: '' })}>Clear filters</button>}
+        <button className="btn btn-secondary btn-sm lib-filter-btn" type="button" onClick={() => setOpen(true)}>
+          <SvgIcon name="sliders-h" size={16} /> Filters{inDialog > 0 && <span className="ui-badge">{inDialog}</span>}
+        </button>
       </div>
-      <div className="requests-filters" role="tablist" aria-label="Show">
-        {STATES.map(s => (
-          <button key={s.key} type="button" role="tab" aria-selected={view.state === s.key} className={`season-tab${view.state === s.key ? ' is-active' : ''}`} onClick={() => patch({ state: s.key })}>{s.label}</button>
-        ))}
+      <div className="lib-chips">
+        <div className="requests-filters" role="tablist" aria-label="Show">
+          {STATES.filter(s => QUICK.includes(s.key) || s.key === view.state).map(s => (
+            <button key={s.key} type="button" role="tab" aria-selected={view.state === s.key} className={`season-tab${view.state === s.key ? ' is-active' : ''}`} onClick={() => patch({ state: s.key })}>{s.label}</button>
+          ))}
+        </div>
+        <span className="page-count">{shown === total ? `${total} titles` : `${shown} of ${total} titles`}</span>
       </div>
-      <div className="lib-letters" aria-label="Jump to letter">
-        {LETTERS.map(l => (
-          <button
-            key={l} type="button" disabled={!letters.has(l)}
-            className={`lib-letter${view.letter === l ? ' is-active' : ''}`}
-            onClick={() => patch({ letter: view.letter === l ? '' : l })}
-          >{l}</button>
-        ))}
-      </div>
-      <span className="page-count">{shown === total ? `${total} titles` : `${shown} of ${total} titles`}</span>
+
+      <Dialog open={open} onClose={() => setOpen(false)} title="Filters">
+        <div className="lib-dialog">
+          <label className="lib-dialog-field"><span>Watch status</span>
+            <select className="settings-input" value={view.state} onChange={e => patch({ state: e.target.value as StateFilter })}>
+              {STATES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+          </label>
+          {genres.length > 0 && (
+            <label className="lib-dialog-field"><span>Genre</span>
+              <select className="settings-input" value={view.genre} onChange={e => patch({ genre: e.target.value })} aria-label="Genre">
+                <option value="">All genres</option>{genres.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </label>
+          )}
+          {collections.length > 0 && (
+            <label className="lib-dialog-field"><span>Collection</span>
+              <select className="settings-input" value={view.collection} onChange={e => patch({ collection: e.target.value })} aria-label="Collection">
+                <option value="">All collections</option>{collections.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+          )}
+          {studios.length > 0 && (
+            <label className="lib-dialog-field"><span>{studioLabel}</span>
+              <select className="settings-input" value={view.studio} onChange={e => patch({ studio: e.target.value })} aria-label={studioLabel}>
+                <option value="">{`All ${studioLabel.toLowerCase()}s`}</option>{studios.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+          )}
+          <div className="lib-dialog-field"><span>Jump to letter</span>
+            <div className="lib-letters" aria-label="Jump to letter">
+              {LETTERS.map(l => (
+                <button key={l} type="button" disabled={!letters.has(l)} className={`lib-letter${view.letter === l ? ' is-active' : ''}`} onClick={() => patch({ letter: view.letter === l ? '' : l })}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div className="dlg-actions">
+            <button type="button" className="btn btn-primary" onClick={() => setOpen(false)}>Show {shown} {shown === 1 ? 'title' : 'titles'}</button>
+            {onSurprise && <button className="btn btn-secondary" type="button" onClick={() => { setOpen(false); onSurprise(); }} disabled={shown === 0}><SvgIcon name="dice" size={16} /> Surprise me</button>}
+            {filtered && <button className="btn btn-secondary" type="button" onClick={clear}>Clear filters</button>}
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

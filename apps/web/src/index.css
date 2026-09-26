@@ -5249,7 +5249,6 @@ iframe.hero-trailer { pointer-events: none; }
 .rating .svg-icon { color: var(--color-accent); vertical-align: -0.15em; margin-right: 2px; }
 
 /* Account and user menu */
-.nav { position: relative; }
 .user-menu { position: relative; margin-left: 8px; }
 .user-menu-button { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 0.86rem; }
 .user-menu-button:hover, .user-menu-button[aria-expanded='true'] { border-color: var(--color-accent); }
@@ -5727,7 +5726,12 @@ a.person:hover, a.person:focus-visible { transform: none; }
 .ts-foot a { color: var(--color-accent); }
 
 /* ========== Phones and small tablets ========== */
-.tabs, .nav .nav-search { display: none; }
+.tabs { display: none; }
+.nav .nav-search { display: inline-grid; place-items: center; flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); transition: color 140ms, border-color 140ms; }
+.nav .nav-search:hover, .nav .nav-search.active { color: var(--color-text-primary); border-color: var(--color-accent); }
+.nav { gap: var(--spacing-lg); }
+.nav-links { flex-wrap: nowrap; gap: 1.1rem; white-space: nowrap; }
+@media (max-width: 1560px) { .user-menu-name { display: none; } .nav-link { padding-left: 0.55rem; padding-right: 0.55rem; } }
 .more-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
 .more-tile { display: grid; justify-items: center; align-content: center; gap: 0.4rem; min-height: 84px; padding: 0.8rem 0.3rem; border: 1px solid var(--color-border); border-radius: var(--radius-medium); background: var(--color-surface); color: var(--color-text-secondary); text-decoration: none; font-size: 0.8rem; font-weight: 600; text-align: center; }
 .more-tile:hover, .more-tile:focus-visible, .more-tile.is-active { color: var(--color-text-primary); border-color: color-mix(in srgb, var(--color-accent) 50%, transparent); outline: none; }
@@ -5831,3 +5835,8 @@ a.person:hover, a.person:focus-visible { transform: none; }
   .media-grid, .album-grid { gap: 0.7rem 0.5rem; }
   .page { padding-left: 0.85rem; padding-right: 0.85rem; }
 }
+
+/* Detail pages: hero, storyline, cast and the rest share one column and one left edge. */
+.detail > .page, .detail > section.page { max-width: 1200px; margin-left: auto; margin-right: auto; width: 100%; box-sizing: border-box; }
+.detail > .people-section.page { margin-left: auto; margin-right: auto; }
+.detail-story { max-width: 78ch; }

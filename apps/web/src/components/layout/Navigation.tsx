@@ -15,20 +15,19 @@ const LINKS = [
   { to: '/music', label: 'Music' },
   { to: '/live', label: 'Live' },
   { to: '/photos', label: 'Photos' },
+  { to: '/books', label: 'Books' },
   { to: '/requests', label: 'Requests' },
-  { to: '/downloads', label: 'Downloads' },
-  { to: '/search', label: 'Search' },
-  { to: '/settings', label: 'Settings' }
+  { to: '/downloads', label: 'Downloads' }
 ];
 
 // Less used pages live under one menu so the bar stays readable.
 const MORE = [
-  { to: '/books', label: 'Books' },
   { to: '/wiki', label: 'Wiki' },
   { to: '/apps', label: 'Apps' },
   { to: '/statistics', label: 'Stats' },
   { to: '/diagnostics', label: 'Diagnostics' },
-  { to: '/themes', label: 'Themes' }
+  { to: '/themes', label: 'Themes' },
+  { to: '/settings', label: 'Settings' }
 ];
 
 /** "More" pages: opens on hover or click, closes on a choice, outside click, Escape or page change. */

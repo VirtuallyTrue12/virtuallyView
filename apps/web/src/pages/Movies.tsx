@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MediaCard } from '../components/media/MediaCard';
 import { api, type MediaItem } from '../lib/api';
-import { BackButton } from '../components/layout/BackButton';
+import { EmptyState, PageHeader } from '../components/ui/Page';
+import { SvgIcon } from '../components/ui/SvgIcon';
 import { ScanButton } from '../components/media/ScanButton';
 import { LibraryControls, useLibraryView } from '../components/media/LibraryControls';
 
@@ -29,25 +30,22 @@ export default function Movies() {
   return (
     <main className="page">
 
-      <BackButton to="/" label="Home" />
-      <div className="page-head">
-        <h1>Movies</h1>
-        <div className="page-head-actions">
-          {!loading && !error && <span className="page-count">{items.length} in library</span>}
+      <PageHeader
+        title="Movies"
+        sub={!loading && !error ? `${items.length} in your library` : undefined}
+        actions={<>
+          <button className="btn btn-primary" type="button" onClick={() => navigate('/search')}><SvgIcon name="plus" size={17} /> Request a title</button>
           <ScanButton type="movie" />
-          <button className="btn btn-secondary btn-sm" type="button" onClick={() => navigate('/search')}>
-            Request a title
-          </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {loading && <div className="loading-state">Loading movies...</div>}
       {error && <div className="loading-state">Could not load movies: {error}</div>}
       {!loading && !error && items.length === 0 && (
-        <div className="loading-state">No movies in your library yet. Connect your Movies service and it will fill in.</div>
+        <EmptyState icon="film" title="No movies yet" text="Request a title and it will search, download and appear here by itself. Or connect an existing Movies service." action={<button className="btn btn-primary" type="button" onClick={() => navigate('/search')}>Find a movie</button>} />
       )}
 
-      {!loading && !error && items.length > 0 && (
+      {!loading && !error && items.length > 12 && (
         <LibraryControls view={lib.view} setView={lib.setView} genres={lib.genres} studios={lib.studios} collections={lib.collections} letters={lib.letters} total={items.length} shown={lib.shown.length} onSurprise={surprise} />
       )}
 

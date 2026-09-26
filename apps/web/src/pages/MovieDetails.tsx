@@ -4,15 +4,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { MediaCard } from '../components/media/MediaCard';
 import PlyrPlayer from '../components/media/PlyrPlayer';
 import { SourceCheck } from '../components/media/SourceCheck';
-import { StatusPill } from '../components/media/StatusPill';
 import { BackButton } from '../components/layout/BackButton';
 import { api, type MediaDescription, type MediaItem } from '../lib/api';
 import { useRequester } from '../lib/useRequester';
 import { FavoriteButton, WatchedButton } from '../components/media/UserFlagButtons';
-import { SearchAgain } from '../components/media/SearchAgain';
 import { MediaInfoPanel } from '../components/media/MediaInfoPanel';
 import { QualitySelect } from '../components/requests/QualitySelect';
-import { ManageSection } from '../components/ui/ManageSection';
+import { Dialog } from '../components/ui/Dialog';
+import { MenuDivider, MenuItem, MoreMenu } from '../components/ui/MoreMenu';
 import { CastRow } from '../components/media/CastRow';
 import { TitleQuality } from '../components/media/TitleQuality';
 import { SvgIcon } from '../components/ui/SvgIcon';
@@ -34,8 +33,11 @@ export default function MovieDetails() {
   const [watchProgress, setWatchProgress] = useState<{ positionSeconds: number; durationSeconds: number; percent: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [replacing, setReplacing] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [dialog, setDialog] = useState<null | 'checks' | 'remove'>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [castLoading, setCastLoading] = useState(false);
+
+  useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -94,6 +96,11 @@ export default function MovieDetails() {
     .slice(0, 8);
   const sharedGenres = movie.genres?.length ? (movie.genres.length > 3 ? movie.genres.slice(0, 3) : movie.genres) : [];
   const inLibrary = movie.status === 'available' || movie.status === 'downloading';
+  const isRadarr = /^radarr-/.test(movie.id);
+  const showStory = !!description?.description && description.source !== 'library' && description.description.trim() !== (movie.overview ?? '').trim();
+  const searchAgain = async () => {
+    try { const r = await api.searchMovie(movie.id); setNotice({ tone: r.success ? 'ok' : 'err', text: r.message }); } catch (err) { setNotice({ tone: 'err', text: (err as Error).message }); }
+  };
 
   const addToLibrary = () => {
     if (inLibrary) {
@@ -182,57 +189,28 @@ export default function MovieDetails() {
 
               <div className="hero-actions">
                 {movie.status === 'available' && (
-                  <button
-                    className="btn btn-primary"
-                    type="button"
-                    onClick={() => navigate(`/movies/${movie.id}/play`)}
-                  >
-                    {watchProgress ? 'Resume' : 'Play'}
-                  </button>
-                )}
-                {watchProgress && movie.status === 'available' && (
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    onClick={() => navigate(`/movies/${movie.id}/play`)}
-                  >
-                    Play from start
+                  <button className="btn btn-primary btn-lg" type="button" onClick={() => navigate(`/movies/${movie.id}/play`)}>
+                    <SvgIcon name="play" size={18} /> {watchProgress ? 'Resume' : 'Play'}
                   </button>
                 )}
                 {(movie.status === 'missing' || movie.status === 'requested') && <QualitySelect mediaType="movie" compact />}
                 {(movie.status === 'missing' || movie.status === 'requested') && (
-                  <button className="btn btn-primary" type="button" onClick={addToLibrary} disabled={requestBusy}>
-                    {requestBusy ? 'Looking it up…' : movie.status === 'requested' ? 'Requested' : 'Request'}
+                  <button className="btn btn-primary btn-lg" type="button" onClick={addToLibrary} disabled={requestBusy}>
+                    <SvgIcon name={movie.status === 'requested' ? 'check' : 'plus'} size={18} /> {requestBusy ? 'Looking it up…' : movie.status === 'requested' ? 'Requested' : 'Request'}
                   </button>
                 )}
                 <FavoriteButton mediaType="movie" mediaId={movie.id} initial={(movie as { favorite?: boolean }).favorite} />
                 {movie.status === 'available' && (
                   <WatchedButton mediaType="movie" mediaId={movie.id} initial={(movie as { watched?: boolean }).watched} onChange={w => { if (w) setWatchProgress(null); }} />
                 )}
-                <button
-                  className="btn btn-danger-outline"
-                  type="button"
-                  onClick={() => setConfirmDelete(v => !v)}
-                  disabled={deleting}
-                  aria-expanded={confirmDelete}
-                >
-                  {deleting ? 'Removing…' : confirmDelete ? 'Cancel' : inLibrary ? 'Delete movie' : 'Remove title'}
-                </button>
-                {confirmDelete && !deleting && (
-                  <span className="detail-delete-confirm">
-                    <span>{inLibrary ? 'Remove from library?' : 'Remove this title from your list?'}</span>
-                    <button className="btn btn-danger btn-sm" type="button" onClick={() => removeMovie(false)}>
-                      {inLibrary ? 'Remove, keep files' : 'Remove from list'}
-                    </button>
-                    <button className="btn btn-danger btn-sm" type="button" onClick={() => removeMovie(true)}>
-                      Remove and delete files
-                    </button>
-                  </span>
-                )}
+                <MoreMenu label="More for this movie">
+                  {movie.status === 'available' && watchProgress && <MenuItem icon="play" label="Play from the start" onSelect={() => navigate(`/movies/${movie.id}/play`)} />}
+                  {isRadarr && isAdmin && movie.status !== 'available' && <MenuItem icon="search" label="Search again" hint="Look for a better release" onSelect={() => void searchAgain()} />}
+                  {isRadarr && isAdmin && <MenuItem icon="sliders-h" label="Download quality and checks" onSelect={() => setDialog('checks')} />}
+                  {isAdmin && <><MenuDivider /><MenuItem icon="trash" label={inLibrary ? 'Delete movie' : 'Remove title'} danger onSelect={() => setDialog('remove')} /></>}
+                  {!isAdmin && movie.status !== 'available' && <MenuItem icon="info" label="Nothing else here yet" hint="Ask an administrator for more options" onSelect={() => undefined} disabled />}
+                </MoreMenu>
               </div>
-              {movie.status !== 'available' && /^radarr-/.test(movie.id) && (
-                <SearchAgain label="Search again" run={() => api.searchMovie(movie.id)} small={false} />
-              )}
               {movie.warnings?.map(warning => (
                 <div key={warning.code + warning.message} className="notice notice--err title-warning" role="alert">
                   <span>{warning.message}</span>
@@ -266,59 +244,26 @@ export default function MovieDetails() {
         </section>
       )}
 
-      {(description?.description || movie.overview) && (
+      {showStory && (
         <section className="page detail-story-section">
-          <div className="rail-head">
-            <h2 className="rail-title">Storyline</h2>
-          </div>
-          <p className="detail-story">
-            {description?.description || movie.overview}
-          </p>
-          {description && description.source !== 'library' && (
-            <span className="detail-story-source">Description pulled from {description.source}</span>
-          )}
+          <div className="rail-head"><h2 className="rail-title">Storyline</h2></div>
+          <p className="detail-story">{description?.description}</p>
+          <span className="detail-story-source">Description pulled from {description?.source}</span>
         </section>
       )}
 
       <CastRow title="Cast" people={movie.cast ?? []} loading={castLoading} link inPage />
 
-      {movie.status === 'available' && (
+      {(movie.status === 'available' || movie.releaseDate || (movie.director && movie.director.length > 0)) && (
         <section className="page">
-          <div className="rail-head"><h2 className="rail-title">Media info</h2></div>
-          <MediaInfoPanel load={() => api.mediaInfo(movie.id)} />
-        </section>
-      )}
-
-      {movie.status && (
-        <section className="page detail-status-section">
-          <div className="rail-head">
-            <h2 className="rail-title">Status</h2>
-          </div>
-          <div className="detail-status-row">
-            <StatusPill status={movie.status} />
-            <span className="detail-status-text">
-              {movie.status === 'available' ? 'Files are in your library and ready to watch.' :
-               movie.status === 'downloading' ? 'A file is being downloaded or imported right now.' :
-               movie.status === 'requested' ? 'This title has been requested and will appear here when it is available.' :
-               movie.status === 'paused' ? 'The transfer for this title is paused.' :
-               'This title is not in your library yet. Use Request to add it.'}
-            </span>
-          </div>
-        </section>
-      )}
-
-      {movie.director && movie.director.length > 0 && (
-        <section className="page detail-director-section">
-          <div className="detail-director-row">
-            <span className="detail-director-label">Director{movie.director.length > 1 ? 's' : ''}</span>
-            <span className="detail-director-names">{movie.director.map(d => d.name).join(', ')}</span>
-          </div>
-          {movie.releaseDate && (
-            <div className="detail-director-row">
-              <span className="detail-director-label">Release Date</span>
-              <span className="detail-director-names">{movie.releaseDate}</span>
-            </div>
-          )}
+          <div className="rail-head"><h2 className="rail-title">Details</h2></div>
+          <dl className="detail-facts">
+            {movie.director && movie.director.length > 0 && <div><dt>Director{movie.director.length > 1 ? 's' : ''}</dt><dd>{movie.director.map(d => d.name).join(', ')}</dd></div>}
+            {movie.releaseDate && <div><dt>Released</dt><dd>{movie.releaseDate}</dd></div>}
+            {movie.studio && <div><dt>Studio</dt><dd>{movie.studio}</dd></div>}
+            {movie.language && <div><dt>Language</dt><dd>{movie.language}</dd></div>}
+          </dl>
+          {movie.status === 'available' && <MediaInfoPanel load={() => api.mediaInfo(movie.id)} />}
         </section>
       )}
 
@@ -334,10 +279,19 @@ export default function MovieDetails() {
           </div>
         </section>
       )}
-      <ManageSection title="Download settings and checks">
-        {/^radarr-/.test(movie.id) && <TitleQuality mediaType="movie" id={movie.id} bare />}
+      <Dialog open={dialog === 'checks'} onClose={() => setDialog(null)} title="Download quality and checks" wide>
+        <TitleQuality mediaType="movie" id={movie.id} bare />
         <SourceCheck id={movie.id} />
-      </ManageSection>
+      </Dialog>
+
+      <Dialog open={dialog === 'remove'} onClose={() => !deleting && setDialog(null)} title={inLibrary ? 'Delete this movie?' : 'Remove this title?'}>
+        <p className="dlg-help">{inLibrary ? `"${movie.title}" will leave your library. You can keep the files on disk or delete them too.` : `"${movie.title}" will be taken off your list.`}</p>
+        <div className="dlg-actions">
+          <button type="button" className="btn btn-danger" disabled={deleting} onClick={() => { setDialog(null); void removeMovie(false); }}>{inLibrary ? 'Remove, keep files' : 'Remove from list'}</button>
+          {inLibrary && <button type="button" className="btn btn-danger" disabled={deleting} onClick={() => { setDialog(null); void removeMovie(true); }}>Remove and delete files</button>}
+          <button type="button" className="btn btn-secondary" disabled={deleting} onClick={() => setDialog(null)}>Cancel</button>
+        </div>
+      </Dialog>
     </main>
   );
 }
