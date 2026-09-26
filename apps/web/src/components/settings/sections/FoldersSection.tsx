@@ -30,6 +30,7 @@ export default function FoldersSection({ settings, onSaved }: { settings: Server
 
   return (
     <div className="st-block">
+      <p className="ui-help">These paths are inside the containers, which is why you will not find <code>/media</code> on your computer. To keep your library in normal folders you can browse and add files to, set <code>MOVIES_DIR</code>, <code>TV_DIR</code> and <code>MUSIC_DIR</code> in your <code>.env</code> file and restart; see <a href="https://github.com/VirtuallyTrue12/virtuallyView/blob/main/docs/existing-media.md" target="_blank" rel="noreferrer">Using the media you already have</a>.</p>
       <p className="ui-help">Where your files live on this machine. Everything you watch or listen to is read from these folders, so changing one redirects that whole part of the library.</p>
       {(Object.keys(LABEL) as Array<keyof Roots>).map(key => (
         <div className="ui-field" key={key}>

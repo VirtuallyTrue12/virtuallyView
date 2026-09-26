@@ -97,7 +97,7 @@ services:
     volumes:
       - secrets:/secrets:ro
       - radarr-config:/config
-      - media-movies:/media/movies
+      - ${MOVIES_DIR:-media-movies}:/media/movies
       - downloads:/downloads
     ports:
       - "127.0.0.1:7878:7878"
@@ -128,7 +128,7 @@ services:
     volumes:
       - secrets:/secrets:ro
       - sonarr-config:/config
-      - media-tv:/media/tv
+      - ${TV_DIR:-media-tv}:/media/tv
       - downloads:/downloads
     ports:
       - "127.0.0.1:8989:8989"
@@ -188,7 +188,7 @@ services:
     volumes:
       - secrets:/secrets:ro
       - lidarr-config:/config
-      - media-music:/media/music
+      - ${MUSIC_DIR:-media-music}:/media/music
       - downloads:/downloads
     ports:
       - "127.0.0.1:8686:8686"
@@ -212,8 +212,8 @@ services:
       - TZ=Etc/UTC
     volumes:
       - bazarr-config:/config
-      - media-movies:/media/movies
-      - media-tv:/media/tv
+      - ${MOVIES_DIR:-media-movies}:/media/movies
+      - ${TV_DIR:-media-tv}:/media/tv
     ports:
       - "127.0.0.1:6767:6767"
     restart: unless-stopped
@@ -237,7 +237,7 @@ services:
       - qbittorrent-config:/config
       - downloads:/downloads
       # Concerts and music videos are filed under their artist here.
-      - media-music:/media/music
+      - ${MUSIC_DIR:-media-music}:/media/music
     ports:
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:6881:6881"
@@ -372,9 +372,9 @@ services:
       - helper-shared:/shared:ro
       - secrets:/secrets:ro
       - app-data:/app/apps/server/data
-      - media-movies:/media/movies:ro
-      - media-tv:/media/tv:ro
-      - media-music:/media/music:ro
+      - ${MOVIES_DIR:-media-movies}:/media/movies:ro
+      - ${TV_DIR:-media-tv}:/media/tv:ro
+      - ${MUSIC_DIR:-media-music}:/media/music:ro
       - media-photos:/media/photos:ro
       - media-books:/media/books:ro
     healthcheck:
@@ -592,7 +592,7 @@ services:
       - YTDLP_PROXY=${YTDLP_PROXY:-}
     volumes:
       - secrets:/secrets:ro
-      - media-music:/media/music
+      - ${MUSIC_DIR:-media-music}:/media/music
     restart: unless-stopped
 
   # Optional automatic updates for the containers above (only the ones
