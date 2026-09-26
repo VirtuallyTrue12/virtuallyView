@@ -41,3 +41,15 @@ With Docker: `docker compose exec app npm run admin -- reset-password <username>
 ## Skipping intros
 
 If a file has chapters named like "Intro", "Opening", "Recap" or "Credits", the player shows a Skip button while that chapter plays (Skip credits goes to the next episode). Files without chapters get a "Skip 90 s" button in the first five minutes of an episode. Chapters are marked on the seek bar.
+
+## Back up and restore one TV show
+
+The dashboard backup (above) never includes media. To keep a single show safe while you rebuild the rest of a library, or to move it, use the show backup:
+
+```
+node scripts/title-backup.mjs backup "How I Met Your Mother" --out ~/Backups
+node scripts/title-backup.mjs restore ~/Backups/how-i-met-your-mother-20260926-1322
+```
+
+It saves the show's files (a plain `files.tar`), a checksum for every file, how Sonarr tracks the show (quality profile, monitored episodes, seasons), and each person's watch progress. Before it finishes it checks the archive holds every file, so do not delete anything until it says Done. Restore refuses to overwrite a show that is already there; it copies the files back, checks every file against its checksum, adds the show to Sonarr, waits for it to find the episodes, then restores monitoring and watch progress (mapped to the new ids). It needs the stack running and the `docker` command (Podman's shim works). It deletes nothing itself.
+
