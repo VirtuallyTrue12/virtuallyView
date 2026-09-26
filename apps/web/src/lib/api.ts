@@ -383,6 +383,7 @@ export interface ServerSettings {
   requests?: { approval: 'off' | 'users'; limit: number; window: 'day' | 'week' };
   notifications?: { channels: NotificationChannel[] };
   autoBackup?: boolean;
+  autoFixDownloads?: boolean;
   updatedAt?: string;
 }
 
@@ -494,6 +495,7 @@ export interface PhotoFolder { path: string; folders: string[]; files: Array<{ n
 export interface LiveChannel { id: string; name: string; logo?: string; group?: string; playlist: string; guide?: boolean }
 export interface LiveProgramme { start: number; stop: number; title: string; desc?: string }
 export interface LivePlaylist { id: string; name: string; url: string; epgUrl?: string }
+export interface DoctorEntry { id: string; title: string; kind: 'stalled' | 'metadata' | 'import' | 'other'; since: string; fixAt: string | null; gaveUp: boolean; needsYou: string | null }
 export interface SettingsChange { id: number; at: string; actor: string; area: string; summary: string }
 export interface SettingsOverview {
   serverName: string;
@@ -527,6 +529,8 @@ export const api = {
   booksFolder: (dir: string) => getJSON<PhotoFolder>(`/api/books?dir=${encodeURIComponent(dir)}`),
   bookFavorites: () => getJSON<{ paths: string[] }>('/api/books/favorites'),
   setBookFavorite: (path: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/books/favorite', { path, favorite }),
+  downloadDoctor: () => getJSON<{ entries: DoctorEntry[] }>('/api/downloads/doctor'),
+  repairDownloads: () => postJSON<{ fixed: string[]; message: string; skippedBecauseOffline: boolean }>('/api/downloads/repair', {}),
   settingsOverview: () => getJSON<SettingsOverview>('/api/settings/overview'),
   settingsHistory: () => getJSON<{ changes: SettingsChange[] }>('/api/settings/history?limit=40'),
   restartService: (service: string) => postJSON<{ ok: boolean; message: string }>('/api/troubleshoot/restart', { service }),

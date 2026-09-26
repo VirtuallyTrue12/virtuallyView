@@ -39,6 +39,7 @@ export function describeSettingsChange(before: ServerSettings, after: ServerSett
   if (!same(before.requests, after.requests)) add('Requests', `Request rules changed (approval ${after.requests.approval === 'users' ? 'required for people' : 'off'}, limit ${after.requests.limit === 0 ? 'none' : `${after.requests.limit} per ${after.requests.window}`})`);
   if (!same(before.defaultQuality, after.defaultQuality)) add('Quality', 'Default download quality changed');
   if (before.autoBackup !== after.autoBackup) add('Backup', `Automatic backups turned ${onOff(after.autoBackup)}`);
+  if (before.autoFixDownloads !== after.autoFixDownloads) add('Downloads', `Replacing dead downloads automatically turned ${onOff(after.autoFixDownloads)}`);
   if (before.allowSignup !== after.allowSignup) add('People', `Self sign-up turned ${onOff(after.allowSignup)}`);
   if (before.trustLocalNetwork !== after.trustLocalNetwork) add('Network', `Trusting services on the home network turned ${onOff(after.trustLocalNetwork)}`);
   if (before.publicUrl !== after.publicUrl) add('Network', after.publicUrl ? 'The address for other devices was changed' : 'The address for other devices was cleared');

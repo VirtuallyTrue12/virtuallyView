@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { actOnDownload, getDownloads, type DownloadAction } from '../services/real-downloads.js';
 import { getRequests } from '../services/requests.js';
 import { retryDownload } from '../services/retry.js';
+import { doctorEntries, runDoctor } from '../services/download-doctor.js';
 
 export default async function downloadsRoutes(server: FastifyInstance) {
   server.get('/api/downloads', async (_request, reply) => {
@@ -19,6 +20,21 @@ export default async function downloadsRoutes(server: FastifyInstance) {
     } catch (error) {
       return reply.code(503).send({ message: (error as Error).message });
     }
+  });
+
+  // What is wrong with the troubled downloads, and when each one is replaced by itself.
+  server.get('/api/downloads/doctor', async () => ({ entries: doctorEntries() }));
+
+  // Administrators: replace every stuck download right now instead of waiting out the grace period.
+  server.post('/api/downloads/repair', async () => {
+    const r = await runDoctor({ force: true });
+    const parts = [
+      r.fixed.length ? `Replaced ${r.fixed.length}: a new search has started for each.` : '',
+      r.skippedBecauseOffline ? 'The downloader or its VPN is not connected, so nothing was replaced. Fix that first (Settings > Health and repair).' : '',
+      r.needsYou.length ? `${r.needsYou.length} need something on the server changed (disk space or permissions).` : '',
+      r.gaveUp.length ? `${r.gaveUp.length} had no working copy after several tries.` : ''
+    ].filter(Boolean);
+    return { ...r, message: parts.join(' ') || 'Nothing needed fixing.' };
   });
 
   server.post<{ Params: { id: string } }>('/api/downloads/:id/retry', async (request, reply) => {

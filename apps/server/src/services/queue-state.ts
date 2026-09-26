@@ -6,7 +6,7 @@
 /** In the queue, but nobody is sending it: not failed, and not moving either. */
 export const STALLED_RE = /stalled|no connections|no seeders|not enough seeders/i;
 
-export const STALLED_HELP = 'Stalled: nobody is sharing this release right now. Try another release from Downloads.';
+export const STALLED_HELP = 'Stalled: nobody is sharing this release right now. Another one is looked for automatically, or pick one from Downloads.';
 
 export function isStalled(status: string | undefined, message: string | undefined, progress = 0): boolean {
   return ['warning', 'error', 'failed'].includes((status ?? '').toLowerCase()) && !!message && STALLED_RE.test(message) && progress < 100;

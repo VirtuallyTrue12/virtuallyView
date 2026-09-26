@@ -28,6 +28,7 @@ export const LEGACY: Record<string, SectionId> = {
 export const SEARCH_INDEX: Array<{ section: SectionId; label: string; words: string }> = [
   { section: 'library', label: 'Movie, TV and music folders', words: 'folder path media root staging download location disk' },
   { section: 'library', label: 'Default download quality', words: 'quality 1080p 4k hd flac lossless profile standard' },
+  { section: 'library', label: 'Replace dead or stuck downloads automatically', words: 'stuck stalled dead download seeders replace fix retry blocklist import failed' },
   { section: 'sources', label: 'Add search sources (indexers)', words: 'indexer torrent usenet prowlarr public private tracker source' },
   { section: 'services', label: 'Connect Radarr, Sonarr, Lidarr, qBittorrent', words: 'radarr sonarr lidarr prowlarr bazarr qbittorrent nzbget api key connect start stop' },
   { section: 'people', label: 'Add or remove people', words: 'user account invite family admin password role remove age limit rating' },

@@ -28,6 +28,8 @@ export interface ServerSettings {
   /** Where notifications go besides the in-app bell. */
   notifications: { channels: NotificationChannel[] };
   autoBackup: boolean;
+  /** Replace downloads that nobody is sharing, or that cannot be matched to the title, by themselves. */
+  autoFixDownloads: boolean;
   updatedAt?: string;
 }
 
@@ -57,7 +59,8 @@ const DEFAULTS: ServerSettings = {
   defaultQuality: { movie: '', series: '', artist: '' },
   requests: { approval: 'off', limit: 0, window: 'week' },
   notifications: { channels: [] },
-  autoBackup: true
+  autoBackup: true,
+  autoFixDownloads: true
 };
 
 const KEY = 'server';
@@ -81,7 +84,8 @@ function parse(value: unknown): ServerSettings {
     defaultQuality: { ...DEFAULTS.defaultQuality, ...(raw.defaultQuality ?? {}) },
     requests: { ...DEFAULTS.requests, ...(raw.requests ?? {}) },
     notifications: { channels: Array.isArray(raw.notifications?.channels) ? raw.notifications!.channels.map(channel => mapChannelSecrets(channel, openSecret)) : [] },
-    autoBackup: raw.autoBackup !== false
+    autoBackup: raw.autoBackup !== false,
+    autoFixDownloads: raw.autoFixDownloads !== false
   };
 }
 

@@ -6,6 +6,7 @@ import { SvgIcon } from '../components/ui/SvgIcon';
 import { LEGACY, SEARCH_INDEX, SECTIONS, type SectionId } from '../components/settings/settings-index';
 import SettingsHome from '../components/settings/SettingsHome';
 import ServicesSection from '../components/settings/sections/ServicesSection';
+import DownloadsFix from '../components/settings/sections/DownloadsFix';
 import FoldersSection from '../components/settings/sections/FoldersSection';
 import NetworkSection from '../components/settings/sections/NetworkSection';
 import AiSection from '../components/settings/sections/AiSection';
@@ -96,7 +97,7 @@ export default function Settings() {
             <>
               {current !== 'home' && <h2 className="st-title">{info.label}</h2>}
               {current === 'home' && <SettingsHome go={go} />}
-              {current === 'library' && (<><FoldersSection settings={settings} onSaved={setSettings} /><DefaultQuality settings={settings} onSaved={setSettings} /></>)}
+              {current === 'library' && (<><FoldersSection settings={settings} onSaved={setSettings} /><DefaultQuality settings={settings} onSaved={setSettings} /><DownloadsFix settings={settings} onSaved={setSettings} /></>)}
               {current === 'sources' && <IndexersPanel />}
               {current === 'services' && <ServicesSection />}
               {current === 'people' && (<><UsersPanel /><RequestRules settings={settings} onSaved={setSettings} /></>)}

@@ -98,6 +98,22 @@ function open(): DatabaseSync {
       checked_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS download_doctor (
+      key TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      first_seen TEXT NOT NULL,
+      gave_up INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS download_fixes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title_key TEXT NOT NULL,
+      title TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS live_recent (
       user_id TEXT NOT NULL,
       channel_id TEXT NOT NULL,

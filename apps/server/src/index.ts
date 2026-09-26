@@ -50,6 +50,7 @@ import { all } from './db/app-db.js';
 import { startAutoBackup } from './services/backup.js';
 import { startAiDigest } from './services/ai-digest.js';
 import { startAutoUpdate } from './services/auto-update.js';
+import { startDownloadDoctor } from './services/download-doctor.js';
 import { startMusicVideoFiler } from './services/music-video-library.js';
 import { startRequestSync } from './services/requests.js';
 import { getAuthBackdrop } from './services/backdrop.js';
@@ -331,7 +332,7 @@ server.addHook('onRequest', (request, _reply, done) => {
 // reconfigures the server or its services is administrator-only.
 const ADMIN_ONLY_WRITE = [
   '/api/server-settings', '/api/integrations', '/api/services', '/api/onboarding', '/api/downloads/',
-  '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists', '/api/live/health', '/api/live/record', '/api/live/recordings', '/api/setup/', '/api/kiwix/config', '/api/apps/', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/member-edits/', '/api/troubleshoot/'
+  '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists', '/api/live/health', '/api/live/record', '/api/live/recordings', '/api/setup/', '/api/kiwix/config', '/api/apps/', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/member-edits/', '/api/troubleshoot/', '/api/downloads/repair'
 ];
 // Reading how the server is wired (service addresses, what is reachable on the
 // network, how to control containers) is administrator-only too.
@@ -470,6 +471,7 @@ const start = async () => {
   startAutoBackup();
   startAiDigest();
   startAutoUpdate();
+  startDownloadDoctor();
   startMusicVideoFiler();
   try {
     const port = Number(process.env.PORT ?? 3000);

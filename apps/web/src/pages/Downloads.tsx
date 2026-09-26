@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SearchAgain } from '../components/media/SearchAgain';
 import { Link } from 'react-router-dom';
-import { api, type DownloadItem } from '../lib/api';
+import { api, type DoctorEntry, type DownloadItem } from '../lib/api';
+import { explainTrouble } from '../lib/download-explain';
 import { EmptyState, PageHeader, Pill, Seg, StatTile, SubNav } from '../components/ui/Page';
 import { Dialog } from '../components/ui/Dialog';
 import { MenuDivider, MenuItem, MoreMenu } from '../components/ui/MoreMenu';
@@ -30,6 +31,10 @@ export default function Downloads() {
   const [filter, setFilter] = useState('');
   const [view, setView] = useState<View | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [doctor, setDoctor] = useState<Map<string, DoctorEntry>>(new Map());
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [fixNote, setFixNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+  const [fixing, setFixing] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmTarget>(null);
 
   const refresh = useCallback((list?: DownloadItem[]) => {
@@ -41,7 +46,9 @@ export default function Downloads() {
       .then(setItems)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
+    api.downloadDoctor().then(r => setDoctor(new Map(r.entries.map(e => [e.id, e])))).catch(() => undefined);
   }, []);
+  useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin' || !st.enabled)).catch(() => undefined); }, []);
 
   useEffect(() => {
     refresh();
@@ -108,8 +115,14 @@ export default function Downloads() {
     setBulkBusy(false);
   };
 
+  const fixAll = async () => {
+    setFixing(true); setFixNote(null);
+    try { const r = await api.repairDownloads(); setFixNote({ tone: r.fixed.length ? 'ok' : 'err', text: r.message }); refresh(); }
+    catch (err) { setFixNote({ tone: 'err', text: (err as Error).message }); } finally { setFixing(false); }
+  };
+
   const rowProps = (d: DownloadItem) => ({
-    item: d, busy: busyId === d.id,
+    item: d, busy: busyId === d.id, entry: doctor.get(d.id),
     onPause: () => act(d.id, 'pause'), onResume: () => act(d.id, 'resume'), onRemove: () => act(d.id, 'remove'),
     onDeleteFiles: () => setConfirm({ id: d.id, title: d.title, mode: 'delete-files' as const })
   });
@@ -120,6 +133,7 @@ export default function Downloads() {
         title="Downloads"
         sub={loading ? undefined : items.length === 0 ? 'Nothing downloading' : `${running.length} downloading${running.length ? ` at ${rate(totalRate)}` : ''}${paused.length ? ` · ${paused.length} paused` : ''}${attention.length ? ` · ${attention.length} need attention` : ''}`}
         actions={<>
+          {isAdmin && attention.length > 0 && <button className="btn btn-primary" type="button" disabled={fixing} onClick={() => void fixAll()}><SvgIcon name="wrench" size={17} /> {fixing ? 'Fixing…' : `Fix ${attention.length} stuck now`}</button>}
           {running.length > 0 && <button className="btn btn-secondary" type="button" disabled={bulkBusy} onClick={() => void setAll('pause')}><SvgIcon name="pause" size={17} /> Pause all</button>}
           {paused.length > 0 && <button className="btn btn-primary" type="button" disabled={bulkBusy} onClick={() => void setAll('resume')}><SvgIcon name="play" size={17} /> Resume all</button>}
         </>}
@@ -127,6 +141,8 @@ export default function Downloads() {
       <SubNav label="Requests and downloads" items={[{ to: '/search', label: 'Find', icon: 'search' }, { to: '/requests', label: 'Requests', icon: 'list' }, { to: '/downloads', label: 'Downloads', icon: 'download', badge: live.length }]} />
 
       {error && <div className="notice notice--err" role="alert">Download action failed: {error}</div>}
+      {fixNote && <div className={`notice notice--${fixNote.tone}`} role="status">{fixNote.text}</div>}
+      {attention.length > 0 && current !== 'attention' && <div className="notice notice--err" role="status">{attention.length} download{attention.length === 1 ? ' is' : 's are'} stuck. Dead ones are replaced automatically; see “Needs attention”.</div>}
       {loading && <div className="loading-state">Loading downloads...</div>}
       {!loading && items.length === 0 && <EmptyState icon="download" title="No downloads right now" text="When you request something it appears here while it downloads, then moves to Completed once it is in your library." action={<Link to="/search" className="btn btn-primary"><SvgIcon name="search" size={16} /> Find something</Link>} />}
 
@@ -176,6 +192,7 @@ export default function Downloads() {
 
 type RowProps = {
   item: DownloadItem;
+  entry?: DoctorEntry | undefined;
   busy: boolean;
   onPause: () => void;
   onResume: () => void;
@@ -188,7 +205,7 @@ const STATE_PILL: Record<string, { tone: 'ok' | 'warn' | 'bad' | 'info' | 'neutr
   completed: { tone: 'ok', label: 'Completed' }, failed: { tone: 'bad', label: 'Failed' }, stalled: { tone: 'warn', label: 'Stalled' }, importing: { tone: 'info', label: 'Filing' }
 };
 
-function DownloadRow({ item, busy, onPause, onResume, onRemove, onDeleteFiles }: RowProps) {
+function DownloadRow({ item, entry, busy, onPause, onResume, onRemove, onDeleteFiles }: RowProps) {
   const allowed = item.actions ?? ['pause', 'resume', 'remove'];
   const showPause = allowed.includes('pause') && item.status === 'downloading';
   const showResume = allowed.includes('resume') && item.status === 'paused';
@@ -211,7 +228,7 @@ function DownloadRow({ item, busy, onPause, onResume, onRemove, onDeleteFiles }:
         </div>
         <div className="rq-bar" role="progressbar" aria-valuenow={item.progress} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${Math.max(item.progress > 0 ? 2 : 0, item.progress)}%` }} /></div>
         <p className="dl-line"><strong>{item.progress}%</strong>{details.map(detail => <span key={detail}>{detail}</span>)}{item.requestId && <Link to="/requests">Requested</Link>}</p>
-        {item.message && <p className={`rq-line rq-line--${isBad(item) ? 'warn' : 'neutral'}`}>{item.message}</p>}
+        {(() => { const why = explainTrouble(item, entry); return why ? <p className={`rq-line rq-line--${why.tone}`} title={item.message}>{why.text}</p> : item.message ? <p className="rq-line rq-line--neutral">{item.message}</p> : null; })()}
       </div>
       <div className="rq-actions">
         {libraryTo && <Link className="btn btn-primary" to={libraryTo}><SvgIcon name="play" size={16} /> Open</Link>}
