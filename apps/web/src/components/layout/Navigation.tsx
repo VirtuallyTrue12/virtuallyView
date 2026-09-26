@@ -108,6 +108,7 @@ export function Navigation({ user, onSignOut, onRefresh }: { user?: AuthUser | n
         {MORE.map(link => <NavLink key={`m-${link.to}`} to={link.to} className={({ isActive }) => `nav-link nav-link--extra${isActive ? ' active' : ''}`}>{link.label}</NavLink>)}
         <MoreMenu />
       </div>
+      {user && <NavLink to="/search" className="nav-search" aria-label="Search"><SvgIcon name="search" size={19} /></NavLink>}
       {user && onRefresh && <RefreshButton onRefresh={onRefresh} />}
       {user && <SystemActivity />}
       {user && <NotificationBell />}

@@ -5,7 +5,8 @@ import type { LidarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from '../services/registry.js';
 import { isAllowedMediaFile } from './stream.js';
 import { freshCast, setCastCache } from '../services/cast.js';
-import { fetchBand } from '../services/cast-more.js';
+import { fetchBand, wikipediaPortrait } from '../services/cast-more.js';
+import { applyEdits, clearEdit, listEdits, saveEdit } from '../services/member-edits.js';
 
 const AUDIO_MIME: Record<string, string> = {
   '.flac': 'audio/flac',
@@ -26,6 +27,8 @@ function audioMime(filePath: string): string {
  * Music endpoints: albums and tracks for one artist (Lidarr), plus a range-aware
  * audio stream that only serves files inside the configured media roots.
  */
+const removedNames = (artistId: string) => listEdits(artistId).filter(e => e.action === 'remove').map(e => e.name);
+
 export default async function musicRoutes(server: FastifyInstance) {
   const lidarr = getAdapter<LidarrAdapter>('lidarr');
 
@@ -48,7 +51,7 @@ export default async function musicRoutes(server: FastifyInstance) {
     const { id } = request.params;
     const key = `artist:${id}`;
     const fresh = freshCast(key);
-    if (fresh) return { artistId: id, kind: fresh.cast.length === 1 && fresh.cast[0]!.role === 'Artist' ? 'solo' : 'band', members: fresh.cast };
+    if (fresh) return { artistId: id, kind: fresh.cast.length === 1 && fresh.cast[0]!.role === 'Artist' ? 'solo' : 'band', members: applyEdits(fresh.cast, listEdits(id)), removed: removedNames(id) };
     try {
       const artist = (await lidarr.getItems()).find(a => a.id === id);
       if (!artist) return reply.code(404).send({ error: 'not_found', message: `No artist found with id "${id}".` });
@@ -58,10 +61,27 @@ export default async function musicRoutes(server: FastifyInstance) {
       // Only remember a fairly complete answer (most portraits found), so a Wikipedia hiccup is retried on the next visit.
       const pictured = band.members.filter(m => m.photo).length;
       if (mbid && band.kind !== 'unknown' && pictured * 2 >= band.members.length) setCastCache(key, band.members, 'musicbrainz');
-      return { artistId: id, ...band };
+      return { artistId: id, ...band, members: applyEdits(band.members, listEdits(id)), removed: removedNames(id) };
     } catch (error) {
       return reply.code(502).send({ error: 'lidarr_offline', message: error instanceof Error ? error.message : 'Lidarr is not available.' });
     }
+  });
+
+  // Administrator corrections to the member list. Everyone sees them; a refresh from MusicBrainz never loses them.
+  server.post<{ Params: { id: string }; Body: { name?: string; action?: string; role?: string; years?: string; current?: boolean } }>('/api/member-edits/:id', async (request, reply) => {
+    const { name, action, role, years, current } = request.body ?? {};
+    if (!name?.trim() || name.length > 100 || !['set', 'remove', 'add'].includes(action ?? '')) return reply.code(400).send({ error: 'bad_request', message: 'Say who, and what to do.' });
+    if ((role?.length ?? 0) > 80 || (years?.length ?? 0) > 40) return reply.code(400).send({ error: 'bad_request', message: 'That is too long.' });
+    const edit = { name: name.trim(), action: action as 'set' | 'remove' | 'add', ...(role !== undefined ? { role: role.trim() } : {}), ...(years !== undefined ? { years: years.trim() } : {}), ...(typeof current === 'boolean' ? { current } : {}) };
+    // A person added by hand gets a portrait too, when Wikipedia has one about a musician.
+    const photo = edit.action === 'add' ? await wikipediaPortrait(edit.name) : '';
+    saveEdit(request.params.id, { ...edit, ...(photo ? { photo } : {}) });
+    return { ok: true };
+  });
+
+  server.delete<{ Params: { id: string; name: string } }>('/api/member-edits/:id/:name', async request => {
+    clearEdit(request.params.id, decodeURIComponent(request.params.name));
+    return { ok: true };
   });
 
   server.get<{ Params: { id: string } }>('/api/artists/:id/tracks', async (request, reply) => {

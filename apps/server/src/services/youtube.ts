@@ -71,6 +71,18 @@ export async function searchYoutube(query: string): Promise<YoutubeResult[]> {
   }));
 }
 
+export interface YoutubeVideo extends YoutubeResult { description: string; uploadDate: string; isLive: boolean }
+
+/** Everything about one video, for a pasted link. */
+export async function youtubeVideo(id: string): Promise<YoutubeVideo> {
+  const { video } = await call<{ video: Omit<YoutubeVideo, 'artistGuess' | 'kind'> }>('POST', '/info', { id });
+  return {
+    ...video,
+    artistGuess: artistGuesses(video.title)[0] ?? '',
+    kind: classifyMusicVideo(video.title) ?? (video.durationSeconds >= 1500 ? 'Concerts' : 'Videos')
+  };
+}
+
 export async function youtubeJobs(): Promise<YoutubeJob[]> {
   return (await call<{ jobs: YoutubeJob[] }>('GET', '/jobs', undefined, 5000)).jobs;
 }

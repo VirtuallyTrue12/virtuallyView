@@ -16,6 +16,12 @@ writeFileSync(fake, `#!/usr/bin/env node
 const args = process.argv.slice(2);
 const fs = require('fs'), path = require('path');
 if (args.includes('-U')) process.exit(0); // the worker's daily self-update
+if (args.includes('-J') && args.at(-1).startsWith('https://www.youtube.com/watch?v=')) {
+  const id = args.at(-1).split('v=')[1];
+  if (id === 'PRIVATEvide') { process.stderr.write('ERROR: Video unavailable. This video is private' + String.fromCharCode(10)); process.exit(1); }
+  console.log(JSON.stringify({ id, title: 'Linkin Park - Rock am Ring 2004 (Full Show)', channel: 'Someone', duration: 4262, view_count: 1921185, upload_date: '20180412', description: 'Nürburg,   Germany   Setlist: 01. Dont Stay', thumbnails: [{ url: 'https://i.ytimg.com/vi/x/hq720.jpg' }], live_status: 'not_live' }));
+  process.exit(0);
+}
 if (args.includes('-J')) {
   const q = args.at(-1);
   if (q.includes('boom')) { process.stderr.write('ERROR: blocked\\n'); process.exit(1); }
@@ -101,6 +107,17 @@ describe('YouTube worker: what it will and will not do', () => {
     expect((await call('POST', '/search', { q: 'x' })).status).toBe(400);
     const failed = await call('POST', '/search', { q: 'boom' });
     expect(failed.status).toBe(502);
+  });
+
+  it('reads one video for a pasted link: title, channel, length, views, date and description', async () => {
+    const r = await call('POST', '/info', { id: '9PSo4PjbDbs' });
+    expect(r.status).toBe(200);
+    expect(r.json.video).toMatchObject({ id: '9PSo4PjbDbs', title: 'Linkin Park - Rock am Ring 2004 (Full Show)', channel: 'Someone', durationSeconds: 4262, views: 1921185, uploadDate: '2018-04-12', isLive: false });
+    expect(r.json.video.description).toBe('Nürburg, Germany Setlist: 01. Dont Stay');
+    expect((await call('POST', '/info', { id: 'nope' })).status).toBe(400);
+    const gone = await call('POST', '/info', { id: 'PRIVATEvide' });
+    expect(gone.status).toBe(502);
+    expect(gone.json.error).toBe('That video is private or no longer available.');
   });
 
   it('rejects bad downloads before anything runs', async () => {

@@ -85,6 +85,7 @@ export default function Music() {
         <div className="lib-actions">
           <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}><SvgIcon name="plus" size={17} /> Add artist</button>
           <button type="button" className="btn btn-secondary" onClick={() => void shuffleLibrary()} disabled={mixing || items.length === 0}><SvgIcon name="shuffle" size={17} /> {mixing ? 'Mixing…' : 'Shuffle'}</button>
+          <button type="button" className="btn btn-secondary" onClick={() => setCreatingOpen(true)}><SvgIcon name="queue" size={17} /> New playlist</button>
           <ScanButton type="artist" />
         </div>
       </header>
@@ -93,53 +94,50 @@ export default function Music() {
         <AddArtist bare onAdded={() => { setAdding(false); api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />
       </Dialog>
 
-      {isAdmin && <PendingMusicVideos onFiled={() => { api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />}
+      <Dialog open={creatingOpen} onClose={() => { setCreatingOpen(false); setNewName(''); }} title="New playlist">
+        <form className="add-artist" onSubmit={e => { e.preventDefault(); void createPlaylist(); }}>
+          <p className="dlg-help">Give it a name. Then open any album and save tracks to it.</p>
+          <input className="settings-input" autoFocus value={newName} onChange={e => setNewName(e.target.value)} placeholder="Playlist name" maxLength={80} aria-label="New playlist name" />
+          {playlistError && <p className="playlist-error" role="alert">{playlistError}</p>}
+          <div className="dlg-actions">
+            <button type="submit" className="btn btn-primary" disabled={creating || !newName.trim()}>{creating ? 'Creating…' : 'Create playlist'}</button>
+            <button type="button" className="btn btn-secondary" onClick={() => { setCreatingOpen(false); setNewName(''); }}>Cancel</button>
+          </div>
+        </form>
+      </Dialog>
 
-      <section className="pl" aria-label="Playlists">
-        <div className="rail-head">
-          <h2 className="rail-title">Playlists</h2>
-          {playlists && playlists.length > 0 && <span className="page-count">{totalTracks} {totalTracks === 1 ? 'track' : 'tracks'}</span>}
-        </div>
-        <div className="pl-rail">
-          {creatingOpen ? (
-            <form className="pl-new pl-new--open" onSubmit={e => { e.preventDefault(); void createPlaylist(); }}>
-              <input className="settings-input" autoFocus value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setCreatingOpen(false); }}
-                placeholder="Playlist name" maxLength={80} aria-label="New playlist name" />
-              <div className="pl-new-actions">
-                <button type="submit" className="btn btn-primary btn-sm" disabled={creating || !newName.trim()}>{creating ? 'Creating…' : 'Create'}</button>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setCreatingOpen(false); setNewName(''); }}>Cancel</button>
-              </div>
-            </form>
-          ) : (
-            <button type="button" className="pl-new" onClick={() => setCreatingOpen(true)}>
-              <span className="pl-new-plus"><SvgIcon name="plus" size={22} /></span>
-              <span className="pl-new-label">New playlist</span>
-            </button>
-          )}
-          {(playlists ?? []).map(playlist => (
-            <Link key={playlist.id} to={`/playlists/${playlist.id}`} className="pl-card">
-              <span className="pl-cover">
-                {playlist.tracks[0]?.cover ? <img src={playlist.tracks[0].cover} alt="" loading="lazy" /> : <SvgIcon name="music-note" size={26} />}
-              </span>
-              <span className="pl-name">{playlist.name}</span>
-              <span className="pl-meta">{playlist.tracks.length} {playlist.tracks.length === 1 ? 'track' : 'tracks'}</span>
-            </Link>
-          ))}
-        </div>
-        {playlistError && <p className="playlist-error" role="alert">{playlistError}</p>}
-        {playlists && playlists.length === 0 && !creatingOpen && <p className="pl-hint">Playlists you make appear here. Open an album and save tracks to one.</p>}
-      </section>
+      {isAdmin && <PendingMusicVideos onFiled={() => { api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />}
 
       {loading && <div className="loading-state">Loading music...</div>}
       {error && <div className="loading-state">Music unavailable: {error}</div>}
       {!loading && items.length === 0 && !error && <div className="empty-state">No music here yet. Connect your Music service and your library will appear.</div>}
       {!loading && items.length > 0 && (
         <section aria-label="Artists">
-          <LibraryControls view={lib.view} setView={lib.setView} genres={lib.genres} letters={lib.letters} total={items.length} shown={lib.shown.length} onSurprise={surprise} showRuntime={false} />
+          {items.length > 12 && <LibraryControls view={lib.view} setView={lib.setView} genres={lib.genres} letters={lib.letters} total={items.length} shown={lib.shown.length} onSurprise={surprise} showRuntime={false} />}
           {lib.shown.length === 0 && <div className="empty-state">Nothing matches these filters.</div>}
           <div className="media-grid">
             {lib.shown.map(item => (
               <MediaCard key={item.id} item={item} showStatus progress={item.watchProgress} to={`/music/${item.id}`} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {playlists && playlists.length > 0 && (
+        <section className="pl pl--compact" aria-label="Playlists">
+          <div className="rail-head">
+            <h2 className="rail-title">Playlists</h2>
+            <span className="page-count">{totalTracks} {totalTracks === 1 ? 'track' : 'tracks'}</span>
+          </div>
+          <div className="pl-rail">
+            {playlists.map(playlist => (
+              <Link key={playlist.id} to={`/playlists/${playlist.id}`} className="pl-card">
+                <span className="pl-cover">
+                  {playlist.tracks[0]?.cover ? <img src={playlist.tracks[0].cover} alt="" loading="lazy" /> : <SvgIcon name="music-note" size={24} />}
+                </span>
+                <span className="pl-name">{playlist.name}</span>
+                <span className="pl-meta">{playlist.tracks.length} {playlist.tracks.length === 1 ? 'track' : 'tracks'}</span>
+              </Link>
             ))}
           </div>
         </section>

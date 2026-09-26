@@ -176,7 +176,7 @@ export default function SeriesDetail() {
         </section>
       )}
 
-      <CastRow title="Cast" people={cast} loading={castLoading} link />
+      <CastRow title="Cast" people={cast} loading={castLoading} link inPage />
 
       {(ordered.length > 0 || episodesError) && (
         <section className="page">

@@ -590,3 +590,75 @@ describe('artist page and music page layout', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('phones, band members and troubleshooting', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('shows a bottom tab bar on a phone with the rest under More, and none on a desktop', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(base + '/movies');
+    await page.getByRole('heading', { name: 'Movies', level: 1 }).waitFor();
+    expect(await page.locator('nav.tabs').isVisible()).toBe(false);
+
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.waitForTimeout(150);
+    const bar = page.getByRole('navigation', { name: 'Main' });
+    await bar.waitFor();
+    expect(await bar.getByRole('link').allInnerTexts()).toEqual(['Home', 'Movies', 'TV', 'Music']);
+    await bar.getByRole('button', { name: 'More' }).click();
+    const sheet = page.getByRole('dialog', { name: 'More' });
+    await sheet.waitFor();
+    await sheet.getByRole('link', { name: 'Downloads' }).click();
+    await page.getByRole('heading', { name: 'Downloads', level: 1 }).waitFor();
+    await page.getByRole('dialog').waitFor({ state: 'detached' });
+    // Nothing on the page is wider than the phone.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    expect(errors).toEqual([]);
+  });
+
+  it('lets people show only current or former members, and edit the list', async () => {
+    await page.route('**/api/artists/lidarr-7', r => r.fulfill(json({ id: 'lidarr-7', title: 'Pink Floyd', type: 'artist', status: 'available', trackFileCount: 1, totalTrackCount: 1, albumCount: 1, genres: [], overview: '' })));
+    await page.route('**/api/artists/lidarr-7/albums', r => r.fulfill(json({ artistId: 'lidarr-7', albums: [] })));
+    await page.route('**/api/artists/lidarr-7/videos', r => r.fulfill(json({ concerts: [], videos: [] })));
+    await page.route('**/api/artists/lidarr-7/members', r => r.fulfill(json({ kind: 'band', removed: [], members: [
+      { name: 'David Gilmour', role: 'guitar', years: '1968–2015', current: true, photo: '' },
+      { name: 'Syd Barrett', role: 'vocals', years: '1965–1968', current: false, photo: '' }
+    ] })));
+    await page.goto(base + '/music/lidarr-7');
+    await page.getByRole('heading', { name: 'Band members' }).waitFor();
+    const names = () => page.locator('.people-section .person-name').allInnerTexts();
+    expect(await names()).toEqual(['David Gilmour', 'Syd Barrett']);
+    await page.getByRole('radio', { name: /Former/ }).click();
+    expect(await names()).toEqual(['Syd Barrett']);
+    await page.getByRole('radio', { name: /Current/ }).click();
+    expect(await names()).toEqual(['David Gilmour']);
+    // Remembered after a reload.
+    await page.reload();
+    await page.getByRole('heading', { name: 'Band members' }).waitFor();
+    expect(await names()).toEqual(['David Gilmour']);
+    await page.getByRole('radio', { name: /Everyone/ }).click();
+    await page.getByRole('button', { name: /Edit/ }).click();
+    await page.getByLabel('New member name').waitFor();
+    expect(errors).toEqual([]);
+  });
+
+  it('troubleshooting on the Apps page names the problem, what to try, and a restart', async () => {
+    let restarted = '';
+    await page.route('**/api/troubleshoot', r => r.fulfill(json({ checkedAt: new Date().toISOString(), checks: [
+      { id: 'flare', area: 'Search', label: 'Cloudflare helper for search sources', status: 'fail', detail: 'The Cloudflare helper is not running.', fixes: ['Start it from the Apps page.'], restart: 'flaresolverr' },
+      { id: 'net', area: 'Internet', label: 'Internet', status: 'ok', detail: 'Reachable.', fixes: [] }
+    ] })));
+    await page.route('**/api/troubleshoot/restart', r => { restarted = r.request().postData() ?? ''; return r.fulfill(json({ message: 'Restarted.' })); });
+    await page.goto(base + '/apps');
+    await page.getByRole('heading', { name: 'Troubleshooting' }).waitFor();
+    await page.getByText('1 thing needs attention.').waitFor();
+    await page.getByText('Start it from the Apps page.').waitFor();
+    await page.getByRole('button', { name: 'Restart flaresolverr' }).click();
+    await page.getByText('Restarted.').waitFor();
+    expect(restarted).toContain('flaresolverr');
+    await page.getByRole('button', { name: /Show what is fine/ }).click();
+    await page.getByText('Reachable.').waitFor();
+    expect(errors).toEqual([]);
+  });
+});

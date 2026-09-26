@@ -19,7 +19,8 @@ const PORT = Number(process.env.HELPER_PORT ?? 8099);
 const TOKEN_FILE = process.env.HELPER_TOKEN_FILE ?? '/shared/token';
 const ALLOWED = new Set([
   'radarr', 'sonarr', 'prowlarr', 'lidarr', 'bazarr', 'qbittorrent', 'nzbget', 'flaresolverr',
-  'ollama', 'tor', 'kiwix', 'audiobookshelf', 'kavita', 'immich-server', 'immich-machine-learning'
+  'ollama', 'tor', 'kiwix', 'audiobookshelf', 'kavita', 'immich-server', 'immich-machine-learning',
+  'gluetun', 'vpngate-config', 'ytdlp', 'watchtower'
 ]);
 const ACTIONS = new Set(['start', 'stop', 'restart']);
 

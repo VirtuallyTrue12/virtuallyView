@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { liveFilerDeps, forgetArtistFolders } from '../services/music-video-library.js';
-import { cancelYoutubeJob, downloadFromYoutube, searchYoutube, WorkerOff, youtubeAvailable, youtubeJobs } from '../services/youtube.js';
+import { cancelYoutubeJob, downloadFromYoutube, searchYoutube, WorkerOff, youtubeAvailable, youtubeJobs, youtubeVideo } from '../services/youtube.js';
 import { artProxyUrl } from '@virtuallyview/integrations';
 
 /** Find concerts and music videos on YouTube and save them under the artist. Administrators only. */
@@ -15,6 +15,18 @@ export default async function youtubeRoutes(server: FastifyInstance) {
       return { query: q, results: results.map(r => ({ ...r, thumbnail: artProxyUrl(r.thumbnail) })) };
     } catch (error) {
       return reply.code(error instanceof WorkerOff ? 503 : 502).send({ error: error instanceof WorkerOff ? 'not_enabled' : 'search_failed', message: error instanceof Error ? error.message : 'Search failed.' });
+    }
+  });
+
+  // A pasted link: the details of that one video.
+  server.get<{ Querystring: { id?: string } }>('/api/youtube/video', async (request, reply) => {
+    const id = request.query.id ?? '';
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return reply.code(400).send({ error: 'bad_request', message: 'That is not a YouTube video link.' });
+    try {
+      const video = await youtubeVideo(id);
+      return { video: { ...video, thumbnail: artProxyUrl(video.thumbnail) } };
+    } catch (error) {
+      return reply.code(error instanceof WorkerOff ? 503 : 502).send({ error: error instanceof WorkerOff ? 'not_enabled' : 'video_failed', message: error instanceof Error ? error.message : 'Could not read that video.' });
     }
   });
 

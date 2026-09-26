@@ -68,3 +68,12 @@ First public release.
 - Netflix style, Apple TV style and Prime Video style themes (unofficial look-alikes).
 - Cast to a TV: Chromecast and AirPlay from the browser, DLNA TVs found by the server, signed one-video links.
 - Live TV from M3U playlists, a photo browser with slideshow, and a book shelf.
+- **Added.** Band members can be edited: show Everyone, Current or Former, hide people for yourself, and (administrators) mark members as former or current, remove wrong entries or add missing ones for everyone.
+- **Changed.** Cast on film and TV pages sits in the page's own column instead of hanging off to one side.
+- **Added.** Pasting a YouTube link into "Find on YouTube" recognises it and shows the video's details with a Download button.
+- **Added.** A **Troubleshooting** panel at the top of the Apps page checks the internet, search sources, downloader, VPN, media apps and extras, explains problems in plain words with what to try, and can restart a stopped service (administrators).
+- **Fixed.** The dashboard did not load on older TV browsers: it now ships a legacy build and non-blocking fonts, and shows a plain message if the browser is too old.
+- **Changed.** Phones get their own layout: a bottom tab bar (Home, Movies, TV, Music, More), a compact top bar, filters that scroll sideways instead of filling the screen, two-column grids and tidy detail pages and download rows.
+- **Changed.** The assistant button is small and fades when you scroll down, and the active-requests pill is merged into the transfers menu in the top bar, so neither covers page content.
+- **Changed.** The Music page is calmer: the big empty "New playlist" tile is gone (playlists show only when you have some), and Add artist, Shuffle, New playlist and Scan sit in a compact header.
+

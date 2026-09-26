@@ -239,11 +239,13 @@ export default function MusicPlayerUI() {
     const root = document.documentElement;
     const el = bar.current;
     if (!el || !entry) { root.style.removeProperty('--dock-bottom'); return; }
-    const update = () => root.style.setProperty('--dock-bottom', `${expanded ? 0 : el.offsetHeight}px`);
+    // How far up from the bottom the bar's top edge is: the tab bar on phones counts too.
+    const update = () => root.style.setProperty('--dock-bottom', `${expanded ? 0 : Math.max(0, Math.round(window.innerHeight - el.getBoundingClientRect().top))}px`);
     update();
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
     observer?.observe(el);
-    return () => { observer?.disconnect(); root.style.removeProperty('--dock-bottom'); };
+    window.addEventListener('resize', update);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', update); root.style.removeProperty('--dock-bottom'); };
   }, [entry, expanded]);
   if (!entry) return null;
   return (

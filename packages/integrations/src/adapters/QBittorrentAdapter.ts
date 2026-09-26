@@ -198,6 +198,14 @@ export class QBittorrentAdapter implements IntegrationAdapter<{ url: string; api
     })).filter(t => t.hash);
   }
 
+  /** Whether the client can reach the network at all: with a VPN, "disconnected" means the tunnel is down. */
+  async connectionStatus(): Promise<{ status: 'connected' | 'firewalled' | 'disconnected'; dhtNodes: number }> {
+    const res = await this.authedFetch('/api/v2/transfer/info');
+    if (!res.ok) throw new Error(`qBittorrent returned ${res.status}.`);
+    const d = (await res.json()) as { connection_status?: string; dht_nodes?: number };
+    return { status: d.connection_status === 'connected' ? 'connected' : d.connection_status === 'firewalled' ? 'firewalled' : 'disconnected', dhtNodes: d.dht_nodes ?? 0 };
+  }
+
   /** Starts a download from a magnet link. `category` keeps it apart from what Radarr, Sonarr and Lidarr manage. */
   async addMagnet(magnet: string, category: string): Promise<{ success: boolean; message: string }> {
     const res = await this.authedFetch('/api/v2/torrents/add', {

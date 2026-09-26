@@ -98,6 +98,17 @@ function open(): DatabaseSync {
       checked_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS artist_member_edits (
+      artist_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      action TEXT NOT NULL,
+      role TEXT,
+      years TEXT,
+      current INTEGER,
+      photo TEXT,
+      PRIMARY KEY (artist_id, name)
+    );
+
     CREATE TABLE IF NOT EXISTS artist_covers (
       artist_id TEXT PRIMARY KEY,
       covers TEXT NOT NULL,

@@ -730,11 +730,42 @@ describe('e2e: youtube', () => {
     expect((await req('POST', '/api/youtube/download', { body: { id: '9PSo4PjbDbs', title: 'x' }, cookieOverride: cookieViewer })).status).toBe(403);
     expect((await req('GET', '/api/youtube/search?q=a', { cookieOverride: cookieAdmin })).status).toBe(400);
     expect((await req('POST', '/api/youtube/download', { body: { id: 'https://evil', title: 'x' }, cookieOverride: cookieAdmin })).status).toBe(400);
+    expect((await req('GET', '/api/youtube/video?id=nope', { cookieOverride: cookieAdmin })).status).toBe(400);
+    expect((await req('GET', '/api/youtube/video?id=9PSo4PjbDbs', { cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('GET', '/api/youtube/video?id=9PSo4PjbDbs', { cookieOverride: cookieAdmin })).status).toBe(503);
     const off = await req('GET', '/api/youtube/search?q=queen', { cookieOverride: cookieAdmin });
     expect(off.status).toBe(503);
     expect(off.text).toMatch(/--profile youtube/);
     expect((await req('GET', '/api/youtube/status', { cookieOverride: cookieAdmin })).json.available).toBe(false);
   }, 30_000);
+});
+
+describe('e2e: troubleshooting', () => {
+  it('is for administrators, reports what it finds in plain words, and refuses to restart anything it is not allowed to', async () => {
+    const cookieViewer = await viewerCookie();
+    expect((await req('GET', '/api/troubleshoot', { cookieOverride: cookieViewer })).status).toBe(403);
+    expect((await req('POST', '/api/troubleshoot/restart', { body: { service: 'radarr' }, cookieOverride: cookieViewer })).status).toBe(403);
+    const r = await req('GET', '/api/troubleshoot', { cookieOverride: cookieAdmin });
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.json.checks)).toBe(true);
+    expect(r.json.checks.length).toBeGreaterThan(3);
+    for (const c of r.json.checks) {
+      expect(['ok', 'warn', 'fail', 'skipped']).toContain(c.status);
+      expect(typeof c.detail).toBe('string');
+      expect(Array.isArray(c.fixes)).toBe(true);
+    }
+    // Nothing is connected in this test server, so the media services read as not working, with something to try.
+    const broken = r.json.checks.find((c: { id: string }) => c.id === 'sources');
+    expect(broken.status).toBe('fail');
+    expect(broken.fixes.length).toBeGreaterThan(0);
+    expect(r.text).not.toMatch(/apikey|password|secret/i);
+    expect((await req('POST', '/api/troubleshoot/restart', { body: { service: 'not-a-service' }, cookieOverride: cookieAdmin })).status).toBe(400);
+    expect((await req('POST', '/api/troubleshoot/restart', { body: { service: '../etc' }, cookieOverride: cookieAdmin })).status).toBe(400);
+    // A real service, but no helper in this test server: an honest message, not a crash.
+    const noHelper = await req('POST', '/api/troubleshoot/restart', { body: { service: 'radarr' }, cookieOverride: cookieAdmin });
+    expect(noHelper.status).toBe(502);
+    expect(noHelper.text).toMatch(/helper/i);
+  }, 60_000);
 });
 
 describe('e2e: kiwix', () => {

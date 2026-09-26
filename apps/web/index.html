@@ -5,12 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>virtuallyView</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <!-- Fonts load without holding the page back: a TV or a network with no internet would otherwise wait on them. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" /></noscript>
 </head>
 <body>
-  <div id="root"><div style="padding:2rem;color:#fff;background:#1a1a28;font-family:system-ui,sans-serif;min-height:100vh;">Loading dashboard... (If this stays, check console)</div></div>
+  <div id="root"><div id="boot" style="padding:2rem;color:#fff;background:#1a1a28;font-family:sans-serif;min-height:100vh;font-size:20px;line-height:1.5;">Loading virtuallyView...</div></div>
+  <script>
+    // Plain old JavaScript on purpose, so it runs in any browser. If the app cannot start, say why instead of hanging.
+    (function () {
+      var boot = function () { return document.getElementById('boot'); };
+      var show = function (text) { var el = boot(); if (el) el.textContent = text; };
+      window.addEventListener('error', function (e) {
+        show('virtuallyView could not start in this browser. ' + (e && e.message ? '(' + e.message + ') ' : '') + 'Try updating the browser, or open this address on a phone or computer.');
+      });
+      setTimeout(function () { if (boot()) show('Still loading... If this stays, this browser may be too old or cannot reach the server. Try again, or use a phone or computer.'); }, 12000);
+    })();
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

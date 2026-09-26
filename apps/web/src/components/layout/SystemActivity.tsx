@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, type PullStatus } from '../../lib/api';
+import { api, type PullStatus, type RequestItem } from '../../lib/api';
 import { useAllDownloads, downloadLabel } from '../../lib/useDownloadProgress';
 
 /**
@@ -12,6 +12,7 @@ export function SystemActivity() {
   const navigate = useNavigate();
   const downloads = useAllDownloads();
   const [pulls, setPulls] = useState<PullStatus[]>([]);
+  const [requests, setRequests] = useState<RequestItem[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -32,6 +33,22 @@ export function SystemActivity() {
     return () => { cancelled = true; clearInterval(interval); window.removeEventListener('vv-refresh', now); };
   }, []);
 
+  // Requests still being worked on: what used to be a floating badge lives here, out of the way of the page.
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const items = await api.requests();
+        if (!cancelled) setRequests(items.filter(r => ['pending', 'searching', 'downloading', 'importing'].includes(r.status)));
+      } catch { if (!cancelled) setRequests([]); }
+    };
+    void poll();
+    const interval = setInterval(() => { if (!document.hidden) void poll(); }, 15000);
+    const now = () => void poll();
+    window.addEventListener('vv-refresh', now);
+    return () => { cancelled = true; clearInterval(interval); window.removeEventListener('vv-refresh', now); };
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const down = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
@@ -42,7 +59,9 @@ export function SystemActivity() {
   }, [open]);
 
   const downloadRows = [...downloads.entries()].filter(([, d]) => d.state !== 'failed');
-  const total = downloadRows.length + pulls.length;
+  // A request that is downloading already shows as a download; count the rest once.
+  const waiting = requests.filter(r => r.status !== 'downloading' && r.status !== 'importing');
+  const total = downloadRows.length + pulls.length + waiting.length;
 
   if (total === 0) return null;
 
@@ -69,6 +88,14 @@ export function SystemActivity() {
                 <button type="button" className="sys-activity-item" onClick={() => { setOpen(false); navigate('/downloads'); }}>
                   <span className="sys-activity-title">{downloadLabel(d)}</span>
                   <div className="sys-activity-bar"><div className="sys-activity-fill" style={{ width: `${Math.max(4, d.progress)}%` }} /></div>
+                </button>
+              </li>
+            ))}
+            {waiting.map(r => (
+              <li key={r.id}>
+                <button type="button" className="sys-activity-item" onClick={() => { setOpen(false); navigate('/requests'); }}>
+                  <span className="sys-activity-title">{r.title}</span>
+                  <span className="sys-activity-sub">{r.status === 'pending' ? 'Waiting for approval' : 'Looking for a download'}</span>
                 </button>
               </li>
             ))}

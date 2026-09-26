@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { BackButton } from '../components/layout/BackButton';
+import { Troubleshooter } from '../components/settings/Troubleshooter';
 
 interface AppStatus { id: string; name: string; what: string; keyHelp: string; install: string; port: number; bundled?: boolean; connected: boolean; url: string | null; healthy: boolean; hasKey: boolean; headline?: string }
 
@@ -78,6 +79,7 @@ export default function HomeLabApps() {
     <main className="page">
       <BackButton to="/" label="Home" />
       <div className="page-head"><h1>Apps</h1></div>
+      <Troubleshooter />
       <p className="settings-help">Connect other self-hosted apps you already run, like your photo library or audiobook server, and check on them from here. Each keeps its own interface; this links to it.</p>
       {error && <div className="notice notice--err" role="alert">{error}</div>}
       {!apps && !error && <div className="loading-state">Loading...</div>}

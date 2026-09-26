@@ -8,6 +8,7 @@ import { UpgradeQuality } from '../components/media/UpgradeQuality';
 import { YoutubeFinder } from '../components/media/YoutubeFinder';
 import { ArtistVideos } from '../components/media/ArtistVideos';
 import { CastRow, type Person } from '../components/media/CastRow';
+import { BandMembers } from '../components/media/BandMembers';
 import { useMusicPlayer } from '../components/media/MusicProvider';
 import { Dialog } from '../components/ui/Dialog';
 import { MenuItem, MenuDivider, MoreMenu } from '../components/ui/MoreMenu';
@@ -41,7 +42,7 @@ export default function ArtistDetails() {
   const [albums, setAlbums] = useState<AlbumItem[]>([]);
   const [covers, setCovers] = useState<CoverCandidate[]>([]);
   const [chosenCover, setChosenCover] = useState<string | null>(null);
-  const [members, setMembers] = useState<{ kind: string; people: Person[] } | null>(null);
+  const [members, setMembers] = useState<{ kind: string; people: Person[]; removed: string[] } | null>(null);
   const [membersLoading, setMembersLoading] = useState(false);
   const [missing, setMissing] = useState(false);
   const [loadFailed, setLoadFailed] = useState<{ message: string } | null>(null);
@@ -72,10 +73,15 @@ export default function ArtistDetails() {
     api.artistCovers(id).then(r => { if (!cancelled) { setCovers(r.candidates); setChosenCover(r.chosen); } }).catch(() => {});
     setMembersLoading(true);
     api.artistMembers(id)
-      .then(r => { if (!cancelled) setMembers({ kind: r.kind, people: r.members }); })
+      .then(r => { if (!cancelled) setMembers({ kind: r.kind, people: r.members, removed: r.removed ?? [] }); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setMembersLoading(false); });
     return () => { cancelled = true; };
+  }, [id]);
+
+  const reloadMembers = useCallback(() => {
+    if (!id) return;
+    api.artistMembers(id).then(r => setMembers({ kind: r.kind, people: r.members, removed: r.removed ?? [] })).catch(() => {});
   }, [id]);
 
   const openArtwork = () => {
@@ -202,7 +208,7 @@ export default function ArtistDetails() {
             </div>
           </header>
 
-          {members?.kind === 'band' && <CastRow title="Band members" people={members.people} loading={membersLoading} />}
+          {members?.kind === 'band' && <BandMembers artistId={artist.id} people={members.people} removed={members.removed} isAdmin={isAdmin} loading={membersLoading} onChanged={reloadMembers} />}
           {membersLoading && !members && <CastRow title="Band members" people={[]} loading />}
 
           <section className="album-section" aria-label="Albums">

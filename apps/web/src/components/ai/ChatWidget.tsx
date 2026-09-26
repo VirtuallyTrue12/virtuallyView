@@ -23,7 +23,25 @@ const SUGGESTIONS = [
   'List current downloads',
 ];
 
+/** True while the person is scrolling down the page, so helpers can get out of the way. Coming back up (or reaching the top) brings them back. */
+function useScrollingDown(): boolean {
+  const [down, setDown] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (Math.abs(y - last) < 8) return;
+      setDown(y > last && y > 120);
+      last = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  return down;
+}
+
 export default function ChatWidget() {
+  const tucked = useScrollingDown();
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [health, setHealth] = useState<AiHealth | null>(null);
@@ -124,7 +142,7 @@ export default function ChatWidget() {
   if (!open) {
     return (
       <button
-        className="chat-fab"
+        className={`chat-fab${tucked ? ' is-tucked' : ''}`}
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Open AI assistant"

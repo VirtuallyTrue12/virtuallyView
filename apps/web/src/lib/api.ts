@@ -485,11 +485,18 @@ export interface ReleaseChoice { id: string; title: string; cleanTitle: string; 
 export interface YoutubeResult { id: string; title: string; channel: string; durationSeconds: number; views: number; thumbnail: string; artistGuess: string; kind: 'Concerts' | 'Videos' }
 export interface YoutubeJob { id: string; videoId: string; title: string; dir: string; status: 'queued' | 'downloading' | 'merging' | 'done' | 'error' | 'cancelled'; percent: number; eta?: string; speed?: string; error?: string }
 
-export interface PersonInfo { name: string; role?: string; photo?: string; years?: string; current?: boolean; group?: 'main' | 'supporting'; episodes?: number }
+export interface PersonInfo { edited?: boolean; name: string; role?: string; photo?: string; years?: string; current?: boolean; group?: 'main' | 'supporting'; episodes?: number }
+
+export interface TroubleCheck { id: string; area: string; label: string; status: 'ok' | 'warn' | 'fail' | 'skipped'; detail: string; fixes: string[]; restart?: string }
 
 export const api = {
+  troubleshoot: () => getJSON<{ checkedAt: string; checks: TroubleCheck[]; summary: { ok: number; warn: number; fail: number } }>('/api/troubleshoot'),
+  restartService: (service: string) => postJSON<{ ok: boolean; message: string }>('/api/troubleshoot/restart', { service }),
   seriesCast: (id: string) => getJSON<{ cast: PersonInfo[] }>(`/api/series/${encodeURIComponent(id)}/cast`).then(r => r.cast),
-  artistMembers: (id: string) => getJSON<{ kind: 'band' | 'solo' | 'unknown'; members: PersonInfo[] }>(`/api/artists/${encodeURIComponent(id)}/members`),
+  editMember: (artistId: string, body: { name: string; action: 'set' | 'remove' | 'add'; role?: string; years?: string; current?: boolean }) => postJSON<{ ok: boolean }>(`/api/member-edits/${encodeURIComponent(artistId)}`, body),
+  undoMemberEdit: (artistId: string, name: string) => deleteJSON<{ ok: boolean }>(`/api/member-edits/${encodeURIComponent(artistId)}/${encodeURIComponent(name)}`),
+  artistMembers: (id: string) => getJSON<{ kind: 'band' | 'solo' | 'unknown'; members: PersonInfo[]; removed?: string[] }>(`/api/artists/${encodeURIComponent(id)}/members`),
+  youtubeVideo: (id: string) => getJSON<{ video: YoutubeResult & { description?: string; uploadDate?: string; isLive?: boolean } }>(`/api/youtube/video?id=${encodeURIComponent(id)}`).then(r => r.video),
   youtubeStatus: () => getJSON<{ available: boolean }>('/api/youtube/status'),
   youtubeSearch: (q: string) => getJSON<{ query: string; results: YoutubeResult[] }>(`/api/youtube/search?q=${encodeURIComponent(q)}`),
   youtubeDownload: (r: { id: string; title: string; artist?: string; kind?: 'Concerts' | 'Videos' }) => postJSON<{ ok: boolean; message: string; artistId: number; artistName: string; kind: string }>('/api/youtube/download', r),

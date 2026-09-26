@@ -40,3 +40,11 @@ Then, as an administrator, either open an artist and press **Find concerts and v
 - It uses [yt-dlp](https://github.com/yt-dlp/yt-dlp), kept up to date automatically. It only ever saves into an artist's Concerts or Videos folder and answers only to the dashboard.
 - Its traffic leaves from your home connection. To send it through Tor or a proxy instead, set `YTDLP_PROXY` (for example `socks5://tor:9050`) in `.env`.
 - **Only save what you have the right to keep.** Many concert uploads are unofficial, and YouTube's terms restrict downloading. This is off by default for that reason, and it is yours to decide (see [rights and acceptable use](acceptable-use.md)).
+
+### Paste a link
+
+Have the exact video? Paste its YouTube address (or just the video id) into the search box in **Find on YouTube**. The title, channel, length, date and description appear straight away, with a **Download** button, and no search is needed. Live streams that have not finished cannot be saved.
+
+## Band members
+
+The artist page lists band members with portraits. Show **Everyone**, **Current** or **Former** at the top of the list (your choice is remembered). **Edit** lets you hide a member just for you; administrators can also mark someone as former or current, remove a wrong entry, restore it, or add a member the sources missed. Those edits are shared with everyone on the server and survive refreshes from the online sources.

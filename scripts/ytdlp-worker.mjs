@@ -58,6 +58,17 @@ export function parseLine(line) {
   return null;
 }
 
+/** One video's details, for when someone pastes a link instead of searching. */
+export function shapeVideoInfo(e) {
+  const date = String(e.upload_date ?? '');
+  return {
+    ...shapeSearchEntry(e),
+    description: String(e.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 400),
+    uploadDate: /^\d{8}$/.test(date) ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6)}` : '',
+    isLive: e.live_status === 'is_live' || e.live_status === 'is_upcoming'
+  };
+}
+
 export function shapeSearchEntry(e) {
   return {
     id: String(e.id ?? ''),
@@ -129,6 +140,16 @@ function search(q) {
   });
 }
 
+function videoInfo(id) {
+  return new Promise((resolve, reject) => {
+    execFile(BINARY, ['--js-runtimes', 'node', '-J', '--no-playlist', '--no-warnings', ...(PROXY ? ['--proxy', PROXY] : []), `https://www.youtube.com/watch?v=${id}`],
+      { timeout: 60_000, maxBuffer: 20 * 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) return reject(new Error(/private|unavailable|not available|removed/i.test(String(stderr)) ? 'That video is private or no longer available.' : 'YouTube could not be reached for that video.'));
+        try { resolve(shapeVideoInfo(JSON.parse(stdout))); } catch { reject(new Error('YouTube returned something unreadable.')); }
+      });
+  });
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -159,6 +180,11 @@ function start() {
         const { q } = await readBody(req);
         if (typeof q !== 'string' || q.trim().length < 2 || q.length > 200) return send(res, 400, { error: 'Type at least two letters.' });
         try { return send(res, 200, { results: await search(q.trim()) }); } catch (e) { return send(res, 502, { error: e.message }); }
+      }
+      if (req.method === 'POST' && url.pathname === '/info') {
+        const { id } = await readBody(req);
+        if (!VIDEO_ID.test(String(id ?? ''))) return send(res, 400, { error: 'That is not a YouTube video id.' });
+        try { return send(res, 200, { video: await videoInfo(id) }); } catch (e) { return send(res, 502, { error: e.message }); }
       }
       if (req.method === 'POST' && url.pathname === '/download') {
         const { id, dir, title } = await readBody(req);

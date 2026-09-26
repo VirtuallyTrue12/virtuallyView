@@ -280,7 +280,7 @@ export default function MovieDetails() {
         </section>
       )}
 
-      <CastRow title="Cast" people={movie.cast ?? []} loading={castLoading} link />
+      <CastRow title="Cast" people={movie.cast ?? []} loading={castLoading} link inPage />
 
       {movie.status === 'available' && (
         <section className="page">

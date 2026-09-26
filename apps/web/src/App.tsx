@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Link, Navigate } from 'react-router-dom';
+import { MobileTabs } from './components/layout/MobileTabs';
 import { Navigation } from './components/layout/Navigation';
 import CommandPalette from './components/layout/CommandPalette';
 import ChatWidget from './components/ai/ChatWidget';
-import RequestActivityPill from './components/requests/RequestActivityPill';
 import LoginScreen from './components/auth/LoginScreen';
 import OnboardingWizard from './components/onboarding/OnboardingWizard';
 import Home from './pages/Home';
@@ -187,9 +187,9 @@ export default function App() {
         <span>virtuallyView</span>
         <span><Link to="/requests">Requests</Link> · <Link to="/downloads">Downloads</Link> · <Link to="/settings">Settings</Link></span>
       </footer>
+      {auth.authenticated && <MobileTabs />}
       <ChatWidget />
       <CommandPalette />
-      <RequestActivityPill />
       </div>
     </MusicProvider>
   );

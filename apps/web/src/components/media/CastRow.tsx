@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 export interface Person {
@@ -11,11 +12,15 @@ export interface Person {
   /** TV: the leads, or everyone else. */
   group?: 'main' | 'supporting';
   episodes?: number;
+  /** Dimmed: hidden from the viewer but shown while editing. */
+  dim?: boolean;
+  /** An administrator changed this one. */
+  edited?: boolean;
 }
 
 const initials = (name: string) => name.split(/\s+/).map(n => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 
-function Card({ person, link }: { person: Person; link: boolean }) {
+function Card({ person, link, extra }: { person: Person; link: boolean; extra?: ReactNode }) {
   const [broken, setBroken] = useState(false);
   const body = (
     <>
@@ -26,13 +31,13 @@ function Card({ person, link }: { person: Person; link: boolean }) {
       {(person.role || person.years) && <span className="person-role">{[person.role, person.years].filter(Boolean).join(' · ')}</span>}
     </>
   );
-  return link
-    ? <Link className="person" to={`/people/${encodeURIComponent(person.name)}`}>{body}</Link>
-    : <div className="person">{body}</div>;
+  const cls = `person${person.dim ? ' is-dim' : ''}`;
+  const face = link ? <Link className="person-face" to={`/people/${encodeURIComponent(person.name)}`}>{body}</Link> : <div className="person-face">{body}</div>;
+  return <div className={cls}>{face}{extra}</div>;
 }
 
-function Rail({ people, link, all }: { people: Person[]; link: boolean; all: boolean }) {
-  return <div className={`people-rail${all ? ' people-rail--wrap' : ''}`}>{people.map((p, i) => <Card key={`${p.name}-${i}`} person={p} link={link} />)}</div>;
+function Rail({ people, link, all, extra }: { people: Person[]; link: boolean; all: boolean; extra?: (p: Person) => ReactNode }) {
+  return <div className={`people-rail${all ? ' people-rail--wrap' : ''}`}>{people.map((p, i) => <Card key={`${p.name}-${i}`} person={p} link={link} extra={extra?.(p)} />)}</div>;
 }
 
 const SHOWN = 14;
@@ -42,17 +47,18 @@ const SHOWN = 14;
  * scroll, with "Show all" for the rest. TV cast splits into the leads and the
  * supporting cast; a band into current and former members.
  */
-export function CastRow({ title, people, loading, link = false, empty }: { title: string; people: Person[]; loading?: boolean; link?: boolean; empty?: string }) {
+export function CastRow({ title, people, loading, link = false, empty, inPage = false, toolbar, cardExtra }: { title: string; people: Person[]; loading?: boolean; link?: boolean; empty?: string; /** Controls shown beside the heading. */ toolbar?: ReactNode; /** Something under each card (edit controls). */ cardExtra?: (p: Person) => ReactNode; /** On film and TV pages the row sits in the same padded column as the other sections. */ inPage?: boolean }) {
+  const cls = `people-section${inPage ? ' page' : ''}`;
   const [all, setAll] = useState(false);
   if (loading && people.length === 0) {
     return (
-      <section className="people-section" aria-label={title} aria-busy="true">
+      <section className={cls} aria-label={title} aria-busy="true">
         <div className="rail-head"><h2 className="rail-title">{title}</h2></div>
         <div className="people-rail" aria-hidden="true">{Array.from({ length: 7 }, (_, i) => <div key={i} className="person person--skeleton"><span className="person-photo" /><span className="person-name" /></div>)}</div>
       </section>
     );
   }
-  if (people.length === 0) return empty ? <section className="people-section"><div className="rail-head"><h2 className="rail-title">{title}</h2></div><p className="people-empty">{empty}</p></section> : null;
+  if (people.length === 0) return empty ? <section className={cls}><div className="rail-head"><h2 className="rail-title">{title}</h2></div><p className="people-empty">{empty}</p></section> : null;
 
   const tv = people.some(p => p.group === 'supporting');
   const band = people.some(p => p.years !== undefined);
@@ -66,10 +72,10 @@ export function CastRow({ title, people, loading, link = false, empty }: { title
   let budget = limited ? SHOWN : Infinity;
 
   return (
-    <section className="people-section" aria-label={title}>
+    <section className={cls} aria-label={title}>
       <div className="rail-head">
         <h2 className="rail-title">{title}</h2>
-        {total > SHOWN && <button type="button" className="mp-link" onClick={() => setAll(v => !v)} aria-expanded={all}>{all ? 'Show fewer' : `Show all ${total}`}</button>}
+        <div className="rail-tools">{toolbar}{total > SHOWN && <button type="button" className="mp-link" onClick={() => setAll(v => !v)} aria-expanded={all}>{all ? 'Show fewer' : `Show all ${total}`}</button>}</div>
       </div>
       {groups.filter(g => g.list.length > 0).map((g, gi) => {
         const list = g.list.slice(0, Math.max(0, budget));
@@ -78,7 +84,7 @@ export function CastRow({ title, people, loading, link = false, empty }: { title
         return (
           <div key={gi} className="people-group">
             {g.label && <h3 className="people-group-label">{g.label}</h3>}
-            <Rail people={list} link={link} all={all} />
+            <Rail people={list} link={link} all={all} extra={cardExtra} />
           </div>
         );
       })}

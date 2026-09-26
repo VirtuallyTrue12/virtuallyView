@@ -8,6 +8,18 @@ Find what you see, then follow the fix. Every item here is a problem someone act
 2. Open **Home**. The **Finish setting up** list says what is missing, with a button for each.
 3. Open **Diagnostics** (under **More**). It checks every service and explains, in plain words, why one does not answer.
 
+**Fastest of all: open the Apps page.** At the top, **Troubleshooting** runs the checks for you (internet, search sources, the downloader and its VPN, your media apps, extras), says in plain words what is wrong, lists what to try, and offers a **Restart** button for the parts the services helper can restart (administrators only; see [services helper](services-helper.md)). Press **Check again** after a fix.
+
+---
+
+## The page does not load on my TV
+
+Older TV browsers (most LG webOS 4-5 and Samsung Tizen 4-5 sets) cannot run modern web pages. virtuallyView ships a second, older-style build that the browser picks automatically, fonts load without blocking the page, and a plain message appears if the browser is too old to start the app at all.
+
+1. Reload the page once; the first load on a slow TV can take up to a minute.
+2. If you see "This browser is too old", update the TV's firmware or use a phone with **Sign in with a code** (see [watching on your TV](tv.md)) and cast from the phone.
+3. If the address does not open at all, it is the server's firewall or the wrong address, not the browser. See the first section of [watching on your TV](tv.md).
+
 ---
 
 ## Installing and starting

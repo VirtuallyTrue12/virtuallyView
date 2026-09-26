@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type YoutubeJob, type YoutubeResult } from '../../lib/api';
 import { SvgIcon } from '../ui/SvgIcon';
+import { youtubeIdFromText } from '../../lib/youtube-link';
 
 const clock = (s: number) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = String(s % 60).padStart(2, '0');
@@ -41,10 +42,22 @@ export function YoutubeFinder({ initialQuery, fixedArtist, onDownloaded }: { ini
     return () => window.clearInterval(timer);
   }, [active, loadJobs, onDownloaded]);
 
+  // A pasted link is not a search: read that one video and show everything about it.
+  const [pasted, setPasted] = useState<YoutubeResult & { description?: string; uploadDate?: string } | null>(null);
+  const lastLink = useRef('');
   const search = async () => {
     if (query.trim().length < 2 || searching) return;
-    setSearching(true); setNote(null);
-    try { setResults((await api.youtubeSearch(query.trim())).results); } catch (err) {
+    setSearching(true); setNote(null); setPasted(null);
+    const linked = youtubeIdFromText(query);
+    try {
+      if (linked) {
+        const video = await api.youtubeVideo(linked);
+        setPasted(video); setResults([video]);
+        if (video.isLive) setNote({ text: 'That is a live stream; it cannot be saved until it ends.', ok: false });
+      } else {
+        setResults((await api.youtubeSearch(query.trim())).results);
+      }
+    } catch (err) {
       setResults(null); setNote({ text: err instanceof Error ? err.message : 'Search failed.', ok: false });
     } finally { setSearching(false); }
   };
@@ -62,6 +75,15 @@ export function YoutubeFinder({ initialQuery, fixedArtist, onDownloaded }: { ini
   };
 
   const cancel = (id: string) => { void api.youtubeCancel(id).then(loadJobs).catch(() => undefined); };
+
+  // Recognise a link the moment it is pasted or typed, without pressing Search.
+  useEffect(() => {
+    const id = youtubeIdFromText(query);
+    if (!available || !id || lastLink.current === id) return;
+    lastLink.current = id;
+    void search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, available]);
 
   if (available === null) return <p className="release-picker-help">Checking...</p>;
   if (!available) {
@@ -88,6 +110,7 @@ export function YoutubeFinder({ initialQuery, fixedArtist, onDownloaded }: { ini
             <input className="settings-input" value={artist} maxLength={120} placeholder="For example: Linkin Park" onChange={e => setArtist(e.target.value)} />
           </label>
         )}
+      {pasted && <p className="release-picker-help">Recognised a YouTube link.</p>}
       {note && <p className={`release-picker-note${note.ok ? '' : ' is-error'}`} role="status">{note.text}</p>}
       {results && results.length === 0 && <p className="release-picker-help">Nothing found. Try different words.</p>}
       {results && results.length > 0 && (
@@ -98,8 +121,9 @@ export function YoutubeFinder({ initialQuery, fixedArtist, onDownloaded }: { ini
               <div className="release-row-main">
                 <span className="release-row-title" title={r.title}>{r.title}</span>
                 <span className="release-row-meta">
-                  {[r.channel, r.durationSeconds ? clock(r.durationSeconds) : '', views(r.views), r.kind === 'Concerts' ? 'concert' : 'video', !fixedArtist && !artist && r.artistGuess ? `artist: ${r.artistGuess}` : ''].filter(Boolean).join(' · ')}
+                  {[r.channel, (pasted?.id === r.id && pasted.uploadDate) || '', r.durationSeconds ? clock(r.durationSeconds) : '', views(r.views), r.kind === 'Concerts' ? 'concert' : 'video', !fixedArtist && !artist && r.artistGuess ? `artist: ${r.artistGuess}` : ''].filter(Boolean).join(' · ')}
                 </span>
+                {pasted?.id === r.id && pasted.description && <p className="yt-desc">{pasted.description}</p>}
               </div>
               <button type="button" className="btn btn-primary btn-sm yt-download" disabled={busy !== null} onClick={() => void download(r)}><SvgIcon name="plus" size={15} />{busy === r.id ? 'Starting…' : 'Save'}</button>
             </li>

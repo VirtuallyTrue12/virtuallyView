@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 export type IconName =
   | 'close' | 'check' | 'star' | 'heart' | 'heart-outline' | 'arrow-left' | 'play' | 'pause' | 'prev' | 'next' | 'stop'
   | 'shuffle' | 'repeat' | 'volume-high' | 'volume-low' | 'volume-mute' | 'sliders' | 'dice' | 'film' | 'tv' | 'mic'
-  | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'plus' | 'pip' | 'chevron-up' | 'queue' | 'repeat-one' | 'music-note' | 'more' | 'image' | 'search' | 'trash' | 'sparkle' | 'youtube' | 'sliders-h' | 'users';
+  | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'plus' | 'pip' | 'chevron-up' | 'queue' | 'repeat-one' | 'music-note' | 'more' | 'image' | 'search' | 'trash' | 'sparkle' | 'youtube' | 'sliders-h' | 'users' | 'edit' | 'eye' | 'eye-off' | 'home' | 'film-tab' | 'tv-tab' | 'note-tab' | 'grid';
 
 const speaker = <path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor" stroke="none" />;
 
@@ -44,6 +44,14 @@ const ICONS: Record<IconName, { fill?: boolean; body: ReactNode }> = {
   youtube: { body: <><rect x="3" y="6" width="18" height="12" rx="4" /><path d="m10.5 9.5 4 2.5-4 2.5z" fill="currentColor" /></> },
   'sliders-h': { body: <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6" /> },
   users: { body: <><circle cx="9" cy="8" r="3.2" /><path d="M3 20a6 6 0 0 1 12 0M16 5.2a3.2 3.2 0 0 1 0 6M18 14.5a6 6 0 0 1 3 5.5" /></> },
+  edit: { body: <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" /> },
+  eye: { body: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" /><circle cx="12" cy="12" r="2.8" /></> },
+  'eye-off': { body: <><path d="M3 3l18 18M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3.2 4M6.2 7.4A17 17 0 0 0 2.5 12S6 18.5 12 18.5c1.4 0 2.7-.3 3.8-.8" /><path d="M10 10a2.8 2.8 0 0 0 4 4" /></> },
+  home: { body: <path d="M4 11 12 4l8 7M6 10v10h4v-6h4v6h4V10" /> },
+  'film-tab': { body: <><rect x="4" y="4" width="16" height="16" rx="2.5" /><path d="M8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4" /></> },
+  'tv-tab': { body: <><rect x="3" y="6" width="18" height="12" rx="2" /><path d="m8 3 4 3 4-3" /></> },
+  'note-tab': { body: <path d="M9 18V6l11-2v12M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3zm11-2a3 3 0 1 1-3-3 3 3 0 0 1 3 3z" /> },
+  grid: { body: <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></> },
   plus: { body: <path d="M12 5v14M5 12h14" /> },
   pip: { body: <><rect x="3" y="5" width="18" height="14" rx="2" /><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" /></> }
 };
