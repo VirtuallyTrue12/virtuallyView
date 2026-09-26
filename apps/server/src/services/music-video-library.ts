@@ -95,7 +95,8 @@ export async function concertFilmsOf(artist: ArtistFolder): Promise<MusicVideo[]
   const ids = concertMoviesOf(artist.id);
   if (ids.length === 0) return [];
   const films = await getAdapter<RadarrAdapter>('radarr').getItems().catch(() => []) as unknown as Array<{ id: string; title: string; status?: string; fileInfo?: { size?: number } }>;
-  return films.filter(f => ids.includes(f.id)).map(f => ({
+  // A film with no file and nothing coming is not a concert to watch yet: leave it off the artist page.
+  return films.filter(f => ids.includes(f.id) && ['available', 'downloading', 'importing'].includes(f.status ?? '')).map(f => ({
     id: f.id, title: withoutArtist(f.title, artist.name), kind: 'Concerts' as const, sizeBytes: f.fileInfo?.size ?? 0, folder: '',
     href: `/movies/${encodeURIComponent(f.id)}${f.status === 'available' ? '/play' : ''}`, status: f.status ?? 'requested'
   }));
