@@ -50,8 +50,18 @@ describe('removing a title that is still downloading', () => {
 
   it('stops its downloads, removes the show by its library id, and drops the requests that pointed at it', async () => {
     const arr = fakeArr([{ id: 'queue-41', mediaId: 'sonarr-3' }, { id: 'queue-42', mediaId: 'sonarr-3' }, { id: 'queue-43', mediaId: 'sonarr-9' }]);
-    const result = await remove.removeTitle(arr as never, 'request-110', true);
-    expect(result).toEqual({ success: true, message: 'Removed, and 2 downloads stopped.' });
+    // The client also holds torrents the media manager's (partial) queue view does not list.
+    const acted: string[] = [];
+    const deps = {
+      downloads: async () => [
+        { id: 'queue-qbittorrent-aaa', mediaId: 'sonarr-3', sourceClient: 'qbittorrent' }, { id: 'queue-qbittorrent-bbb', mediaId: 'sonarr-3', sourceClient: 'qbittorrent' },
+        { id: 'queue-qbittorrent-ccc', mediaId: 'sonarr-9', sourceClient: 'qbittorrent' }, { id: 'queue-sonarr-41', mediaId: 'sonarr-3', sourceClient: 'sonarr' }
+      ],
+      act: async (id: string, action: string) => { acted.push(`${id}:${action}`); return { success: true, message: 'ok' }; }
+    };
+    const result = await remove.removeTitle(arr as never, 'request-110', true, deps);
+    expect(result).toEqual({ success: true, message: 'Removed, and 4 downloads stopped.' });
+    expect(acted.sort()).toEqual(['queue-qbittorrent-aaa:delete-files', 'queue-qbittorrent-bbb:delete-files']);
     expect(arr.removedQueue.sort()).toEqual(['41', '42']);
     expect(arr.remove).toHaveBeenCalledWith('sonarr-3', true);
     expect(requests.getRequest('request-110')).toBeUndefined();
@@ -60,11 +70,11 @@ describe('removing a title that is still downloading', () => {
   it('keeps the request when the media manager refuses, and removes a request that never reached it', async () => {
     const refusing = fakeArr([], { success: false, message: 'Sonarr could not remove the series (status 500).' });
     requests.getRequests();
-    const failed = await remove.removeTitle(refusing as never, 'sonarr-3', false);
+    const failed = await remove.removeTitle(refusing as never, 'sonarr-3', false, { downloads: async () => [{ id: 'queue-qbittorrent-zzz', mediaId: 'sonarr-3', sourceClient: 'qbittorrent' }], act: async () => { throw new Error('must not touch the client when the removal was refused'); } });
     expect(failed.success).toBe(false);
 
     const none = fakeArr([]);
-    const result = await remove.removeTitle(none as never, 'request-111', false);
+    const result = await remove.removeTitle(none as never, 'request-111', false, { downloads: async () => [], act: async () => ({ success: true, message: '' }) });
     expect(result.success).toBe(true);
     expect(none.remove).not.toHaveBeenCalled();
     expect(requests.getRequest('request-111')).toBeUndefined();
