@@ -77,6 +77,7 @@ export interface RequestItem {
   title: string;
   year?: number;
   overview?: string;
+  poster?: string;
   status: RequestStatus;
   service: string;
   mediaType: MediaKind;

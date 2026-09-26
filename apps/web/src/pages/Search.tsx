@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { MediaCard } from '../components/media/MediaCard';
 import { MediaRail } from '../components/media/MediaRail';
-import { BackButton } from '../components/layout/BackButton';
+import { PageHeader, Seg, SubNav } from '../components/ui/Page';
 import { QualitySelect } from '../components/requests/QualitySelect';
 import { api, type Dashboard, type MediaItem, type SearchAll, type SearchCandidate, type SearchSuggestion } from '../lib/api';
 import { addRecentSearch, clearRecentSearches, getRecentSearches, removeRecentSearch } from '../lib/recent-searches';
@@ -145,7 +145,7 @@ export default function Search() {
     const key = `${c.type}:${c.providerId}`;
     setLastKey(key);
     setNotice(null);
-    void requester.submit({ title: c.title, ...(c.year ? { year: c.year } : {}), mediaType: c.type, selectedProviderId: c.providerId });
+    void requester.submit({ title: c.title, ...(c.year ? { year: c.year } : {}), mediaType: c.type, selectedProviderId: c.providerId, ...(c.poster ? { poster: c.poster } : {}) });
   };
 
   const requestArtist = (name: string) => {
@@ -175,8 +175,8 @@ export default function Search() {
   return (
     <main className="page search-page">
       {requester.picker}
-      <BackButton to="/" label="Home" />
-      <div className="search-head"><h1>Search</h1></div>
+      <PageHeader title="Search" sub="Your library, and anything you can request" />
+      <SubNav label="Requests and downloads" items={[{ to: '/search', label: 'Find', icon: 'search' }, { to: '/requests', label: 'Requests', icon: 'list' }, { to: '/downloads', label: 'Downloads', icon: 'download' }]} />
 
       <div className="search-box search-box--wide" ref={boxRef}>
         <input
@@ -209,16 +209,7 @@ export default function Search() {
 
       {(active || query.trim().length >= 2) && (
         <div className="search-filters">
-          <div className="requests-filters" role="tablist" aria-label="Result type">
-            {FILTERS.map(f => {
-              const n = f.key === 'all' ? null : counts[f.key];
-              return (
-                <button key={f.key} type="button" role="tab" aria-selected={filter === f.key} className={`season-tab${filter === f.key ? ' is-active' : ''}`} onClick={() => setFilter(f.key)}>
-                  {f.label}{n !== null && data ? ` (${n})` : ''}
-                </button>
-              );
-            })}
-          </div>
+          <Seg<Filter> label="Result type" value={filter} onChange={setFilter} options={FILTERS.map(f => ({ value: f.key, label: f.label, ...(f.key !== 'all' && data ? { count: counts[f.key] } : {}) }))} />
           <QualitySelect mediaType={filter === 'series' ? 'series' : filter === 'artist' ? 'artist' : 'movie'} compact />
         </div>
       )}

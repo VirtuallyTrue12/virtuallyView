@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { StatusPill } from '../components/media/StatusPill';
 import { RequestActivityFeed } from '../components/requests/RequestActivityFeed';
+import { ACTIVE, RequestCard, RequestsEmpty, needsAttention } from '../components/requests/RequestCard';
+import { EmptyState, PageHeader, Seg, SubNav } from '../components/ui/Page';
+import { Dialog } from '../components/ui/Dialog';
 import { api, type RequestItem } from '../lib/api';
 import { lookupRequestCandidates } from '../lib/request-selection';
 import { useRequester } from '../lib/useRequester';
@@ -9,11 +11,9 @@ import { humanName } from '../lib/integration-names';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import { ReleasePicker } from '../components/media/ReleasePicker';
 
-const ACTIVE = ['pending', 'searching', 'downloading', 'importing'];
-type Filter = 'all' | 'active' | 'failed' | 'done';
-const FILTER_LABEL: Record<Filter, string> = { all: 'All', active: 'Active', failed: 'Failed', done: 'Finished' };
+type Filter = 'all' | 'active' | 'attention' | 'done';
 const inFilter = (item: RequestItem, f: Filter) =>
-  f === 'all' || (f === 'active' && ACTIVE.includes(item.status)) || (f === 'failed' && item.status === 'failed') ||
+  f === 'all' || (f === 'active' && ACTIVE.includes(item.status)) || (f === 'attention' && needsAttention(item)) ||
   (f === 'done' && (item.status === 'available' || item.status === 'cancelled'));
 
 export default function Requests() {
@@ -30,8 +30,27 @@ export default function Requests() {
   const [confirmBulk, setConfirmBulk] = useState<'remove' | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [detail, setDetail] = useState<RequestItem | null>(null);
+  const [picking, setPicking] = useState<RequestItem | null>(null);
+  const [art, setArt] = useState<Map<string, string>>(new Map());
   useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
   const retryOf = useRef<string | null>(null);
+
+  // Older requests carry no artwork of their own; borrow it from the library when the title is in it.
+  useEffect(() => {
+    let live = true;
+    Promise.allSettled([api.movies(), api.series(), api.artists()]).then(([m, t, a]) => {
+      if (!live) return;
+      const map = new Map<string, string>();
+      const add = (kind: string, list: PromiseSettledResult<{ title: string; artwork?: { poster?: string } }[]>) => {
+        if (list.status === 'fulfilled') for (const i of list.value) if (i.artwork?.poster) map.set(`${kind}:${i.title.toLowerCase()}`, i.artwork.poster);
+      };
+      add('movie', m); add('series', t); add('artist', a);
+      setArt(map);
+    });
+    return () => { live = false; };
+  }, []);
 
   const load = async () => {
     try {
@@ -170,65 +189,70 @@ export default function Requests() {
   };
 
   const activeCount = items.filter(i => ACTIVE.includes(i.status)).length;
+  const attentionCount = items.filter(needsAttention).length;
   const visible = items.filter(i => inFilter(i, filter));
-  const counts: Record<Filter, number> = { all: items.length, active: activeCount, failed: items.filter(i => i.status === 'failed').length, done: items.filter(i => inFilter(i, 'done')).length };
+  const counts: Record<Filter, number> = { all: items.length, active: activeCount, attention: attentionCount, done: items.filter(i => inFilter(i, 'done')).length };
   const selectedItems = items.filter(i => selected.has(i.id));
   const selectMany = (list: RequestItem[]) => setSelected(new Set(list.map(i => i.id)));
-
-  const serviceName = (service: string) => humanName(service);
+  const posterOf = (item: RequestItem) => item.poster ?? art.get(`${item.mediaType}:${item.title.toLowerCase()}`);
+  const endSelecting = () => { setSelecting(false); setSelected(new Set()); setConfirmBulk(null); };
 
   return (
     <main className="page">
-      <div className="page-head">
-        <h1>Requests</h1>
-        <div className="page-head-actions">
-          {!loading && !error && (
-            <span className="page-count">
-              {items.length} total{activeCount > 0 ? ` · ${activeCount} active` : ''}
-            </span>
-          )}
-          <button className="btn btn-secondary btn-sm" type="button" onClick={() => navigate('/search')}>
-            Request a title
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Requests"
+        sub={loading || error ? undefined : items.length === 0 ? 'Nothing requested yet' : `${activeCount} in progress${attentionCount ? ` · ${attentionCount} need attention` : ''} · ${items.length} in all`}
+        actions={<>
+          <button className="btn btn-primary" type="button" onClick={() => navigate('/search')}><SvgIcon name="plus" size={17} /> Request a title</button>
+          {items.length > 1 && <button className="btn btn-secondary" type="button" onClick={() => (selecting ? endSelecting() : setSelecting(true))} aria-pressed={selecting}><SvgIcon name={selecting ? 'close' : 'check'} size={17} /> {selecting ? 'Done' : 'Select'}</button>}
+        </>}
+      />
+      <SubNav label="Requests and downloads" items={[{ to: '/search', label: 'Find', icon: 'search' }, { to: '/requests', label: 'Requests', icon: 'list', badge: activeCount }, { to: '/downloads', label: 'Downloads', icon: 'download' }]} />
 
-      {notice && <div className={`notice notice--${notice.tone}`}>{notice.text}</div>}
-
+      {notice && <div className={`notice notice--${notice.tone}`} role="status">{notice.text}</div>}
       {loading && <div className="loading-state">Loading requests...</div>}
       {error && <div className="loading-state">Could not load requests: {error}</div>}
-
-      {!loading && !error && items.length === 0 && (
-        <div className="empty-state">
-          No requests yet.
-          <span>Request a movie that is missing from your library and it will flow through search, download, and import automatically.</span>
-        </div>
-      )}
+      {!loading && !error && items.length === 0 && <RequestsEmpty onRequest={() => navigate('/search')} />}
 
       {!loading && !error && items.length > 0 && (
-        <div className="requests-toolbar">
-          <div className="requests-filters" role="tablist" aria-label="Filter requests">
-            {(Object.keys(FILTER_LABEL) as Filter[]).map(f => (
-              <button key={f} type="button" role="tab" aria-selected={filter === f} className={`season-tab${filter === f ? ' is-active' : ''}`} onClick={() => setFilter(f)}>
-                {FILTER_LABEL[f]} ({counts[f]})
-              </button>
-            ))}
-          </div>
-          <div className="requests-select-actions">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => selectMany(visible)} disabled={visible.length === 0}>Select all shown</button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => selectMany(items.filter(i => i.status === 'failed'))} disabled={counts.failed === 0}>Select all failed</button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => selectMany(items.filter(i => inFilter(i, 'done')))} disabled={counts.done === 0}>Select finished</button>
-            {selected.size > 0 && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSelected(new Set())}>Clear</button>}
-          </div>
+        <div className="rq-toolbar">
+          <Seg<Filter> label="Show requests" value={filter} onChange={setFilter} options={[
+            { value: 'all', label: 'All', count: counts.all }, { value: 'active', label: 'In progress', count: counts.active },
+            { value: 'attention', label: 'Needs attention', count: counts.attention }, { value: 'done', label: 'Finished', count: counts.done }
+          ]} />
+          {selecting && (
+            <div className="rq-select-tools">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => selectMany(visible)} disabled={visible.length === 0}>All shown</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => selectMany(items.filter(needsAttention))} disabled={counts.attention === 0}>All needing attention</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => selectMany(items.filter(i => inFilter(i, 'done')))} disabled={counts.done === 0}>All finished</button>
+            </div>
+          )}
         </div>
       )}
 
-      {selected.size > 0 && (
-        <div className="requests-bulk" role="region" aria-label="Bulk actions">
+      {!loading && !error && items.length > 0 && visible.length === 0 && (
+        <EmptyState icon="check" title={filter === 'attention' ? 'Nothing needs attention' : 'Nothing here'} text={filter === 'attention' ? 'Every request is either moving along or finished.' : 'No requests match this view.'} />
+      )}
+
+      {visible.length > 0 && (
+        <div className="rq-list">
+          {visible.map(item => (
+            <RequestCard
+              key={item.id} item={item} poster={posterOf(item)} isAdmin={isAdmin} busy={busyId === item.id}
+              selecting={selecting} selected={selected.has(item.id)} onSelect={() => toggleSelected(item.id)}
+              onDetails={() => setDetail(item)} onApprove={() => void action(item.id, 'approve')} onCancel={() => void action(item.id, 'cancel')}
+              onStop={() => void stop(item.id)} onRetry={() => void retry(item)} onRemove={() => void remove(item.id)} onPickRelease={() => setPicking(item)}
+            />
+          ))}
+        </div>
+      )}
+
+      {selecting && selected.size > 0 && (
+        <div className="rq-bulk" role="region" aria-label="Bulk actions">
           <strong>{selected.size} selected</strong>
           {confirmBulk === 'remove' ? (
             <>
-              <span>Remove {selectedItems.filter(i => !ACTIVE.includes(i.status)).length} finished/failed request(s) from the list?</span>
+              <span>Remove {selectedItems.filter(i => !ACTIVE.includes(i.status)).length} finished or failed?</span>
               <button type="button" className="btn btn-danger btn-sm" disabled={bulkBusy} onClick={() => void runBulk('remove')}>Yes, remove</button>
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => setConfirmBulk(null)}>Cancel</button>
             </>
@@ -242,128 +266,27 @@ export default function Requests() {
         </div>
       )}
 
-      {!loading && !error && items.length > 0 && visible.length === 0 && (
-        <div className="empty-state">Nothing in this filter.</div>
-      )}
+      <Dialog open={!!detail} onClose={() => setDetail(null)} title={detail?.title ?? 'Request'} wide>
+        {detail && (
+          <div className="rq-detail">
+            {detail.overview && <p className="rq-overview">{detail.overview}</p>}
+            <dl className="detail-facts">
+              <div><dt>Status</dt><dd>{detail.status}</dd></div>
+              <div><dt>Handled by</dt><dd>{humanName(detail.service)}</dd></div>
+              {detail.qualityProfile && <div><dt>Quality</dt><dd>{detail.qualityProfile}</dd></div>}
+              {detail.rootFolder && <div><dt>Saved to</dt><dd>{detail.rootFolder}</dd></div>}
+              {detail.requester && <div><dt>Requested by</dt><dd>{detail.requester}</dd></div>}
+              <div><dt>Requested</dt><dd>{new Date(detail.createdAt).toLocaleString()}</dd></div>
+            </dl>
+            <h3 className="ui-section-title">What happened</h3>
+            <RequestActivityFeed events={detail.events} status={detail.status} />
+          </div>
+        )}
+      </Dialog>
 
-      {!loading && !error && visible.length > 0 && (
-        <div className="requests-grid">
-          {visible.map(item => {
-            const isOpen = expanded.has(item.id);
-            const isActive = ACTIVE.includes(item.status);
-            return (
-              <article className={`request-card${isOpen ? ' is-open' : ''}${selected.has(item.id) ? ' is-selected' : ''}`} key={item.id}>
-                <label className="request-select" title="Select for bulk actions">
-                  <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelected(item.id)} aria-label={`Select ${item.title}`} />
-                </label>
-                <button type="button" className="request-card-head" onClick={() => toggle(item.id)} aria-expanded={isOpen}>
-                  <span className="request-card-toggle" aria-hidden="true"><SvgIcon name={isOpen ? 'chevron-down' : 'chevron-right'} size={16} /></span>
-                  <span className="request-card-main">
-                    <span className="request-title">{item.title}</span>
-                    <span className="request-meta">
-                      {item.year ? `${item.year} · ` : ''}via {serviceName(item.service)}
-                      {item.requester ? ` · by ${item.requester}` : ''}
-                    </span>
-                  </span>
-                  <StatusPill status={item.status} />
-                </button>
-                {!isOpen && (item.status === 'downloading' || item.status === 'importing') && (
-                  <div className="request-progress request-progress--compact" aria-hidden="true">
-                    <div className="request-progress-bar" style={{ width: `${Math.max(3, item.download?.progress ?? item.progress ?? 3)}%` }} />
-                  </div>
-                )}
-
-                {isOpen && (
-                  <div className="request-card-body">
-                    {item.overview && <p className="request-overview">{item.overview}</p>}
-
-                    {(item.status === 'downloading' || item.status === 'searching' || item.status === 'importing') && (
-                      <div className="request-progress">
-                        <div className="request-progress-bar" style={{ width: `${Math.max(3, item.progress ?? 3)}%` }} />
-                      </div>
-                    )}
-                    <RequestActivityFeed events={item.events} status={item.status} />
-                    {isAdmin && (item.status === 'searching' || item.status === 'failed' || !!item.message?.startsWith('Stalled')) && <ReleasePicker initialQuery={item.title} />}
-                    {item.status === 'searching' && (
-                      item.message?.startsWith('Nothing found yet')
-                        ? <p className="request-detail request-detail--warn">{item.message}</p>
-                        : <p className="request-detail">Looking for the best available download. This can take a minute.</p>
-                    )}
-                    {item.status === 'downloading' && (
-                      <p className="request-detail">
-                        {item.download
-                          ? `Downloading ${item.download.count > 1 ? `${item.download.count} files` : 'release'} · ${item.download.progress}%${item.download.speed ? ` · ${item.download.speed}` : ''}${item.download.eta ? ` · ETA ${item.download.eta}` : ''}${item.download.sourceClient ? ` · ${item.download.sourceClient}` : ''}`
-                          : 'A release was found and the download client is receiving it.'}
-                      </p>
-                    )}
-                    {item.status === 'importing' && (
-                      <p className="request-detail">Download complete. {serviceName(item.service)} is importing and organizing the files.</p>
-                    )}
-                    {item.status === 'failed' && item.message && (
-                      <p className="request-detail request-detail--error">{item.message}</p>
-                    )}
-                    {item.status === 'available' && (
-                      <p className="request-done">Imported to {serviceName(item.service)}. It now appears in your library.</p>
-                    )}
-
-                    {item.qualityProfile && item.rootFolder && (
-                      <p className="request-detail">
-                        {item.qualityProfile} to {item.rootFolder}
-                      </p>
-                    )}
-
-                    <div className="request-actions">
-                      {(item.status === 'downloading' || item.status === 'importing') && (
-                        <Link className="btn btn-secondary btn-sm" to="/downloads">View in Downloads</Link>
-                      )}
-                      {item.status === 'available' && (item.providerId || item.selectedProviderId) && (
-                        <Link
-                          className="btn btn-primary btn-sm"
-                          to={`${item.mediaType === 'series' ? '/series' : item.mediaType === 'artist' ? '/music' : '/movies'}/${encodeURIComponent(item.providerId ?? item.selectedProviderId ?? '')}`}
-                        >
-                          Open in library
-                        </Link>
-                      )}
-                      {item.status === 'pending' && (
-                        <>
-                          {isAdmin ? (
-                            <button className="btn btn-primary btn-sm" type="button" onClick={() => action(item.id, 'approve')} disabled={busyId === item.id}>
-                              {busyId === item.id ? 'Approving...' : 'Approve'}
-                            </button>
-                          ) : (
-                            <span className="request-detail">Waiting for an administrator to approve this.</span>
-                          )}
-                          <button className="btn btn-secondary btn-sm" type="button" onClick={() => action(item.id, 'cancel')} disabled={busyId === item.id}>
-                            {isAdmin ? 'Decline' : 'Cancel request'}
-                          </button>
-                        </>
-                      )}
-
-                      {isActive && (
-                        <button className="btn btn-danger btn-sm" type="button" onClick={() => stop(item.id)} disabled={busyId === item.id}>
-                          {busyId === item.id ? 'Stopping…' : 'Stop search / download'}
-                        </button>
-                      )}
-
-                      {item.status === 'failed' && (
-                        <button className="btn btn-primary btn-sm" type="button" onClick={() => void retry(item)} disabled={busyId === item.id}>
-                          {busyId === item.id ? 'Working…' : item.selectedProviderId ? 'Retry' : 'Choose match & retry'}
-                        </button>
-                      )}
-
-                      {!isActive && item.status !== 'pending' && (
-                        <button className="btn btn-secondary btn-sm" type="button" onClick={() => remove(item.id)} disabled={busyId === item.id}>
-                          Remove from list
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </article>
-            );
-          })}
-        </div>
-      )}
+      <Dialog open={!!picking} onClose={() => setPicking(null)} title={`Pick a release: ${picking?.title ?? ''}`} wide>
+        {picking && <ReleasePicker initialQuery={picking.title} />}
+      </Dialog>
       {requester.picker}
     </main>
   );

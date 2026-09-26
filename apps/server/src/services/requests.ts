@@ -28,6 +28,8 @@ export interface RequestItem {
   title: string;
   year?: number;
   overview?: string;
+  /** Artwork chosen when the request was made, so the list can show what it is about. */
+  poster?: string;
   status: RequestStatus;
   service: string;
   mediaType: MediaKind;
@@ -239,6 +241,7 @@ export interface CreateRequestInput {
   title: string;
   year?: number;
   overview?: string;
+  poster?: string;
   requester?: string;
   mediaType?: MediaKind;
   selectedProviderId?: string;
@@ -360,6 +363,7 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
   const quality = chosenQuality || getServerSettings().defaultQuality?.[mediaType]?.trim() || (mediaType === 'artist' ? 'Standard' : 'HD-1080p');
   const request: RequestItem = {
     id: `request-${seq++}`, title, year: input.year, overview: input.overview,
+    ...(typeof input.poster === 'string' && /^(https?:\/\/|\/)/.test(input.poster) && input.poster.length < 600 ? { poster: input.poster } : {}),
     selectedProviderId: input.selectedProviderId, status: 'pending', service, mediaType,
     qualityProfile: quality, rootFolder, requester: input.requester ?? (actor.role === 'system' ? 'you' : actor.username), ...(actor.role !== 'system' ? { requesterId: actor.userId } : {}),
     createdAt: now(), updatedAt: now()

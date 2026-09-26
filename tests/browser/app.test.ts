@@ -504,9 +504,10 @@ describe('search, requests and downloads agree', () => {
     await page.goto(base + '/downloads');
     await page.getByText('I Am Legend 2007 Theatrical').waitFor();
     expect(await page.getByRole('button', { name: 'Try another release' }).count()).toBe(1);
-    expect(await page.locator('.download-message').first().innerText()).toMatch(/stalled/);
+    expect(await page.locator('.rq-line').first().innerText()).toMatch(/stalled/);
     // A finished season pack links to its series.
-    expect(await page.getByRole('link', { name: 'View in library' }).getAttribute('href')).toBe('/series/sonarr-1');
+    await page.getByRole('radio', { name: /Completed/ }).click();
+    expect(await page.getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('/series/sonarr-1');
     expect(errors).toEqual([]);
   });
 });

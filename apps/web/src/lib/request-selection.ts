@@ -35,7 +35,7 @@ export function lookupRequestCandidates(title: string, mediaType: MediaKind): Pr
 export function confirmRequestCandidate(candidate: RequestCandidate): Promise<SelectionResult> {
   return fetchSelection('/api/requests', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: candidate.title, year: candidate.year, mediaType: candidate.type, selectedProviderId: candidate.providerId })
+    body: JSON.stringify({ title: candidate.title, year: candidate.year, mediaType: candidate.type, selectedProviderId: candidate.providerId, ...(candidate.poster ? { poster: candidate.poster } : {}) })
   });
 }
 
@@ -47,7 +47,7 @@ export type RequestOutcome =
 
 /** Create a request and classify the answer; the 409 candidate list is kept. */
 export async function submitRequest(body: {
-  title: string; year?: number; mediaType: MediaKind; selectedProviderId?: string; qualityProfile?: string;
+  title: string; year?: number; mediaType: MediaKind; selectedProviderId?: string; qualityProfile?: string; poster?: string;
   /** For a film with no home release yet: wait for a proper copy, or take a camera copy now. */
   releaseChoice?: 'wait' | 'now';
 }): Promise<RequestOutcome> {
@@ -60,7 +60,8 @@ export async function submitRequest(body: {
         ...(body.year ? { year: body.year } : {}),
         ...(body.selectedProviderId ? { selectedProviderId: body.selectedProviderId } : {}),
         ...(quality ? { qualityProfile: quality } : {}),
-        ...(body.releaseChoice ? { releaseChoice: body.releaseChoice } : {})
+        ...(body.releaseChoice ? { releaseChoice: body.releaseChoice } : {}),
+        ...(body.poster ? { poster: body.poster } : {})
       })
     });
     if (response.status === 401) window.dispatchEvent(new CustomEvent('virtuallyview:auth-required'));

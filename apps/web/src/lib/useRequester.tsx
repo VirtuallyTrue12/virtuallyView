@@ -4,7 +4,7 @@ import { CandidatePicker } from '../components/requests/CandidatePicker';
 import { ReleaseNotice } from '../components/requests/ReleaseNotice';
 import { submitRequest, type RequestCandidate, type RequestOutcome } from './request-selection';
 
-interface Base { title: string; year?: number; mediaType: MediaKind }
+interface Base { title: string; year?: number; mediaType: MediaKind; poster?: string }
 interface Pending { base: Base; candidates: RequestCandidate[]; message?: string }
 
 /**
@@ -42,7 +42,7 @@ export function useRequester(onDone: (outcome: RequestOutcome, base: Base) => vo
   const pick = async (candidate: RequestCandidate) => {
     if (!pending) return;
     setBusy(true);
-    const base = { title: candidate.title, year: candidate.year, mediaType: candidate.type, selectedProviderId: candidate.providerId };
+    const base = { title: candidate.title, year: candidate.year, mediaType: candidate.type, selectedProviderId: candidate.providerId, ...(candidate.poster ? { poster: candidate.poster } : {}) };
     const outcome = await submitRequest(base);
     setBusy(false);
     if (outcome.kind === 'ambiguous') {
