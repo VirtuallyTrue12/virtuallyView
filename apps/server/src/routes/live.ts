@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { Readable } from 'node:stream';
-import { addPlaylist, channelById, channelsFor, listPlaylists, removePlaylist, rewriteHls, verifyRelay } from '../services/live-tv.js';
+import { addPlaylist, channelById, channelsFor, guideSources, knownChannel, listPlaylists, removePlaylist, rewriteHls, verifyRelay } from '../services/live-tv.js';
+import { ensureGuide, programmesFor, type Programme } from '../services/epg.js';
+import { checkChannels, deadChannels, favoriteChannels, recentChannels, setChannelFavorite, touchRecent } from '../services/live-user.js';
 import { outboundFetch } from '../services/outbound.js';
 import { startTranscode } from '../services/transcode.js';
 import { acquireConversion, CONVERSION_MAX_MS } from '../lib/limits.js';
@@ -13,8 +15,8 @@ const isPlaylistType = (type: string | null, url: string) => /mpegurl/i.test(typ
 export default async function liveRoutes(server: FastifyInstance) {
   server.get('/api/live/playlists', async () => ({ playlists: listPlaylists() }));
 
-  server.post<{ Body: { name?: string; url?: string } }>('/api/live/playlists', async (request, reply) => {
-    const result = addPlaylist(request.body?.name ?? '', (request.body?.url ?? '').trim());
+  server.post<{ Body: { name?: string; url?: string; epgUrl?: string } }>('/api/live/playlists', async (request, reply) => {
+    const result = addPlaylist(request.body?.name ?? '', (request.body?.url ?? '').trim(), request.body?.epgUrl ?? '');
     return result.ok ? result.playlist : reply.code(400).send({ message: result.message });
   });
 
@@ -28,13 +30,64 @@ export default async function liveRoutes(server: FastifyInstance) {
     for (const playlist of lists) {
       try {
         // The address of a stream stays on the server; the page gets an id.
-        for (const { url: _hidden, ...channel } of await channelsFor(playlist)) channels.push(channel);
+        const hasGuide = guideSources(playlist.id).length > 0 || !!playlist.epgUrl;
+        for (const { url: _hidden, tvgId, ...channel } of await channelsFor(playlist)) channels.push({ ...channel, ...(hasGuide && tvgId ? { guide: true } : {}) });
       } catch (error) {
         problems.push(`${playlist.name}: ${error instanceof Error ? error.message : 'could not be loaded'}`);
       }
     }
     if (!channels.length && problems.length) return reply.code(502).send({ message: problems.join(' ') });
     return { channels, problems };
+  });
+
+  // What is on: now and next (and more) for the channels asked about, from the playlist's program guide.
+  server.get<{ Querystring: { channels?: string; hours?: string } }>('/api/live/guide', async request => {
+    const ids = [...new Set((request.query.channels ?? '').split(',').filter(Boolean))].slice(0, 150);
+    const hours = Math.min(Math.max(Number(request.query.hours) || 3, 1), 24);
+    const now = Date.now();
+    const wanted: Array<{ id: string; tvgId: string; urls: string[] }> = [];
+    for (const id of ids) {
+      const c = knownChannel(id) ?? await channelById(id);
+      const urls = c ? (listPlaylists().find(p => p.id === c.playlist)?.epgUrl ? [listPlaylists().find(p => p.id === c.playlist)!.epgUrl!] : guideSources(c.playlist)) : [];
+      if (c?.tvgId && urls.length) wanted.push({ id, tvgId: c.tvgId, urls });
+    }
+    const byUrl = new Map<string, Set<string>>();
+    for (const w of wanted) for (const u of w.urls) { const set = byUrl.get(u) ?? new Set<string>(); set.add(w.tvgId); byUrl.set(u, set); }
+    // The guide covers every channel of its playlist, so ask for all of that playlist's ids the first time.
+    const all = new Map<string, Set<string>>();
+    for (const [u, set] of byUrl) {
+      const full = new Set(set);
+      for (const p of listPlaylists()) if (p.epgUrl === u || guideSources(p.id).includes(u)) { try { for (const c of await channelsFor(p)) if (c.tvgId) full.add(c.tvgId); } catch { /* the playlist is unreachable */ } }
+      all.set(u, full);
+    }
+    const ready = (await Promise.all([...all].map(([u, set]) => ensureGuide(u, set)))).every(Boolean);
+    const programmes: Record<string, Programme[]> = {};
+    for (const w of wanted) {
+      const list = w.urls.flatMap(u => programmesFor(u, w.tvgId, now - 30 * 60_000, now + hours * 3_600_000));
+      if (list.length) programmes[w.id] = list.sort((a, b) => a.start - b.start).slice(0, 40);
+    }
+    return { ready, now, programmes };
+  });
+
+  // Each person's favorites and recently watched channels, and which channels were found dead.
+  server.get('/api/live/me', async () => ({ favorites: favoriteChannels(), recent: recentChannels(), dead: deadChannels() }));
+  server.post<{ Body: { channelId?: string; favorite?: boolean } }>('/api/live/favorite', async (request, reply) => {
+    const id = String(request.body?.channelId ?? '');
+    if (!/^[0-9a-f]{12}$/.test(id)) return reply.code(400).send({ message: 'Unknown channel.' });
+    setChannelFavorite(id, request.body?.favorite !== false);
+    return { ok: true };
+  });
+  server.post<{ Body: { channelId?: string } }>('/api/live/watched', async (request, reply) => {
+    const channel = await channelById(String(request.body?.channelId ?? ''));
+    if (!channel) return reply.code(404).send({ message: 'Channel not found.' });
+    touchRecent(channel.id, channel.name);
+    return { ok: true };
+  });
+  // Administrators: test a batch of channels and remember which ones do not answer.
+  server.post<{ Body: { channelIds?: string[] } }>('/api/live/health', async (request, reply) => {
+    const ids = (request.body?.channelIds ?? []).filter(id => /^[0-9a-f]{12}$/.test(id)).slice(0, 60);
+    if (!ids.length) return reply.code(400).send({ message: 'Choose some channels to check.' });
+    return checkChannels(ids);
   });
 
   // The stream itself: playlists are relayed (HLS), anything else is converted to MP4 by ffmpeg.

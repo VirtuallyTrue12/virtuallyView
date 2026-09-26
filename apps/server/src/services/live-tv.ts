@@ -8,13 +8,13 @@ import { outboundFetch } from './outbound.js';
 // as TVHeadend and free public lists all use). Nothing is bundled and no
 // channel is added for you.
 
-export interface Playlist { id: string; name: string; url: string }
-export interface Channel { id: string; name: string; logo?: string; group?: string; playlist: string; url: string }
+export interface Playlist { id: string; name: string; url: string; /** A program guide (XMLTV) address, when the playlist has none of its own. */ epgUrl?: string }
+export interface Channel { id: string; name: string; logo?: string; group?: string; playlist: string; url: string; tvgId?: string }
 
 const FILE = resolve(DATA_DIR, 'live-tv.json');
 const MAX_CHANNELS = 8000;
 const CACHE_MS = 30 * 60 * 1000;
-const parsed = new Map<string, { at: number; channels: Channel[] }>();
+const parsed = new Map<string, { at: number; channels: Channel[]; epg: string[] }>();
 const known = new Map<string, Channel>();
 /** Playlists are read again the next time they are needed. Channel ids already handed out stay valid. */
 export const clearPlaylistCache = (): void => parsed.clear();
@@ -30,14 +30,18 @@ function save(playlists: Playlist[]): void {
   writeFileSync(FILE, JSON.stringify({ playlists }), { encoding: 'utf8', mode: 0o600 });
 }
 
-export function addPlaylist(name: string, url: string): { ok: true; playlist: Playlist } | { ok: false; message: string } {
+export function addPlaylist(name: string, url: string, epgUrl = ''): { ok: true; playlist: Playlist } | { ok: false; message: string } {
   let parsedUrl: URL;
   try { parsedUrl = new URL(url); } catch { return { ok: false, message: 'Enter a full address starting with http:// or https://.' }; }
   if (!/^https?:$/.test(parsedUrl.protocol)) return { ok: false, message: 'Only http and https addresses are supported.' };
   const list = listPlaylists();
   if (list.some(p => p.url === url)) return { ok: false, message: 'That playlist is already added.' };
   if (list.length >= 20) return { ok: false, message: 'Twenty playlists is the limit.' };
-  const playlist = { id: shortId(url), name: name.trim().slice(0, 60) || parsedUrl.hostname, url };
+  let epg = '';
+  if (epgUrl.trim()) {
+    try { const e = new URL(epgUrl.trim()); if (!/^https?:$/.test(e.protocol)) throw new Error('scheme'); epg = e.toString(); } catch { return { ok: false, message: 'The program guide address must start with http:// or https://.' }; }
+  }
+  const playlist: Playlist = { id: shortId(url), name: name.trim().slice(0, 60) || parsedUrl.hostname, url, ...(epg ? { epgUrl: epg } : {}) };
   save([...list, playlist]);
   return { ok: true, playlist };
 }
@@ -51,6 +55,13 @@ export function removePlaylist(id: string): boolean {
 }
 
 /** #EXTINF lines followed by a stream address. */
+/** Program guide addresses a playlist names in its first line (url-tvg="a.xml,b.xml"). */
+export function epgUrlsOf(text: string): string[] {
+  const head = text.slice(0, 2000).split(/\r?\n/).find(l => l.startsWith('#EXTM3U')) ?? '';
+  const raw = /(?:url-tvg|x-tvg-url)="([^"]*)"/i.exec(head)?.[1] ?? '';
+  return raw.split(',').map(u => u.trim()).filter(u => /^https?:\/\//i.test(u)).slice(0, 3);
+}
+
 export function parseM3u(text: string, playlist: string): Channel[] {
   const out: Channel[] = [];
   let pending: { name: string; logo?: string; group?: string } | null = null;
@@ -61,7 +72,8 @@ export function parseM3u(text: string, playlist: string): Channel[] {
       const name = line.slice(line.lastIndexOf(',') + 1).trim() || attr('tvg-name') || 'Channel';
       const logo = attr('tvg-logo');
       const group = attr('group-title');
-      pending = { name, ...(logo ? { logo } : {}), ...(group ? { group } : {}) };
+      const tvgId = attr('tvg-id');
+      pending = { name, ...(logo ? { logo } : {}), ...(group ? { group } : {}), ...(tvgId ? { tvgId } : {}) };
     } else if (line && !line.startsWith('#') && pending && /^https?:\/\//i.test(line)) {
       out.push({ id: shortId(`${playlist}|${line}`), playlist, url: line, ...pending });
       pending = null;
@@ -76,8 +88,9 @@ export async function channelsFor(playlist: Playlist): Promise<Channel[]> {
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.channels;
   const res = await outboundFetch(playlist.url, { timeoutMs: 20_000 });
   if (!res.ok) throw new Error(`The playlist answered ${res.status}.`);
-  const channels = parseM3u(await res.text(), playlist.id);
-  parsed.set(playlist.id, { at: Date.now(), channels });
+  const text = await res.text();
+  const channels = parseM3u(text, playlist.id);
+  parsed.set(playlist.id, { at: Date.now(), channels, epg: playlist.epgUrl ? [playlist.epgUrl] : epgUrlsOf(text) });
   for (const channel of channels) known.set(channel.id, channel);
   return channels;
 }
@@ -134,3 +147,7 @@ export function rewriteHls(body: string, base: string): string {
     return abs(trimmed);
   }).join('\n');
 }
+
+/** Where a playlist's program guide comes from, once the playlist has been read. */
+export const guideSources = (playlistId: string): string[] => parsed.get(playlistId)?.epg ?? [];
+export const knownChannel = (id: string): Channel | undefined => known.get(id);

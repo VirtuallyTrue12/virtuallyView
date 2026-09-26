@@ -331,7 +331,7 @@ server.addHook('onRequest', (request, _reply, done) => {
 // reconfigures the server or its services is administrator-only.
 const ADMIN_ONLY_WRITE = [
   '/api/server-settings', '/api/integrations', '/api/services', '/api/onboarding', '/api/downloads/',
-  '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists', '/api/live/record', '/api/live/recordings', '/api/setup/', '/api/kiwix/config', '/api/apps/', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/member-edits/', '/api/troubleshoot/'
+  '/api/themes', '/api/ai/pull', '/api/ai/permissions', '/api/system', '/api/library', '/api/quality', '/api/notifications/test', '/api/indexers', '/api/backup', '/api/live/playlists', '/api/live/health', '/api/live/record', '/api/live/recordings', '/api/setup/', '/api/kiwix/config', '/api/apps/', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/member-edits/', '/api/troubleshoot/'
 ];
 // Reading how the server is wired (service addresses, what is reachable on the
 // network, how to control containers) is administrator-only too.

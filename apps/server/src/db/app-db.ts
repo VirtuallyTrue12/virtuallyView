@@ -98,6 +98,20 @@ function open(): DatabaseSync {
       checked_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS live_recent (
+      user_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      at TEXT NOT NULL,
+      PRIMARY KEY (user_id, channel_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS live_health (
+      channel_id TEXT PRIMARY KEY,
+      ok INTEGER NOT NULL,
+      checked_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS photo_albums (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,

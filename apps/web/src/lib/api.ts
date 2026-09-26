@@ -491,6 +491,9 @@ export interface PersonInfo { edited?: boolean; name: string; role?: string; pho
 export interface PhotoEntry { path: string; name: string; size: number; modified: number }
 export interface PhotoAlbum { id: string; name: string; count: number; cover: string | null; updatedAt: string }
 export interface PhotoFolder { path: string; folders: string[]; files: Array<{ name: string; size: number; modified?: number }> }
+export interface LiveChannel { id: string; name: string; logo?: string; group?: string; playlist: string; guide?: boolean }
+export interface LiveProgramme { start: number; stop: number; title: string; desc?: string }
+export interface LivePlaylist { id: string; name: string; url: string; epgUrl?: string }
 export interface SettingsChange { id: number; at: string; actor: string; area: string; summary: string }
 export interface SettingsOverview {
   serverName: string;
@@ -511,6 +514,15 @@ export const api = {
   photoAlbum: (id: string) => getJSON<{ id: string; name: string; photos: PhotoEntry[] }>(`/api/photo-albums/${encodeURIComponent(id)}`),
   changePhotoAlbum: (id: string, body: { name?: string; add?: string[]; remove?: string[] }) => postJSON<{ ok: boolean }>(`/api/photo-albums/${encodeURIComponent(id)}`, body),
   deletePhotoAlbum: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/photo-albums/${encodeURIComponent(id)}`),
+  livePlaylists: () => getJSON<{ playlists: LivePlaylist[] }>('/api/live/playlists'),
+  liveChannels: () => getJSON<{ channels: LiveChannel[]; problems: string[] }>('/api/live/channels'),
+  liveGuide: (ids: string[], hours = 3) => getJSON<{ ready: boolean; now: number; programmes: Record<string, LiveProgramme[]> }>(`/api/live/guide?channels=${ids.join(',')}&hours=${hours}`),
+  liveMe: () => getJSON<{ favorites: string[]; recent: string[]; dead: string[] }>('/api/live/me'),
+  liveFavorite: (channelId: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/live/favorite', { channelId, favorite }),
+  liveWatched: (channelId: string) => postJSON<{ ok: boolean }>('/api/live/watched', { channelId }),
+  liveHealth: (channelIds: string[]) => postJSON<{ checked: number; dead: string[]; alive: string[] }>('/api/live/health', { channelIds }),
+  addLivePlaylist: (name: string, url: string, epgUrl = '') => postJSON<LivePlaylist>('/api/live/playlists', { name, url, ...(epgUrl ? { epgUrl } : {}) }),
+  removeLivePlaylist: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/live/playlists/${encodeURIComponent(id)}`),
   settingsOverview: () => getJSON<SettingsOverview>('/api/settings/overview'),
   settingsHistory: () => getJSON<{ changes: SettingsChange[] }>('/api/settings/history?limit=40'),
   restartService: (service: string) => postJSON<{ ok: boolean; message: string }>('/api/troubleshoot/restart', { service }),
