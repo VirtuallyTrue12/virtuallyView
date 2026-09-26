@@ -57,6 +57,8 @@ Pair it with a VPN for downloads (below): your searches and your downloads then 
 
 ## VPN for downloads
 
+With either VPN below running, **searching goes through it as well** (gluetun's built-in web proxy, reachable only inside the compose network). Setup does this by itself; `SEARCH_VIA_VPN=false` in `.env` opts out. Sources that do not answer through the VPN are switched off rather than searching directly, and are tried again on the next setup run. If Tor search is on, Tor is used instead.
+
 Two ways, both use [gluetun](https://github.com/qdm12/gluetun), an open-source VPN client container. Either one routes only qBittorrent's traffic; search, browsing and every other service are untouched.
 
 ### No account (VPN Gate)

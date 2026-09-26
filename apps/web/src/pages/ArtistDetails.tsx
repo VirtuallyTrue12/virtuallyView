@@ -1,3 +1,4 @@
+import { itemDownloadLabel, isArriving } from '../lib/item-download';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { BackButton } from '../components/layout/BackButton';
@@ -57,6 +58,13 @@ export default function ArtistDetails() {
   const [removing, setRemoving] = useState(false);
 
   useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
+
+  const albumsArriving = albums.some(a => isArriving(a.download));
+  useEffect(() => {
+    if (!id || !albumsArriving) return;
+    const timer = window.setInterval(() => { api.artistAlbums(id).then(({ albums }) => setAlbums(albums)).catch(() => {}); }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [id, albumsArriving]);
 
   useEffect(() => {
     if (!id) return;
@@ -229,6 +237,7 @@ export default function ArtistDetails() {
                     </div>
                     <span className="album-card-title">{album.title}</span>
                     <span className="album-card-sub">{album.releaseDate ? album.releaseDate.slice(0, 4) : ''}{album.albumType ? ` · ${album.albumType}` : ''}</span>
+                    {isArriving(album.download) && <span className="album-card-arriving">{itemDownloadLabel(album.download)}</span>}
                   </Link>
                 ))}
               </div>

@@ -48,7 +48,9 @@ services:
       # Some free relays block DNS-over-TLS (port 853) and the tunnel then looks dead. DNS-over-HTTPS uses port 443.
       - DNS_UPSTREAM_RESOLVER_TYPE=DoH
       - FIREWALL_OUTBOUND_SUBNETS=10.89.0.0/16,172.16.0.0/12
-      - FIREWALL_INPUT_PORTS=8080
+      - FIREWALL_INPUT_PORTS=8080,8888
+      # gluetun's own web proxy: Prowlarr sends its searches through it (never published outside the compose network).
+      - HTTPPROXY=on
     ports:
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:6881:6881"

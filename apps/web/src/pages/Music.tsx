@@ -7,6 +7,7 @@ import { ScanButton } from '../components/media/ScanButton';
 import { PendingMusicVideos } from '../components/media/PendingMusicVideos';
 import { AddArtist } from '../components/media/AddArtist';
 import { Dialog } from '../components/ui/Dialog';
+import { ImportExisting } from '../components/media/ImportExisting';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import { LibraryControls, useLibraryView } from '../components/media/LibraryControls';
 import { useMusicPlayer } from '../components/media/MusicProvider';
@@ -86,6 +87,7 @@ export default function Music() {
           <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}><SvgIcon name="plus" size={17} /> Add artist</button>
           <button type="button" className="btn btn-secondary" onClick={() => void shuffleLibrary()} disabled={mixing || items.length === 0}><SvgIcon name="shuffle" size={17} /> {mixing ? 'Mixing…' : 'Shuffle'}</button>
           <button type="button" className="btn btn-secondary" onClick={() => setCreatingOpen(true)}><SvgIcon name="queue" size={17} /> New playlist</button>
+          <ImportExisting kind="artists" onImported={() => { api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />
           <ScanButton type="artist" />
         </div>
       </header>

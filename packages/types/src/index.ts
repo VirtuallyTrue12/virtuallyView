@@ -105,6 +105,9 @@ export interface Download {
   associatedMedia?: { type: string; title: string; id: string };
   /** The download client's own label (qBittorrent category), such as radarr, sonarr or lidarr. */
   category?: string;
+  /** Sonarr: the episode this queue row is for. Lidarr: the album. Lets a page show what is arriving item by item. */
+  episodeId?: number;
+  albumId?: number;
 }
 
 export interface ActivityEvent {

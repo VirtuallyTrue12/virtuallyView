@@ -33,6 +33,7 @@ import releaseRoutes from './routes/releases.js';
 import youtubeRoutes from './routes/youtube.js';
 import troubleshootRoutes from './routes/troubleshoot.js';
 import settingsOverviewRoutes from './routes/settings-overview.js';
+import importExistingRoutes from './routes/import-existing.js';
 import { recordChange } from './services/settings-history.js';
 import lyricsRoutes from './routes/lyrics.js';
 import subtitleRoutes from './routes/subtitles.js';
@@ -348,7 +349,7 @@ const ADMIN_ONLY_WRITE = [
 ];
 // Reading how the server is wired (service addresses, what is reachable on the
 // network, how to control containers) is administrator-only too.
-const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/troubleshoot', '/api/settings/'];
+const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/troubleshoot', '/api/settings/', '/api/library/unmapped'];
 server.addHook('preHandler', async (request, reply) => {
   if (request.method !== 'GET') return;
   const path = request.url.split('?')[0] ?? '';
@@ -451,6 +452,7 @@ const start = async () => {
   await server.register(youtubeRoutes);
   await server.register(troubleshootRoutes);
   await server.register(settingsOverviewRoutes);
+  await server.register(importExistingRoutes);
 
   // In production (Docker, `npm start`) the built web app ships alongside the
   // server, so one process serves both the API and the UI on one port. In

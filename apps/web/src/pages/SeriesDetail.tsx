@@ -1,3 +1,4 @@
+import { itemDownloadLabel, isArriving } from '../lib/item-download';
 import { DownloadPanel } from '../components/media/DownloadPanel';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -55,6 +56,14 @@ export default function SeriesDetail() {
       .finally(() => { if (!cancelled) setEpisodesLoading(false); });
     return () => { cancelled = true; };
   }, [id]);
+
+  // While anything is on its way, look again now and then so each episode flips to playable by itself.
+  const anyArriving = episodes.some(e => !e.hasFile && isArriving(e.download));
+  useEffect(() => {
+    if (!id || !anyArriving) return;
+    const timer = window.setInterval(() => { api.serieEpisodes(id).then(res => setEpisodes(res.episodes)).catch(() => {}); }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [id, anyArriving]);
 
   const ordered = useMemo(
     () => [...episodes].sort((a, b) => (a.seasonNumber || 999) - (b.seasonNumber || 999) || a.episodeNumber - b.episodeNumber),
@@ -235,18 +244,19 @@ export default function SeriesDetail() {
                     {episode.hasFile && <span className="episode-card-play" aria-hidden="true"><SvgIcon name="play" size={18} /></span>}
                     {episode.watched && <span className="episode-card-watched">Watched</span>}
                     {progress > 0 && <div className="episode-card-progress"><span style={{ width: `${progress}%` }} /></div>}
+                    {!episode.hasFile && isArriving(episode.download) && <div className="episode-card-progress is-download" role="progressbar" aria-label="Download progress" aria-valuenow={episode.download.progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${Math.max(4, episode.download.progress)}%` }} /></div>}
                   </div>
                   <div className="episode-card-body">
                     <span className="episode-card-title">{episode.title}</span>
                     <span className="episode-card-sub">
-                      {episode.hasFile ? '' : 'Not downloaded · '}
+                      {episode.hasFile ? '' : isArriving(episode.download) ? `${itemDownloadLabel(episode.download)} · ` : 'Not downloaded · '}
                       {episode.airDate ?? ''}{episode.runtime ? ` · ${episode.runtime} min` : ''}
                       {progress > 0 ? ` · ${progress}% watched` : ''}
                     </span>
                     {episode.overview && <span className="episode-card-overview">{episode.overview}</span>}
                   </div>
                 </button>
-                {!episode.hasFile && (
+                {!episode.hasFile && !isArriving(episode.download) && (
                   <div className="episode-search">
                     <SearchAgain label="Search for this episode" run={() => api.searchSeries(series.id, episode.id)} />
                   </div>

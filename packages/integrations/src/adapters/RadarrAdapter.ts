@@ -1,6 +1,6 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
-import { queueProblem, joinApiUrl, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { queueProblem, joinApiUrl, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
 
 const ART = 'https://image.tmdb.org/t/p/w500';
 const ART_LARGE = 'https://image.tmdb.org/t/p/w1280';
@@ -152,6 +152,11 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     return null;
   }
 
+  /** Folders in this app's root folders that hold files it does not track yet. */
+  async unmappedFolders(): Promise<Array<{ name: string; path: string }>> {
+    return listUnmappedFolders(this.requireConfig(), 'v3');
+  }
+
   async lookupCandidates(title: string) {
     return lookupRequestCandidates(this.requireConfig(), 'radarr', title);
   }
@@ -185,8 +190,9 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
         qualityProfileId: targets.qualityProfileId,
         rootFolderPath: targets.rootFolderPath,
         monitored: true,
+        ...(req.existingPath ? { path: req.existingPath } : {}),
         ...(req.wait ? { minimumAvailability: 'released' } : {}),
-        addOptions: { searchForMovie: !req.wait }
+        addOptions: { searchForMovie: !req.wait && !req.existingPath }
       }),
       signal: AbortSignal.timeout(4000)
     });
@@ -260,7 +266,7 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
 
   async getQueue(): Promise<Download[]> {
     const { url, apiKey } = this.requireConfig();
-    const res = await fetch(`${url}/api/v3/queue?pageSize=100`, {
+    const res = await fetch(`${url}/api/v3/queue?pageSize=500`, {
       headers: { 'X-Api-Key': apiKey },
       signal: AbortSignal.timeout(4000)
     });

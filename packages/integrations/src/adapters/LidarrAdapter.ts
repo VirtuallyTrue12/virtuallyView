@@ -1,7 +1,7 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
 import { artProxyUrl } from '../art-proxy.js';
-import { runArrCommand, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { runArrCommand, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
 
 export interface LidarrAlbum {
   id: number;
@@ -172,6 +172,11 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     return all.find(a => a.id === id) ?? null;
   }
 
+  /** Folders in this app's root folders that hold files it does not track yet. */
+  async unmappedFolders(): Promise<Array<{ name: string; path: string }>> {
+    return listUnmappedFolders(this.requireConfig(), 'v1');
+  }
+
   async lookupCandidates(title: string) {
     return lookupRequestCandidates(this.requireConfig(), 'lidarr', title);
   }
@@ -207,7 +212,8 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
         ...(targets.metadataProfileId !== undefined ? { metadataProfileId: targets.metadataProfileId } : {}),
         rootFolderPath: targets.rootFolderPath,
         monitored: true,
-        addOptions: { monitor: 'all', searchForMissingAlbums: true }
+        ...(req.existingPath ? { path: req.existingPath } : {}),
+        addOptions: req.existingPath ? { monitor: 'existing', searchForMissingAlbums: false } : { monitor: 'all', searchForMissingAlbums: true }
       }),
       signal: AbortSignal.timeout(4000)
     });
@@ -281,7 +287,7 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
 
   async getQueue(): Promise<Download[]> {
     const { url, apiKey } = this.requireConfig();
-    const res = await fetch(`${url}/api/v1/queue?pageSize=100`, {
+    const res = await fetch(`${url}/api/v1/queue?pageSize=1000`, {
       headers: { 'X-Api-Key': apiKey },
       signal: AbortSignal.timeout(4000)
     });
@@ -298,6 +304,7 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
         sourceClient: 'lidarr',
         downloadId: typeof q.downloadId === 'string' ? q.downloadId : undefined,
         mediaId: q.artistId ? `lidarr-${String(q.artistId)}` : undefined,
+        ...(Number.isInteger(q.albumId) ? { albumId: q.albumId as number } : {}),
         status: queueProblem(q).status ?? String((q.status ?? '') as string).toLowerCase(),
         ...(queueProblem(q).message ? { statusMessage: queueProblem(q).message } : {}),
         progress,

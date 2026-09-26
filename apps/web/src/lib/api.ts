@@ -107,7 +107,11 @@ export interface SeriesItem extends MediaItem {
   seasons?: SeriesSeason[];
 }
 
+/** What is arriving for one episode, track or album right now. */
+export interface ItemDownload { progress: number; status: string; message?: string; timeleft?: string }
+
 export interface EpisodeItem {
+  download?: ItemDownload;
   id: string;
   seriesId: string;
   seasonNumber: number;
@@ -311,6 +315,7 @@ export interface WatchProgress {
 }
 
 export interface AlbumItem {
+  download?: ItemDownload;
   id: number;
   title: string;
   artistId: number;
@@ -323,6 +328,7 @@ export interface AlbumItem {
 }
 
 export interface TrackItem {
+  download?: ItemDownload;
   id: number;
   title: string;
   albumId: number;
@@ -496,6 +502,8 @@ export interface LiveChannel { id: string; name: string; logo?: string; group?: 
 export interface LiveProgramme { start: number; stop: number; title: string; desc?: string }
 export interface LivePlaylist { id: string; name: string; url: string; epgUrl?: string }
 export interface DoctorEntry { id: string; title: string; kind: 'stalled' | 'metadata' | 'import' | 'other'; since: string; fixAt: string | null; gaveUp: boolean; needsYou: string | null }
+export interface ImportCandidate { provider: string; providerId: string; title: string; year?: number; overview?: string; poster?: string }
+export interface UnmappedFolder { folder: string; path: string; term: string; year?: number; best: ImportCandidate | null; options: ImportCandidate[] }
 export interface SettingsChange { id: number; at: string; actor: string; area: string; summary: string }
 export interface SettingsOverview {
   serverName: string;
@@ -531,6 +539,8 @@ export const api = {
   setBookFavorite: (path: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/books/favorite', { path, favorite }),
   downloadDoctor: () => getJSON<{ entries: DoctorEntry[] }>('/api/downloads/doctor'),
   repairDownloads: () => postJSON<{ fixed: string[]; message: string; skippedBecauseOffline: boolean }>('/api/downloads/repair', {}),
+  unmappedFolders: (kind: 'movies' | 'series' | 'artists') => getJSON<{ items: UnmappedFolder[] }>(`/api/library/unmapped?kind=${kind}`),
+  importFolders: (kind: 'movies' | 'series' | 'artists', items: Array<{ path: string; providerId: string; title: string; year?: number }>) => postJSON<{ results: Array<{ path: string; success: boolean; message: string }> }>('/api/library/import', { kind, items }),
   settingsOverview: () => getJSON<SettingsOverview>('/api/settings/overview'),
   settingsHistory: () => getJSON<{ changes: SettingsChange[] }>('/api/settings/history?limit=40'),
   restartService: (service: string) => postJSON<{ ok: boolean; message: string }>('/api/troubleshoot/restart', { service }),

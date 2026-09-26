@@ -3899,6 +3899,7 @@ html[data-mode='light'] .login-bg-scrim {
 
 .album-card-title { font-size: 0.88rem; font-weight: 600; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .album-card-sub { font-size: 0.76rem; color: var(--color-text-muted); }
+.album-card-arriving { font-size: 0.74rem; color: var(--color-accent); font-weight: 600; }
 
 .mv-grid {
   display: grid;
@@ -5049,6 +5050,8 @@ body.has-music-bar { padding-bottom: 96px; }
 .episode-card-num { position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.7); color: #fff; font-size: 0.75rem; font-weight: 600; }
 .episode-card-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255, 255, 255, 0.2); }
 .episode-card-progress > span { display: block; height: 100%; background: var(--color-accent); }
+.episode-card-progress.is-download > span { background: var(--color-accent); }
+.episode-card-progress.is-download { height: 5px; }
 .episode-card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; }
 .episode-card-title { font-weight: 600; }
 .episode-card-sub { font-size: 0.8rem; color: var(--color-text-muted); }
@@ -5349,6 +5352,7 @@ iframe.hero-trailer { pointer-events: none; }
 .search-again-note--err { color: var(--color-danger); }
 .episode-search { padding: 0 0.75rem 0.6rem; }
 .download-message { margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--color-danger); }
+.album-track-quality.is-arriving { color: var(--color-accent); font-weight: 600; }
 .album-track-quality.is-mono { color: var(--color-danger); font-weight: 600; }
 
 .subtitle-manager { margin-top: 0.75rem; }

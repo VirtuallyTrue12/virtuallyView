@@ -1,3 +1,4 @@
+import { itemDownloadLabel, isArriving } from '../lib/item-download';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { BackButton } from '../components/layout/BackButton';
@@ -31,6 +32,14 @@ export default function AlbumDetails() {
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Album could not be loaded.'));
   }, [id]);
+
+  // While tracks are on their way, look again now and then so they become playable by themselves.
+  const arriving = tracks.some(t => !t.hasFile && isArriving(t.download));
+  useEffect(() => {
+    if (!id || !arriving) return;
+    const timer = window.setInterval(() => { api.album(id).then(r => { setAlbum(r.album); setTracks(r.tracks); }).catch(() => {}); }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [id, arriving]);
 
   const playableTracks = tracks.filter(t => t.hasFile);
   const queue = playableTracks.map(track => ({
@@ -167,7 +176,7 @@ export default function AlbumDetails() {
               >
                 <span className="album-track-num">{isActiveTrack(track) ? <SvgIcon name="play" size={12} /> : track.trackNumber ?? String(position + 1)}</span>
                 <span className="album-track-title">{track.title}</span>
-                {track.hasFile ? ((track.audioLabel ?? track.quality) && <span className={`album-track-quality${track.channels === 1 ? ' is-mono' : ''}`} title={track.channels === 1 ? 'Mono recording. Search again for a stereo copy.' : undefined}>{track.audioLabel ?? track.quality}</span>) : <span className="album-track-quality">Not downloaded</span>}
+                {track.hasFile ? ((track.audioLabel ?? track.quality) && <span className={`album-track-quality${track.channels === 1 ? ' is-mono' : ''}`} title={track.channels === 1 ? 'Mono recording. Search again for a stereo copy.' : undefined}>{track.audioLabel ?? track.quality}</span>) : <span className={`album-track-quality${isArriving(track.download) ? ' is-arriving' : ''}`}>{isArriving(track.download) ? itemDownloadLabel(track.download) : 'Not downloaded'}</span>}
                 <span className="album-track-dur">
                   {track.durationMs ? `${Math.floor(track.durationMs / 60000)}:${String(Math.floor((track.durationMs % 60000) / 1000)).padStart(2, '0')}` : ''}
                 </span>

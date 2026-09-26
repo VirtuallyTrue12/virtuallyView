@@ -16,6 +16,7 @@ import { filterByRating, ratingAllowed } from '../services/parental.js';
 import { warningsFor } from '../services/release-check.js';
 import { retryMovie, retrySeries, retryArtist } from '../services/retry.js';
 import { removeTitle } from '../services/remove-title.js';
+import { queueByItem } from '../services/item-downloads.js';
 
 type LibraryItem = Media & {
   streamUrl?: string;
@@ -295,13 +296,16 @@ export default async function mediaRoutes(server: FastifyInstance) {
       const episodes = await sonarr.getEpisodes(id);
       const map = progressForLibrary('episode', episodes.map(e => e.id));
       const episodeFlags = flagsForLibrary('episode', episodes.map(e => e.id));
+      const arriving = await queueByItem('sonarr', sonarr as never);
       return {
         seriesId: id,
         episodes: episodes.map(e => ({
           ...e,
           streamUrl: e.hasFile ? `/api/stream/episode/${encodeURIComponent(e.id)}` : undefined,
           watchProgress: map.get(e.id)?.percent ?? 0,
-          watched: episodeFlags.get(e.id)?.watched ?? false
+          watched: episodeFlags.get(e.id)?.watched ?? false,
+          // What is arriving for an episode that has no file yet, so the page can say so item by item.
+          ...(e.hasFile ? {} : (() => { const d = arriving.get(Number(String(e.id).replace(/^episode-/, ''))); return d ? { download: d } : {}; })())
         }))
       };
     } catch (error) {

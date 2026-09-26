@@ -1,3 +1,4 @@
+import { queueByItem } from '../services/item-downloads.js';
 import { createReadStream, existsSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -39,8 +40,8 @@ export default async function musicRoutes(server: FastifyInstance) {
       return reply.code(400).send({ error: 'bad_request', message: 'Invalid artist id.' });
     }
     try {
-      const albums = await lidarr.getAlbums(numeric);
-      return { artistId: id, albums };
+      const [albums, arriving] = await Promise.all([lidarr.getAlbums(numeric), queueByItem('lidarr', lidarr as never)]);
+      return { artistId: id, albums: albums.map(a => { const d = arriving.get(Number(a.id)); return d ? { ...a, download: d } : a; }) };
     } catch (error) {
       return reply.code(502).send({ error: 'lidarr_offline', message: error instanceof Error ? error.message : 'Lidarr is not available.' });
     }
@@ -114,7 +115,9 @@ export default async function musicRoutes(server: FastifyInstance) {
       if (!album) {
         return reply.code(404).send({ error: 'not_found', message: `No album found with id "${id}".` });
       }
-      return { album, tracks };
+      const arriving = await queueByItem('lidarr', lidarr as never);
+      const download = arriving.get(Number(numeric));
+      return { album: download ? { ...album, download } : album, tracks: tracks.map(t => (!t.hasFile && download ? { ...t, download } : t)) };
     } catch (error) {
       return reply.code(502).send({ error: 'lidarr_offline', message: error instanceof Error ? error.message : 'Lidarr is not available.' });
     }

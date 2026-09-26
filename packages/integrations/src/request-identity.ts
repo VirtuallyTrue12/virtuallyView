@@ -53,6 +53,8 @@ export interface RequestSelectionInput {
   selectedProviderId?: string;
   /** Movies only: add without searching and hold off until a proper (digital or disc) release exists. */
   wait?: boolean;
+  /** A folder that already holds this title's files: use it as the title's path and fetch nothing. */
+  existingPath?: string;
 }
 
 export interface RequestAddResult {
@@ -148,6 +150,14 @@ export interface ResolvedAddTargets {
  * the first usable profile is used. A missing/inaccessible set of targets is a
  * real error (the add cannot be configured correctly), never a silent fallback.
  */
+/** Folders inside a media app's root folders that it does not track yet (files put there by hand). */
+export async function listUnmappedFolders(config: { url: string; apiKey: string }, api: 'v3' | 'v1'): Promise<Array<{ name: string; path: string }>> {
+  const res = await fetch(`${config.url.replace(/\/+$/, '')}/api/${api}/rootfolder`, { headers: { 'X-Api-Key': config.apiKey }, signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`The media app returned ${res.status} while listing its folders.`);
+  const roots = (await res.json()) as Array<{ unmappedFolders?: Array<{ name?: string; path?: string }> }>;
+  return roots.flatMap(r => r.unmappedFolders ?? []).filter((f): f is { name: string; path: string } => !!f.path && !!f.name && !f.name.startsWith('.'));
+}
+
 export async function resolveAddTargets(
   config: { url: string; apiKey: string },
   service: 'radarr' | 'sonarr' | 'lidarr',
