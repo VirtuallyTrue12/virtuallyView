@@ -6,6 +6,8 @@ import { BackButton } from '../components/layout/BackButton';
 import { ScanButton } from '../components/media/ScanButton';
 import { PendingMusicVideos } from '../components/media/PendingMusicVideos';
 import { AddArtist } from '../components/media/AddArtist';
+import { Dialog } from '../components/ui/Dialog';
+import { SvgIcon } from '../components/ui/SvgIcon';
 import { LibraryControls, useLibraryView } from '../components/media/LibraryControls';
 import { useMusicPlayer } from '../components/media/MusicProvider';
 import { libraryMix } from '../lib/instant-mix';
@@ -19,6 +21,8 @@ export default function Music() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [playlistError, setPlaylistError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [creatingOpen, setCreatingOpen] = useState(false);
 
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
@@ -59,6 +63,7 @@ export default function Music() {
       const created = await api.createPlaylist(name);
       setPlaylists(prev => [created, ...(prev ?? [])]);
       setNewName('');
+      setCreatingOpen(false);
     } catch (err) {
       setPlaylistError(err instanceof Error ? err.message : 'Could not create that playlist.');
     } finally {
@@ -69,60 +74,60 @@ export default function Music() {
   const totalTracks = (playlists ?? []).reduce((sum, p) => sum + p.tracks.length, 0);
 
   return (
-    <main className="page">
-
+    <main className="page music-page">
       <BackButton to="/" label="Home" />
-      <div className="page-head">
-        <h1>Music</h1>
-        <div className="page-head-actions">
-          <span className="page-count">{items.length} artists</span>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => void shuffleLibrary()} disabled={mixing || items.length === 0}>{mixing ? 'Mixing...' : 'Shuffle library'}</button>
+
+      <header className="lib-head">
+        <div className="lib-head-text">
+          <h1>Music</h1>
+          <p className="lib-sub">{items.length} {items.length === 1 ? 'artist' : 'artists'}{playlists && playlists.length > 0 ? ` · ${playlists.length} ${playlists.length === 1 ? 'playlist' : 'playlists'}` : ''}</p>
+        </div>
+        <div className="lib-actions">
+          <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}><SvgIcon name="plus" size={17} /> Add artist</button>
+          <button type="button" className="btn btn-secondary" onClick={() => void shuffleLibrary()} disabled={mixing || items.length === 0}><SvgIcon name="shuffle" size={17} /> {mixing ? 'Mixing…' : 'Shuffle'}</button>
           <ScanButton type="artist" />
         </div>
-      </div>
+      </header>
 
-      <AddArtist onAdded={() => { api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />
+      <Dialog open={adding} onClose={() => setAdding(false)} title="Add an artist">
+        <AddArtist bare onAdded={() => { setAdding(false); api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />
+      </Dialog>
 
       {isAdmin && <PendingMusicVideos onFiled={() => { api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />}
 
-      <section className="playlists-section" aria-label="Playlists">
-        <div className="playlists-head">
-          <h2 className="section-title">Playlists</h2>
-          <span className="page-count">{totalTracks} {totalTracks === 1 ? 'track' : 'tracks'} across {playlists?.length ?? 0} {playlists?.length === 1 ? 'playlist' : 'playlists'}</span>
+      <section className="pl" aria-label="Playlists">
+        <div className="rail-head">
+          <h2 className="rail-title">Playlists</h2>
+          {playlists && playlists.length > 0 && <span className="page-count">{totalTracks} {totalTracks === 1 ? 'track' : 'tracks'}</span>}
         </div>
-        <div className="playlist-create-row">
-          <input
-            className="settings-input"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') void createPlaylist(); }}
-            placeholder="New playlist name"
-            maxLength={80}
-            aria-label="New playlist name"
-          />
-          <button type="button" className="btn btn-primary" onClick={() => void createPlaylist()} disabled={creating || !newName.trim()}>
-            {creating ? 'Creating...' : 'Create playlist'}
-          </button>
+        <div className="pl-rail">
+          {creatingOpen ? (
+            <form className="pl-new pl-new--open" onSubmit={e => { e.preventDefault(); void createPlaylist(); }}>
+              <input className="settings-input" autoFocus value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setCreatingOpen(false); }}
+                placeholder="Playlist name" maxLength={80} aria-label="New playlist name" />
+              <div className="pl-new-actions">
+                <button type="submit" className="btn btn-primary btn-sm" disabled={creating || !newName.trim()}>{creating ? 'Creating…' : 'Create'}</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setCreatingOpen(false); setNewName(''); }}>Cancel</button>
+              </div>
+            </form>
+          ) : (
+            <button type="button" className="pl-new" onClick={() => setCreatingOpen(true)}>
+              <span className="pl-new-plus"><SvgIcon name="plus" size={22} /></span>
+              <span className="pl-new-label">New playlist</span>
+            </button>
+          )}
+          {(playlists ?? []).map(playlist => (
+            <Link key={playlist.id} to={`/playlists/${playlist.id}`} className="pl-card">
+              <span className="pl-cover">
+                {playlist.tracks[0]?.cover ? <img src={playlist.tracks[0].cover} alt="" loading="lazy" /> : <SvgIcon name="music-note" size={26} />}
+              </span>
+              <span className="pl-name">{playlist.name}</span>
+              <span className="pl-meta">{playlist.tracks.length} {playlist.tracks.length === 1 ? 'track' : 'tracks'}</span>
+            </Link>
+          ))}
         </div>
-        {playlistError && <p className="playlist-error">{playlistError}</p>}
-        {playlists && playlists.length === 0 && (
-          <div className="empty-state playlist-empty">Your playlists appear here. Open any album and save tracks to a playlist.</div>
-        )}
-        {playlists && playlists.length > 0 && (
-          <div className="playlist-grid">
-            {playlists.map(playlist => (
-              <Link key={playlist.id} to={`/playlists/${playlist.id}`} className="playlist-card">
-                <span className="playlist-card-name">{playlist.name}</span>
-                <span className="playlist-card-meta">
-                  {playlist.tracks.length} {playlist.tracks.length === 1 ? 'track' : 'tracks'}
-                  {playlist.tracks[0]?.cover && (
-                    <img className="playlist-card-cover" src={playlist.tracks[0].cover} alt="" loading="lazy" />
-                  )}
-                </span>
-              </Link>
-            ))}
-          </div>
-        )}
+        {playlistError && <p className="playlist-error" role="alert">{playlistError}</p>}
+        {playlists && playlists.length === 0 && !creatingOpen && <p className="pl-hint">Playlists you make appear here. Open an album and save tracks to one.</p>}
       </section>
 
       {loading && <div className="loading-state">Loading music...</div>}

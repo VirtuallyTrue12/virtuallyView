@@ -6,10 +6,12 @@ import { MediaCard } from '../components/media/MediaCard';
 import { SourceCheck } from '../components/media/SourceCheck';
 import { StatusPill } from '../components/media/StatusPill';
 import { BackButton } from '../components/layout/BackButton';
+import { ManageSection } from '../components/ui/ManageSection';
+import { CastRow } from '../components/media/CastRow';
 import { TitleQuality } from '../components/media/TitleQuality';
 import { RemoveTitle } from '../components/media/RemoveTitle';
 import { FavoriteButton } from '../components/media/UserFlagButtons';
-import { api, type EpisodeItem, type MediaDescription, type SeriesItem } from '../lib/api';
+import { api, type PersonInfo, type EpisodeItem, type MediaDescription, type SeriesItem } from '../lib/api';
 import { SvgIcon } from '../components/ui/SvgIcon';
 
 export default function SeriesDetail() {
@@ -23,6 +25,8 @@ export default function SeriesDetail() {
   const [episodesLoading, setEpisodesLoading] = useState(true);
   const [episodesError, setEpisodesError] = useState<string | null>(null);
   const [season, setSeason] = useState<number | null>(null);
+  const [cast, setCast] = useState<PersonInfo[]>([]);
+  const [castLoading, setCastLoading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -33,6 +37,9 @@ export default function SeriesDetail() {
     setEpisodesError(null);
     setEpisodesLoading(true);
     setSeason(null);
+    setCast([]);
+    setCastLoading(true);
+    api.seriesCast(id).then(c => { if (!cancelled) setCast(c); }).catch(() => {}).finally(() => { if (!cancelled) setCastLoading(false); });
     api.serie(id).then(s => { if (!cancelled) setSeries(s); }).catch(err => { if (!cancelled) setError(err.message); });
     api.series().then(items => { if (!cancelled) setLibrary(items); }).catch(() => {});
     api.mediaDescription(id).then(desc => { if (!cancelled) setDescription(desc); }).catch(() => {});
@@ -155,8 +162,6 @@ export default function SeriesDetail() {
         </div>
       </section>
 
-      {/^sonarr-/.test(series.id) && <TitleQuality mediaType="series" id={series.id} />}
-
       {(description?.description || series.overview) && (
         <section className="page detail-story-section">
           <div className="rail-head">
@@ -171,9 +176,7 @@ export default function SeriesDetail() {
         </section>
       )}
 
-      <section className="page detail-sources-section">
-        <SourceCheck id={series.id} />
-      </section>
+      <CastRow title="Cast" people={cast} loading={castLoading} link />
 
       {(ordered.length > 0 || episodesError) && (
         <section className="page">
@@ -280,6 +283,10 @@ export default function SeriesDetail() {
           </div>
         </section>
       )}
+      <ManageSection title="Download settings and checks">
+        {/^sonarr-/.test(series.id) && <TitleQuality mediaType="series" id={series.id} bare />}
+        <SourceCheck id={series.id} />
+      </ManageSection>
     </main>
   );
 }

@@ -24,8 +24,8 @@ export default async function artistCoversRoutes(server: FastifyInstance) {
     }
   }
 
-  function lidarrImagesOf(artist: { artwork?: { poster?: string; backdrop?: string } }): string[] {
-    return [artist.artwork?.poster, artist.artwork?.backdrop].filter((u): u is string => !!u && u.startsWith('http'));
+  async function lidarrImagesOf(id: string) {
+    try { return await lidarr.getArtistImages(id); } catch { return []; }
   }
 
   // Pictures are shown through this server, so the browser never contacts the image sites.
@@ -35,9 +35,8 @@ export default async function artistCoversRoutes(server: FastifyInstance) {
     const { id } = request.params;
     const artist = await resolveArtist(id);
     if (!artist) return reply.code(404).send({ error: 'not_found', message: `No artist found with id "${id}".` });
-    const numeric = id.replace(/^lidarr-/, '');
-    const albums = /^\d+$/.test(numeric) ? await lidarr.getAlbumMbids(numeric).catch(() => []) : [];
-    const found = await findMoreArtwork(artist.title, albums);
+    const mbid = (artist.provider?.metadata as { foreignArtistId?: string } | undefined)?.foreignArtistId;
+    const found = await findMoreArtwork(artist.title, { mbid });
     const saved = getArtistCover(id);
     const existing = saved?.covers ?? [];
     const fresh = found.filter(c => !existing.some(e => e.url === c.url));
@@ -51,7 +50,7 @@ export default async function artistCoversRoutes(server: FastifyInstance) {
     if (!artist) {
       return reply.code(404).send({ error: 'not_found', message: `No artist found with id "${id}".` });
     }
-    const result = await gatherCoverCandidates(id, artist.title, lidarrImagesOf(artist));
+    const result = await gatherCoverCandidates(id, artist.title, await lidarrImagesOf(id));
     const saved = getArtistCover(id);
     return {
       artistId: id,

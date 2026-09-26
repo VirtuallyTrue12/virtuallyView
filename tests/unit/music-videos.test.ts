@@ -136,4 +136,17 @@ describe('the artist page listing', () => {
     // One file in a release folder takes the release's name, minus the artist's own name.
     expect(items.find(i => i.kind === 'Concerts')?.title).toBe('Live at Wembley 1986');
   });
+
+  it('gives every video a short id however long its file name is, and finds the file again from it', () => {
+    const artistPath = join(root, 'music', 'Linkin Park');
+    const long = 'Linkin Park - Rock am Ring 2004 (Full Show) with a very long descriptive title that goes on and on [9PSo4PjbDbs].mp4';
+    mkdirSync(join(artistPath, 'Concerts'), { recursive: true });
+    writeFileSync(join(artistPath, 'Concerts', long), 'x');
+    const artist = { id: 4, name: 'Linkin Park', path: artistPath };
+    const video = lib.scanArtistVideos(artist)[0]!;
+    expect(video.id.length).toBeLessThan(40); // Fastify refuses address parameters over 100 characters
+    expect(lib.findMusicVideoFile(artist, video.id.split('~')[1]!)).toBe(join(artistPath, 'Concerts', long));
+    expect(lib.findMusicVideoFile(artist, 'AAAAAAAAAAAAAAAA')).toBeNull();
+    expect(lib.findMusicVideoFile({ ...artist, id: 5, path: join(root, 'music', 'Nobody') }, video.id.split('~')[1]!)).toBeNull();
+  });
 });

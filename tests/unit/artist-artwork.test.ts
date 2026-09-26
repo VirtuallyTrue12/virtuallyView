@@ -9,44 +9,68 @@ const reply = (body: unknown) => new Response(JSON.stringify(body), { status: 20
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('find more artwork', () => {
-  it('gathers artist photos and album covers from several sources, only for the right artist, without duplicates', async () => {
+describe('find more artwork: pictures of the artist, not their albums', () => {
+  it('gathers logo, portraits, group and live photos from several sources, without duplicates or album covers', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL) => {
       const url = String(input);
-      if (url.includes('deezer.com/search/artist')) return reply({ data: [{ id: 5, name: 'Somebody Else', picture_xl: 'https://cdn-images.dzcdn.net/wrong.jpg' }, { id: 92, name: 'Linkin Park', picture_xl: 'https://cdn-images.dzcdn.net/images/artist/abc/1000x1000-000000-80-0-0.jpg' }] });
-      if (url.includes('deezer.com/artist/92/albums')) return reply({ data: [{ title: 'Meteora', cover_xl: 'https://cdn-images.dzcdn.net/images/cover/m/1000x1000-000000-80-0-0.jpg' }] });
-      if (url.includes('itunes.apple.com')) return reply({ results: [
-        { artistName: 'LINKIN PARK', collectionName: 'Hybrid Theory', artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/Music/x/100x100bb.jpg' },
-        { artistName: 'Linkin Park Tribute Band', collectionName: 'Not Them', artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/Music/y/100x100bb.jpg' }
-      ] });
+      if (url.includes('deezer.com/search/artist')) return reply({ data: [{ name: 'Somebody Else', picture_xl: 'https://cdn-images.dzcdn.net/wrong.jpg' }, { name: 'Linkin Park', picture_xl: 'https://cdn-images.dzcdn.net/images/artist/abc/1000x1000.jpg' }] });
       if (url.includes('media-list')) return reply({ items: [
         { type: 'image', title: 'File:Linkin_Park_2017.jpg', showInGallery: true, srcset: [{ src: '//upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Linkin_Park_2017.jpg/500px-Linkin_Park_2017.jpg?x=1' }] },
-        { type: 'image', title: 'File:Linkin_Park_logo.png', showInGallery: true, srcset: [{ src: '//upload.wikimedia.org/logo.png' }] },
-        { type: 'image', title: 'File:Flag_of_the_US.svg', showInGallery: true, srcset: [{ src: '//upload.wikimedia.org/flag.svg' }] }
+        { type: 'image', title: 'File:Linkin_Park_band_members_2003.jpg', showInGallery: true, srcset: [{ src: '//upload.wikimedia.org/g.jpg' }] },
+        { type: 'image', title: 'File:Meteora_album_cover.jpg', showInGallery: true, srcset: [{ src: '//upload.wikimedia.org/cover.jpg' }] },
+        { type: 'image', title: 'File:Linkin_Park_logo.png', showInGallery: true, srcset: [{ src: '//upload.wikimedia.org/logo.png' }] }
       ] });
+      if (url.includes('musicbrainz.org')) return reply({ relations: [
+        { type: 'image', url: { resource: 'https://commons.wikimedia.org/wiki/File:LinkinParkBerlin2010.jpg' } },
+        { type: 'wikidata', url: { resource: 'https://www.wikidata.org/wiki/Q261' } }
+      ] });
+      if (url.includes('wikidata.org')) return reply({ entities: { Q261: { claims: {
+        P154: [{ mainsnak: { datavalue: { value: 'Linkin Park logo.svg' } } }],
+        P18: [{ mainsnak: { datavalue: { value: 'LinkinParkBerlin2010.jpg' } } }],
+        P2716: [{ mainsnak: { datavalue: { value: 'Linkin Park collage.jpg' } } }],
+        P373: [{ mainsnak: { datavalue: { value: 'Linkin Park' } } }]
+      } } } });
+      if (url.includes('commons.wikimedia.org/w/api.php')) return reply({ query: { pages: {
+        '1': { title: 'File:Linkin Park live Rock am Ring.jpg', imageinfo: [{ thumburl: 'https://upload.wikimedia.org/live1.jpg', mime: 'image/jpeg' }] },
+        '2': { title: 'File:Linkin Park album cover.jpg', imageinfo: [{ thumburl: 'https://upload.wikimedia.org/cover2.jpg', mime: 'image/jpeg' }] },
+        '3': { title: 'File:Linkin Park group photo.png', imageinfo: [{ thumburl: 'https://upload.wikimedia.org/group3.png', mime: 'image/png' }] },
+        '4': { title: 'File:Video.webm', imageinfo: [{ thumburl: 'https://upload.wikimedia.org/v.jpg', mime: 'video/webm' }] }
+      } } });
       return new Response('{}', { status: 404 });
     }));
     const { findMoreArtwork } = await import('../../apps/server/src/services/artist-artwork.js');
-    const found = await findMoreArtwork('Linkin Park', [{ title: 'Meteora', mbid: 'abc-123' }]);
-    const bySource = (s: string) => found.filter(c => c.source === s);
-    expect(bySource('deezer').map(c => c.kind)).toEqual(['artist', 'album']);
+    const found = await findMoreArtwork('Linkin Park', { mbid: 'f59c' });
+    const kinds = (k: string) => found.filter(c => c.kind === k).map(c => c.label);
+    expect(kinds('logo')).toEqual(['Logo']);
+    expect(found.find(c => c.kind === 'logo')!.url).toBe('https://commons.wikimedia.org/wiki/Special:FilePath/Linkin_Park_logo.svg?width=800');
+    expect(kinds('group')).toEqual(expect.arrayContaining(['Group photo']));
+    expect(found.some(c => c.url.includes('group3.png') && c.kind === 'group')).toBe(true);
+    expect(found.some(c => c.url.includes('live1.jpg') && c.kind === 'live')).toBe(true);
+    expect(found.some(c => c.source === 'deezer')).toBe(true);
     expect(found.some(c => c.url.includes('wrong.jpg'))).toBe(false);
-    expect(bySource('itunes')).toHaveLength(1);
-    expect(bySource('itunes')[0]!.url).toBe('https://is1-ssl.mzstatic.com/image/thumb/Music/x/1000x1000bb.jpg');
-    expect(bySource('wikipedia').map(c => c.url)).toEqual(['https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Linkin_Park_2017.jpg/500px-Linkin_Park_2017.jpg']);
-    expect(bySource('musicbrainz')[0]).toMatchObject({ url: 'https://coverartarchive.org/release-group/abc-123/front-500', kind: 'album' });
+    // No album covers, logos disguised as photos, or non-images.
+    for (const bad of ['cover.jpg', 'cover2.jpg', 'v.jpg']) expect(found.some(c => c.url.endsWith(bad))).toBe(false);
+    expect(found.filter(c => c.label?.includes('logo')).length).toBe(0);
     expect(new Set(found.map(c => c.url)).size).toBe(found.length);
   });
 
-  it('carries on when a source is down', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
-    const { findMoreArtwork } = await import('../../apps/server/src/services/artist-artwork.js');
-    expect(await findMoreArtwork('Nobody', [])).toEqual([]);
+  it('turns what Lidarr already has into labelled candidates', async () => {
+    const { lidarrArtwork } = await import('../../apps/server/src/services/artist-artwork.js');
+    expect(lidarrArtwork([
+      { coverType: 'clearlogo', url: '/config/MediaCover/4/clearlogo.png' }, { coverType: 'poster', url: '/config/MediaCover/4/poster.jpg' },
+      { coverType: 'fanart', url: '/config/MediaCover/4/fanart.jpg' }, { coverType: 'banner', url: '/config/MediaCover/4/banner.jpg' }, { coverType: 'cover', url: '/x' }
+    ]).map(c => [c.kind, c.label])).toEqual([['logo', 'Logo'], ['artist', 'Artist photo'], ['banner', 'Background'], ['banner', 'Banner']]);
   });
 
-  it('serves the new image hosts through the server and refuses others', async () => {
+  it('carries on when every source is down', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
+    const { findMoreArtwork } = await import('../../apps/server/src/services/artist-artwork.js');
+    expect(await findMoreArtwork('Nobody', { mbid: 'x' })).toEqual([]);
+  });
+
+  it('serves the image hosts through the server and refuses others', async () => {
     const { artProxyUrl } = await import('@virtuallyview/integrations');
-    for (const host of ['cdn-images.dzcdn.net', 'is1-ssl.mzstatic.com', 'upload.wikimedia.org', 'coverartarchive.org']) expect(artProxyUrl(`https://${host}/x.jpg`)).toMatch(/^\/api\/art\?u=/);
+    for (const host of ['cdn-images.dzcdn.net', 'upload.wikimedia.org', 'commons.wikimedia.org', 'assets.fanart.tv']) expect(artProxyUrl(`https://${host}/x.jpg`)).toMatch(/^\/api\/art\?u=/);
     expect(artProxyUrl('https://evil.example.com/x.jpg')).toBe('https://evil.example.com/x.jpg');
   });
 });

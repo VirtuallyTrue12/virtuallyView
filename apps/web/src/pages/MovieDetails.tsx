@@ -12,6 +12,8 @@ import { FavoriteButton, WatchedButton } from '../components/media/UserFlagButto
 import { SearchAgain } from '../components/media/SearchAgain';
 import { MediaInfoPanel } from '../components/media/MediaInfoPanel';
 import { QualitySelect } from '../components/requests/QualitySelect';
+import { ManageSection } from '../components/ui/ManageSection';
+import { CastRow } from '../components/media/CastRow';
 import { TitleQuality } from '../components/media/TitleQuality';
 import { SvgIcon } from '../components/ui/SvgIcon';
 
@@ -44,20 +46,15 @@ export default function MovieDetails() {
       .then(m => {
         if (cancelled) return;
         setMovie(m);
-        // The library item may not carry cast (Radarr exposes credits only for
-        // some titles), or may carry names without portraits. Enrich from the
-        // local cast cache / TMDB scrape so the detail page tries to show the
-        // main actors with photos even when Radarr returned a bare list.
-        if (!m.cast?.length || !m.cast.some(actor => actor.photo)) {
-          setCastLoading(true);
-          api.movieCast(id)
-            .then(cast => {
-              if (cancelled) return;
-              setMovie(prev => prev ? { ...prev, cast } : prev);
-            })
-            .catch(() => {})
-            .finally(() => { if (!cancelled) setCastLoading(false); });
-        }
+        // The server answers from Radarr's own credits first, then the TMDB page, and remembers the answer.
+        setCastLoading(true);
+        api.movieCast(id)
+          .then(cast => {
+            if (cancelled) return;
+            setMovie(prev => prev ? { ...prev, cast } : prev);
+          })
+          .catch(() => {})
+          .finally(() => { if (!cancelled) setCastLoading(false); });
       })
       .catch(err => { if (!cancelled) setError(err.message); });
     api.movies()
@@ -283,39 +280,7 @@ export default function MovieDetails() {
         </section>
       )}
 
-      {movie.cast && movie.cast.length > 0 ? (
-        <section className="page detail-cast-section">
-          <div className="rail-head">
-            <h2 className="rail-title">Cast</h2>
-          </div>
-          <div className="cast-list">
-            {movie.cast.map((actor, i) => (
-              <Link className="cast-card" key={i} to={`/people/${encodeURIComponent(actor.name)}`}>
-                {actor.photo ? (
-                  <img className="cast-portrait" src={actor.photo} alt={actor.name} loading="lazy" />
-                ) : (
-                  <div className="cast-portrait cast-portrait--fallback">
-                    <span className="cast-initials">{actor.name.split(' ').map(n => n[0]).join('')}</span>
-                  </div>
-                )}
-                <div className="cast-caption">
-                  <span className="cast-name">{actor.name}</span>
-                  <span className="cast-role">{actor.role}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : castLoading ? (
-        <section className="page detail-cast-section">
-          <div className="rail-head">
-            <h2 className="rail-title">Cast</h2>
-          </div>
-          <p className="detail-story-source">Looking up the main actors…</p>
-        </section>
-      ) : null}
-
-      {/^radarr-/.test(movie.id) && <TitleQuality mediaType="movie" id={movie.id} />}
+      <CastRow title="Cast" people={movie.cast ?? []} loading={castLoading} link />
 
       {movie.status === 'available' && (
         <section className="page">
@@ -357,10 +322,6 @@ export default function MovieDetails() {
         </section>
       )}
 
-      <section className="page detail-sources-section">
-        <SourceCheck id={movie.id} />
-      </section>
-
       {similar.length > 0 && (
         <section className="page">
           <div className="rail-head">
@@ -373,6 +334,10 @@ export default function MovieDetails() {
           </div>
         </section>
       )}
+      <ManageSection title="Download settings and checks">
+        {/^radarr-/.test(movie.id) && <TitleQuality mediaType="movie" id={movie.id} bare />}
+        <SourceCheck id={movie.id} />
+      </ManageSection>
     </main>
   );
 }

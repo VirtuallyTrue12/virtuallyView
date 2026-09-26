@@ -1,12 +1,19 @@
-import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { LidarrAdapter, QBittorrentAdapter } from '@virtuallyview/integrations';
+import type { LidarrAdapter, QBittorrentAdapter, RadarrAdapter } from '@virtuallyview/integrations';
+import { concertMoviesOf, sweepConcertMovies } from './concert-movies.js';
 import { getAdapter } from './registry.js';
 import { isAllowedMediaFile } from './media-roots.js';
 import { cleanReleaseName } from './names.js';
 import { VIDEO_EXT, sweepMusicVideos, type ArtistFolder, type FilerDeps, type VideoKind } from './music-videos.js';
 
-export interface MusicVideo { id: string; title: string; kind: VideoKind; sizeBytes: number; folder: string }
+export interface MusicVideo {
+  id: string; title: string; kind: VideoKind; sizeBytes: number; folder: string;
+  /** A concert that came in as a film: where to play it, and how far along it is. */
+  href?: string; status?: string;
+}
+interface Found extends MusicVideo { file: string }
 
 const KINDS: VideoKind[] = ['Concerts', 'Videos'];
 let folders: { at: number; items: ArtistFolder[] } | null = null;
@@ -19,8 +26,8 @@ export async function artistFolders(force = false): Promise<ArtistFolder[]> {
 }
 export function forgetArtistFolders(): void { folders = null; }
 
-const b64 = (text: string) => Buffer.from(text, 'utf8').toString('base64url');
-const unb64 = (text: string) => Buffer.from(text, 'base64url').toString('utf8');
+/** A short, stable id for a file inside an artist's folder: long file names must not make long addresses. */
+export const videoKey = (relativePath: string) => createHash('sha1').update(relativePath).digest('base64url').slice(0, 16);
 
 function walk(dir: string, depth: number, out: string[]): void {
   if (depth < 0) return;
@@ -42,9 +49,8 @@ function withoutArtist(title: string, artistName: string): string {
   return trimmed.length >= 3 ? trimmed : title;
 }
 
-/** Video files in one artist's Concerts and Videos folders. */
-export function scanArtistVideos(artist: ArtistFolder): MusicVideo[] {
-  const found: MusicVideo[] = [];
+function scan(artist: ArtistFolder): Found[] {
+  const found: Found[] = [];
   for (const kind of KINDS) {
     const root = path.join(artist.path, kind);
     if (!existsSync(root)) continue;
@@ -60,26 +66,39 @@ export function scanArtistVideos(artist: ArtistFolder): MusicVideo[] {
       const base = cleanReleaseName(path.basename(file));
       // One file in a release folder is named by the release; several are "release: file".
       const title = !inRelease ? base : perFolder.get(path.dirname(file)) === 1 ? cleanReleaseName(folder) : `${cleanReleaseName(folder)}: ${base}`;
-      found.push({ id: `musicvideo-${artist.id}~${b64(rel)}`, title: withoutArtist(title, artist.name), kind, sizeBytes: statSync(file).size, folder: inRelease ? folder : '' });
+      found.push({ id: `musicvideo-${artist.id}~${videoKey(rel)}`, title: withoutArtist(title, artist.name), kind, sizeBytes: statSync(file).size, folder: inRelease ? folder : '', file });
     }
   }
   return found;
 }
 
-/** The file on disk for a `musicvideo-...` id, only when it is inside that artist's Concerts or Videos folder. */
+/** Video files in one artist's Concerts and Videos folders. */
+export function scanArtistVideos(artist: ArtistFolder): MusicVideo[] {
+  return scan(artist).map(({ file: _file, ...video }) => video);
+}
+
+/** The file on disk for one `musicvideo-...` id of an artist, only ever from inside that artist's Concerts or Videos folder. */
+export function findMusicVideoFile(artist: ArtistFolder, key: string): string | null {
+  const hit = scan(artist).find(v => v.id.endsWith(`~${key}`));
+  return hit && isAllowedMediaFile(hit.file) ? hit.file : null;
+}
+
 export async function resolveMusicVideoPath(id: string): Promise<string | null> {
-  const match = /^musicvideo-(\d+)~([A-Za-z0-9_-]+)$/.exec(id);
+  const match = /^musicvideo-(\d+)~([A-Za-z0-9_-]{16})$/.exec(id);
   if (!match) return null;
   const artist = (await artistFolders().catch(() => [])).find(a => String(a.id) === match[1]);
-  if (!artist) return null;
-  const rel = unb64(match[2]!);
-  const first = rel.split(/[\\/]/)[0];
-  if (!KINDS.includes(first as VideoKind)) return null;
-  const full = path.resolve(artist.path, rel);
-  if (!full.startsWith(path.resolve(artist.path) + path.sep)) return null;
-  if (!VIDEO_EXT.has(path.extname(full).toLowerCase()) || !existsSync(full)) return null;
-  try { if (!realpathSync(full).startsWith(realpathSync(artist.path) + path.sep)) return null; } catch { return null; }
-  return isAllowedMediaFile(full) ? full : null;
+  return artist ? findMusicVideoFile(artist, match[2]!) : null;
+}
+
+/** Concerts of this artist that were added as films, ready to play from the film player. */
+export async function concertFilmsOf(artist: ArtistFolder): Promise<MusicVideo[]> {
+  const ids = concertMoviesOf(artist.id);
+  if (ids.length === 0) return [];
+  const films = await getAdapter<RadarrAdapter>('radarr').getItems().catch(() => []) as unknown as Array<{ id: string; title: string; status?: string; fileInfo?: { size?: number } }>;
+  return films.filter(f => ids.includes(f.id)).map(f => ({
+    id: f.id, title: withoutArtist(f.title, artist.name), kind: 'Concerts' as const, sizeBytes: f.fileInfo?.size ?? 0, folder: '',
+    href: `/movies/${encodeURIComponent(f.id)}${f.status === 'available' ? '/play' : ''}`, status: f.status ?? 'requested'
+  }));
 }
 
 export function liveFilerDeps(): FilerDeps {
@@ -100,7 +119,12 @@ export function startMusicVideoFiler(): void {
   const tick = async () => {
     if (running) return;
     running = true;
-    try { await sweepMusicVideos(liveFilerDeps()); } catch { /* services offline: try again next minute */ } finally { running = false; }
+    try {
+      const deps = liveFilerDeps();
+      await sweepMusicVideos(deps);
+      // Concerts that arrived as films (Radarr) belong with their artist.
+      await sweepConcertMovies(await getAdapter<RadarrAdapter>('radarr').getItems() as never, deps);
+    } catch { /* services offline: try again next minute */ } finally { running = false; }
   };
   setTimeout(() => void tick(), 45_000).unref();
   setInterval(() => void tick(), 60_000).unref();

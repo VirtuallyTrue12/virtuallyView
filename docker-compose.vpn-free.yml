@@ -71,9 +71,11 @@ services:
 
   qbittorrent:
     network_mode: "service:gluetun"
+    # Start with the tunnel, not only once it is healthy: gluetun's firewall blocks everything until the
+    # tunnel is up (no leaks), and the dashboard must not refuse to start because a free relay is slow today.
     depends_on:
       gluetun:
-        condition: service_healthy
+        condition: service_started
     ports: !reset []
 
 volumes:

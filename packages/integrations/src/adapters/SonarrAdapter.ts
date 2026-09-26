@@ -72,6 +72,8 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       title?: string;
       year?: number;
       tvdbId?: number;
+      tmdbId?: number;
+      tvMazeId?: number;
       imdbId?: string;
       overview?: string;
       runtime?: number;
@@ -103,7 +105,7 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
           type: 'series' as const,
           year: s.year,
           status: (episodeFiles > 0 ? 'available' : 'missing') as MediaStatus,
-          provider: { name: 'Sonarr', id: s.id as number, metadata: { tvdbId: s.tvdbId, imdbId: s.imdbId } },
+          provider: { name: 'Sonarr', id: s.id as number, metadata: { tvdbId: s.tvdbId, imdbId: s.imdbId, tmdbId: s.tmdbId, tvMazeId: s.tvMazeId } },
           artwork: { poster, backdrop },
           genres: s.genres ?? [],
           rating: s.ratings?.value,

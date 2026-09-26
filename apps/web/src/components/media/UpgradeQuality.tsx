@@ -8,7 +8,8 @@ import { api } from '../../lib/api';
  * again. The person is told up front that it can take a while.
  */
 export function UpgradeQuality({ artistId }: { artistId: string }) {
-  const [step, setStep] = useState<'idle' | 'confirm' | 'working' | 'done'>('idle');
+  // Shown inside its own dialog, so it opens straight on the explanation.
+  const [step, setStep] = useState<'idle' | 'confirm' | 'working' | 'done'>('confirm');
   const [note, setNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   // Changing quality is an administrator's job, so only they see the button.

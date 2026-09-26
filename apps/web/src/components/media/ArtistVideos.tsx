@@ -14,13 +14,13 @@ function Section({ title, items, artistId, initial }: { title: string; items: Mu
       </div>
       <div className="mv-grid">
         {items.map(v => (
-          <Link key={v.id} className="mv-card" to={`/music/${artistId}/watch/${encodeURIComponent(v.id)}`}>
+          <Link key={v.id} className="mv-card" to={v.href ?? `/music/${artistId}/watch/${encodeURIComponent(v.id)}`}>
             <div className="mv-card-frame" aria-hidden="true">
               <span className="mv-card-initial">{initial}</span>
               <span className="mv-card-play"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg></span>
             </div>
             <span className="mv-card-title">{v.title}</span>
-            <span className="mv-card-sub">{size(v.sizeBytes)}</span>
+            <span className="mv-card-sub">{[v.sizeBytes ? size(v.sizeBytes) : '', v.status && v.status !== 'available' ? v.status : ''].filter(Boolean).join(' · ')}</span>
           </Link>
         ))}
       </div>

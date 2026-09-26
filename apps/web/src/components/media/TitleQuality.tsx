@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 type Kind = 'movie' | 'series' | 'artist';
 
 /** Change the quality a tracked title downloads in (e.g. move a movie to 4K, or down to 720p). */
-export function TitleQuality({ mediaType, id }: { mediaType: Kind; id: string }) {
+export function TitleQuality({ mediaType, id, bare }: { mediaType: Kind; id: string; bare?: boolean }) {
   const [data, setData] = useState<{ profiles: Array<{ id: number; name: string }>; current: number | null } | null>(null);
   const [pick, setPick] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,8 +36,8 @@ export function TitleQuality({ mediaType, id }: { mediaType: Kind; id: string })
   };
 
   return (
-    <section className="page title-quality">
-      <div className="rail-head"><h2 className="rail-title">Download quality</h2></div>
+    <section className={bare ? 'title-quality' : 'page title-quality'}>
+      {!bare && <div className="rail-head"><h2 className="rail-title">Download quality</h2></div>}
       <p className="detail-story-source">
         Currently set to <strong>{currentName}</strong>. Pick a different profile to have it searched again in that quality
         (for example Ultra-HD if you have a 4K screen, or 720p to save space).

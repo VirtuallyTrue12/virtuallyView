@@ -91,6 +91,13 @@ function open(): DatabaseSync {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS concert_movies (
+      movie_id TEXT PRIMARY KEY,
+      artist_id INTEGER,
+      artist_name TEXT,
+      checked_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS artist_covers (
       artist_id TEXT PRIMARY KEY,
       covers TEXT NOT NULL,

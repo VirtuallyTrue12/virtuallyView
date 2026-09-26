@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { artistFolders, liveFilerDeps, resolveMusicVideoPath, scanArtistVideos } from '../services/music-video-library.js';
+import { artistFolders, concertFilmsOf, liveFilerDeps, resolveMusicVideoPath, scanArtistVideos } from '../services/music-video-library.js';
 import { fileTorrent, listJobs, sweepMusicVideos, type VideoKind } from '../services/music-videos.js';
 
 export { resolveMusicVideoPath };
@@ -12,7 +12,7 @@ export default async function musicVideoRoutes(server: FastifyInstance) {
     try {
       const artist = (await artistFolders()).find(a => String(a.id) === numeric);
       if (!artist) return { artistId: request.params.id, concerts: [], videos: [] };
-      const items = scanArtistVideos(artist);
+      const items = [...scanArtistVideos(artist), ...(await concertFilmsOf(artist))];
       return { artistId: request.params.id, concerts: items.filter(i => i.kind === 'Concerts'), videos: items.filter(i => i.kind === 'Videos') };
     } catch (error) {
       return reply.code(502).send({ error: 'lidarr_offline', message: error instanceof Error ? error.message : 'Lidarr is not available.' });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type YoutubeJob, type YoutubeResult } from '../../lib/api';
+import { SvgIcon } from '../ui/SvgIcon';
 
 const clock = (s: number) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = String(s % 60).padStart(2, '0');
@@ -100,7 +101,7 @@ export function YoutubeFinder({ initialQuery, fixedArtist, onDownloaded }: { ini
                   {[r.channel, r.durationSeconds ? clock(r.durationSeconds) : '', views(r.views), r.kind === 'Concerts' ? 'concert' : 'video', !fixedArtist && !artist && r.artistGuess ? `artist: ${r.artistGuess}` : ''].filter(Boolean).join(' · ')}
                 </span>
               </div>
-              <button type="button" className="btn btn-primary btn-sm" disabled={busy !== null} onClick={() => void download(r)}>{busy === r.id ? 'Starting...' : 'Download'}</button>
+              <button type="button" className="btn btn-primary btn-sm yt-download" disabled={busy !== null} onClick={() => void download(r)}><SvgIcon name="plus" size={15} />{busy === r.id ? 'Starting…' : 'Save'}</button>
             </li>
           ))}
         </ul>

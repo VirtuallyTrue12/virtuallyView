@@ -6,23 +6,30 @@ export interface CastMember {
   role: string;
   /** Absolute TMDB profile image URL, or '' when the profile has no photo. */
   photo?: string;
+  /** TV: how many episodes they are in. */
+  episodes?: number;
+  /** TV: the leads, or the recurring and supporting people. */
+  group?: 'main' | 'supporting';
+  /** Bands: what they play, and when. */
+  years?: string;
+  current?: boolean;
 }
 
 export interface CastResult {
   mediaId: string;
   title: string;
   cast: CastMember[];
-  source: 'cache' | 'tmdb' | 'shared' | 'none';
+  source: 'cache' | 'tmdb' | 'shared' | 'radarr' | 'tvmaze' | 'musicbrainz' | 'none';
   fetchedAt?: string;
 }
 
-const CAST_SCHEMA = 3;
+export const CAST_SCHEMA = 3;
 const TMDB_MOVIE_PAGE = 'https://www.themoviedb.org/movie/';
 const TMDB_SEARCH_PAGE = 'https://www.themoviedb.org/search?query=';
 // Force the English site: the default page can render actor names transliterated
 // into the viewer's local script (e.g. Devanagari), which is what made the cast
 // list show Hindi names on an English dashboard.
-const TMDB_HEADERS = {
+export const TMDB_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) virtuallyView/1.0',
   'Accept-Language': 'en-US,en;q=0.9'
 };
@@ -71,7 +78,7 @@ function castRegion(html: string): string {
 }
 
 /** Extract cast names + character names from a TMDB movie page's HTML. */
-function parseCastHtml(html: string, limit = 18): CastMember[] {
+export function parseCastHtml(html: string, limit = 18): CastMember[] {
   const members: CastMember[] = [];
   const seen = new Set<string>();
   // TMDB renders each actor as `<p><a href="/person/…">Name</a></p>` followed
@@ -233,7 +240,7 @@ export function getCastCache(mediaId: string): { cast: CastMember[]; fetchedAt: 
   }
 }
 
-function setCastCache(mediaId: string, cast: CastMember[], source: string): void {
+export function setCastCache(mediaId: string, cast: CastMember[], source: string): void {
   run(
     `INSERT INTO cast_cache (media_id, payload, fetched_at) VALUES (?, ?, ?)
      ON CONFLICT(media_id) DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at`,
@@ -242,6 +249,13 @@ function setCastCache(mediaId: string, cast: CastMember[], source: string): void
     new Date().toISOString()
   );
   void source;
+}
+
+/** A cached cast list that is still fresh (people change slowly; a month is plenty). */
+export function freshCast(mediaId: string, maxAgeMs = 30 * 24 * 3_600_000): { cast: CastMember[]; fetchedAt: string } | null {
+  const cached = getCastCache(mediaId);
+  if (!cached || !cached.cast.length) return null;
+  return Date.now() - Date.parse(cached.fetchedAt) < maxAgeMs ? cached : null;
 }
 
 /** Open a route to enrich a media item's cast on demand. */

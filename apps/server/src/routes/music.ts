@@ -4,6 +4,8 @@ import type { FastifyInstance } from 'fastify';
 import type { LidarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from '../services/registry.js';
 import { isAllowedMediaFile } from './stream.js';
+import { freshCast, setCastCache } from '../services/cast.js';
+import { fetchBand } from '../services/cast-more.js';
 
 const AUDIO_MIME: Record<string, string> = {
   '.flac': 'audio/flac',
@@ -36,6 +38,27 @@ export default async function musicRoutes(server: FastifyInstance) {
     try {
       const albums = await lidarr.getAlbums(numeric);
       return { artistId: id, albums };
+    } catch (error) {
+      return reply.code(502).send({ error: 'lidarr_offline', message: error instanceof Error ? error.message : 'Lidarr is not available.' });
+    }
+  });
+
+  // The people in a band (or the artist themselves, when solo), with portraits.
+  server.get<{ Params: { id: string } }>('/api/artists/:id/members', async (request, reply) => {
+    const { id } = request.params;
+    const key = `artist:${id}`;
+    const fresh = freshCast(key);
+    if (fresh) return { artistId: id, kind: fresh.cast.length === 1 && fresh.cast[0]!.role === 'Artist' ? 'solo' : 'band', members: fresh.cast };
+    try {
+      const artist = (await lidarr.getItems()).find(a => a.id === id);
+      if (!artist) return reply.code(404).send({ error: 'not_found', message: `No artist found with id "${id}".` });
+      const mbid = (artist.provider?.metadata as { foreignArtistId?: string } | undefined)?.foreignArtistId;
+      const band = await fetchBand(mbid, artist.title);
+      // Only remember a real answer, so a MusicBrainz hiccup is retried on the next visit.
+      // Only remember a fairly complete answer (most portraits found), so a Wikipedia hiccup is retried on the next visit.
+      const pictured = band.members.filter(m => m.photo).length;
+      if (mbid && band.kind !== 'unknown' && pictured * 2 >= band.members.length) setCastCache(key, band.members, 'musicbrainz');
+      return { artistId: id, ...band };
     } catch (error) {
       return reply.code(502).send({ error: 'lidarr_offline', message: error instanceof Error ? error.message : 'Lidarr is not available.' });
     }

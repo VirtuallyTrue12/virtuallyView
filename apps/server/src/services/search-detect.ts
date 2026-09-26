@@ -1,3 +1,4 @@
+import { concertMovieIds } from './concert-movies.js';
 import type { RadarrAdapter, SonarrAdapter, LidarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from './registry.js';
 import { outboundFetch } from './outbound.js';
@@ -368,7 +369,8 @@ export async function searchAll(rawQuery: string): Promise<SearchAllResult> {
   const libraries = await Promise.all((['radarr', 'sonarr', 'lidarr'] as const).map(async key => {
     try { return await libraryItemsOf(getAdapter<Adapter>(key)); } catch { return []; }
   }));
-  const all = libraries.flat() as Array<LibraryItem & { artwork?: { poster?: string }; rating?: number }>;
+  const moved = concertMovieIds();
+  const all = (libraries.flat() as Array<LibraryItem & { artwork?: { poster?: string }; rating?: number }>).filter(i => !(i.type === 'movie' && moved.has(i.id)));
   const rank = (title: string) => { const t = normalize(title); return t === q ? 0 : t.startsWith(q) ? 1 : 2; };
   const library = all
     .filter(i => normalize(i.title).includes(q))

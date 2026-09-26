@@ -45,6 +45,9 @@ export function artistGuesses(rawName: string): string[] {
     const [left, right] = [dash[1]!, dash[2]!];
     out.push(...(titleLike(left) && !titleLike(right) ? [right, left] : [left, right]));
   }
+  // "Pink Floyd: Live at Pompeii"
+  const colon = /^(.{2,50}?):\s+(.{2,60})$/.exec(name);
+  if (colon && !dash) out.push(colon[1]!);
   const live = /^(.{2,60}?)\s+(?:live\b|in concert\b|unplugged\b|concert\b|world tour\b|farewell tour\b|tour\b|music videos?\b|video collection\b|videography\b|the videos?\b)/i.exec(name);
   if (live) out.push(live[1]!);
   const seen = new Set<string>();

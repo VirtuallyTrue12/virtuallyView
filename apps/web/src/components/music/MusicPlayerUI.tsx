@@ -233,11 +233,23 @@ function NowPlaying() {
 /** The always-there bar at the bottom, and the full Now Playing view it opens. */
 export default function MusicPlayerUI() {
   const { entry, error, expanded, setExpanded, stopPlayback } = useMusicPlayer();
+  const bar = useRef<HTMLDivElement>(null);
+  // Floating helpers (the assistant, the requests badge) read this to sit above the bar, not on top of it.
+  useEffect(() => {
+    const root = document.documentElement;
+    const el = bar.current;
+    if (!el || !entry) { root.style.removeProperty('--dock-bottom'); return; }
+    const update = () => root.style.setProperty('--dock-bottom', `${expanded ? 0 : el.offsetHeight}px`);
+    update();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    observer?.observe(el);
+    return () => { observer?.disconnect(); root.style.removeProperty('--dock-bottom'); };
+  }, [entry, expanded]);
   if (!entry) return null;
   return (
     <>
       <NowPlaying />
-      <div className={`mp${expanded ? ' is-hidden' : ''}`} role="region" aria-label="Music player">
+      <div ref={bar} className={`mp${expanded ? ' is-hidden' : ''}`} role="region" aria-label="Music player">
         <div className="mp-edge"><Progress times="none" /></div>
         <div className="mp-row">
           <button type="button" className="mp-now" onClick={() => setExpanded(true)} aria-label="Open Now Playing" title="Open Now Playing" tabIndex={expanded ? -1 : 0}>

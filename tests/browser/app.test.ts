@@ -298,7 +298,8 @@ describe('upgrade music quality', () => {
     });
     let posted: unknown = null;
     await page.goto(base + '/music/lidarr-3');
-    await page.getByRole('button', { name: 'Upgrade quality' }).click();
+    await page.getByRole('button', { name: 'More for this artist' }).click();
+    await page.getByRole('menuitem', { name: 'Upgrade quality' }).click();
     expect(await page.locator('.upgrade-quality-confirm').innerText()).toMatch(/can take some time/i);
     await page.getByRole('button', { name: 'Start upgrade' }).click();
     await page.waitForSelector('.upgrade-quality .notice--ok');
@@ -441,7 +442,8 @@ describe('concerts from YouTube', () => {
     });
 
     await page.goto(base + '/music/lidarr-4');
-    await page.getByRole('button', { name: 'Find concerts and videos on YouTube' }).click();
+    await page.getByRole('button', { name: 'More for this artist' }).click();
+    await page.getByRole('menuitem', { name: 'Find concerts on YouTube' }).click();
     await page.getByLabel('Search YouTube').waitFor();
     expect(await page.getByLabel('Search YouTube').inputValue()).toBe('Linkin Park live concert');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
@@ -449,7 +451,7 @@ describe('concerts from YouTube', () => {
     expect(searched).toBe('Linkin Park live concert');
     expect(await page.locator('.yt-row .release-row-meta').innerText()).toMatch(/1:11:02.*1\.9M views.*concert/);
 
-    await page.locator('.yt-row').getByRole('button', { name: 'Download' }).click();
+    await page.locator('.yt-row').getByRole('button', { name: 'Save' }).click();
     await page.waitForSelector('.yt-job');
     expect(posted).toEqual({ id: '9PSo4PjbDbs', title: result.title, artist: 'Linkin Park', kind: 'Concerts' });
     const before = videosCalls;
@@ -467,7 +469,8 @@ describe('concerts from YouTube', () => {
     await page.unroute('**/api/youtube/status');
     await page.route('**/api/youtube/status', r => r.fulfill(json({ available: false })));
     await page.goto(base + '/music/lidarr-4');
-    await page.getByRole('button', { name: 'Find concerts and videos on YouTube' }).click();
+    await page.getByRole('button', { name: 'More for this artist' }).click();
+    await page.getByRole('menuitem', { name: 'Find concerts on YouTube' }).click();
     await page.getByText('docker compose --profile youtube up -d').waitFor();
     expect(errors).toEqual([]);
   });
@@ -504,6 +507,86 @@ describe('search, requests and downloads agree', () => {
     expect(await page.locator('.download-message').first().innerText()).toMatch(/stalled/);
     // A finished season pack links to its series.
     expect(await page.getByRole('link', { name: 'View in library' }).getAttribute('href')).toBe('/series/sonarr-1');
+    expect(errors).toEqual([]);
+  });
+});
+
+describe('artist page and music page layout', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const artist = { id: 'lidarr-6', title: 'Linkin Park', type: 'artist', status: 'available', trackFileCount: 39, totalTrackCount: 107, albumCount: 5, genres: ['Rock', 'Nu Metal'], overview: 'Linkin Park is an American rock band from Agoura Hills, California. Formed in 1996, the band rose to international fame with their debut album Hybrid Theory, released in 2000. '.repeat(3) };
+
+  it('keeps the page calm: Play and My List up front, the rest in a menu, members below', async () => {
+    await page.route('**/api/artists/lidarr-6', r => r.fulfill(json(artist)));
+    await page.route('**/api/artists/lidarr-6/albums', r => r.fulfill(json({ artistId: 'lidarr-6', albums: [] })));
+    await page.route('**/api/artists/lidarr-6/videos', r => r.fulfill(json({ concerts: [], videos: [] })));
+    await page.route('**/api/artists/lidarr-6/members', r => r.fulfill(json({ kind: 'band', members: [
+      { name: 'Mike Shinoda', role: 'guitar', years: '1996–present', current: true, photo: '' },
+      { name: 'Chester Bennington', role: 'lead vocals', years: '1996–2017', current: false, photo: '' }
+    ] })));
+    let coversCalls = 0;
+    await page.route('**/api/artists/lidarr-6/covers', r => { coversCalls++; return r.fulfill(json({ candidates: [{ url: 'https://x/logo.png', preview: '/l.svg', source: 'lidarr', label: 'Logo', kind: 'logo' }], chosen: null })); });
+    await page.route('**/api/artists/lidarr-6/covers/more', r => r.fulfill(json({ artistId: 'lidarr-6', added: 2, chosen: null, candidates: [
+      { url: 'https://x/logo.png', preview: '/l.svg', source: 'lidarr', label: 'Logo', kind: 'logo' },
+      { url: 'https://x/p.jpg', preview: '/p.svg', source: 'deezer', label: 'Deezer photo', kind: 'artist' },
+      { url: 'https://x/g.jpg', preview: '/g.svg', source: 'wikimedia', label: 'Group photo', kind: 'group' },
+      { url: 'https://x/album.jpg', preview: '/a.svg', source: 'itunes', label: 'An album', kind: 'album' }
+    ] })));
+    for (const f of ['l', 'p', 'g', 'a']) await page.route(`**/${f}.svg`, r => r.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>' }));
+
+    await page.goto(base + '/music/lidarr-6');
+    await page.getByRole('heading', { name: 'Linkin Park', level: 1 }).waitFor();
+    // Up front: the two things people come to do, plus the menu. Not a row of seven buttons.
+    expect(await page.locator('.ah-actions > .btn, .ah-actions .more-trigger').count()).toBeLessThanOrEqual(3);
+    expect(await page.getByRole('button', { name: /Play mix/ }).count()).toBe(1);
+    expect(await page.getByRole('button', { name: 'Upgrade quality' }).count()).toBe(0);
+    expect(await page.locator('.title-quality').count()).toBe(0);
+    // The long biography is folded until asked for.
+    expect(await page.locator('.ah-bio p.is-clamped').count()).toBe(1);
+    await page.getByRole('button', { name: 'Read more' }).click();
+    expect(await page.locator('.ah-bio p.is-clamped').count()).toBe(0);
+    if (process.env.VV_SHOTS) await page.screenshot({ path: `${process.env.VV_SHOTS}/artist-desktop.png`, fullPage: true });
+    // Band members: current first, former under their own heading.
+    await page.getByRole('heading', { name: 'Band members' }).waitFor();
+    expect(await page.locator('.people-section .person-name').allInnerTexts()).toEqual(['Mike Shinoda', 'Chester Bennington']);
+    expect(await page.getByRole('heading', { name: 'Former members' }).count()).toBe(1);
+
+    // The menu, keyboard-reachable, then artwork in its own dialog without album covers.
+    await page.getByRole('button', { name: 'More for this artist' }).click();
+    expect(await page.getByRole('menuitem').count()).toBeGreaterThanOrEqual(4);
+    await page.getByRole('menuitem', { name: /Change artwork/ }).click();
+    await page.getByRole('dialog', { name: 'Artwork' }).waitFor();
+    await page.getByRole('button', { name: 'Use Group photo' }).waitFor();
+    if (process.env.VV_SHOTS) await page.screenshot({ path: `${process.env.VV_SHOTS}/artist-artwork.png` });
+    expect(await page.getByRole('heading', { name: 'Logos' }).count()).toBe(1);
+    expect(await page.getByRole('heading', { name: 'Band and group photos' }).count()).toBe(1);
+    expect(await page.getByText('An album', { exact: true }).count()).toBe(0);
+    await page.keyboard.press('Escape');
+    await page.getByRole('dialog').waitFor({ state: 'detached' });
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.waitForTimeout(200);
+    if (process.env.VV_SHOTS) await page.screenshot({ path: `${process.env.VV_SHOTS}/artist-phone.png`, fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    expect(errors).toEqual([]);
+  });
+
+  it('the music page opens with a clear header, a playlist row and Add artist in a dialog', async () => {
+    await page.route('**/api/artists', r => r.request().method() === 'GET' ? r.fulfill(json([artist])) : r.continue());
+    await page.route('**/api/playlists', r => r.request().method() === 'GET' ? r.fulfill(json([{ id: 'p1', name: 'Road trip', tracks: [{ trackId: '1', title: 'x' }], createdAt: '', updatedAt: '' }])) : r.continue());
+    await page.goto(base + '/music');
+    await page.getByRole('heading', { name: 'Music', level: 1 }).waitFor();
+    await page.getByRole('link', { name: /Road trip/ }).waitFor();
+    if (process.env.VV_SHOTS) await page.screenshot({ path: `${process.env.VV_SHOTS}/music-page.png` });
+    // No big form up top any more.
+    expect(await page.getByLabel('Artist name').count()).toBe(0);
+    await page.getByRole('button', { name: 'Add artist' }).click();
+    await page.getByRole('dialog', { name: 'Add an artist' }).waitFor();
+    if (process.env.VV_SHOTS) await page.screenshot({ path: `${process.env.VV_SHOTS}/add-artist.png` });
+    await page.getByLabel('Artist name').fill('Queen');
+    await page.keyboard.press('Escape');
+    await page.getByRole('dialog').waitFor({ state: 'detached' });
+    // A new playlist opens inline.
+    await page.getByRole('button', { name: 'New playlist' }).click();
+    await page.getByLabel('New playlist name').waitFor();
     expect(errors).toEqual([]);
   });
 });

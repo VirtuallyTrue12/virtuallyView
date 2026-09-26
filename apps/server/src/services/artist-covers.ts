@@ -1,13 +1,15 @@
 import { get, run } from '../db/app-db.js';
 import { outboundFetch } from './outbound.js';
 import { artProxyUrl } from '@virtuallyview/integrations';
+import { lidarrArtwork } from './artist-artwork.js';
 
 export interface ArtistCoverCandidate {
   url: string;
   source: string;
   label?: string;
   /** A photo of the artist, or an album cover. */
-  kind?: 'artist' | 'album';
+  /** What the picture is. Album covers are not offered: they arrive with the music. */
+  kind?: 'artist' | 'logo' | 'group' | 'live' | 'banner' | 'album';
 }
 
 /**
@@ -75,16 +77,12 @@ export function chooseArtistCover(artistId: string, url: string): ArtistCoverCan
 export async function gatherCoverCandidates(
   artistId: string,
   title: string,
-  lidarrImages: string[]
+  lidarrImages: Array<{ coverType: string; url: string }>
 ): Promise<{ candidates: ArtistCoverCandidate[]; chosen?: string }> {
   const saved = getArtistCover(artistId);
   const candidates: ArtistCoverCandidate[] = [];
 
-  for (const url of lidarrImages) {
-    if (url && (url.startsWith('http') || url.startsWith('/api/art')) && !candidates.some(c => c.url === url)) {
-      candidates.push({ url, source: 'lidarr', label: 'Lidarr artwork', kind: 'artist' });
-    }
-  }
+  for (const c of lidarrArtwork(lidarrImages)) if (!candidates.some(x => x.url === c.url)) candidates.push(c);
 
   if (!candidates.length) {
     // Wikipedia artist image as a last fallback so the artist tile is
@@ -106,7 +104,7 @@ export async function gatherCoverCandidates(
   }
 
   // Artwork found earlier with "Find more artwork" stays in the list.
-  for (const earlier of saved?.covers ?? []) if (!candidates.some(c => c.url === earlier.url)) candidates.push(earlier);
+  for (const earlier of saved?.covers ?? []) if (earlier.kind !== 'album' && !candidates.some(c => c.url === earlier.url)) candidates.push(earlier);
   const chosen = saved?.chosen && candidates.some(c => c.url === saved.chosen) ? saved.chosen : undefined;
   saveArtistCovers(artistId, candidates, chosen);
   return { candidates, chosen };

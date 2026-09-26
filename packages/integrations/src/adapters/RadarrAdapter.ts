@@ -287,6 +287,18 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     }) as Download[];
   }
 
+  /** The film's cast in billing order, with portraits, from Radarr's own metadata. */
+  async getCast(radarrId: string | number): Promise<Array<{ name: string; role: string; photo: string }>> {
+    const { url, apiKey } = this.requireConfig();
+    const numeric = String(radarrId).replace(/^radarr-/, '');
+    const res = await fetch(`${url}/api/v3/credit?movieId=${encodeURIComponent(numeric)}`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const credits = (await res.json()) as Array<{ personName?: string; character?: string; type?: string; order?: number; images?: Array<{ coverType?: string; remoteUrl?: string }> }>;
+    return credits.filter(c => c.type === 'cast' && c.personName)
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+      .map(c => ({ name: c.personName!, role: c.character ?? '', photo: (c.images ?? []).find(i => i.coverType === 'headshot')?.remoteUrl?.replace('/original/', '/w185/') ?? '' }));
+  }
+
   async removeQueueItem(queueId: string, blocklist = false): Promise<{ success: boolean; message: string }> {
     const { url, apiKey } = this.requireConfig();
     const res = await fetch(`${url}/api/v3/queue/${queueId}?removeFromClient=true&blocklist=${blocklist}`, {

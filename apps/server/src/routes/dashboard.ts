@@ -1,3 +1,4 @@
+import { withoutConcerts } from '../services/concert-movies.js';
 import type { FastifyInstance } from 'fastify';
 import type { Media } from '@virtuallyview/types';
 import { getAdapter } from '../services/registry.js';
@@ -28,7 +29,8 @@ export default async function dashboardRoutes(server: FastifyInstance) {
     const radarr = getAdapter('radarr');
     const sonarr = getAdapter('sonarr');
     const lidarr = getAdapter('lidarr');
-    const [movies, series] = await Promise.all([safeItems(radarr), safeItems(sonarr)]);
+    const [allFilms, series] = await Promise.all([safeItems(radarr), safeItems(sonarr)]);
+    const movies = withoutConcerts(allFilms);
     const artists = await safeItems(lidarr);
 
     const sortedByAdded = [...movies].sort(

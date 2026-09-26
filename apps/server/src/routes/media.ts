@@ -5,7 +5,10 @@ import { getAdapter } from '../services/registry.js';
 import { getRequests } from '../services/requests.js';
 import { getWatchProgress, progressForLibrary } from '../services/progress.js';
 import { flagsForLibrary, getFlags } from '../services/user-flags.js';
-import { ensureCast, getCastCache, type CastMember } from '../services/cast.js';
+import { ensureCast, freshCast, getCastCache, setCastCache, type CastMember } from '../services/cast.js';
+import { seriesCast } from '../services/cast-more.js';
+import { sweepConcertMovies, withoutConcerts } from '../services/concert-movies.js';
+import { liveFilerDeps } from '../services/music-video-library.js';
 import { getArtistCover, servedCover } from '../services/artist-covers.js';
 import { findTrailer } from '../services/trailers.js';
 import { outboundFetch } from '../services/outbound.js';
@@ -130,8 +133,15 @@ export default async function mediaRoutes(server: FastifyInstance) {
     }));
   }
 
-  server.get('/api/movies', async () => {
+  // Concerts added as films move to their artist. Ones whose title says so move at once; the rest are found by a background check.
+  const filmItems = async (): Promise<LibraryItem[]> => {
     const items = (await safeItems(moviesAdapter)) as LibraryItem[];
+    try { await Promise.race([sweepConcertMovies(items as never, liveFilerDeps(), { onlyTitleBased: true }), new Promise(r => setTimeout(r, 6000))]); } catch { /* the list still loads */ }
+    return withoutConcerts(items);
+  };
+
+  server.get('/api/movies', async () => {
+    const items = await filmItems();
     // Local files get a stream URL on every tile, not just the hero, so card
     // hover previews can play the real file (P2-8).
     return withProgress(items, 'movie').map(item => ({
@@ -400,7 +410,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
     const normalizedQuery = normalizeSearch(query);
     const haystack = (m: any) =>
       normalizeSearch([m.title, m.overview, m.originalTitle, m.artist, ...(m.genres ?? [])].join(' '));
-    const allMovies = withProgress(mergeRequests((await safeItems(moviesAdapter)) as LibraryItem[], 'movie'), 'movie');
+    const allMovies = withProgress(mergeRequests(await filmItems(), 'movie'), 'movie');
     const allSeries = withProgress(mergeRequests((await safeItems(seriesAdapter)) as LibraryItem[], 'series'), 'series');
     const allArtists = withProgress(mergeRequests((await safeItems(artistsAdapter)) as LibraryItem[], 'artist'), 'artist');
     const catalog = [...allMovies, ...allSeries, ...allArtists];
@@ -428,7 +438,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
 
     const ql = query.toLowerCase();
 
-    const allMovies = await safeItems(moviesAdapter);
+    const allMovies = withoutConcerts(await safeItems(moviesAdapter));
     const allSeries = await safeItems(seriesAdapter);
     const allArtists = await safeItems(artistsAdapter);
 
@@ -620,8 +630,32 @@ export default async function mediaRoutes(server: FastifyInstance) {
       }
       movie = { id, title: pending.title, type: 'movie', status: 'requested', createdAt: new Date(pending.createdAt), updatedAt: new Date(pending.updatedAt) } as LibraryItem;
     }
+    const fresh = freshCast(id);
+    if (fresh) return { mediaId: id, title: movie.title, cast: fresh.cast, source: 'cache', fetchedAt: fresh.fetchedAt };
+    // Radarr already holds the film's credits with portraits: fast, and it works with no internet lookups.
+    if (/^radarr-/.test(id)) {
+      try {
+        const credits = (await getAdapter<RadarrAdapter>('radarr').getCast(id)).slice(0, 30);
+        if (credits.length) { setCastCache(id, credits, 'radarr'); return { mediaId: id, title: movie.title, cast: credits, source: 'radarr' }; }
+      } catch { /* fall back to the TMDB page below */ }
+    }
     const tmdbId = (movie.provider?.metadata as { tmdbId?: number } | undefined)?.tmdbId;
     const result = await ensureCast(id, movie.title, movie.year, tmdbId);
     return result;
+  });
+
+  // A series' people: the leads first, then the recurring and supporting cast.
+  server.get<{ Params: { id: string } }>('/api/series/:id/cast', async (request, reply) => {
+    const { id } = request.params;
+    const key = `series:${id}`;
+    const fresh = freshCast(key);
+    if (fresh) return { mediaId: id, cast: fresh.cast, source: 'cache' };
+    let series: LibraryItem | null = null;
+    try { series = (await seriesAdapter.getItem(id)) as LibraryItem | null; } catch { /* offline */ }
+    if (!series) return reply.code(404).send({ error: 'not_found', message: `No TV show found with id "${id}".` });
+    const meta = (series.provider?.metadata ?? {}) as { tmdbId?: number; tvMazeId?: number };
+    const cast = await seriesCast({ tmdbId: meta.tmdbId, tvMazeId: meta.tvMazeId });
+    if (cast.length) setCastCache(key, cast, 'tmdb');
+    return { mediaId: id, cast, source: cast.length ? 'tmdb' : 'none' };
   });
 }

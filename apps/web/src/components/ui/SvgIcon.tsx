@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 export type IconName =
   | 'close' | 'check' | 'star' | 'heart' | 'heart-outline' | 'arrow-left' | 'play' | 'pause' | 'prev' | 'next' | 'stop'
   | 'shuffle' | 'repeat' | 'volume-high' | 'volume-low' | 'volume-mute' | 'sliders' | 'dice' | 'film' | 'tv' | 'mic'
-  | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'plus' | 'pip' | 'chevron-up' | 'queue' | 'repeat-one' | 'music-note';
+  | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'plus' | 'pip' | 'chevron-up' | 'queue' | 'repeat-one' | 'music-note' | 'more' | 'image' | 'search' | 'trash' | 'sparkle' | 'youtube' | 'sliders-h' | 'users';
 
 const speaker = <path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor" stroke="none" />;
 
@@ -36,6 +36,14 @@ const ICONS: Record<IconName, { fill?: boolean; body: ReactNode }> = {
   queue: { body: <path d="M4 6h12M4 11h12M4 16h7M17 14v6l5-3z" /> },
   'repeat-one': { body: <><path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3" /><path d="M11 10h1.5v5" /></> },
   'music-note': { body: <path d="M9 18V6l11-2v12M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3zm11-2a3 3 0 1 1-3-3 3 3 0 0 1 3 3z" /> },
+  more: { fill: true, body: <><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></> },
+  image: { body: <><rect x="3" y="4" width="18" height="16" rx="2.5" /><circle cx="9" cy="10" r="1.6" /><path d="m4 18 5-5 4 4 3-3 4 4" /></> },
+  search: { body: <><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></> },
+  trash: { body: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" /> },
+  sparkle: { body: <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18" /> },
+  youtube: { body: <><rect x="3" y="6" width="18" height="12" rx="4" /><path d="m10.5 9.5 4 2.5-4 2.5z" fill="currentColor" /></> },
+  'sliders-h': { body: <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6" /> },
+  users: { body: <><circle cx="9" cy="8" r="3.2" /><path d="M3 20a6 6 0 0 1 12 0M16 5.2a3.2 3.2 0 0 1 0 6M18 14.5a6 6 0 0 1 3 5.5" /></> },
   plus: { body: <path d="M12 5v14M5 12h14" /> },
   pip: { body: <><rect x="3" y="5" width="18" height="14" rx="2" /><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" /></> }
 };

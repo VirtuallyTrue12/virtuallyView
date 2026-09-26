@@ -2,7 +2,9 @@
 FROM node:24-alpine AS build
 WORKDIR /app
 COPY . .
-RUN npm ci
+# npm skips an optional native package it fails to download (Rollup's, here) and the build then dies later.
+# Check it loaded and try again a few times, so one bad download does not sink the install.
+RUN for i in 1 2 3 4; do npm ci && node -e "require('rollup')" && exit 0; echo "install attempt $i failed, retrying"; rm -rf node_modules; sleep 3; done; exit 1
 RUN npm run build --workspace=apps/server --workspace=apps/web
 # Drop dev tooling; workspace packages stay linked.
 RUN npm prune --omit=dev
