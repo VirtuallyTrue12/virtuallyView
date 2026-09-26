@@ -5840,3 +5840,40 @@ a.person:hover, a.person:focus-visible { transform: none; }
 .detail > .page, .detail > section.page { max-width: 1200px; margin-left: auto; margin-right: auto; width: 100%; box-sizing: border-box; }
 .detail > .people-section.page { margin-left: auto; margin-right: auto; }
 .detail-story { max-width: 78ch; }
+
+/* ---------- Scrollbars: slim and quiet everywhere ---------- */
+:root { --scrollbar-thumb: rgba(140, 145, 165, 0.38); --scrollbar-thumb-hover: rgba(160, 165, 185, 0.62); }
+* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 3px solid transparent; background-clip: padding-box; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: padding-box; }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+
+/* ---------- The three-dots button ---------- */
+.btn.more-trigger { width: 42px; height: 42px; min-height: 0; padding: 0; border-radius: 50%; background: transparent; border: 1px solid var(--color-border); color: var(--color-text-secondary); box-shadow: none; }
+.btn.more-trigger:hover, .btn.more-trigger[aria-expanded='true'] { background: var(--color-surface-elevated); color: var(--color-text-primary); border-color: color-mix(in srgb, var(--color-text-muted) 55%, transparent); transform: none; }
+.hero-actions .btn.more-trigger, .lib-actions .btn.more-trigger { width: 44px; height: 44px; }
+.rq-actions .btn.more-trigger { width: 40px; height: 40px; }
+@media (max-width: 640px) {
+  /* On a phone the menu is a sheet above the tab bar, so it never runs off the screen. */
+  .more-menu { position: fixed; left: 12px; right: 12px; top: auto; bottom: calc(var(--tabbar-h, 0px) + 12px); min-width: 0; max-height: 65vh; overflow-y: auto; z-index: 130; transform-origin: bottom center; padding: 0.5rem; }
+  .more-item { padding: 0.8rem 0.9rem; }
+}
+
+/* ---------- Top bar: it measures itself; what does not fit moves under More ---------- */
+@media (min-width: 861px) {
+  .nav { flex-wrap: nowrap; gap: var(--spacing-lg); }
+  .nav-links { position: relative; flex: 1 1 auto; min-width: 0; justify-content: flex-end; flex-wrap: nowrap; gap: 18px; }
+  .nav-link { white-space: nowrap; }
+}
+.nav-tools { display: flex; align-items: center; gap: 0.75rem; flex: 0 0 auto; }
+.nav-brand { flex: 0 0 auto; }
+.nav-measure { position: absolute; left: 0; top: 0; display: flex; gap: 18px; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; white-space: nowrap; }
+.nav-measure .nav-link { flex: 0 0 auto; }
+@media (max-width: 1100px) { .nav-brand span { display: none; } }
+@media (max-width: 860px) {
+  .nav-measure { display: none; }
+  .app .nav-tools { margin-left: auto; gap: 0.4rem; }
+  .app .nav .nav-search { margin-left: 0; }
+}

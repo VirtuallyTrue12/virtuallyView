@@ -51,6 +51,26 @@ export function applyTheme(id: string, mode: 'light' | 'dark', vars: Record<stri
   try { localStorage.setItem(CACHE, JSON.stringify({ id, mode, vars })); } catch { /* storage blocked */ }
 }
 
+let previewKeys: string[] = [];
+/** Show a theme on the whole app without saving it (the theme creator's live preview). */
+export function previewTheme(mode: 'light' | 'dark', vars: Record<string, string>): void {
+  const root = document.documentElement;
+  for (const key of previewKeys) root.style.removeProperty(key);
+  previewKeys = Object.keys(vars);
+  for (const [key, value] of Object.entries(vars)) root.style.setProperty(key, value);
+  root.dataset.mode = mode;
+  root.dataset.theme = 'preview';
+  root.style.colorScheme = mode;
+}
+/** Put back the theme this device actually uses. */
+export function endPreview(): void {
+  const root = document.documentElement;
+  for (const key of previewKeys) root.style.removeProperty(key);
+  previewKeys = [];
+  paintCachedTheme();
+  void syncTheme().catch(() => undefined);
+}
+
 /** Paint the last-used theme synchronously so there is no flash before the API answers. */
 export function paintCachedTheme(): void {
   try {

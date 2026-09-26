@@ -5,6 +5,7 @@ import { EmptyState, PageHeader, Pill, Seg, Switch } from '../components/ui/Page
 import { Dialog } from '../components/ui/Dialog';
 import { MenuItem, MoreMenu } from '../components/ui/MoreMenu';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import { ScrollRow } from '../components/ui/ScrollRow';
 import { LivePlayer } from '../components/live/LivePlayer';
 import { GuideGrid } from '../components/live/GuideGrid';
 
@@ -237,10 +238,10 @@ export default function LiveTV() {
             </div>
 
             {view !== 'recordings' && groups.length > 0 && (
-              <div className="lv-chips" role="tablist" aria-label="Category">
+              <ScrollRow className="lv-chips" label="categories"><div className="lv-chips-inner" role="tablist" aria-label="Category">
                 <button type="button" role="tab" aria-selected={!group} className={`season-tab${!group ? ' is-active' : ''}`} onClick={() => setGroup('')}>All</button>
                 {groups.map(g => <button key={g} type="button" role="tab" aria-selected={group === g} className={`season-tab${group === g ? ' is-active' : ''}`} onClick={() => setGroup(group === g ? '' : g)}>{g}</button>)}
-              </div>
+              </div></ScrollRow>
             )}
             {view !== 'recordings' && dead.size > 0 && (
               <label className="lv-toggle"><Switch checked={!hideDead} onChange={v => setHideDead(!v)} label="Show offline channels" /> <span>Show offline channels ({dead.size})</span></label>

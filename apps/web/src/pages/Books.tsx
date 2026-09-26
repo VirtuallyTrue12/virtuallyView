@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type PhotoEntry } from '../lib/api';
 import { EmptyState, PageHeader, Seg } from '../components/ui/Page';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import { ScrollRow } from '../components/ui/ScrollRow';
 
 type View = 'library' | 'folders' | 'favorites';
 type Format = 'all' | 'pdf' | 'epub' | 'comic' | 'other';
@@ -94,9 +95,9 @@ export default function Books() {
               <select className="settings-input" value={sort} onChange={e => setSort(e.target.value as Sort)} aria-label="Sort by"><option value="new">Newest</option><option value="name">A to Z</option><option value="size">Largest</option></select>
             </div>
           </div>
-          <div className="lv-chips" role="tablist" aria-label="Format">
+          <ScrollRow className="lv-chips" label="formats"><div className="lv-chips-inner" role="tablist" aria-label="Format">
             {chips.filter(([f]) => f === 'all' || counts[f] > 0).map(([f, label]) => <button key={f} type="button" role="tab" aria-selected={format === f} className={`season-tab${format === f ? ' is-active' : ''}`} onClick={() => setFormat(f)}>{label} ({counts[f]})</button>)}
-          </div>
+          </div></ScrollRow>
 
           {view === 'folders' && (
             <>

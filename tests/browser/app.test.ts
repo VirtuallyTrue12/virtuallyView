@@ -505,7 +505,7 @@ describe('search, requests and downloads agree', () => {
     await page.goto(base + '/downloads');
     await page.getByText('I Am Legend 2007 Theatrical').waitFor();
     expect(await page.getByRole('button', { name: 'Try another release' }).count()).toBe(1);
-    expect(await page.locator('.rq-line').first().innerText()).toMatch(/stalled/);
+    expect(await page.locator('.rq-line').first().innerText()).toMatch(/Nobody is sharing this file/);
     // A finished season pack links to its series.
     await page.getByRole('radio', { name: /Completed/ }).click();
     expect(await page.getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('/series/sonarr-1');
@@ -606,7 +606,7 @@ describe('phones, band members and troubleshooting', () => {
     await page.waitForTimeout(150);
     const bar = page.getByRole('navigation', { name: 'Main' });
     await bar.waitFor();
-    expect(await bar.getByRole('link').allInnerTexts()).toEqual(['Home', 'Movies', 'TV', 'Music']);
+    expect(await bar.getByRole('link').allInnerTexts()).toEqual(['Home', 'Movies', 'TV shows', 'Music']);
     await bar.getByRole('button', { name: 'More' }).click();
     const sheet = page.getByRole('dialog', { name: 'More' });
     await sheet.waitFor();
@@ -772,6 +772,60 @@ describe('settings, photos, live tv and requests', () => {
     expect(await page.getByRole('article', { name: 'Chandni' }).getByRole('button', { name: 'Choose match' }).count()).toBe(1);
     await page.getByRole('radio', { name: /Finished/ }).click();
     expect(await page.getByRole('article', { name: 'Pink Floyd' }).getByRole('link', { name: 'Open' }).getAttribute('href')).toBe('/music/lidarr-7');
+    expect(errors).toEqual([]);
+  });
+});
+
+describe('stuck downloads, menus and the theme creator', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('explains a stuck download in plain words, says when it is replaced, and can fix it now', async () => {
+    const soon = new Date(Date.now() + 25 * 60_000).toISOString();
+    let repaired = 0;
+    await page.route(/\/api\/downloads(\?.*)?$/, r => r.fulfill(json([
+      { id: 'queue-radarr-7', title: 'I Am Legend 2007 Remux', progress: 0, status: 'stalled', message: 'The download is stalled with no connections', sourceClient: 'radarr', mediaType: 'movie', actions: ['remove'] }
+    ])));
+    await page.route('**/api/downloads/doctor', r => r.fulfill(json({ entries: [{ id: 'queue-radarr-7', title: 'I Am Legend 2007 Remux', kind: 'stalled', since: new Date().toISOString(), fixAt: soon, gaveUp: false, needsYou: null }] })));
+    await page.route('**/api/downloads/repair', r => { repaired++; return r.fulfill(json({ fixed: ['I Am Legend 2007 Remux'], skippedBecauseOffline: false, needsYou: [], gaveUp: [], waiting: 0, message: 'Replaced 1: a new search has started for each.' })); });
+    await page.goto(base + '/downloads');
+    await page.getByText(/Nobody is sharing this file right now\. It is replaced automatically in about/).waitFor();
+    expect(await page.getByText('stalled with no connections').count()).toBe(0);
+    await page.getByRole('button', { name: /Fix 1 stuck now/ }).click();
+    await page.getByText('Replaced 1: a new search has started for each.').waitFor();
+    expect(repaired).toBe(1);
+    expect(errors).toEqual([]);
+  });
+
+  it('the three-dots menu stays on screen on a phone', async () => {
+    const now = new Date().toISOString();
+    await page.route(/\/api\/requests(\?.*)?$/, r => r.fulfill(json({ items: [{ id: 'r1', title: 'Chandni', year: 1989, status: 'failed', message: 'No release matched.', service: 'radarr', mediaType: 'movie', createdAt: now, updatedAt: now }], total: 1 })));
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.goto(base + '/requests');
+    await page.getByRole('button', { name: 'More for Chandni' }).click();
+    const menu = page.getByRole('menu');
+    await menu.waitFor();
+    const box = (await menu.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    expect(box.y + box.height).toBeLessThanOrEqual(800);
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    expect(errors).toEqual([]);
+  });
+
+  it('the theme creator shows a live copy of the app and can paint the whole app', async () => {
+    await page.goto(base + '/themes/create');
+    const scene = page.getByRole('img', { name: /Live preview of the My theme theme/ });
+    await scene.waitFor();
+    await page.getByLabel('Accent', { exact: true }).fill('#ff0000');
+    const accent = () => scene.evaluate(el => getComputedStyle(el).getPropertyValue('--color-accent').trim());
+    expect(await accent()).toBe('#ff0000');
+    await page.getByLabel('Name', { exact: true }).fill('Ruby');
+    await page.getByRole('img', { name: /Live preview of the Ruby theme/ }).waitFor();
+    await page.getByRole('switch', { name: 'Preview on the whole app' }).click();
+    await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--color-accent').trim() === '#ff0000');
+    await page.getByRole('switch', { name: 'Preview on the whole app' }).click();
+    await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--color-accent').trim() !== '#ff0000');
     expect(errors).toEqual([]);
   });
 });

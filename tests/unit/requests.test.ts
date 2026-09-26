@@ -226,6 +226,39 @@ describe('request pipeline', () => {
     });
   });
 
+  test('a request that says downloading goes back to searching when its download vanishes from the queue', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const instance = instanceFixture(url);
+      if (instance) return instance;
+      if (init?.method === 'POST') return json({ id: 5 });
+      return json(String(url).includes('/artist/lookup') ? [{ foreignArtistId: uuid, artistName: 'Lost Band' }] : []);
+    }));
+    const created = await createRequest({ title: 'Lost Band', mediaType: 'artist', selectedProviderId: uuid });
+    const id = created.request!.id;
+    const lidarr = getAdapter<LidarrAdapter>('lidarr');
+    const missingArtist = { id: 'lidarr-5', title: 'Lost Band', type: 'artist', status: 'missing', trackFileCount: 0, totalTrackCount: 40, provider: { metadata: { foreignArtistId: uuid } } };
+    const items = vi.spyOn(lidarr, 'getItems').mockResolvedValue([missingArtist] as never);
+    const queue = vi.spyOn(lidarr, 'getQueue').mockResolvedValue([{ mediaId: 'lidarr-5', status: 'downloading', progress: 0 }] as never);
+    const search = vi.spyOn(lidarr, 'searchMissing').mockResolvedValue({ success: true, count: 1, message: 'ok' } as never);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      await syncRequestsWithServices();
+      expect(getRequest(id)?.status).toBe('downloading');
+
+      // A brief gap (an import in progress) is not a lost download.
+      queue.mockResolvedValue([] as never);
+      await syncRequestsWithServices();
+      expect(getRequest(id)?.status).toBe('downloading');
+
+      // Still nothing after the grace period: it is searching again, and says why.
+      vi.setSystemTime(Date.now() + 120_000);
+      await syncRequestsWithServices();
+      expect(getRequest(id)?.status).toBe('searching');
+      expect(getRequest(id)?.message).toMatch(/went missing from the queue/);
+      expect(search).toHaveBeenCalled();
+    } finally { vi.useRealTimers(); items.mockRestore(); queue.mockRestore(); search.mockRestore(); }
+  });
+
   test('a music request with more on the way is not called available, and says how much is here', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
       const instance = instanceFixture(url);

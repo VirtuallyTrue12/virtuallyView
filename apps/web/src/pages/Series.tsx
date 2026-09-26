@@ -31,7 +31,7 @@ export default function Series() {
     <main className="page">
 
       <PageHeader
-        title="TV Shows"
+        title="TV shows"
         sub={!loading && !error ? `${items.length} in your library` : undefined}
         actions={<>
           <button className="btn btn-primary" type="button" onClick={() => navigate('/search')}><SvgIcon name="plus" size={17} /> Request a title</button>

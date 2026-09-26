@@ -1,3 +1,4 @@
+import { ScrollRow } from '../ui/ScrollRow';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -37,7 +38,9 @@ function Card({ person, link, extra }: { person: Person; link: boolean; extra?: 
 }
 
 function Rail({ people, link, all, extra }: { people: Person[]; link: boolean; all: boolean; extra?: (p: Person) => ReactNode }) {
-  return <div className={`people-rail${all ? ' people-rail--wrap' : ''}`}>{people.map((p, i) => <Card key={`${p.name}-${i}`} person={p} link={link} extra={extra?.(p)} />)}</div>;
+  const cards = people.map((p, i) => <Card key={`${p.name}-${i}`} person={p} link={link} extra={extra?.(p)} />);
+  if (all) return <div className="people-rail people-rail--wrap">{cards}</div>;
+  return <ScrollRow label="people"><div className="people-rail">{cards}</div></ScrollRow>;
 }
 
 const SHOWN = 14;

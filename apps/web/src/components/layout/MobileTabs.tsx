@@ -6,7 +6,7 @@ import { SvgIcon, type IconName } from '../ui/SvgIcon';
 const TABS: Array<{ to: string; label: string; icon: IconName; end?: boolean }> = [
   { to: '/', label: 'Home', icon: 'home', end: true },
   { to: '/movies', label: 'Movies', icon: 'film-tab' },
-  { to: '/series', label: 'TV', icon: 'tv-tab' },
+  { to: '/series', label: 'TV shows', icon: 'tv-tab' },
   { to: '/music', label: 'Music', icon: 'note-tab' }
 ];
 

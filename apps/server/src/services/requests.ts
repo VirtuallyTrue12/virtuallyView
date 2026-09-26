@@ -127,6 +127,9 @@ export function requestStateForQueue(queueStatus: string | undefined, queueMessa
 }
 
 const downloadByRequest = new Map<string, string>();
+/** When a "downloading" request first had nothing in the queue, so a brief gap around an import is not mistaken for a lost download. */
+const missingSince = new Map<string, number>();
+export const LOST_DOWNLOAD_GRACE_MS = 90_000;
 const lastLoggedProgress = new Map<string, number>();
 
 const SERVICE_LABELS: Record<string, string> = { radarr: 'Radarr', sonarr: 'Sonarr', lidarr: 'Lidarr' };
@@ -674,7 +677,20 @@ export async function syncRequestsWithServices(): Promise<void> {
         const keepNothingFound = mapped.message === undefined && (old?.startsWith(NOTHING_FOUND_PREFIX) || isQueueNote(old));
         const message = stillArriving && partial.have > 0 ? `${partlyMessage(partial)} ${mapped.message ?? 'Still fetching the rest.'}` : mapped.message ?? (keepNothingFound ? undefined : getRequest(req.id)?.message);
         patch(req.id, { status: mapped.status, progress, message });
+        missingSince.delete(req.id);
         await syncDownload(getRequest(req.id)!);
+      } else if (getRequest(req.id)?.status === 'downloading' && localId) {
+        // It says "downloading", but the queue has nothing for it: the download was removed or rejected.
+        // Without this the request would say "downloading 0%" for ever.
+        const first = missingSince.get(req.id) ?? Date.now();
+        missingSince.set(req.id, first);
+        if (Date.now() - first > LOST_DOWNLOAD_GRACE_MS) {
+          missingSince.delete(req.id);
+          logStatusChange(req.id, 'downloading', 'searching');
+          logEvent(req.id, 'The download is no longer in the queue; searching for another');
+          patch(req.id, { status: 'searching', progress: 0, message: 'The download went missing from the queue, so a new one is being searched for.', searchedAt: now(), searches: (getRequest(req.id)?.searches ?? 0) + 1 });
+          void retryTitle(localId).catch(() => undefined);
+        }
       }
     }
   }

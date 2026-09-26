@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BackButton } from '../components/layout/BackButton';
-import { ThemePreview } from '../components/settings/ThemePreview';
+import { PageHeader, Switch } from '../components/ui/Page';
+import { ThemeScene } from '../components/settings/ThemeScene';
+import { endPreview, previewTheme } from '../lib/appearance';
 import { api } from '../lib/api';
 import { FONTS, START, buildTokens, tokensToVars, type CreatorChoices } from '../lib/theme-tokens';
 
@@ -22,11 +23,19 @@ export default function ThemeCreator() {
   const [description, setDescription] = useState('');
   const [note, setNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [wholeApp, setWholeApp] = useState(false);
 
   const set = <K extends keyof CreatorChoices>(key: K, value: CreatorChoices[K]) => setC(prev => ({ ...prev, [key]: value }));
   const tokens = useMemo(() => buildTokens(c), [c]);
   const vars = useMemo(() => tokensToVars(tokens), [tokens]);
   const id = slug(name) || 'my-theme';
+
+  // Optionally paint the whole app with the theme while it is being edited; leaving puts your own theme back.
+  useEffect(() => {
+    if (!wholeApp) return;
+    previewTheme(c.mode, vars);
+    return () => endPreview();
+  }, [wholeApp, vars, c.mode]);
 
   const manifest = () => ({
     name: name.trim() || 'My theme', id, version: '1.0.0', author: 'You',
@@ -66,8 +75,7 @@ export default function ThemeCreator() {
 
   return (
     <main className="page creator">
-      <BackButton to="/themes" label="Appearance" />
-      <div className="page-head"><h1>Create a theme</h1></div>
+      <PageHeader title="Create a theme" sub="Change anything on the left and watch the preview update as you go" actions={<button type="button" className="btn btn-secondary" onClick={() => setC(START)}>Start over</button>} />
 
       <div className="creator-layout">
         <div className="creator-controls">
@@ -138,7 +146,8 @@ export default function ThemeCreator() {
 
         <aside className="creator-preview">
           <div className="creator-sticky">
-            <div className="theme-tile"><ThemePreview vars={vars} name={name || 'My theme'} /></div>
+            <ThemeScene vars={vars} name={name || 'My theme'} />
+            <label className="creator-live"><span><strong>Try it on the whole app</strong><br /><small>Paints every page with this theme while you edit. Leave this page and yours comes back.</small></span><Switch checked={wholeApp} onChange={setWholeApp} label="Preview on the whole app" /></label>
             {note && <div className={`notice notice--${note.tone}`} role="status">{note.text}</div>}
             <div className="theme-tile-actions">
               <button className="btn btn-primary" type="button" onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save theme'}</button>

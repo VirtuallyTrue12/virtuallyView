@@ -216,3 +216,22 @@ Open **Diagnostics**, press **Copy safe report** (it leaves out keys and passwor
 ## Photos and books
 
 Both folders are mounted read only on purpose: nothing here can change or delete your files. Favorites and albums are saved in the server's own database for each person, not in the photo folder.
+
+---
+
+## A download says it is stuck
+
+**"Nobody is sharing this file right now"** (the download apps word it "stalled with no connections"). Public sources are messy: a release that had seeders yesterday can have none today, and Radarr, Sonarr and Lidarr never give up on it by themselves, so a request can sit at 0% for ever.
+
+virtuallyView now handles this for you. A background check (the *download doctor*) looks at the queue every five minutes:
+
+| What it sees | What it does, and when |
+| --- | --- |
+| Nobody is sharing the release | Rejects it (so it is never picked again) and searches for another, after about 45 minutes |
+| Stuck fetching the file's details | The same, after about 90 minutes |
+| Finished, but the files cannot be matched to the title ("Couldn't find similar album", "no files found") | The same, after about 20 minutes |
+| Disk full, folder not writable, wrong path | Nothing: another release would fail the same way. It says so on the Downloads page |
+
+Safety rules: it never acts while the downloader or its VPN is down (then everything looks stalled and the releases are not to blame), it replaces a title at most three times a day and then tells an administrator, and every replacement appears in the bell. The Downloads page shows when each stuck download will be replaced, and administrators can press **Fix stuck now** to do it immediately. Turn it off under **Settings, Library and quality, Stuck downloads**.
+
+If a title keeps failing, the sources are the problem: add more under **Settings, Search sources**, or pick a release by hand from **Requests**.

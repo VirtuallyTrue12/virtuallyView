@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { SvgIcon } from '../ui/SvgIcon';
 import { VvLogo } from './VvLogo';
@@ -11,17 +11,17 @@ import type { AuthUser } from '../../lib/api';
 const LINKS = [
   { to: '/', label: 'Home' },
   { to: '/movies', label: 'Movies' },
-  { to: '/series', label: 'TV' },
+  { to: '/series', label: 'TV shows' },
   { to: '/music', label: 'Music' },
-  { to: '/live', label: 'Live' },
+  { to: '/live', label: 'Live TV' },
   { to: '/photos', label: 'Photos' },
-  { to: '/books', label: 'Books' },
   { to: '/requests', label: 'Requests' },
   { to: '/downloads', label: 'Downloads' }
 ];
 
 // Less used pages live under one menu so the bar stays readable.
 const MORE = [
+  { to: '/books', label: 'Books' },
   { to: '/wiki', label: 'Wiki' },
   { to: '/apps', label: 'Apps' },
   { to: '/statistics', label: 'Stats' },
@@ -31,13 +31,14 @@ const MORE = [
 ];
 
 /** "More" pages: opens on hover or click, closes on a choice, outside click, Escape or page change. */
-function MoreMenu() {
+function MoreMenu({ extra = [] }: { extra?: Array<{ to: string; label: string }> }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const closeTimer = useRef<number | null>(null);
   const { pathname } = useLocation();
-  const current = MORE.some(link => pathname.startsWith(link.to));
+  const all = [...extra, ...MORE];
+  const current = all.some(link => link.to === '/' ? pathname === '/' : pathname.startsWith(link.to));
 
   useEffect(() => { setOpen(false); }, [pathname]);
 
@@ -74,8 +75,8 @@ function MoreMenu() {
       </button>
       {open && (
         <div className="nav-more-panel" role="menu">
-          {MORE.map(link => (
-            <NavLink key={link.to} to={link.to} role="menuitem" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} onClick={() => setOpen(false)}>
+          {all.map(link => (
+            <NavLink key={link.to} to={link.to} end={link.to === '/'} role="menuitem" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} onClick={() => setOpen(false)}>
               {link.label}
             </NavLink>
           ))}
@@ -85,15 +86,50 @@ function MoreMenu() {
   );
 }
 
+/** How many of the main links fit next to the logo and the buttons; the rest move under More. Recomputed whenever the bar changes size. */
+function useFittingLinks(nav: React.RefObject<HTMLElement | null>, brand: React.RefObject<HTMLElement | null>, tools: React.RefObject<HTMLElement | null>, measure: React.RefObject<HTMLElement | null>) {
+  const [fit, setFit] = useState(LINKS.length);
+  useLayoutEffect(() => {
+    const bar = nav.current;
+    if (!bar) return;
+    const compute = () => {
+      const m = measure.current;
+      // Phones use the tab bar instead of these links.
+      if (window.innerWidth <= 860 || !m) { setFit(LINKS.length); return; }
+      const widths = [...m.children].map(c => c.getBoundingClientRect().width);
+      const cs = getComputedStyle(bar);
+      const gap = parseFloat(cs.columnGap) || 16;
+      const room = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - (brand.current?.offsetWidth ?? 0) - (tools.current?.offsetWidth ?? 0) - gap * 2;
+      const between = 18;
+      const moreWidth = 78;
+      let used = moreWidth, n = 0;
+      for (const w of widths) { if (used + between + w > room) break; used += between + w; n++; }
+      setFit(Math.max(0, n));
+    };
+    compute();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(compute) : null;
+    observer?.observe(bar);
+    window.addEventListener('resize', compute);
+    void document.fonts?.ready.then(compute);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', compute); };
+  }, [nav, brand, tools, measure]);
+  return fit;
+}
+
 export function Navigation({ user, onSignOut, onRefresh }: { user?: AuthUser | null; onSignOut?: () => void; onRefresh?: () => void }) {
+  const nav = useRef<HTMLElement>(null);
+  const brand = useRef<HTMLAnchorElement>(null);
+  const tools = useRef<HTMLDivElement>(null);
+  const measure = useRef<HTMLDivElement>(null);
+  const fit = useFittingLinks(nav, brand, tools, measure);
   return (
-    <nav className="nav" aria-label="Primary">
-      <NavLink to="/" className="nav-brand">
+    <nav className="nav" aria-label="Primary" ref={nav}>
+      <NavLink to="/" className="nav-brand" ref={brand}>
         <VvLogo variant="tile" size={32} />
         <span>virtuallyView</span>
       </NavLink>
       <div className="nav-links">
-        {LINKS.map(link => (
+        {LINKS.slice(0, fit).map(link => (
           <NavLink
             key={link.to}
             to={link.to}
@@ -105,13 +141,16 @@ export function Navigation({ user, onSignOut, onRefresh }: { user?: AuthUser | n
         ))}
         {/* On phones the links scroll sideways in one row, so the extra pages sit inline instead of in a menu. */}
         {MORE.map(link => <NavLink key={`m-${link.to}`} to={link.to} className={({ isActive }) => `nav-link nav-link--extra${isActive ? ' active' : ''}`}>{link.label}</NavLink>)}
-        <MoreMenu />
+        <MoreMenu extra={LINKS.slice(fit)} />
+        <div className="nav-measure" ref={measure} aria-hidden="true">{LINKS.map(l => <span key={l.to} className="nav-link">{l.label}</span>)}</div>
       </div>
-      {user && <NavLink to="/search" className="nav-search" aria-label="Search"><SvgIcon name="search" size={19} /></NavLink>}
-      {user && onRefresh && <RefreshButton onRefresh={onRefresh} />}
-      {user && <SystemActivity />}
-      {user && <NotificationBell />}
-      {user && onSignOut && <UserMenu user={user} onSignOut={onSignOut} />}
+      <div className="nav-tools" ref={tools}>
+        {user && <NavLink to="/search" className="nav-search" aria-label="Search"><SvgIcon name="search" size={19} /></NavLink>}
+        {user && onRefresh && <RefreshButton onRefresh={onRefresh} />}
+        {user && <SystemActivity />}
+        {user && <NotificationBell />}
+        {user && onSignOut && <UserMenu user={user} onSignOut={onSignOut} />}
+      </div>
     </nav>
   );
 }
