@@ -779,6 +779,33 @@ describe('settings, photos, live tv and requests', () => {
 describe('stuck downloads, menus and the theme creator', () => {
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
+  it('a three-dots menu is drawn above the page, never cut off, and opens upward when the row is at the bottom', async () => {
+    const now = new Date().toISOString();
+    const items = Array.from({ length: 8 }, (_, i) => ({ id: `r${i}`, title: `Title ${i}`, year: 2000 + i, status: 'failed', message: 'No release matched.', service: 'radarr', mediaType: 'movie', createdAt: now, updatedAt: now }));
+    await page.route(/\/api\/requests(\?.*)?$/, r => r.fulfill(json({ items, total: items.length })));
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await page.goto(base + '/requests');
+    const last = page.getByRole('button', { name: 'More for Title 7' });
+    await last.scrollIntoViewIfNeeded();
+    // Put the last row right at the bottom edge of the window.
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await last.click();
+    const menu = page.locator('body > .more-menu');
+    await menu.waitFor();
+    const box = (await menu.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(600);
+    const trigger = (await last.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(1280);
+    // The dots sit in the middle of their round button.
+    const dot = await last.locator('svg').boundingBox();
+    expect(Math.abs((dot!.x + dot!.width / 2) - (trigger.x + trigger.width / 2))).toBeLessThan(2);
+    await page.keyboard.press('Escape');
+    await menu.waitFor({ state: 'detached' });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    expect(errors).toEqual([]);
+  });
+
   it('explains a stuck download in plain words, says when it is replaced, and can fix it now', async () => {
     const soon = new Date(Date.now() + 25 * 60_000).toISOString();
     let repaired = 0;

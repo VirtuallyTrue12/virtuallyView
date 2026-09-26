@@ -5877,3 +5877,13 @@ a.person:hover, a.person:focus-visible { transform: none; }
   .app .nav-tools { margin-left: auto; gap: 0.4rem; }
   .app .nav .nav-search { margin-left: 0; }
 }
+
+/* The three-dots button: a centred round icon that is easy to see, and a menu drawn above the page. */
+.btn.more-trigger { display: inline-grid; place-items: center; justify-content: center; align-content: center; color: var(--color-text-primary); }
+.btn.more-trigger .svg-icon { display: block; vertical-align: 0; margin: 0; opacity: 0.9; }
+.more-menu--portal { position: fixed; right: auto; bottom: auto; z-index: 400; width: max-content; min-width: 240px; max-width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; }
+.more-menu--portal.is-measuring { visibility: hidden; top: 0; left: 0; }
+@media (max-width: 640px) {
+  .more-menu--portal { left: 12px; right: 12px; top: auto; bottom: calc(var(--tabbar-h, 0px) + 12px); width: auto; max-width: none; min-width: 0; max-height: 65vh; transform-origin: bottom center; }
+  .more-menu--portal.is-measuring { visibility: visible; }
+}

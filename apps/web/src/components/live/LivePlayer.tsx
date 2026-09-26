@@ -16,10 +16,12 @@ export interface LivePlayerProps {
   onRecord: () => void;
   onClose: () => void;
   onPlaying: () => void;
+  wide: boolean;
+  onWide: () => void;
 }
 
 /** One channel playing: HLS through hls.js, anything else as a converted stream, with zapping, favorite, record and picture-in-picture. */
-export function LivePlayer({ channel, number, now, next, favorite, onFavorite, onZap, onRecord, onClose, onPlaying }: LivePlayerProps) {
+export function LivePlayer({ channel, number, now, next, favorite, onFavorite, onZap, onRecord, onClose, onPlaying, wide, onWide }: LivePlayerProps) {
   const video = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -85,6 +87,7 @@ export function LivePlayer({ channel, number, now, next, favorite, onFavorite, o
           <button type="button" className="btn btn-secondary" onClick={() => onZap(1)} aria-label="Next channel" title="Next channel (↓)"><SvgIcon name="chevron-down" size={18} /></button>
           <button type="button" className={`btn btn-secondary${favorite ? ' is-on' : ''}`} onClick={onFavorite} aria-pressed={favorite} aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'}><SvgIcon name={favorite ? 'heart' : 'heart-outline'} size={18} /></button>
           {canPip && <button type="button" className="btn btn-secondary" onClick={() => { const el = video.current; if (!el) return; if (document.pictureInPictureElement) void document.exitPictureInPicture(); else void el.requestPictureInPicture().catch(() => undefined); }} aria-label="Keep watching in a small window" title="Small window"><SvgIcon name="pip" size={18} /></button>}
+          <button type="button" className="btn btn-secondary lv-wide-btn" onClick={onWide} aria-pressed={wide} aria-label={wide ? 'Make the player smaller' : 'Make the player bigger'} title={wide ? 'Smaller player' : 'Bigger player'}><SvgIcon name={wide ? 'minimize' : 'maximize'} size={18} /></button>
           <button type="button" className="btn btn-secondary" onClick={onRecord}><span className="lv-rec" aria-hidden="true" /> Record</button>
         </div>
       </div>

@@ -172,8 +172,8 @@ async function extraChecks(): Promise<Check[]> {
   const helper = await helperStatus();
   out.push(check({
     id: 'helper', area: 'Extras', label: 'Restart helper', status: helper.ok ? 'ok' : 'skipped',
-    detail: helper.ok ? 'The helper is on, so the Restart buttons here work.' : 'The optional helper is off, so Restart buttons cannot work; restart from the server instead.',
-    fixes: helper.ok ? [] : ['To turn it on: run "docker compose --profile helper up -d" on the server.']
+    detail: helper.ok ? 'The helper is on, so the Restart buttons here work.' : 'The optional helper is not running, so the Restart buttons cannot work; restart from the server instead.',
+    fixes: helper.ok ? [] : ['To turn the buttons on, run this once on the server: docker compose --profile helper up -d (on Podman, see docs/services-helper.md).']
   }));
   if (process.env.YTDLP_URL) {
     const up = await youtubeAvailable();

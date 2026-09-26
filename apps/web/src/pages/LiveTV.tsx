@@ -94,6 +94,8 @@ export default function LiveTV() {
   const [watching, setWatching] = useState<Recording | null>(null);
   const [checking, setChecking] = useState<{ done: number; total: number } | null>(null);
   const [note, setNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+  const [wide, setWide] = useState(() => { try { return localStorage.getItem('vv-live-wide') === '1'; } catch { return false; } });
+  const toggleWide = () => setWide(w => { const n = !w; try { localStorage.setItem('vv-live-wide', n ? '1' : '0'); } catch { /* storage blocked */ } return n; });
   const [digits, setDigits] = useState('');
   const digitTimer = useRef<number | null>(null);
 
@@ -205,7 +207,7 @@ export default function LiveTV() {
   const cn = current ? nowNext(guide[current.id]) : { now: undefined, next: undefined };
 
   return (
-    <main className={`page lv-page${current ? ' has-player' : ''}`}>
+    <main className={`page lv-page${current ? ' has-player' : ''}${wide ? ' lv-wide' : ''}`}>
       <PageHeader
         title="Live TV"
         sub={channels.length ? `${channels.length.toLocaleString()} channels${favs.size ? ` · ${favs.size} favorite${favs.size === 1 ? '' : 's'}` : ''}${dead.size ? ` · ${dead.size} offline` : ''}` : undefined}
@@ -286,7 +288,7 @@ export default function LiveTV() {
 
           {current && (
             <aside className="lv-side">
-              <LivePlayer channel={current} number={numberOf} now={cn.now} next={cn.next} favorite={favs.has(current.id)} onFavorite={() => toggleFavorite(current.id)} onZap={zap} onRecord={() => setRecDialog(true)} onClose={() => setCurrent(null)}
+              <LivePlayer channel={current} number={numberOf} now={cn.now} next={cn.next} favorite={favs.has(current.id)} onFavorite={() => toggleFavorite(current.id)} onZap={zap} onRecord={() => setRecDialog(true)} onClose={() => setCurrent(null)} wide={wide} onWide={toggleWide}
                 onPlaying={() => { api.liveWatched(current.id).then(() => setRecent(prev => [current.id, ...prev.filter(id => id !== current.id)].slice(0, 20))).catch(() => {}); }} />
             </aside>
           )}

@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const URL_BASE = process.env.VV_HELPER_URL ?? 'http://helper:8099';
 const TOKEN_FILE = process.env.VV_HELPER_TOKEN_FILE ?? '/shared/token';
-export const HELPER_HINT = 'Service controls need the helper: run "docker compose --profile helper up -d" on the server. It is optional, and it is the only part with container access.';
+export const HELPER_HINT = 'The Restart and Start buttons are off because the optional helper is not running. To turn them on, run this once on the server: docker compose --profile helper up -d (on Podman, see docs/services-helper.md). The helper is optional because it is the only part with access to the containers.';
 
 export interface HelperResult<T> { ok: boolean; message?: string; data?: T }
 
