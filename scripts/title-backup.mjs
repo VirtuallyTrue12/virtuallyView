@@ -6,6 +6,7 @@
  *
  *   node scripts/title-backup.mjs backup  "How I Met Your Mother" --out ~/Backups
  *   node scripts/title-backup.mjs restore ~/Backups/how-i-met-your-mother-20260926-1900
+ *   node scripts/title-backup.mjs restore <backup folder> --adopt   (the files are already in place: check them and add the show)
  *
  * It talks to the stack through the docker CLI (Podman's docker shim works too) and to Sonarr's own API. Nothing is
  * deleted by this script. Restore refuses to overwrite a show that is already there.
@@ -130,6 +131,8 @@ async function backup() {
 }
 
 async function restore() {
+  const adopt = args.includes('--adopt');
+  if (adopt) args.splice(args.indexOf('--adopt'), 1);
   const dir = resolve((args.shift() ?? '').replace(/^~/, process.env.HOME ?? '~'));
   if (!existsSync(resolve(dir, 'backup.json'))) throw new Error('Pass the backup folder (the one that holds backup.json).');
   const meta = JSON.parse(readFileSync(resolve(dir, 'backup.json'), 'utf8'));
@@ -137,16 +140,20 @@ async function restore() {
   const { series, folder, root } = meta;
   const existing = await sonarrApi(sonarr, 'GET', '/series');
   if (existing.some(s => s.tvdbId === series.tvdbId)) throw new Error(`"${series.title}" is already in Sonarr. Remove it first if you want to restore over it.`);
-  if (sh(['exec', sonarr, 'sh', '-c', `[ -e "${root}/${folder}" ] && echo yes || echo no`]).trim() === 'yes') throw new Error(`${root}/${folder} already exists. Move it away first.`);
+  const present = sh(['exec', sonarr, 'sh', '-c', `[ -e "${root}/${folder}" ] && echo yes || echo no`]).trim() === 'yes';
+  if (present && !adopt) throw new Error(`${root}/${folder} already exists. Move it away, or add --adopt to use the files that are there.`);
+  if (!present && adopt) throw new Error(`--adopt needs the files already in ${root}/${folder}; nothing is there.`);
 
-  say(`Restoring "${meta.title}": copying ${meta.fileCount} files back…`);
-  await new Promise((done, fail) => {
-    const child = spawn(DOCKER, ['exec', '-i', sonarr, 'tar', 'xf', '-', '-C', root, '--no-same-owner'], { stdio: ['pipe', 'inherit', 'inherit'] });
-    child.on('error', fail);
-    child.on('close', code => (code === 0 ? done() : fail(new Error(`tar exited with ${code}`))));
-    pipeline(createReadStream(resolve(dir, 'files.tar')), child.stdin).catch(fail);
-  });
-  sh(['exec', sonarr, 'sh', '-c', `chown -R ${meta.owner} "${root}/${folder}"`]);
+  if (!adopt) {
+    say(`Restoring "${meta.title}": copying ${meta.fileCount} files back…`);
+    await new Promise((done, fail) => {
+      const child = spawn(DOCKER, ['exec', '-i', sonarr, 'tar', 'xf', '-', '-C', root, '--no-same-owner'], { stdio: ['pipe', 'inherit', 'inherit'] });
+      child.on('error', fail);
+      child.on('close', code => (code === 0 ? done() : fail(new Error(`tar exited with ${code}`))));
+      pipeline(createReadStream(resolve(dir, 'files.tar')), child.stdin).catch(fail);
+    });
+    sh(['exec', sonarr, 'sh', '-c', `chown -R ${meta.owner} "${root}/${folder}"`]);
+  } else say(`Using the files already in ${root}/${folder}.`);
 
   say('Checking every file against its checksum…');
   const manifest = readFileSync(resolve(dir, 'files.sha256'), 'utf8');

@@ -90,8 +90,8 @@ services:
       - 1.1.1.1
       - 8.8.8.8
     environment:
-      - PUID=0
-      - PGID=0
+      - PUID=${PUID:-0}
+      - PGID=${PGID:-0}
       - TZ=Etc/UTC
       - FILE__RADARR__AUTH__APIKEY=/secrets/radarr
     volumes:
@@ -121,8 +121,8 @@ services:
       - 1.1.1.1
       - 8.8.8.8
     environment:
-      - PUID=0
-      - PGID=0
+      - PUID=${PUID:-0}
+      - PGID=${PGID:-0}
       - TZ=Etc/UTC
       - FILE__SONARR__AUTH__APIKEY=/secrets/sonarr
     volumes:
@@ -152,8 +152,8 @@ services:
       - 1.1.1.1
       - 8.8.8.8
     environment:
-      - PUID=0
-      - PGID=0
+      - PUID=${PUID:-0}
+      - PGID=${PGID:-0}
       - TZ=Etc/UTC
       - FILE__PROWLARR__AUTH__APIKEY=/secrets/prowlarr
     volumes:
@@ -181,8 +181,8 @@ services:
       - 1.1.1.1
       - 8.8.8.8
     environment:
-      - PUID=0
-      - PGID=0
+      - PUID=${PUID:-0}
+      - PGID=${PGID:-0}
       - TZ=Etc/UTC
       - FILE__LIDARR__AUTH__APIKEY=/secrets/lidarr
     volumes:
@@ -207,8 +207,8 @@ services:
       bazarr-init:
         condition: service_completed_successfully
     environment:
-      - PUID=0
-      - PGID=0
+      - PUID=${PUID:-0}
+      - PGID=${PGID:-0}
       - TZ=Etc/UTC
     volumes:
       - bazarr-config:/config
@@ -229,8 +229,8 @@ services:
       - 1.1.1.1
       - 8.8.8.8
     environment:
-      - PUID=0
-      - PGID=0
+      - PUID=${PUID:-0}
+      - PGID=${PGID:-0}
       - TZ=Etc/UTC
       - WEBUI_PORT=8080
     volumes:
@@ -257,8 +257,8 @@ services:
       downloads-init:
         condition: service_completed_successfully
     environment:
-      - PUID=0
-      - PGID=0
+      - PUID=${PUID:-0}
+      - PGID=${PGID:-0}
       - TZ=Etc/UTC
       - NZBGET_USER=${NZBGET_USERNAME:-nzbget}
       - NZBGET_PASS=${NZBGET_PASSWORD:-nzbget}

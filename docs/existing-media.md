@@ -26,16 +26,24 @@ Keep the layout the apps expect: one folder per title, for example `TV Shows/How
 
 ## Permissions
 
-The apps run as user 1000 (`PUID`/`PGID`). On Docker, make the folders yours with that id (`sudo chown -R 1000:1000 "/path"`), or set `PUID`/`PGID` in `.env` to your own ids (`id -u`, `id -g`).
+By default the media apps run as the container's root user. That is what makes this work with no setup on **rootless Podman** (Fedora, Arch, most Linux desktops): the container's root *is your own user*, so the folders stay yours, you can open and edit every file, and the apps can write too. Nothing to change.
 
-On **rootless Podman** the containers' user 1000 is not your user. Give the folder to it once with:
+On regular **Docker** (run by root) the same setting would leave root-owned files in your folders. Tell the apps to run as you instead, in `.env`, and make the folders yours:
 
 ```
-podman unshare chown -R 1000:1000 "/home/you/Videos/TV Shows"
+PUID=1000
+PGID=1000
 ```
 
-Your own account can then no longer edit those files directly; use `podman unshare` (for example `podman unshare cp -r "Some Show" "/home/you/Videos/TV Shows/"`) to add files.
+Use your own ids (`id -u`, `id -g`) and run `sudo chown -R 1000:1000 "/path/to/folder"` once.
+
+On systems with SELinux (Fedora and friends) a folder outside your home may also need a label: `chcon -Rt container_file_t "/path/to/folder"`.
 
 ## Moving a library that is already in Docker's storage
 
-Copy it out first, then set the variable: `docker cp appletvopensourcce-sonarr-1:/media/tv/. "/home/you/Videos/TV Shows/"` (the same works for `-radarr-1` with `/media/movies` and `-lidarr-1` with `/media/music`). Check the copy opened fine before you delete the old volume.
+1. Stop the apps that use it: `docker compose stop sonarr radarr lidarr bazarr app` (add `ytdlp` if you use it).
+2. Move the contents to your folder. On rootless Podman the storage is a normal folder you own, so a move on the same disk is instant: `mv ~/.local/share/containers/storage/volumes/<project>_media-tv/_data/* "/home/you/Videos/TV Shows/"`. On Docker use `docker cp <project>-sonarr-1:/media/tv/. "/path/"` before stopping.
+3. Set `TV_DIR` (and the others) in `.env`, then `docker compose up -d`.
+4. Files appear in the library only once the show is added; see the next section, or the one-click **Find my existing media** on the Movies, TV and Music pages.
+
+To keep one show safe while you move things around, or to bring one back, see `scripts/title-backup.mjs` in [administration](administration.md); `restore <backup> --adopt` adds a show whose files are already in place.
