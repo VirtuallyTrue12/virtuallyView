@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, type MediaItem, type DownloadItem, type RequestItem, type StorageReport } from '../lib/api';
-import { BackButton } from '../components/layout/BackButton';
+import { Link } from 'react-router-dom';
+import { PageHeader, Section, StatTile } from '../components/ui/Page';
+import { SvgIcon } from '../components/ui/SvgIcon';
 
 function uniqueCompleted(downloads: DownloadItem[]): DownloadItem[] {
   // One movie can be reported as a completed transfer by qBittorrent AND as a
@@ -106,119 +108,80 @@ export default function Statistics() {
     return sum + (isNaN(gb) ? 0 : gb);
   }, 0);
 
+  const stalled = downloads.filter(d => d.status === 'stalled' || d.status === 'failed').length;
+  const disk = storage?.disk ?? null;
+  const diskPct = disk && disk.totalBytes > 0 ? Math.round((disk.usedBytes / disk.totalBytes) * 100) : null;
+  const rootsTotal = storage ? Math.max(1, storage.roots.reduce((sum, r) => sum + (r.exists ? r.bytes : 0), 0)) : 1;
+  const insights: Array<{ tone: 'warn' | 'info' | 'ok'; text: string; to?: string; cta?: string }> = [];
+  if (diskPct !== null && diskPct >= 90) insights.push({ tone: 'warn', text: `The media drive is ${diskPct}% full. Free some space before more downloads arrive.` });
+  if (stalled > 0) insights.push({ tone: 'warn', text: `${stalled} download${stalled === 1 ? '' : 's'} failed or stalled.`, to: '/downloads', cta: 'Open downloads' });
+  if (missingMovies > 0) insights.push({ tone: 'info', text: `${missingMovies} movie${missingMovies === 1 ? '' : 's'} in your list ${missingMovies === 1 ? 'is' : 'are'} not downloaded yet.`, to: '/movies', cta: 'See movies' });
+  if (pendingRequests > 0) insights.push({ tone: 'info', text: `${pendingRequests} request${pendingRequests === 1 ? ' is' : 's are'} still in progress.`, to: '/requests', cta: 'Open requests' });
+  if (insights.length === 0) insights.push({ tone: 'ok', text: 'Nothing needs your attention.' });
+
   return (
     <main className="page">
+      <PageHeader title="Statistics" sub="Your library at a glance" actions={<button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}><SvgIcon name="refresh" size={17} /> Refresh</button>} />
 
-      <BackButton to="/" label="Home" />
-      <div className="page-head">
-        <h1>Statistics</h1>
-        <span className="page-count">Your library at a glance</span>
+      <div className="ui-stats">
+        <StatTile label="Movies" value={availableMovies} hint={`of ${totalMovies} tracked`} />
+        <StatTile label="TV shows" value={availableSeries} hint={`of ${totalSeries} tracked`} />
+        <StatTile label="Artists" value={totalArtists} hint={`${artistTitles.length} albums`} />
+        <StatTile label="Downloading" value={activeDownloads} hint={completedDownloads ? `${completedDownloads} waiting to file` : 'idle'} />
+        <StatTile label="Requests" value={pendingRequests + availableRequests} hint={`${pendingRequests} in progress`} />
+        <StatTile label="Media size" value={storage ? formatBytes(storage.mediaBytes) : '…'} hint={storage ? `${storage.mediaFiles.toLocaleString()} files` : 'reading folders'} />
       </div>
 
-      <div className="stats-grid">
-        <section className="stats-card">
-          <h2>Movies</h2>
-          <p className="stats-big">{availableMovies}</p>
-          <p className="stats-sub">
-            downloaded · {missingMovies} missing of {totalMovies} tracked
-          </p>
-        </section>
+      <Section title="Worth a look">
+        <ul className="stt-insights">
+          {insights.map((i, n) => (
+            <li key={n} className={`stt-insight stt-insight--${i.tone}`}>
+              <SvgIcon name={i.tone === 'ok' ? 'check' : i.tone === 'warn' ? 'alert' : 'info'} size={18} />
+              <span>{i.text}</span>
+              {i.to && <Link className="btn btn-secondary btn-sm" to={i.to}>{i.cta}</Link>}
+            </li>
+          ))}
+        </ul>
+      </Section>
 
-        <section className="stats-card">
-          <h2>TV Series</h2>
-          <p className="stats-big">{availableSeries}</p>
-          <p className="stats-sub">downloaded · {totalSeries} tracked</p>
-        </section>
-
-        <section className="stats-card">
-          <h2>Music artists</h2>
-          <p className="stats-big">{totalArtists}</p>
-          <p className="stats-sub">{artistTitles.length} albums across your Music service</p>
-        </section>
-
-        <section className="stats-card">
-          <h2>Active downloads</h2>
-          <p className="stats-big">{activeDownloads}</p>
-          <p className="stats-sub">transferring or importing now</p>
-        </section>
-
-        <section className="stats-card">
-          <h2>Completed</h2>
-          <p className="stats-big">{completedDownloads}</p>
-          <p className="stats-sub">
-            {completedDownloads === 1 ? 'title finished' : 'titles finished'} and ready to import
-          </p>
-        </section>
-
-        <section className="stats-card">
-          <h2>Requests</h2>
-          <p className="stats-big">{pendingRequests + availableRequests}</p>
-          <p className="stats-sub">
-            {pendingRequests} in progress · {availableRequests} available
-          </p>
-        </section>
-
-        <section className="stats-card">
-          <h2>Storage on device</h2>
-          <p className="stats-big">{formatBytes(storage?.mediaBytes ?? 0)}</p>
-          <p className="stats-sub">
-            {storage
-              ? `${storage.mediaFiles.toLocaleString()} files in your media folders`
-              : 'reading media folders...'}
-          </p>
-        </section>
-      </div>
-
-      <section className="stats-detail">
-        <h2>Storage on this server</h2>
-        {!storage ? (
-          <div className="empty-state">Reading the media folders...</div>
-        ) : (
-          <>
-            <ul className="stats-list">
-              {storage.roots.map(root => (
+      <Section title="Storage" help={storage?.disk ? `${formatBytes(storage.disk.freeBytes)} free of ${formatBytes(storage.disk.totalBytes)} on the media drive.` : undefined}>
+        {!storage ? <div className="loading-state">Reading the media folders…</div> : (
+          <div className="ui-card">
+            {disk && diskPct !== null && (
+              <div className="stt-disk" role="img" aria-label={`Drive ${diskPct}% full`}>
+                <div className="stt-disk-bar">
+                  {storage.roots.map((r, i) => r.exists && r.bytes > 0 ? <span key={r.path} className={`stt-seg stt-seg--${i % 6}`} style={{ width: `${Math.max(0.5, (r.bytes / disk.totalBytes) * 100)}%` }} title={`${r.name}: ${formatBytes(r.bytes)}`} /> : null)}
+                  <span className="stt-seg stt-seg--other" style={{ width: `${Math.max(0, diskPct - (storage.mediaBytes / disk.totalBytes) * 100)}%` }} title="Everything else on the drive" />
+                </div>
+                <div className="stt-disk-key"><span>{diskPct}% used</span><span>{formatBytes(disk.freeBytes)} free</span></div>
+              </div>
+            )}
+            <ul className="stt-roots">
+              {storage.roots.map((root, i) => (
                 <li key={root.path}>
-                  <span className="stats-list-title">{root.name}</span>
-                  <span className="stats-list-status">
-                    {root.exists ? `${root.files.toLocaleString()} files` : 'folder not found'}
-                  </span>
-                  <span className="stats-list-size">{root.exists ? formatBytes(root.bytes) : 'no data'}</span>
+                  <span className={`stt-dot stt-seg--${i % 6}`} />
+                  <span className="stt-root-name">{root.name}</span>
+                  <span className="stt-root-bar"><span style={{ width: `${root.exists ? (root.bytes / rootsTotal) * 100 : 0}%` }} /></span>
+                  <span className="stt-root-size">{root.exists ? `${formatBytes(root.bytes)} · ${root.files.toLocaleString()} files` : 'folder not found'}</span>
                 </li>
               ))}
             </ul>
-            {storage.disk ? (
-              <p className="stats-note">
-                {formatBytes(storage.disk.freeBytes)} free of {formatBytes(storage.disk.totalBytes)} on the media drive.
-              </p>
-            ) : (
-              <p className="stats-note">
-                No media folder is reachable yet, so only transfer sizes are known.
-              </p>
-            )}
-            {totalStorage > 0 && (
-              <p className="stats-note">{formatSize(totalStorage)} currently in active transfers.</p>
-            )}
-            {storage.truncated && (
-              <p className="stats-note">A folder was very large, so this total is partial.</p>
-            )}
-          </>
+            {totalStorage > 0 && <p className="ui-help">{formatSize(totalStorage)} in transfers right now.</p>}
+            {storage.truncated && <p className="ui-help">A folder was very large, so this total is partial.</p>}
+          </div>
         )}
-      </section>
+      </Section>
 
-      <section className="stats-detail">
-        <h2>Downloads in detail</h2>
-        {unique.length === 0 ? (
-          <div className="empty-state">No downloads are running right now.</div>
-        ) : (
+      <details className="settings-section st-details">
+        <summary><span>Downloads in detail</span><span className="ui-badge">{unique.length}</span></summary>
+        {unique.length === 0 ? <p className="ui-help">No downloads are running right now.</p> : (
           <ul className="stats-list">
             {unique.map(d => {
               const inLibrary = libraryTitles.has((d.title ?? '').trim().toLowerCase());
               return (
                 <li key={d.id}>
                   <span className="stats-list-title">{d.title}</span>
-                  <span className="stats-list-status">
-                    {inLibrary && d.status === 'completed' ? 'in library' : d.status}
-                  </span>
+                  <span className="stats-list-status">{inLibrary && d.status === 'completed' ? 'in library' : d.status}</span>
                   <span className="stats-list-progress">{d.progress}%</span>
                   {d.size && <span className="stats-list-size">{d.size}</span>}
                 </li>
@@ -226,13 +189,8 @@ export default function Statistics() {
             })}
           </ul>
         )}
-        {downloads.length !== unique.length && (
-          <p className="stats-note">
-            {downloads.length - unique.length} duplicate report{downloads.length - unique.length === 1 ? '' : 's'} from
-            download clients were merged into a single count.
-          </p>
-        )}
-      </section>
+        {downloads.length !== unique.length && <p className="ui-help">{downloads.length - unique.length} duplicate report{downloads.length - unique.length === 1 ? '' : 's'} from download clients were merged into one.</p>}
+      </details>
     </main>
   );
 }

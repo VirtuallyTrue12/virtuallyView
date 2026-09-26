@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { BackButton } from '../components/layout/BackButton';
+import { PageHeader, Pill, Section } from '../components/ui/Page';
+import { SvgIcon } from '../components/ui/SvgIcon';
 import { api, type AuthSession, type AuthUser } from '../lib/api';
 import { Avatar } from '../components/ui/Avatar';
 import QuickConnectApprove from '../components/settings/QuickConnectApprove';
@@ -103,73 +104,67 @@ export default function Account() {
 
   return (
     <main className="page account-page">
-      <BackButton to="/" label="Home" />
-      <div className="page-head"><h1>Account</h1></div>
+      <PageHeader title="Account" sub="Your profile, password and the devices you are signed in on" />
 
-      <section className="settings-section account-card">
-        <div className="account-id">
-          <Avatar user={me} large />
-          <div>
-            <h2>{me.username}</h2>
-            <p className="model-suggest-meta">
-              {me.role === 'admin' ? 'Administrator' : 'User'}
-              {me.createdAt && new Date(me.createdAt).getTime() > 0 ? `, joined ${new Date(me.createdAt).toLocaleDateString()}` : ''}
-              {me.maxRating ? `, limited to ${me.maxRating} and below` : ''}
-            </p>
-          </div>
+      <section className="ac-profile">
+        <Avatar user={me} large />
+        <div className="ac-who">
+          <h2>{me.username}</h2>
+          <p><Pill tone={me.role === 'admin' ? 'info' : 'neutral'}>{me.role === 'admin' ? 'Administrator' : 'User'}</Pill>
+            {me.createdAt && new Date(me.createdAt).getTime() > 0 ? <span> Joined {new Date(me.createdAt).toLocaleDateString()}</span> : null}
+            {me.maxRating ? <span> · Limited to {me.maxRating} and below</span> : null}</p>
         </div>
-        <div className="account-actions">
+        <div className="ac-actions">
           <label className="btn btn-secondary">
-            {busy === 'avatar' ? 'Saving...' : 'Change picture'}
+            <SvgIcon name="camera" size={16} /> {busy === 'avatar' ? 'Saving…' : 'Change picture'}
             <input type="file" accept="image/*" hidden disabled={busy === 'avatar'} onChange={e => { void chooseAvatar(e.target.files?.[0]); e.target.value = ''; }} />
           </label>
           {me.avatar && <button className="btn btn-secondary" type="button" onClick={() => void removeAvatar()} disabled={busy === 'avatar'}>Remove picture</button>}
           <button className="btn btn-secondary" type="button" onClick={() => void signOut()} disabled={busy === 'out'}>Sign out</button>
-          {me.role === 'admin' && <Link className="btn btn-secondary" to="/settings?cat=users">Manage users</Link>}
-          <Link className="btn btn-secondary" to="/themes">Appearance</Link>
         </div>
       </section>
+
+      <div className="ac-links">
+        <Link className="ac-link" to="/themes"><SvgIcon name="palette" size={20} /><span><strong>Appearance</strong><em>Light, dark and themes</em></span></Link>
+        <Link className="ac-link" to="/requests"><SvgIcon name="list" size={20} /><span><strong>My requests</strong><em>What you asked for</em></span></Link>
+        {me.role === 'admin' && <Link className="ac-link" to="/settings?s=people"><SvgIcon name="users" size={20} /><span><strong>Manage people</strong><em>Accounts and age limits</em></span></Link>}
+        {me.role === 'admin' && <Link className="ac-link" to="/settings"><SvgIcon name="gear" size={20} /><span><strong>Settings</strong><em>Everything about the server</em></span></Link>}
+      </div>
 
       {note && <div className={`notice notice--${note.tone}`} role="status">{note.text}</div>}
 
-      <section className="settings-section">
-        <h3 className="section-title">Change password</h3>
-        <form className="users-add" onSubmit={changePassword}>
-          <label className="login-field">
-            <span>Current password</span>
-            <input className="settings-input" type="password" autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)} required />
-          </label>
-          <label className="login-field">
-            <span>New password</span>
-            <input className="settings-input" type="password" autoComplete="new-password" placeholder="At least 4 characters" value={next} onChange={e => setNext(e.target.value)} required />
-          </label>
-          <button className="btn btn-primary" type="submit" disabled={busy === 'pw'}>{busy === 'pw' ? 'Saving...' : 'Change password'}</button>
-        </form>
-      </section>
+      <div className="ac-cols">
+        <Section title="Change password" help="Changing it signs out your other devices.">
+          <form className="users-add" onSubmit={changePassword}>
+            <label className="login-field">
+              <span>Current password</span>
+              <input className="settings-input" type="password" autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)} required />
+            </label>
+            <label className="login-field">
+              <span>New password</span>
+              <input className="settings-input" type="password" autoComplete="new-password" placeholder="At least 4 characters" value={next} onChange={e => setNext(e.target.value)} required />
+            </label>
+            <button className="btn btn-primary" type="submit" disabled={busy === 'pw'}>{busy === 'pw' ? 'Saving…' : 'Change password'}</button>
+          </form>
+        </Section>
 
-      <QuickConnectApprove />
+        <Section title="Sign in a TV or other device" help="On the TV choose “Sign in with a code”, then type the six digits here.">
+          <QuickConnectApprove />
+        </Section>
+      </div>
 
-      <section className="settings-section">
-        <div className="account-devices-head">
-          <h3 className="section-title">Signed-in devices</h3>
-          {sessions.length > 1 && <button className="btn btn-secondary btn-sm" type="button" onClick={() => void signOutOthers()} disabled={busy === 'others'}>Sign out other devices</button>}
-        </div>
-        <ul className="users-list">
+      <Section title="Signed-in devices" help="Sign out any device you do not recognise." aside={sessions.length > 1 ? <button className="btn btn-secondary btn-sm" type="button" onClick={() => void signOutOthers()} disabled={busy === 'others'}>Sign out other devices</button> : undefined}>
+        <ul className="st-list">
           {sessions.map(s => (
-            <li key={s.id} className="users-row">
-              <span className="users-name">
-                {s.device}
-                {s.current && <span className="users-you">this device</span>}
-                <small style={{ display: 'block', opacity: 0.7 }}>{s.ip || 'unknown address'}, {s.createdAt ? `signed in ${new Date(s.createdAt).toLocaleString()}` : 'signed in earlier'}</small>
-              </span>
-              <span className="users-actions">
-                <button type="button" className="btn btn-secondary btn-sm" disabled={busy === s.id} onClick={() => void signOutDevice(s)}>Sign out</button>
-              </span>
-            </li>
+            <li key={s.id} className="st-row"><div className="st-row-main">
+              <span className={`st-dot st-dot--${s.current ? 'ok' : 'neutral'}`} aria-hidden="true" />
+              <div className="st-row-text"><strong>{s.device}{s.current && <span className="users-you">this device</span>}</strong><span>{s.ip || 'unknown address'} · {s.createdAt ? `signed in ${new Date(s.createdAt).toLocaleString()}` : 'signed in earlier'}</span></div>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={busy === s.id} onClick={() => void signOutDevice(s)}>Sign out</button>
+            </div></li>
           ))}
-          {sessions.length === 0 && <li className="users-row"><span className="users-name">No active sessions listed.</span></li>}
+          {sessions.length === 0 && <li className="ui-help">No active sessions listed.</li>}
         </ul>
-      </section>
+      </Section>
     </main>
   );
 }

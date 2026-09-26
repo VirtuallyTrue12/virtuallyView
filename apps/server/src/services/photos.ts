@@ -4,7 +4,7 @@ import path from 'node:path';
 import { all, get, run } from '../db/app-db.js';
 import { currentUserId } from './user-context.js';
 import { listFlagged, setFlags } from './user-flags.js';
-import { inside, photosRoot } from './library-folders.js';
+import { booksRoot, inside, photosRoot } from './library-folders.js';
 
 export const PHOTO_RE = /\.(jpe?g|png|webp|gif|avif|bmp)$/i;
 
@@ -14,14 +14,11 @@ const MAX_PHOTOS = 6000;
 const MAX_DEPTH = 8;
 let cache: { at: number; root: string; items: PhotoEntry[]; truncated: boolean } | null = null;
 
-/** Every photo under the photos folder, newest first: the timeline. Kept for half a minute so scrolling stays fast. */
-export function allPhotos(now = Date.now()): { items: PhotoEntry[]; truncated: boolean } {
-  const root = photosRoot();
-  if (cache && cache.root === root && now - cache.at < 30_000) return cache;
+function walkFiles(root: string, re: RegExp, limit: number): { items: PhotoEntry[]; truncated: boolean } {
   const items: PhotoEntry[] = [];
   let truncated = false;
   let base: string;
-  try { base = realpathSync(root); } catch { cache = { at: now, root, items: [], truncated: false }; return cache; }
+  try { base = realpathSync(root); } catch { return { items, truncated }; }
   const walk = (dir: string, depth: number) => {
     if (truncated) return;
     let entries;
@@ -30,17 +27,43 @@ export function allPhotos(now = Date.now()): { items: PhotoEntry[]; truncated: b
       if (entry.name.startsWith('.')) continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) { if (depth < MAX_DEPTH) walk(full, depth + 1); continue; }
-      if (!entry.isFile() || !PHOTO_RE.test(entry.name)) continue;
-      if (items.length >= MAX_PHOTOS) { truncated = true; return; }
+      if (!entry.isFile() || !re.test(entry.name)) continue;
+      if (items.length >= limit) { truncated = true; return; }
       try { const st = statSync(full); items.push({ path: path.relative(base, full).split(path.sep).join('/'), name: entry.name, size: st.size, modified: Math.round(st.mtimeMs) }); } catch { /* vanished */ }
     }
   };
   walk(base, 0);
   items.sort((a, b) => b.modified - a.modified || a.path.localeCompare(b.path));
-  cache = { at: now, root, items, truncated };
+  return { items, truncated };
+}
+
+/** Every photo under the photos folder, newest first: the timeline. Kept for half a minute so scrolling stays fast. */
+export function allPhotos(now = Date.now()): { items: PhotoEntry[]; truncated: boolean } {
+  const root = photosRoot();
+  if (cache && cache.root === root && now - cache.at < 30_000) return cache;
+  cache = { at: now, root, ...walkFiles(root, PHOTO_RE, MAX_PHOTOS) };
   return cache;
 }
-export const resetPhotoCache = (): void => { cache = null; };
+
+export const BOOK_RE = /\.(pdf|epub|cbz|cbr|txt|mobi)$/i;
+let bookCache: { at: number; root: string; items: PhotoEntry[]; truncated: boolean } | null = null;
+/** Every book and comic, newest first, so the Books page can search the whole shelf. */
+export function allBooks(now = Date.now()): { items: PhotoEntry[]; truncated: boolean } {
+  const root = booksRoot();
+  if (bookCache && bookCache.root === root && now - bookCache.at < 30_000) return bookCache;
+  bookCache = { at: now, root, ...walkFiles(root, BOOK_RE, 6000) };
+  return bookCache;
+}
+export function validBookPath(relative: unknown): string | null {
+  if (typeof relative !== 'string' || relative.length > 500 || !BOOK_RE.test(relative)) return null;
+  const file = inside(booksRoot(), relative);
+  if (!file) return null;
+  try { if (!statSync(file).isFile()) return null; } catch { return null; }
+  return relative.replace(/^\/+/, '');
+}
+export const favoriteBooks = (): string[] => listFlagged('favorite').filter(f => f.mediaType === 'book').map(f => f.mediaId);
+export const setBookFavorite = (relative: string, favorite: boolean): void => { setFlags('book', relative, { favorite }); };
+export const resetPhotoCache = (): void => { cache = null; bookCache = null; };
 
 /** A photo path from a client: only ones that exist inside the photos folder count. */
 export function validPhotoPath(relative: unknown): string | null {

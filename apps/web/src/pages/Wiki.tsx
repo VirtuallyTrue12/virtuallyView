@@ -1,5 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { BackButton } from '../components/layout/BackButton';
+import { PageHeader, Pill } from '../components/ui/Page';
+import { Dialog } from '../components/ui/Dialog';
+import { MenuItem, MoreMenu } from '../components/ui/MoreMenu';
+import { SvgIcon } from '../components/ui/SvgIcon';
 
 interface KiwixStatus { configured: boolean; url: string | null; healthy: boolean; bundled?: boolean }
 
@@ -21,6 +24,8 @@ export default function Wiki() {
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [changing, setChanging] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const load = async () => {
     try {
@@ -64,47 +69,59 @@ export default function Wiki() {
     }
   };
 
+  const readerUrl = status?.bundled ? `${window.location.protocol}//${window.location.hostname}:8888` : status?.url ?? '';
+  const command = 'docker compose --profile kiwix up -d';
+
+  const form = (
+    <form className="st-connect" onSubmit={e => { void save(e).then(() => setChanging(false)); }} style={{ padding: 0, border: 0 }}>
+      <label>Address of your Kiwix server<input className="settings-input" value={url} onChange={e => setUrl(e.target.value)} placeholder="http://192.168.1.5:8080 or http://kiwix:8080" required /></label>
+      <div className="st-connect-actions"><button className="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Connecting…' : 'Connect'}</button></div>
+    </form>
+  );
+
   if (status?.configured && status.healthy) {
     return (
       <main className="page wiki-page">
-        <BackButton to="/" label="Home" />
-        <div className="page-head">
-          <h1>Wiki</h1>
-          <div className="page-head-actions">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void disconnect()} disabled={busy}>Disconnect</button>
-          </div>
-        </div>
-        <iframe src={status.bundled ? `${window.location.protocol}//${window.location.hostname}:8888` : status.url ?? ''} title="Kiwix" className="wiki-frame" />
+        <PageHeader title="Wiki" sub={<>Offline reading from your own Kiwix library <Pill tone="ok">Connected</Pill></>}
+          actions={<>
+            <a className="btn btn-secondary" href={readerUrl} target="_blank" rel="noreferrer noopener"><SvgIcon name="external" size={17} /> Open in a new tab</a>
+            <MoreMenu label="More for the wiki">
+              <MenuItem icon="edit" label="Change the address" onSelect={() => setChanging(true)} />
+              <MenuItem icon="close" label="Disconnect" danger disabled={busy} onSelect={() => void disconnect()} />
+            </MoreMenu>
+          </>} />
+        <iframe src={readerUrl} title="Kiwix" className="wiki-frame" />
+        <Dialog open={changing} onClose={() => setChanging(false)} title="Change the Kiwix address">{form}</Dialog>
       </main>
     );
   }
 
   return (
     <main className="page">
-      <BackButton to="/" label="Home" />
-      <div className="page-head"><h1>Wiki</h1></div>
+      <PageHeader title="Wiki" sub="Wikipedia and other reference libraries that work without the internet" />
       {status?.configured && !status.healthy && (
-        <div className="notice notice--err" role="alert">Could not reach {status.url}. Check that it's running and the address is correct.</div>
+        <div className="notice notice--err" role="alert">Could not reach {status.url}. Check that it is running and the address is correct.</div>
       )}
       {error && <div className="notice notice--err" role="alert">{error}</div>}
 
-      <section className="settings-section">
-        <h3>Offline Wikipedia and other wikis</h3>
-        <p className="settings-help">
-          Kiwix (open source) reads ZIM files - full offline copies of Wikipedia, Wiktionary, Project Gutenberg
-          and hundreds of others, downloadable from <a href="https://library.kiwix.org" target="_blank" rel="noreferrer noopener">library.kiwix.org</a>.
-          Only an administrator can change this.
-        </p>
-        <p className="settings-help">
-          Already run a Kiwix server? Enter its address below. Otherwise turn on the bundled one with
-          <code> docker compose --profile kiwix up -d</code>: it downloads a starter set of libraries (Wikipedia, wikibooks,
-          travel, medicine, water and more) and this page connects to it by itself. Bigger packs are one setting away, see docs/kiwix.md.
-        </p>
-        <form className="users-add" onSubmit={e => void save(e)}>
-          <label className="login-field"><span>Address</span><input className="settings-input" value={url} onChange={e => setUrl(e.target.value)} placeholder="http://192.168.1.5:8080 or http://kiwix:8080" required /></label>
-          <button className="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Connecting...' : 'Connect'}</button>
-        </form>
-      </section>
+      <div className="wk-steps">
+        <section className="wk-card">
+          <span className="wk-num">1</span>
+          <h2>Start the built-in library</h2>
+          <p>Run this once on the server. It downloads a starter set (Wikipedia, wikibooks, travel, medicine, water and more) and this page connects by itself.</p>
+          <code>{command}</code>
+          <div className="st-connect-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => { void navigator.clipboard?.writeText(command); setCopied(true); window.setTimeout(() => setCopied(false), 1600); }}><SvgIcon name="copy" size={16} /> {copied ? 'Copied' : 'Copy command'}</button>
+            <a className="ui-help" href="https://github.com/VirtuallyTrue12/virtuallyView/blob/main/docs/kiwix.md" target="_blank" rel="noreferrer noopener">Bigger packs</a>
+          </div>
+        </section>
+        <section className="wk-card">
+          <span className="wk-num">2</span>
+          <h2>Or connect one you already run</h2>
+          <p>Kiwix reads ZIM files: full offline copies of Wikipedia, Wiktionary, Project Gutenberg and hundreds more from <a href="https://library.kiwix.org" target="_blank" rel="noreferrer noopener">library.kiwix.org</a>. Only an administrator can change this.</p>
+          {form}
+        </section>
+      </div>
     </main>
   );
 }

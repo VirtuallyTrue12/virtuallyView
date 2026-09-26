@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { DATA_DIR } from '../lib/paths.js';
 import { booksRoot, inside, listFolder, photosRoot } from '../services/library-folders.js';
 import { resolveBinary } from '../services/transcode.js';
-import { albumPhotos, allPhotos, changeAlbum, createAlbum, deleteAlbum, favoritePhotos, listAlbums, setPhotoFavorite, validPhotoPath } from '../services/photos.js';
+import { allBooks, favoriteBooks, setBookFavorite, validBookPath, albumPhotos, allPhotos, changeAlbum, createAlbum, deleteAlbum, favoritePhotos, listAlbums, setPhotoFavorite, validPhotoPath } from '../services/photos.js';
 
 const PHOTO = /\.(jpe?g|png|webp|gif|avif|bmp)$/i;
 const BOOK = /\.(pdf|epub|cbz|cbr|txt|mobi)$/i;
@@ -97,6 +97,18 @@ export default async function libraryFolderRoutes(server: FastifyInstance) {
   server.get<{ Querystring: { dir?: string } }>('/api/books', async (request, reply) => {
     const listing = listFolder(booksRoot(), request.query.dir ?? '', BOOK);
     return listing ?? reply.code(404).send({ message: 'No book folder here. Mount one at /media/books (see the docs).' });
+  });
+
+  server.get('/api/books/all', async () => allBooks());
+  server.get('/api/books/favorites', async () => {
+    const known = new Set(allBooks().items.map(b => b.path));
+    return { paths: favoriteBooks().filter(p => known.has(p)) };
+  });
+  server.post<{ Body: { path?: string; favorite?: boolean } }>('/api/books/favorite', async (request, reply) => {
+    const rel = validBookPath(request.body?.path);
+    if (!rel) return reply.code(404).send({ message: 'Book not found.' });
+    setBookFavorite(rel, request.body?.favorite !== false);
+    return { ok: true };
   });
 
   server.get<{ Querystring: { path?: string } }>('/api/books/file', async (request, reply) => {

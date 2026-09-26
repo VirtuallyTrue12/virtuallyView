@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type ThemeSummary } from '../lib/api';
 import { effectiveMode, loadAppearance, saveAppearance, type Appearance } from '../lib/appearance';
-import { BackButton } from '../components/layout/BackButton';
+import { PageHeader, Seg } from '../components/ui/Page';
+import { SvgIcon } from '../components/ui/SvgIcon';
 import { ModeSwitch } from '../components/settings/ModeSwitch';
 import { ThemePreview } from '../components/settings/ThemePreview';
 
@@ -79,22 +80,19 @@ export default function Themes() {
 
   return (
     <main className="page appearance">
-      <BackButton to="/" label="Home" />
-      <div className="page-head">
-        <div>
-          <h1>Appearance</h1>
-          <p className="search-hint">Each device keeps its own look. Pick a mode, then a theme for it.</p>
-        </div>
-        <div className="page-head-actions">
+      <PageHeader
+        title="Appearance"
+        sub="Each device keeps its own look. Pick a mode, then a theme for it."
+        actions={<>
+          <Link className="btn btn-primary" to="/themes/create"><SvgIcon name="edit" size={17} /> Create theme</Link>
           {isAdmin && (
             <>
               <input ref={importRef} type="file" accept="application/json,.json" hidden onChange={onImport} />
-              <button className="btn btn-secondary btn-sm" type="button" onClick={() => importRef.current?.click()}>Import theme</button>
+              <button className="btn btn-secondary" type="button" onClick={() => importRef.current?.click()}><SvgIcon name="upload" size={17} /> Import theme</button>
             </>
           )}
-          <Link className="btn btn-primary btn-sm" to="/themes/create">Create theme</Link>
-        </div>
-      </div>
+        </>}
+      />
 
       <section className="appearance-mode">
         <ModeSwitch />
@@ -105,12 +103,8 @@ export default function Themes() {
 
       {note && <div className={`notice notice--${note.tone}`} role="status">{note.text}</div>}
 
-      <div className="requests-filters" role="tablist" aria-label="Theme brightness">
-        {(['all', 'dark', 'light'] as Filter[]).map(f => (
-          <button key={f} type="button" role="tab" aria-selected={filter === f} className={`season-tab${filter === f ? ' is-active' : ''}`} onClick={() => setFilter(f)}>
-            {f === 'all' ? `All (${themes.length})` : f === 'dark' ? 'Dark' : 'Light'}
-          </button>
-        ))}
+      <div className="rq-toolbar">
+        <Seg<Filter> label="Theme brightness" value={filter} onChange={setFilter} options={[{ value: 'all', label: 'All', count: themes.length }, { value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]} />
       </div>
 
       <div className="theme-gallery">

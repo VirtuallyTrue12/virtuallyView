@@ -23,12 +23,8 @@ export default function QuickConnectApprove() {
   };
 
   return (
-    <section className="settings-section">
-      <h3 className="section-title">Sign in another device</h3>
-      <p className="settings-help">
-        On the other device, choose Sign in with a code, then enter the six digits it shows here.
-        Only do this for a device you are holding: it will be signed in as you.
-      </p>
+    <div>
+      <p className="ui-help">Only do this for a device you are holding: it will be signed in as you.</p>
       <form className="users-add" onSubmit={submit}>
         <label className="login-field">
           <span>Code</span>
@@ -48,6 +44,6 @@ export default function QuickConnectApprove() {
         </button>
       </form>
       {note && <div className={`notice notice--${note.tone}`} role="status">{note.text}</div>}
-    </section>
+    </div>
   );
 }
