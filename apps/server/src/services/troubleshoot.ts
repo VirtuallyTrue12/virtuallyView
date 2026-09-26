@@ -91,16 +91,29 @@ async function searchChecks(): Promise<Check[]> {
   return out;
 }
 
+/**
+ * What the downloader's connection status means. "Firewalled" only says nobody can connect IN to it, which is normal
+ * behind a VPN (free relays cannot forward ports). While it still sees peers (DHT nodes) downloads work, so that is fine.
+ */
+export function judgeDownloaderNetwork(conn: { status: 'connected' | 'firewalled' | 'disconnected'; dhtNodes: number }): { status: CheckStatus; detail: string } {
+  if (conn.status === 'connected') return { status: 'ok', detail: 'qBittorrent is connected to the network.' };
+  if (conn.status === 'firewalled' && conn.dhtNodes > 0) {
+    return { status: 'ok', detail: `qBittorrent is downloading normally (${conn.dhtNodes} peers in its network). Other people cannot connect in to it, which is expected behind a VPN and only makes a few downloads a little slower.` };
+  }
+  if (conn.status === 'firewalled') return { status: 'warn', detail: 'qBittorrent is running but cannot see any peers yet. If this lasts, the VPN tunnel may be down.' };
+  return { status: 'fail', detail: 'qBittorrent has no network connection. If you use the built-in VPN, the tunnel is probably down.' };
+}
+
 async function downloadChecks(): Promise<Check[]> {
   const out: Check[] = [];
   try {
     const qbit = getAdapter<QBittorrentAdapter>('qbittorrent');
     const conn = await bounded(qbit.connectionStatus());
+    const verdict = judgeDownloaderNetwork(conn);
     out.push(check({
-      id: 'download-client', area: 'Downloads', label: 'Download client and its network', status: conn.status === 'connected' ? 'ok' : conn.status === 'firewalled' ? 'warn' : 'fail',
-      detail: conn.status === 'connected' ? 'qBittorrent is connected to the network.' : conn.status === 'firewalled' ? 'qBittorrent is running but other people cannot connect to it (normal behind a VPN). Downloads still work.' : 'qBittorrent has no network connection. If you use the built-in VPN, the tunnel is probably down.',
-      fixes: conn.status === 'disconnected' ? ['Restart the VPN with the button (free VPN relays come and go; a new one is picked automatically), then restart qBittorrent.', 'Wait a minute and run the checks again.', 'If it keeps failing, see Settings > VPN to pick another provider or country.'] : [],
-      ...(conn.status === 'disconnected' ? { restart: 'gluetun' } : {})
+      id: 'download-client', area: 'Downloads', label: 'Download client and its network', status: verdict.status, detail: verdict.detail,
+      fixes: verdict.status === 'ok' ? [] : ['Restart the VPN with the button (free VPN relays come and go; a new one is picked automatically), then restart qBittorrent.', 'Wait a minute and run the checks again.', 'If it keeps failing, see Settings > VPN to pick another provider or country.'],
+      ...(verdict.status === 'ok' ? {} : { restart: 'gluetun' })
     }));
   } catch {
     out.push(check({ id: 'download-client', area: 'Downloads', label: 'Download client and its network', status: 'fail', detail: 'qBittorrent does not answer.', fixes: ['Restart qBittorrent with the button.', 'If it does not start, restart the VPN first, then qBittorrent (they share a network).'], restart: 'qbittorrent' }));
