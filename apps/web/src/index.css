@@ -1907,13 +1907,22 @@ select.settings-input option:hover {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 60px);
-  overflow: hidden;
   background: #000;
   cursor: none;
 }
 
 .player:hover { cursor: default; }
+
+/* The backdrop image and its dark tint are bounded to this box (the title bar and video
+   stage), never the whole page: without it, the semi-transparent overlay used to stretch
+   over Watch Together, Get subtitles and the file details below the player and wash them out. */
+.player-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 60px);
+  overflow: hidden;
+}
 
 .player-bg {
   position: absolute;
@@ -2056,23 +2065,6 @@ select.settings-input option:hover {
 }
 
 .player-video-error button { margin-left: var(--spacing-sm); }
-
-.player-bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: 0;
-  opacity: 0.35;
-}
-
-.player-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: radial-gradient(ellipse at center, transparent 0%, var(--color-background) 90%);
-}
 
 .player-meta {
   padding: var(--spacing-lg) var(--spacing-xxl);

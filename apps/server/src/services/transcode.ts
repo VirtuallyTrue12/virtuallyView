@@ -237,7 +237,12 @@ export function ffmpegTranscodeArgs(filePath: string, startSeconds = 0, options:
       '-preset', 'veryfast',
       '-crf', scale ? '25' : '23',
       '-profile:v', 'high',
-      '-pix_fmt', 'yuv420p'
+      '-pix_fmt', 'yuv420p',
+      // A source with a long keyframe interval (common in HEVC releases) made the fragmented-MP4 muxer
+      // (movflags frag_keyframe below) hold several seconds of frames before it could close a fragment,
+      // so the browser received video in bursts with a stall in between instead of a steady trickle. A
+      // keyframe every 2 seconds, on a wall-clock schedule rather than the source's own GOP, fixes that.
+      '-force_key_frames', 'expr:gte(t,n_forced*2)'
     );
     if (scale && burn === undefined) args.push('-vf', `scale=-2:${Math.round(options.height as number)}`);
   }

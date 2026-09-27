@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Added.** Radio's Now Playing: pressing the station on the player bar opens a full-screen view, the same idea as the music player's (big colour badge or picture, a live pill, volume), instead of just the compact bar.
+- **Fixed.** The hero on Home never played a downloaded show's own file: TV shows fell straight to an online trailer lookup (which can say "video unavailable"), while movies already previewed a random minute of the real file. A show with downloaded episodes now does the same.
+- **Fixed.** Safari, and several TV and embedded browsers, refused to play a good number of downloaded files outright ("could not decode the video") because the server sent the wrong Content-Type for their extension (`.m4v` served as a generic download, and `.ts`, `.m2ts`, `.wmv`, `.mpg`, `.mpeg` and `.vob` were never given one at all). Chromium browsers mostly ignore that and played the file anyway, which is why it looked fine on one system and not another. All of them now get a real video type.
+- **Fixed.** A dark tint meant to sit behind the video title bar stretched down over Watch Together, Get subtitles and the file details below the player instead, washing them out (worst right after using fullscreen, since that is when the page first grows taller than the screen). It is now the same reach as the title bar and video, no further.
+- **Fixed.** A converted stream could look laggy on a perfectly good connection when the source file had a long gap between keyframes (common in HEVC releases): the server had to hold several seconds of video before it could send anything. Conversion now forces a keyframe every 2 seconds, so video arrives in a steady trickle instead of bursts.
+
 ## 0.3.0
 
 - **Added.** "Find my existing media": on Movies, TV and Music, administrators get an "Import N found" button when the library folder holds titles the apps do not know yet. It matches each folder to the right title and adds it without downloading anything.

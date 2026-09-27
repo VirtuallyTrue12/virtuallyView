@@ -14,15 +14,28 @@ import { acquireConversion, CONVERSION_MAX_MS } from '../lib/limits.js';
 
 type Streamable = Media & { streamUrl?: string; fileInfo?: { path?: string; size?: number } };
 
+// Safari (and several TV and embedded browsers) refuse to play a <video> whose Content-Type is missing or wrong,
+// even when the bytes themselves are fine and a less strict browser (most Chromium builds) plays them anyway.
+// Every extension the library scanner accepts (music-videos.ts VIDEO_EXT) needs an entry here for that reason.
 const CID_TYPES: Record<string, string> = {
   '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
   '.mkv': 'video/x-matroska',
   '.webm': 'video/webm',
   '.mov': 'video/quicktime',
-  '.avi': 'video/x-msvideo'
+  '.avi': 'video/x-msvideo',
+  '.wmv': 'video/x-ms-wmv',
+  '.ts': 'video/mp2t',
+  '.m2ts': 'video/mp2t',
+  '.mpg': 'video/mpeg',
+  '.mpeg': 'video/mpeg',
+  '.vob': 'video/mpeg'
 };
 
 export { getMediaRoots, isAllowedMediaFile };
+
+/** The Content-Type a direct (non-transcoded) file is served with, by extension. */
+export const contentTypeFor = (filePath: string): string => CID_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
 
 /** True when a real, allowed file exists at this path. */
 function isServable(filePath: string | null | undefined): filePath is string {
@@ -42,7 +55,7 @@ function serveMediaFile(
 ): FastifyReply {
   const safePath = realpathSync(filePath);
   const stat = statSync(safePath);
-  const mime = CID_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+  const mime = contentTypeFor(filePath);
   const range = request.headers.range;
 
   if (range) {

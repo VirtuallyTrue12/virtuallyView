@@ -653,7 +653,6 @@ button.lv-live--behind { cursor: pointer; letter-spacing: 0.02em; color: var(--c
 .rs-eq i:nth-child(2) { animation-delay: 0.2s; } .rs-eq i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes rs-bar { 0%, 100% { height: 4px; } 50% { height: 14px; } }
 @media (prefers-reduced-motion: reduce) { .rs-eq i { animation: none; height: 10px; } }
-.rb .mp-now { cursor: default; }
 .rb-cover { width: 52px; height: 52px; }
 .sl--large { width: 52px; height: 52px; border-radius: var(--radius-small); }
 .sl-initials { width: 100%; height: 100%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em; }
@@ -686,3 +685,15 @@ button.lv-live--behind { cursor: pointer; letter-spacing: 0.02em; color: var(--c
 .hl-chan.is-on { outline: 2px solid #fff; }
 .hl-else { font-size: 0.76rem; opacity: 0.85; }
 @media (max-width: 760px) { .rb .rb-live-row { display: none; } .rb-cover, .sl--large { width: 46px; height: 46px; } }
+
+/* Radio Now Playing */
+.rnp-body { align-items: center; }
+.sl.rnp-art { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--radius-large); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+.rnp-art .sl-initials { font-size: clamp(2.6rem, 9vw, 4.8rem); }
+.rnp-art img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.np-meta .rb-pill { margin-bottom: 0.6rem; }
+.rnp-tags { margin: 0.4rem 0 0; font-size: 0.82rem; color: var(--color-text-muted); }
+.rnp-home { display: inline-block; margin-top: 0.4rem; }
+@media (max-width: 760px) {
+  .np-body.rnp-body { grid-template-areas: "art" "main"; }
+}

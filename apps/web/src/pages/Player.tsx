@@ -80,6 +80,7 @@ export default function Player() {
 
   return (
     <main className="player">
+      <div className="player-hero">
       {movie.artwork?.backdrop && <img className="player-bg" src={movie.artwork.backdrop} alt="" />}
       <div className="player-overlay" aria-hidden="true" />
       <div className="player-topbar">
@@ -117,6 +118,7 @@ export default function Player() {
             party={partyCode ? { remote: party.remote, onLocal: party.onLocal } : undefined}
           />
         )}
+      </div>
       </div>
       <div className="player-meta">
         <span className="player-hint">

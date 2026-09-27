@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api, type RadioStation } from '../../lib/api';
 import { useMusicPlayer } from '../media/MusicProvider';
 import { RadioBar } from './RadioBar';
+import { RadioNowPlaying } from './RadioNowPlaying';
 
 export type RadioState = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 interface RadioContextValue {
@@ -12,6 +13,9 @@ interface RadioContextValue {
   /** What the station says is playing (artist and title), when it tells. */
   nowTitle: string | null;
   volume: number;
+  /** The full-screen Now Playing view, same idea as the music player's. */
+  expanded: boolean;
+  setExpanded: (open: boolean) => void;
   play: (station: RadioStation) => void;
   toggle: () => void;
   stop: () => void;
@@ -37,6 +41,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [nowTitle, setNowTitle] = useState<string | null>(null);
   const [volume, setVolumeState] = useState(readVolume);
+  const [expanded, setExpanded] = useState(false);
   const retried = useRef(false);
 
   const release = useCallback(() => {
@@ -67,7 +72,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     void api.radioPlayed(s.id).catch(() => undefined);
   }, [music, load]);
 
-  const stop = useCallback(() => { release(); setStation(null); setState('idle'); setError(null); setNowTitle(null); }, [release]);
+  const stop = useCallback(() => { release(); setStation(null); setState('idle'); setError(null); setNowTitle(null); setExpanded(false); }, [release]);
   const toggle = useCallback(() => {
     const el = audio.current;
     if (!el || !station) return;
@@ -117,11 +122,15 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     return () => { document.body.classList.remove('has-music-bar'); };
   }, [station, nowTitle, toggle, stop]);
 
-  const value = useMemo<RadioContextValue>(() => ({ station, state, error, nowTitle, volume, play, toggle, stop, setVolume }), [station, state, error, nowTitle, volume, play, toggle, stop, setVolume]);
+  const value = useMemo<RadioContextValue>(
+    () => ({ station, state, error, nowTitle, volume, expanded, setExpanded, play, toggle, stop, setVolume }),
+    [station, state, error, nowTitle, volume, expanded, play, toggle, stop, setVolume]
+  );
   return (
     <RadioContext.Provider value={value}>
       {children}
       <audio ref={audio} preload="none" />
+      {station && <RadioNowPlaying />}
       {station && <RadioBar />}
     </RadioContext.Provider>
   );

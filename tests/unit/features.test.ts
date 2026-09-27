@@ -63,6 +63,19 @@ describe('picture subtitles', () => {
   });
 });
 
+describe('live transcode smoothness', () => {
+  it('forces a keyframe every 2 seconds, on a clock, when re-encoding, so a source with a long GOP does not stall the fragmented-MP4 stream', () => {
+    const args = ffmpegTranscodeArgs('/m/a.mkv', 0, {});
+    expect(args).toContain('-force_key_frames');
+    expect(args[args.indexOf('-force_key_frames') + 1]).toBe('expr:gte(t,n_forced*2)');
+  });
+
+  it('is skipped when the video is only remuxed (copy), since there is no encoder to schedule keyframes for', () => {
+    const args = ffmpegTranscodeArgs('/m/a.mkv', 0, { copyVideo: true });
+    expect(args).not.toContain('-force_key_frames');
+  });
+});
+
 import { cinemaNotice, isStillInCinemas, warningsFor } from '../../apps/server/src/services/release-check';
 
 describe('release checks', () => {

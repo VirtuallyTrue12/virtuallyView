@@ -5,7 +5,7 @@ import { StationLogo } from './StationLogo';
 
 /** The bar at the bottom while a station plays: what it is, what is on, pause and stop, volume. */
 export function RadioBar() {
-  const { station, state, error, nowTitle, volume, toggle, stop, setVolume } = useRadio();
+  const { station, state, error, nowTitle, volume, toggle, stop, setVolume, setExpanded } = useRadio();
   const bar = useRef<HTMLDivElement>(null);
   // Floating buttons (the assistant, the requests pill) sit above whatever is docked at the bottom.
   useEffect(() => {
@@ -29,13 +29,13 @@ export function RadioBar() {
   return (
     <div ref={bar} className="mp rb" role="region" aria-label="Radio player">
       <div className="mp-row">
-        <div className="mp-now">
+        <button type="button" className="mp-now" onClick={() => setExpanded(true)} aria-label="Open Now Playing" title="Open Now Playing">
           <StationLogo station={station} className={`rb-cover${playing ? ' is-live' : ''}`} large />
           <span className="mp-now-text">
             <span className="mp-now-title">{title}</span>
             <span className={`mp-now-sub${state === 'error' ? ' is-error' : ''}`} role="status">{sub}</span>
           </span>
-        </div>
+        </button>
 
         <div className="mp-center">
           <div className="mp-transport">
@@ -55,6 +55,7 @@ export function RadioBar() {
             <button type="button" className="mp-icon" onClick={() => setVolume(volume === 0 ? 1 : 0)} aria-label={volume === 0 ? 'Unmute radio' : 'Mute radio'}><SvgIcon name={volume === 0 ? 'volume-mute' : volume < 0.5 ? 'volume-low' : 'volume-high'} size={18} /></button>
             <input className="mp-range" type="range" min={0} max={1} step={0.02} value={volume} style={{ '--v': volume } as CSSProperties} onChange={e => setVolume(Number(e.target.value))} aria-label="Radio volume" />
           </label>
+          <button type="button" className="mp-icon" onClick={() => setExpanded(true)} aria-label="Open Now Playing" title="Open Now Playing"><SvgIcon name="chevron-up" size={20} /></button>
         </div>
       </div>
     </div>

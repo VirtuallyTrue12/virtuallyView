@@ -117,6 +117,7 @@ export default function EpisodePlayer() {
 
   return (
     <main className="player">
+      <div className="player-hero">
       {series?.artwork?.backdrop && <img className="player-bg" src={series.artwork.backdrop} alt="" />}
       <div className="player-overlay" aria-hidden="true" />
       <div className="player-topbar">
@@ -158,6 +159,7 @@ export default function EpisodePlayer() {
             episodes={{ groups, onSelect: eid => { const t = ordered.find(e => e.id === eid); if (t) go(t); } }}
           />
         )}
+      </div>
       </div>
       <div className="player-meta">
         <span className="player-hint">Space play/pause, left/right arrows skip 10s, N next episode, C subtitles, F fullscreen</span>

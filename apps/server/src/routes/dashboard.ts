@@ -53,7 +53,20 @@ export default async function dashboardRoutes(server: FastifyInstance) {
     });
     const seriesByAdded = [...series].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const heroMovies = sortedByAdded.slice(0, 4).map(i => toHero(i, 'Recently Added Movie'));
-    const heroSeries = seriesByAdded.slice(0, 3).map(i => toHero(i, 'TV Series'));
+    // A show with downloaded episodes previews the real file, same as a movie (a random episode, not
+    // necessarily the pilot, so the hero doesn't always spoil episode one); only a show with nothing
+    // downloaded yet falls back to an online trailer lookup.
+    const heroSeries = await Promise.all(seriesByAdded.slice(0, 3).map(async i => {
+      const hero = toHero(i, 'TV Series');
+      if (i.status !== 'available') return hero;
+      try {
+        const episodes = (await (sonarr as unknown as SonarrAdapter).getEpisodes(i.id)).filter(e => e.hasFile);
+        const pick = episodes[Math.floor(Math.random() * episodes.length)];
+        return pick ? { ...hero, streamUrl: `/api/stream/episode/${encodeURIComponent(pick.id)}` } : hero;
+      } catch {
+        return hero; // Sonarr slow or offline: trailer fallback still works
+      }
+    }));
     const heroArtists = byRating(artists, 3).map(i => toHero(i, 'Featured Artist'));
     const heroCandidates: ReturnType<typeof toHero>[] = [];
     for (let i = 0; i < 4; i++) {

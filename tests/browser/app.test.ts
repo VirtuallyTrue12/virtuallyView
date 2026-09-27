@@ -901,6 +901,13 @@ describe('radio, one-press repair and live highlights', () => {
     const bar = page.getByRole('region', { name: 'Radio player' });
     await bar.waitFor();
     await bar.getByText('Mirchi Top 20').waitFor();
+    // The bar opens a full Now Playing view, the same idea as the music player's.
+    await bar.getByRole('button', { name: 'Open Now Playing' }).first().click();
+    const nowPlaying = page.getByRole('dialog', { name: 'Now playing' });
+    await nowPlaying.getByText('Mirchi Top 20').waitFor();
+    await nowPlaying.getByText('LIVE').waitFor();
+    await nowPlaying.getByRole('button', { name: 'Close Now Playing' }).click();
+    await page.waitForFunction(() => document.querySelector('.np')?.getAttribute('aria-hidden') === 'true');
     // Navigating away keeps the player; closing it removes it.
     await page.getByRole('link', { name: 'Movies' }).first().click();
     await bar.waitFor();
