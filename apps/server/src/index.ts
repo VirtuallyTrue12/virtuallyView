@@ -2,7 +2,7 @@ import './lib/env-files.js';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 
 import { WEB_DIST_DIR } from './lib/paths.js';
@@ -338,16 +338,26 @@ server.delete<{ Params: { id: string } }>('/api/auth/sessions/:id', async (reque
   return { ok: true };
 });
 
+/**
+ * The user a signed cast/TV link (`?st=`) was issued to, only while that account still exists right now.
+ * A valid signature alone used to be enough: delete the account (or it never existed) and the link kept
+ * working for the rest of its 6-hour life anyway, just as an unrestricted "shared guest" actor - which for
+ * a link that had been carrying a child's age limit meant that limit silently stopped applying, and a
+ * removed account's cast links kept working, exactly while the person who issued them can no longer do
+ * anything about it. Re-reading the account fresh on every request already picks up a *tightened* limit
+ * immediately; this closes the one case that fell through instead of being refused.
+ */
+function streamTokenOwner(request: FastifyRequest): ReturnType<typeof listUsers>[number] | null {
+  if (request.method !== 'GET') return null;
+  const [pathname = '', query = ''] = request.url.split('?');
+  const owner = verifyStreamToken(new URLSearchParams(query).get('st') ?? undefined, pathname);
+  return owner ? listUsers().find(u => u.id === owner) ?? null : null;
+}
+
 // Everything below runs as the signed-in user, so per-user data (watch
 // progress, My List) resolves without threading a user id through every call.
 server.addHook('onRequest', (request, _reply, done) => {
-  let user = currentUser(readSessionCookie(request.headers.cookie));
-  // A cast receiver has no cookie: a signed link stands in for the person who made it.
-  if (!user && request.method === 'GET') {
-    const [pathname = '', query = ''] = request.url.split('?');
-    const owner = verifyStreamToken(new URLSearchParams(query).get('st') ?? undefined, pathname);
-    if (owner) user = listUsers().find(u => u.id === owner) ?? null;
-  }
+  const user = currentUser(readSessionCookie(request.headers.cookie)) ?? streamTokenOwner(request);
   runAsActor(user ? { userId: user.id, username: user.username, role: user.role, ...(user.maxRating ? { maxRating: user.maxRating } : {}) } : { userId: 'shared', username: 'guest', role: 'user' }, done);
 });
 
@@ -359,7 +369,7 @@ const ADMIN_ONLY_WRITE = [
 ];
 // Reading how the server is wired (service addresses, what is reachable on the
 // network, how to control containers) is administrator-only too.
-const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/troubleshoot', '/api/settings/', '/api/library/unmapped'];
+const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/troubleshoot', '/api/settings/', '/api/server-settings/proxy-test', '/api/library/unmapped'];
 server.addHook('preHandler', async (request, reply) => {
   if (request.method !== 'GET') return;
   const path = request.url.split('?')[0] ?? '';
@@ -407,8 +417,7 @@ server.addHook('preHandler', async (request, reply) => {
   // library or configuration data.
   if (request.url === '/api/health' || request.url === '/api/ready' || request.url === '/api/metrics') return;
   if (!isAuthenticated(readSessionCookie(request.headers.cookie))) {
-    const [pathname = '', query = ''] = request.url.split('?');
-    if (request.method === 'GET' && verifyStreamToken(new URLSearchParams(query).get('st') ?? undefined, pathname)) return;
+    if (streamTokenOwner(request)) return;
     return reply.code(401).send({ message: 'Authentication required.' });
   }
 });

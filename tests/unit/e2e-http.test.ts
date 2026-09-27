@@ -311,6 +311,13 @@ describe('e2e: accounts (closed sign-up + admin management)', () => {
     const okAdmin = await req('POST', '/api/server-settings', { body: { allowSignup: true }, cookieOverride: cookieAdmin });
     expect(okAdmin.status).toBe(200);
 
+    // The base settings read redacts the proxy host for a regular user; the live connectivity test must be
+    // refused outright, not answered with the host and port spelled out in its message.
+    const proxyDenied = await req('GET', '/api/server-settings/proxy-test', { cookieOverride: cookieViewer });
+    expect(proxyDenied.status).toBe(403);
+    const proxyAdmin = await req('GET', '/api/server-settings/proxy-test', { cookieOverride: cookieAdmin });
+    expect(proxyAdmin.status).toBe(200);
+
     const status = await req('GET', '/api/auth/status');
     expect(status.json.signupOpen).toBe(true);
     const signup = await req('POST', '/api/auth/signup', { body: { username: 'e2eself', password: 'e2eself-password-123' } });
@@ -1169,6 +1176,23 @@ describe('e2e: cast links, live tv, photos, books', () => {
     expect((await req('GET', `/api/stream/radarr-2?st=${token}`, { cookieOverride: null })).status).toBe(401);
     expect((await req('GET', `/api/stream/radarr-1?st=${token.slice(0, -2)}xx`, { cookieOverride: null })).status).toBe(401);
     expect((await req('GET', `/api/movies?st=${token}`, { cookieOverride: null })).status).toBe(401);
+  }, 30_000);
+
+  it('a signed link stops working the moment the account it was issued to is deleted, instead of keeping any age limit off for the rest of its life', async () => {
+    const made = await req('POST', '/api/auth/users', { body: { username: 'e2ecastuser', password: 'e2ecastuser-pass-123', role: 'user' }, cookieOverride: cookieAdmin });
+    expect(made.status).toBe(200);
+    const castUserId = (made.json.users as Array<{ id: string; username: string }>).find(u => u.username === 'e2ecastuser')!.id;
+    const login = await req('POST', '/api/auth/login', { body: { username: 'e2ecastuser', password: 'e2ecastuser-pass-123' } });
+    const cookieCastUser = /vv_session=[^;]+/.exec(login.setCookie!)![0];
+    const signed = await req('POST', '/api/stream-token', { body: { path: '/api/stream/radarr-1' }, cookieOverride: cookieCastUser });
+    const token = signed.json.token as string;
+    // Works while the account exists.
+    expect((await req('GET', `/api/stream/radarr-1?st=${token}`, { cookieOverride: null })).status).not.toBe(401);
+    const removed = await req('DELETE', `/api/auth/users/${castUserId}`, { cookieOverride: cookieAdmin });
+    expect(removed.status).toBe(200);
+    // The same still-unexpired, correctly-signed token must now be refused outright, not quietly
+    // downgraded to an unrestricted anonymous "shared guest" that keeps playing for up to 6 more hours.
+    expect((await req('GET', `/api/stream/radarr-1?st=${token}`, { cookieOverride: null })).status).toBe(401);
   }, 30_000);
 
   it('lists cast devices (none in a test) and refuses unknown ones', async () => {
