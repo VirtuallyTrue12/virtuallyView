@@ -587,7 +587,7 @@ async function ensureProwlarrIndexer() {
  * so that turning it off later, or a later run when the proxy is back, switches
  * them on again. A source uses one proxy, so the other route's tags are dropped.
  */
-async function ensureSearchViaProxy(headers, { on, required, name, implementation, host, port, via: viaLabel, off: offLabel, other, notRunning, label, switchOffFailing = true }) {
+async function ensureSearchViaProxy(headers, { on, required, name, implementation, host, port, via: viaLabel, off: offLabel, other, notRunning, label, switchOffFailing = true, cloudflareFallback = false }) {
   const api = (path, init) => fetch(`${PROWLARR.url}/api/v1${path}`, { headers, signal: AbortSignal.timeout(120000), ...init });
   const tags = await (await api('/tag')).json();
   const ensureTag = async text => tags.find(t => t.label === text) ?? await (await api('/tag', { method: 'POST', body: JSON.stringify({ label: text }) })).json();
@@ -632,17 +632,33 @@ async function ensureSearchViaProxy(headers, { on, required, name, implementatio
   }
 
   const flare = tags.find(t => t.label === 'flaresolverr');
-  const todo = indexers.filter(ix => !(ix.tags ?? []).includes(via.id) || (ix.tags ?? []).includes(off.id));
-  let working = 0, disabled = 0, next = 0;
+  // A route that never switches sources off re-checks all of them each time, so one that a site now blocks moves on to FlareSolverr.
+  const todo = switchOffFailing ? indexers.filter(ix => !(ix.tags ?? []).includes(via.id) || (ix.tags ?? []).includes(off.id)) : indexers;
+  let working = 0, disabled = 0, viaFlare = 0, next = 0;
   const worker = async () => {
     while (next < todo.length) {
       const ix = todo[next++];
       // FlareSolverr is dropped in favour of this proxy (one proxy per source).
       const base = (ix.tags ?? []).filter(t => t !== flare?.id && t !== off.id && !otherIds.includes(t));
       // A route that is often briefly down (a free VPN relay) keeps its sources on: Prowlarr rests a failing one and
-      // retries it, and nothing is ever searched outside the proxy.
+      // retries it, and nothing is ever searched outside the proxy, with one exception the person can turn off: a site
+      // that blocks the VPN's address with a Cloudflare check is searched through FlareSolverr (from this connection)
+      // instead of not at all. SEARCH_VIA_VPN=strict never does that.
       if (!switchOffFailing) {
-        await api(`/indexer/${ix.id}?forceSave=true`, { method: 'PUT', body: JSON.stringify({ ...ix, enable: ix.enable || (ix.tags ?? []).includes(off.id), tags: [...base, via.id] }) });
+        const enable = ix.enable || (ix.tags ?? []).includes(off.id);
+        let via_ok = false, blockedByCloudflare = false;
+        try {
+          const tested = await api(`/indexer/${ix.id}`, { method: 'PUT', body: JSON.stringify({ ...ix, enable, tags: [...base, via.id] }) });
+          via_ok = tested.ok;
+          if (!tested.ok) blockedByCloudflare = /cloudflare|ddos|captcha|challenge/i.test(await tested.text().catch(() => ''));
+        } catch { /* a slow site: keep it on the VPN */ }
+        if (via_ok) { working++; continue; }
+        if (cloudflareFallback && blockedByCloudflare && flare) {
+          await api(`/indexer/${ix.id}?forceSave=true`, { method: 'PUT', body: JSON.stringify({ ...ix, enable, tags: [...base.filter(t => t !== via.id), flare.id] }) });
+          viaFlare++;
+          continue;
+        }
+        await api(`/indexer/${ix.id}?forceSave=true`, { method: 'PUT', body: JSON.stringify({ ...ix, enable, tags: [...base, via.id] }) });
         working++;
         continue;
       }
@@ -657,7 +673,7 @@ async function ensureSearchViaProxy(headers, { on, required, name, implementatio
   await Promise.all(Array.from({ length: 4 }, worker));
   log(switchOffFailing
     ? `Prowlarr: search over ${label} is on. ${working} source(s) work through it; ${disabled} do not and are switched off rather than searching directly.`
-    : `Prowlarr: search over ${label} is on for ${working} source(s). One that does not answer is retried by itself, never searched directly.`);
+    : `Prowlarr: search over ${label} is on for ${working} source(s)${viaFlare ? `; ${viaFlare} block the VPN's address with a Cloudflare check and are searched through FlareSolverr from this connection instead (SEARCH_VIA_VPN=strict stops that)` : ''}. One that does not answer is retried by itself.`);
 }
 
 const flag = value => /^(1|true|yes|on)$/i.test(value ?? '');
@@ -679,13 +695,13 @@ async function ensureSearchViaTor(headers) {
  * VPN is up; SEARCH_VIA_VPN=false opts out, =true insists. Tor, when on, wins.
  */
 async function ensureSearchViaVpn(headers) {
-  const setting = (process.env.SEARCH_VIA_VPN ?? 'auto').toLowerCase();
+  const setting = (process.env.SEARCH_VIA_VPN ?? 'auto').toLowerCase(); // auto | true | strict | false
   const torOn = flag(process.env.SEARCH_VIA_TOR);
   const host = process.env.VPN_PROXY_HOST ?? 'gluetun';
   const port = Number(process.env.VPN_PROXY_PORT ?? 8888);
   return ensureSearchViaProxy(headers, {
-    on: !torOn && setting !== 'false' && setting !== '0' && setting !== 'off' && setting !== 'no', required: flag(setting), label: 'the VPN',
-    name: 'VPN (virtuallyView)', implementation: 'Http', switchOffFailing: false, host, port, via: 'vv-vpn', off: 'vv-vpn-off', other: ['vv-tor', 'vv-tor-off'],
+    on: !torOn && setting !== 'false' && setting !== '0' && setting !== 'off' && setting !== 'no', required: flag(setting) || setting === 'strict', label: 'the VPN',
+    name: 'VPN (virtuallyView)', implementation: 'Http', switchOffFailing: false, cloudflareFallback: setting !== 'strict', host, port, via: 'vv-vpn', off: 'vv-vpn-off', other: ['vv-tor', 'vv-tor-off'],
     notRunning: `SEARCH_VIA_VPN is on but the VPN's web proxy at ${host}:${port} is not running. Start the VPN overlay (docker-compose.vpn-free.yml or docker-compose.vpn.yml), or set SEARCH_VIA_VPN=false`
   });
 }

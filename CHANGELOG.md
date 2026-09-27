@@ -7,6 +7,9 @@
 - **Added.** "Fix everything" in Settings > Health and repair: one press starts what stopped, restarts what is stuck, reconnects the apps and replaces dead downloads, step by step, and `scripts/repair.sh` fixes what needs the machine itself (asks for a password only when needed). Stopped services are also started again by themselves.
 - **Added.** Live TV highlights: the big matches and races on now and soon, with the channels from your playlists that show them.
 - **Fixed.** `docker compose run --rm provision` tried to recreate qBittorrent outside the VPN and failed on port 6881; setup now runs without touching it (`--no-deps`), and the setup step no longer starts by itself with the stopped services.
+- **Fixed.** Radio's player bar looked plain next to the music player; it now matches it (a colour badge per station, a live pill with a pulsing meter, a real play button), and stations without a picture get initials instead of a generic icon.
+- **Fixed.** "Fix everything" restarting the VPN often left qBittorrent still unable to see peers, because the same dead relay came back. Restarting the VPN now also asks the free relay watcher for a fresh one (never repeating the last few), and the step waits up to two minutes for peers to show up before reporting. It also re-tests search sources, since Prowlarr rests a source that just failed for up to a day.
+- **Fixed.** With the VPN search setting on, a site that blocks the VPN's address with a Cloudflare check was switched off instead of tried another way; it now falls back to FlareSolverr, from your own connection, for that one site. `SEARCH_VIA_VPN=strict` turns that fallback off.
 
 ## 0.2.0
 

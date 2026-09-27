@@ -289,6 +289,7 @@ services:
       - PROWLARR_AUTO_INDEXERS=${PROWLARR_AUTO_INDEXERS:-internetarchive,linuxtracker,btetree}
       - FLARESOLVERR_URL=http://flaresolverr:8191
       - SEARCH_VIA_TOR=${SEARCH_VIA_TOR:-false}
+      - SEARCH_VIA_VPN=${SEARCH_VIA_VPN:-auto}
       - LIDARR_URL=http://lidarr:8686
       - LIDARR_API_KEY_FILE=/secrets/lidarr
       - BAZARR_URL=http://bazarr:6767

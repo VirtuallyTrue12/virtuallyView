@@ -78,8 +78,16 @@ export const answers = (host, port, proto = 'tcp') => new Promise(ok => {
 
 const protoOf = config => (/^proto\s+udp/m.test(config) ? 'udp' : 'tcp');
 
+// The last few relays used, so asking for "another" (a restart, or the Fix everything button) never lands on the
+// one that just had no peers, and repeated requests walk through different relays.
+const recentFile = `${out}.recent`;
+const recentRelays = () => { try { return JSON.parse(readFileSync(recentFile, 'utf8')).filter(x => typeof x === 'string'); } catch { return []; } };
+
 async function choose(avoid) {
-  const s = await pick(avoid);
+  const seen = recentRelays();
+  let s;
+  try { s = await pick(new Set([...avoid, ...seen])); } catch (err) { if (!seen.length) throw err; s = await pick(avoid); }
+  try { writeFileSync(recentFile, JSON.stringify([s.ip, ...seen.filter(ip => ip !== s.ip)].slice(0, 8)), { mode: 0o600 }); } catch { /* the list is a nicety */ }
   writeFileSync(out, s.config.replace(/\r/g, '') + '\ndata-ciphers-fallback AES-128-CBC\n', { mode: 0o600 });
   console.log(`vpngate: chose ${s.host} (${s.country}, ${s.ip})`);
   return s.ip;
@@ -88,7 +96,13 @@ async function choose(avoid) {
 async function main() {
 let current = '';
 if (!existsSync(out) || !watch) current = await choose();
-else current = remoteOf(readFileSync(out, 'utf8')).host;
+else {
+  // Every start of the watcher picks a fresh relay (a relay that answers can still have no peers, and restarting is
+  // how a person, or the "Fix everything" button, asks for another). If VPN Gate cannot be reached, keep the old one.
+  const before = remoteOf(readFileSync(out, 'utf8'));
+  current = before.host;
+  try { current = await choose(new Set([before.host])); } catch (err) { console.log(`vpngate: keeping ${before.host} (${err instanceof Error ? err.message : err})`); }
+}
 if (!watch) process.exit(0);
 
 let misses = 0;

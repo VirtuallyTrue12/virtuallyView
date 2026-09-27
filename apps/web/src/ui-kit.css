@@ -653,19 +653,20 @@ button.lv-live--behind { cursor: pointer; letter-spacing: 0.02em; color: var(--c
 .rs-eq i:nth-child(2) { animation-delay: 0.2s; } .rs-eq i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes rs-bar { 0%, 100% { height: 4px; } 50% { height: 14px; } }
 @media (prefers-reduced-motion: reduce) { .rs-eq i { animation: none; height: 10px; } }
-.rb { position: fixed; left: 0; right: 0; bottom: var(--tabbar-h, 0px); z-index: 60; display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem var(--spacing-lg); background: var(--color-surface); border-top: 1px solid var(--color-border); box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.25); }
-.rb-logo { width: 44px; height: 44px; }
-.rb-info { display: grid; min-width: 0; flex: 1; }
-.rb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rb-sub { font-size: 0.8rem; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rb-sub.is-error { color: var(--color-danger); }
-.rb-live { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; padding: 0.15rem 0.45rem; border-radius: 4px; background: var(--color-border); color: var(--color-text-muted); }
-.rb-live.is-on { background: var(--color-danger, #e5484d); color: #fff; }
-.rb-btn { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--color-border); background: var(--color-background); color: inherit; display: inline-grid; place-items: center; cursor: pointer; }
-.rb-btn--main { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent, #fff); }
-.rb-vol { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--color-text-muted); }
-.rb-vol input { width: 90px; accent-color: var(--color-accent); }
-@media (max-width: 720px) { .rb-vol, .rb-live { display: none; } .rb { padding: 0.5rem var(--spacing-md); } .rd-field select, .rd-field input { min-width: 0; width: 100%; } .rd-field { flex: 1 1 100%; } }
+.rb .mp-now { cursor: default; }
+.rb-cover { width: 52px; height: 52px; }
+.sl--large { width: 52px; height: 52px; border-radius: var(--radius-small); }
+.sl-initials { width: 100%; height: 100%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em; }
+.rb-cover.is-live { box-shadow: 0 0 0 2px var(--color-accent), 0 0 22px color-mix(in srgb, var(--color-accent) 45%, transparent); }
+.rb .mp-now-sub.is-error { color: var(--color-danger); white-space: normal; }
+.rb-live-row { display: flex; align-items: center; justify-content: center; gap: 0.6rem; min-width: 0; font-size: 0.76rem; color: var(--color-text-muted); }
+.rb-pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; background: var(--color-surface-elevated); border: 1px solid var(--color-border); color: var(--color-text-muted); }
+.rb-pill.is-on { background: color-mix(in srgb, var(--color-danger, #e5484d) 22%, transparent); border-color: var(--color-danger, #e5484d); color: var(--color-text-primary); }
+.rb-eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; }
+.rb-eq i { width: 2px; background: var(--color-danger, #e5484d); animation: rs-bar 0.9s ease-in-out infinite; }
+.rb-eq i:nth-child(2) { animation-delay: 0.15s; } .rb-eq i:nth-child(3) { animation-delay: 0.3s; } .rb-eq i:nth-child(4) { animation-delay: 0.45s; }
+.rb-spec { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .rb-eq i { animation: none; height: 8px; } }
 
 /* Live TV highlights */
 .hl { margin: 0 0 var(--spacing-lg); }
@@ -684,3 +685,4 @@ button.lv-live--behind { cursor: pointer; letter-spacing: 0.02em; color: var(--c
 .hl-chan { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.65rem; border-radius: 999px; border: 0; background: var(--color-accent); color: var(--color-on-accent, #fff); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
 .hl-chan.is-on { outline: 2px solid #fff; }
 .hl-else { font-size: 0.76rem; opacity: 0.85; }
+@media (max-width: 760px) { .rb .rb-live-row { display: none; } .rb-cover, .sl--large { width: 46px; height: 46px; } }

@@ -57,7 +57,7 @@ Pair it with a VPN for downloads (below): your searches and your downloads then 
 
 ## VPN for downloads
 
-With either VPN below running, **searching goes through it as well** (gluetun's built-in web proxy, reachable only inside the compose network). Setup does this by itself; `SEARCH_VIA_VPN=false` in `.env` opts out. A source never searches outside the VPN: if the tunnel is down, searches wait or fail (the Health panel says so) instead of leaking. If Tor search is on, Tor is used instead.
+With either VPN below running, **searching goes through it as well** (gluetun's built-in web proxy, reachable only inside the compose network). Setup does this by itself; `SEARCH_VIA_VPN=false` in `.env` opts out. If the tunnel is down, searches wait or fail (the Health panel says so) instead of leaking. One exception: a site that blocks the VPN's address with a Cloudflare check is searched through FlareSolverr from your own connection instead of not at all; set `SEARCH_VIA_VPN=strict` to never do that. If Tor search is on, Tor is used instead.
 
 Two ways, both use [gluetun](https://github.com/qdm12/gluetun), an open-source VPN client container. Either one routes only qBittorrent's traffic; search, browsing and every other service are untouched.
 

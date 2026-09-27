@@ -100,7 +100,7 @@ export function judgeDownloaderNetwork(conn: { status: 'connected' | 'firewalled
   if (conn.status === 'firewalled' && conn.dhtNodes > 0) {
     return { status: 'ok', detail: `qBittorrent is downloading normally (${conn.dhtNodes} peers in its network). Other people cannot connect in to it, which is expected behind a VPN and only makes a few downloads a little slower.` };
   }
-  if (conn.status === 'firewalled') return { status: 'warn', detail: 'qBittorrent is running but cannot see any peers yet. If this lasts, the VPN tunnel may be down.' };
+  if (conn.status === 'firewalled') return { status: 'warn', detail: "qBittorrent is running but cannot see any peers yet. This can just be a quiet relay; press 'Fix everything' to pick another, or wait a few minutes." };
   return { status: 'fail', detail: 'qBittorrent has no network connection. If you use the built-in VPN, the tunnel is probably down.' };
 }
 

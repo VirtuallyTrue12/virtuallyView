@@ -3,6 +3,7 @@ import { helperAction, helperStartAll, helperStatus } from './host-helper.js';
 import { runTroubleshooting, type Check } from './troubleshoot.js';
 import { runDoctor } from './download-doctor.js';
 import { getServerSettings } from './server-settings.js';
+import { loadServiceConfig } from './registry.js';
 
 /**
  * "Fix everything": one press does every repair the server can do by itself, in a sensible order,
@@ -30,11 +31,26 @@ const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const problems = (checks: Check[]) => checks.filter(c => c.status === 'fail' || c.status === 'warn');
 
 /** Services that share a network with the VPN must be restarted after it, never before. */
-export function restartOrder(services: string[]): string[] {
+export function restartOrder(services: string[], present?: string[]): string[] {
   const rank = (name: string) => (name === 'vpngate-config' ? 0 : name === 'gluetun' ? 1 : name === 'qbittorrent' ? 3 : 2);
   const set = new Set(services);
+  // The free VPN's relay watcher picks a fresh relay when it starts: a tunnel that is up but sees no peers needs that.
+  if (set.has('gluetun') && (!present || present.includes('vpngate-config'))) set.add('vpngate-config');
   if (set.has('gluetun')) set.add('qbittorrent');
   return [...set].sort((a, b) => rank(a) - rank(b));
+}
+
+/** Prowlarr rests a source that failed (for up to a day) and only a test brings it back; do that now. */
+async function retestSources(): Promise<{ ok: number; total: number } | null> {
+  const entry = loadServiceConfig().prowlarr;
+  if (!entry?.url || entry.enabled === false) return null;
+  try {
+    const res = await fetch(`${entry.url.replace(/\/$/, '')}/api/v1/indexer/testall`, { method: 'POST', headers: { 'X-Api-Key': entry.apiKey }, signal: AbortSignal.timeout(120_000) });
+    // Prowlarr answers 400 with the per-source results when any source fails, so read the body either way.
+    const rows = await res.json().catch(() => null) as Array<{ isValid?: boolean }> | null;
+    if (!Array.isArray(rows)) return null;
+    return { ok: rows.filter(r => r.isValid).length, total: rows.length };
+  } catch { return null; }
 }
 
 let current: FixJob | undefined;
@@ -60,6 +76,7 @@ async function run(job: FixJob): Promise<void> {
   const start = step('start', 'Starting anything that stopped');
   const restart = step('restart', 'Restarting what is not answering');
   const setup = step('setup', 'Reconnecting the apps to each other');
+  const sources = step('sources', 'Testing the search sources');
   const downloads = step('downloads', 'Replacing dead downloads');
   const verify = step('verify', 'Checking again');
 
@@ -86,7 +103,7 @@ async function run(job: FixJob): Promise<void> {
 
     set(restart, 'running');
     const broken = problems((await runTroubleshooting()).checks).flatMap(c => (c.restart ? [c.restart] : []));
-    const order = restartOrder(broken);
+    const order = restartOrder(broken, status.data?.services.map(s => s.service));
     if (!order.length) set(restart, 'ok', 'Nothing needed restarting.');
     else {
       const done: string[] = [];
@@ -94,9 +111,18 @@ async function run(job: FixJob): Promise<void> {
       for (const service of order) {
         const r = await helperAction(service, 'restart');
         (r.ok ? done : failed).push(service);
+        if (service === 'vpngate-config') await pause(30_000); // it needs a moment to choose and write a new relay
         if (service === 'gluetun') await pause(20_000);
       }
       await pause(20_000);
+      // A new tunnel takes a minute or two to find peers: wait for the download client rather than reporting too early.
+      if (order.includes('qbittorrent')) {
+        for (let i = 0; i < 8; i++) {
+          const now = (await runTroubleshooting()).checks.find(c => c.id === 'download-client');
+          if (now?.status === 'ok') break;
+          await pause(15_000);
+        }
+      }
       set(restart, failed.length && !done.length ? 'failed' : 'fixed', `${done.length ? `Restarted ${done.join(', ')}.` : ''}${failed.length ? ` Could not restart ${failed.join(', ')}.` : ''}`.trim());
     }
 
@@ -114,6 +140,11 @@ async function run(job: FixJob): Promise<void> {
   } else {
     for (const s of [start, restart, setup]) set(s, 'needs-host', 'Needs the helper.');
   }
+
+  set(sources, 'running');
+  const tested = await retestSources();
+  if (!tested) set(sources, 'ok', 'Could not test them (search is not set up, or is still starting).');
+  else set(sources, tested.ok < tested.total ? 'failed' : 'ok', `${tested.ok} of ${tested.total} search source${tested.total === 1 ? '' : 's'} answer${tested.ok === 1 ? 's' : ''}.${tested.ok < tested.total ? ' The others are retried automatically; add more in Settings > Search sources.' : ''}`);
 
   set(downloads, 'running');
   try {
