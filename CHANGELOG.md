@@ -1,4 +1,7 @@
 # Changelog
+
+## 0.3.0
+
 - **Added.** "Find my existing media": on Movies, TV and Music, administrators get an "Import N found" button when the library folder holds titles the apps do not know yet. It matches each folder to the right title and adds it without downloading anything.
 - **Added.** Each episode, album and track that is on its way shows its own state ("Downloading 42% · 10 min left", "Waiting to download", "Download stuck") on the TV, artist and album pages, and turns playable by itself when done.
 - **Added.** With the VPN running, searches go through it too (SEARCH_VIA_VPN, automatic when the VPN is up, `false` to opt out); Tor keeps priority when SEARCH_VIA_TOR is on.
