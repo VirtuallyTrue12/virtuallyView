@@ -365,6 +365,9 @@ services:
       - WATCHTOWER_URL=http://watchtower:8080
       - YTDLP_URL=http://ytdlp:8098
       - YTDLP_TOKEN_FILE=/secrets/ytdlp
+      # Reaches the bundled service by default; point this at a public instance instead
+      # (https://docs.invidious.io/instances/) if you never turn that on, or if it gets blocked.
+      - INVIDIOUS_URL=${INVIDIOUS_URL:-http://invidious:3000}
       - WATCHTOWER_TOKEN_FILE=/secrets/watchtower
       - VV_HELPER_URL=http://helper:8099
       - VV_SECRET_KEY=${VV_SECRET_KEY:-}
@@ -485,6 +488,93 @@ services:
     volumes:
       - immich-db:/var/lib/postgresql/data
     restart: unless-stopped
+
+  # Optional: search and watch YouTube through a private front end instead of
+  # YouTube itself (no ads, no account, no Google tracking your browser), and
+  # feeds movie/show trailer lookups a real search API instead of screen-scraping
+  # a YouTube results page. Off by default: docker compose --profile invidious up -d
+  #
+  # Read this before relying on it: Invidious works by having ITS OWN server ask
+  # YouTube for videos on your behalf, and YouTube actively tries to block that.
+  # A small, personally-run instance is the case most likely to get rate-limited
+  # or blocked outright (this is well known and not something this stack can fix);
+  # a busy public instance blends in better. If search or playback here stops
+  # working, set INVIDIOUS_URL in .env to a public instance (see https://docs.invidious.io/instances/)
+  # instead of running this service, everything above keeps working the same way.
+  invidious:
+    image: quay.io/invidious/invidious:latest
+    profiles: ["invidious"]
+    # Public resolvers: without this, reaching YouTube fails to resolve on some Docker/Podman networks
+    # (the same fix the *arr stack and app already need).
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      INVIDIOUS_CONFIG: |
+        channel_threads: 1
+        feed_threads: 1
+        check_tables: true
+        hmac_key: ${INVIDIOUS_HMAC_KEY:-virtuallyview-local-instance}
+        invidious_companion:
+          - private_url: "http://invidious-companion:8282/companion"
+        invidious_companion_key: ${INVIDIOUS_COMPANION_KEY:-vvlocalcompanion}
+        db:
+          user: invidious
+          password: ${INVIDIOUS_DB_PASSWORD:-invidious-local-db}
+          host: invidious-db
+          port: 5432
+          dbname: invidious
+    ports:
+      - "${VV_APPS_BIND:-0.0.0.0}:3300:3000"
+    depends_on:
+      invidious-db:
+        condition: service_healthy
+      invidious-companion:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/v1/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # Handles YouTube's own anti-bot challenge for Invidious: without it, Invidious cannot actually fetch
+  # a video (search still works, but every video shows as unplayable).
+  invidious-companion:
+    image: quay.io/invidious/invidious-companion:latest
+    profiles: ["invidious"]
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - SERVER_SECRET_KEY=${INVIDIOUS_COMPANION_KEY:-vvlocalcompanion}
+    volumes:
+      - invidious-companion-cache:/var/tmp/youtubei.js:rw
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  invidious-db:
+    image: docker.io/library/postgres:15-alpine
+    profiles: ["invidious"]
+    environment:
+      - POSTGRES_USER=invidious
+      - POSTGRES_PASSWORD=${INVIDIOUS_DB_PASSWORD:-invidious-local-db}
+      - POSTGRES_DB=invidious
+    volumes:
+      - invidious-db:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invidious"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   # Optional AI assistant (about 5 GB). Not started by default so the first
   # install is quick. Turn it on with: docker compose --profile ai up -d
@@ -653,3 +743,5 @@ volumes:
   immich-upload:
   immich-model-cache:
   immich-db:
+  invidious-db:
+  invidious-companion-cache:

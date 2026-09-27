@@ -42,6 +42,7 @@ import peopleRoutes from './routes/people.js';
 import castRoutes from './routes/cast.js';
 import liveRoutes from './routes/live.js';
 import radioRoutes from './routes/radio.js';
+import invidiousRoutes from './routes/invidious.js';
 import kiwixRoutes from './routes/kiwix.js';
 import appsRoutes from './routes/apps.js';
 import refreshRoutes from './routes/refresh.js';
@@ -442,6 +443,7 @@ const start = async () => {
   await server.register(castRoutes);
   await server.register(liveRoutes);
   await server.register(radioRoutes);
+  await server.register(invidiousRoutes);
   await server.register(kiwixRoutes);
   await server.register(appsRoutes);
   await server.register(refreshRoutes);

@@ -39,6 +39,24 @@ describe('real download HTTP contract', () => {
     expect(upstream.qbittorrent.pause).toHaveBeenCalledWith(hash);
     expect(upstream.radarr.pause).not.toHaveBeenCalled();
   });
+  test('several episodes of the same show downloading at once stay as separate rows, not one that swallows the rest', async () => {
+    // None of these have a torrent hash to match by (the common NZBGet case, and any time the client's
+    // report lags the manager's): the old mediaId-only fallback stamped the show's id onto the first
+    // client row it found, then reused that SAME stamped row for every other episode of the show,
+    // collapsing 3 episodes of sonarr-7 and 1 of sonarr-8 into 2 rows total and silently dropping 2.
+    upstream.sonarr.getQueue.mockResolvedValue([
+      { id: 'queue-101', mediaId: 'sonarr-7', episodeId: 101, title: 'Show S01E01', status: 'downloading', progress: 10 },
+      { id: 'queue-102', mediaId: 'sonarr-7', episodeId: 102, title: 'Show S01E02', status: 'downloading', progress: 20 },
+      { id: 'queue-103', mediaId: 'sonarr-7', episodeId: 103, title: 'Show S01E03', status: 'downloading', progress: 30 },
+      { id: 'queue-201', mediaId: 'sonarr-8', episodeId: 201, title: 'Other Show S01E01', status: 'downloading', progress: 40 }
+    ]);
+    const rows = (await app.inject('/api/downloads')).json();
+    expect(rows).toHaveLength(4);
+    const progressById = Object.fromEntries(rows.map((r: { mediaId: string; progress: number }, i: number) => [i, r.progress]));
+    expect(new Set(Object.values(progressById))).toEqual(new Set([10, 20, 30, 40]));
+    expect(rows.filter((r: { mediaId: string }) => r.mediaId === 'sonarr-7')).toHaveLength(3);
+  });
+
   test('artwork fallback resolves provider art for a title missing from the library', async () => {
     const poster = 'https://image.tmdb.org/t/p/w500/abc123.jpg';
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(

@@ -102,8 +102,13 @@ export function getServerSettings(): ServerSettings {
   }
 }
 
-export function saveServerSettings(patch: Partial<ServerSettings>): ServerSettings {
+export function saveServerSettings(rawPatch: Partial<ServerSettings>): ServerSettings {
   const current = getServerSettings();
+  // A field a caller never mentions still arrives as an explicit `key: undefined` (routes pass every field
+  // through unconditionally), and a plain {...current, ...patch} spread lets that undefined win over the
+  // real current value — silently resetting it to its default the moment anything else is saved. Only a
+  // field the caller actually set should ever touch the merge.
+  const patch = Object.fromEntries(Object.entries(rawPatch).filter(([, v]) => v !== undefined)) as Partial<ServerSettings>;
   const next: ServerSettings = {
     ...current,
     ...patch,

@@ -960,3 +960,46 @@ describe('radio, one-press repair and live highlights', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('Videos (Invidious)', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('says how to turn it on when the video service is off, and keeps local history reachable anyway', async () => {
+    const savedVideo = { id: 'dQw4w9WgXcQ', title: 'Watched earlier', channel: 'A Channel', durationSeconds: 60, views: 1 };
+    await page.route('**/api/videos/status', r => r.fulfill(json({ available: false })));
+    await page.route('**/api/videos/history/me', r => r.fulfill(json({ history: [savedVideo] })));
+    await page.goto(base + '/videos');
+    await page.getByText('Not turned on yet').waitFor();
+    await page.getByText(/docker compose --profile invidious up -d/).waitFor();
+    await page.getByRole('radio', { name: /History/ }).click();
+    await page.getByRole('button', { name: `Play ${savedVideo.title}` }).waitFor();
+    expect(errors).toEqual([]);
+  });
+
+  it('searches, plays a video in an embedded player, and keeps it in history until removed', async () => {
+    const video = { id: 'dQw4w9WgXcQ', title: 'A great video about virtuallyView', channel: 'A Channel', durationSeconds: 213, views: 12_345, thumbnail: 'http://x/thumb.jpg' };
+    let history = [] as typeof video[];
+    const watched: string[] = [];
+    await page.route('**/api/videos/status', r => r.fulfill(json({ available: true })));
+    await page.route('**/api/videos/search**', r => r.fulfill(json({ videos: [video] })));
+    await page.route('**/api/videos/history/me', r => r.fulfill(json({ history })));
+    await page.route(`**/api/videos/${video.id}`, r => r.fulfill(json({ video, embed: `http://invidious.local/embed/${video.id}?local=true` })));
+    await page.route('**/api/videos/history/watched', r => { watched.push(r.request().postDataJSON().id); history = [video]; return r.fulfill(json({ ok: true })); });
+    await page.route(`**/api/videos/history/${video.id}`, r => { history = []; return r.fulfill(json({ ok: true })); });
+    await page.route('**/api/videos/*/thumbnail', r => r.fulfill({ status: 404 }));
+    await page.goto(base + '/videos');
+    await page.getByPlaceholder('Search YouTube').fill('virtuallyview');
+    await page.getByRole('button', { name: `Play ${video.title}` }).waitFor();
+    await page.getByRole('button', { name: `Play ${video.title}` }).click();
+    await page.getByRole('dialog', { name: video.title }).waitFor();
+    expect(await page.locator('.vid-player iframe').getAttribute('src')).toBe(`http://invidious.local/embed/${video.id}?local=true`);
+    await page.waitForTimeout(150);
+    expect(watched).toEqual([video.id]);
+    await page.keyboard.press('Escape');
+    await page.getByRole('radio', { name: /History/ }).click();
+    await page.getByRole('button', { name: `Play ${video.title}` }).waitFor();
+    await page.getByRole('button', { name: `Remove ${video.title} from history` }).click();
+    await page.getByText('Nothing watched yet').waitFor();
+    expect(errors).toEqual([]);
+  });
+});

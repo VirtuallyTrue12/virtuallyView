@@ -71,7 +71,7 @@ export default async function serverSettingsRoutes(server: FastifyInstance) {
         if (nextVal.trim().length === 0) {
           return reply.code(400).send({ message: 'Media folders cannot be empty.' });
         }
-        if (current.mediaRoots[key as keyof typeof current.mediaRoots] !== nextVal.trim()) {
+        if (current.folderChangeRequiresConfirmation !== false && current.mediaRoots[key as keyof typeof current.mediaRoots] !== nextVal.trim()) {
           const expected = CONFIRMATION_PHRASES[key];
           if ((body.confirm ?? '').trim().toLowerCase() !== expected) {
             return reply.code(422).send({

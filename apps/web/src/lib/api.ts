@@ -119,6 +119,11 @@ export interface RadioStation {
 }
 export interface RadioPlace { name: string; code: string; stations: number }
 
+export interface VideoResult {
+  id: string; title: string; channel: string; channelId?: string; durationSeconds: number; views: number;
+  published?: string; thumbnail?: string; description?: string;
+}
+
 export interface EpisodeItem {
   download?: ItemDownload;
   id: string;
@@ -538,6 +543,13 @@ export const api = {
   photoAlbum: (id: string) => getJSON<{ id: string; name: string; photos: PhotoEntry[] }>(`/api/photo-albums/${encodeURIComponent(id)}`),
   changePhotoAlbum: (id: string, body: { name?: string; add?: string[]; remove?: string[] }) => postJSON<{ ok: boolean }>(`/api/photo-albums/${encodeURIComponent(id)}`, body),
   deletePhotoAlbum: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/photo-albums/${encodeURIComponent(id)}`),
+  videosStatus: () => getJSON<{ available: boolean }>('/api/videos/status'),
+  videosSearch: (q: string, page = 1) => getJSON<{ videos: VideoResult[] }>(`/api/videos/search?q=${encodeURIComponent(q)}&page=${page}`),
+  video: (id: string) => getJSON<{ video: VideoResult; embed: string | null }>(`/api/videos/${encodeURIComponent(id)}`),
+  videoHistory: () => getJSON<{ history: VideoResult[] }>('/api/videos/history/me'),
+  videoWatched: (id: string) => postJSON<{ ok: boolean }>('/api/videos/history/watched', { id }),
+  removeVideoHistory: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/videos/history/${encodeURIComponent(id)}`),
+  clearVideoHistory: () => requestJSON<{ ok: boolean }>('DELETE', '/api/videos/history'),
   radioCountries: () => getJSON<{ countries: RadioPlace[] }>('/api/radio/countries'),
   radioRegions: (country: string) => getJSON<{ regions: RadioPlace[] }>(`/api/radio/regions?country=${encodeURIComponent(country)}`),
   radioTags: () => getJSON<{ tags: Array<{ name: string; stations: number }> }>('/api/radio/tags'),

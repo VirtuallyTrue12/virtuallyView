@@ -15,6 +15,7 @@ const LINKS = [
   { to: '/music', label: 'Music' },
   { to: '/live', label: 'Live TV' },
   { to: '/radio', label: 'Radio' },
+  { to: '/videos', label: 'Videos' },
   { to: '/photos', label: 'Photos' },
   { to: '/requests', label: 'Requests' },
   { to: '/downloads', label: 'Downloads' }

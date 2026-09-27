@@ -212,23 +212,34 @@ export async function getDownloads(): Promise<QueueItem[]> {
   const rows = results.flatMap(result => result.rows);
   const clients = rows.filter(row => ['qbittorrent', 'nzbget'].includes(row.sourceClient));
   const merged = [...clients];
+  // A client row a manager row has already claimed (via a hash match or the mediaId fallback below) must
+  // never be reused for a different manager row: `mediaId` is only the show or artist, not the episode or
+  // track, so once it is stamped onto one client row by the first match, that same mediaId would otherwise
+  // also "match" every other episode of the same show still downloading, collapsing several real downloads
+  // into one and silently dropping the rest.
+  const claimed = new Set<QueueItem>();
   for (const manager of rows.filter(row => !clients.includes(row))) {
     // A title is NOT an identity: different releases often share a title.
     // Merge by download ID first (torrent hashes), then by the media identity
     // both sources report, so a completed movie never reads as two downloads.
     const transfer = manager.downloadId?.toLowerCase();
     const client = transfer ? clients.find(row => {
+      if (claimed.has(row)) return false;
       const rawId = row.id.slice(`queue-${row.sourceClient}-`.length).toLowerCase();
       // Numeric IDs can collide between NZBGet instances. Until upstream
       // client identity is carried explicitly, merge only torrent hashes.
       return row.sourceClient === 'qbittorrent' && /^[a-f0-9]{40}$/.test(transfer) && transfer === rawId;
     }) : undefined;
-    const byMediaId = client ?? (manager.mediaId ? clients.find(row => row.mediaId === manager.mediaId)
-      ?? merged.find(row => row.mediaId === manager.mediaId) : undefined);
+    // The media identity alone (mediaId, no episode/track) only ever picks a real *client* row: two manager
+    // rows for the same show (different episodes) sharing that id must never merge with each other, since
+    // nothing here distinguishes which one is which.
+    const byMediaId = client ?? (manager.mediaId ? clients.find(row => !claimed.has(row) && row.mediaId === manager.mediaId) : undefined);
     if (!byMediaId) {
       merged.push(manager);
+      claimed.add(manager);
       continue;
     }
+    claimed.add(byMediaId);
     byMediaId.reportedBy = [...new Set([...byMediaId.reportedBy, manager.sourceClient])];
     byMediaId.mediaId ??= manager.mediaId;
     byMediaId.mediaType ??= manager.mediaType;

@@ -977,6 +977,32 @@ describe('e2e: server settings + system', () => {
     expect(rename.status).toBe(200);
     expect(rename.json.serverName).toBe('E2E Box');
 
+    // A save that only names one field must leave every other saved field exactly as it was: every route
+    // handler passes every field through on each call (most as an explicit `key: undefined` when the
+    // caller never mentioned them), so an unguarded {...current, ...patch} merge lets that undefined win
+    // and quietly resets the rest to their defaults the moment anything else is saved. Non-default values
+    // are used here on purpose: a reset-to-default would otherwise look identical to "left alone" for a
+    // field whose current value already happens to be the default.
+    const tuned = await req('POST', '/api/server-settings', {
+      body: { port: 3210, coverSource: 'wikipedia', logLevel: 'debug', bindAddress: '127.0.0.1', folderChangeRequiresConfirmation: false }
+    });
+    expect(tuned.status).toBe(200);
+    const untouched = await req('POST', '/api/server-settings', { body: { serverName: 'E2E Box Two' } });
+    expect(untouched.status).toBe(200);
+    expect(untouched.json.serverName).toBe('E2E Box Two');
+    expect(untouched.json.port).toBe(3210);
+    expect(untouched.json.coverSource).toBe('wikipedia');
+    expect(untouched.json.logLevel).toBe('debug');
+    expect(untouched.json.bindAddress).toBe('127.0.0.1');
+    expect(untouched.json.folderChangeRequiresConfirmation).toBe(false);
+    // The setting just saved must actually do something: with it off, a folder change needs no phrase.
+    const noPhraseNeeded = await req('POST', '/api/server-settings', { body: { mediaRoots: { movies: '/tmp/e2e-movies-unconfirmed' } } });
+    expect(noPhraseNeeded.status).toBe(200);
+    expect(noPhraseNeeded.json.mediaRoots.movies).toBe('/tmp/e2e-movies-unconfirmed');
+    await req('POST', '/api/server-settings', { body: { mediaRoots: { movies: current.json.mediaRoots.movies } } });
+    // Put the confirmation guard back so the folder-change test below still needs the phrase.
+    await req('POST', '/api/server-settings', { body: { folderChangeRequiresConfirmation: true } });
+
     // Changing a media folder requires the exact confirmation phrase.
     const folderChange = await req('POST', '/api/server-settings', {
       body: { mediaRoots: { movies: '/tmp/e2e-movies' } }

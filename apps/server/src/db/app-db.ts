@@ -131,6 +131,15 @@ function open(): DatabaseSync {
       PRIMARY KEY (user_id, station_id, kind)
     );
 
+    -- What was watched in the Videos section (Invidious). Kept only on this server, never sent anywhere.
+    CREATE TABLE IF NOT EXISTS video_history (
+      user_id TEXT NOT NULL,
+      video_id TEXT NOT NULL,
+      snapshot TEXT NOT NULL,
+      at TEXT NOT NULL,
+      PRIMARY KEY (user_id, video_id)
+    );
+
     CREATE TABLE IF NOT EXISTS live_health (
       channel_id TEXT PRIMARY KEY,
       ok INTEGER NOT NULL,

@@ -1,4 +1,5 @@
 import { outboundFetch } from './outbound.js';
+import { searchVideos } from './invidious.js';
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) virtuallyView/1.0',
@@ -19,7 +20,18 @@ async function fromTmdbPage(kind: 'movie' | 'tv', tmdbId: string): Promise<strin
   return /data-site="YouTube" data-id="([A-Za-z0-9_-]{11})"/.exec(html)?.[1] ?? null;
 }
 
+/** A real search API (Invidious) when one is configured: sturdier than scraping a YouTube results page,
+ * and never asks YouTube directly from this server. */
+async function fromInvidious(query: string): Promise<string | null> {
+  const [first] = await searchVideos(query, 1);
+  return first?.id ?? null;
+}
+
 async function fromYouTubeSearch(query: string): Promise<string | null> {
+  try {
+    const id = await fromInvidious(query);
+    if (id) return id;
+  } catch { /* not configured, or unreachable: fall back to scraping YouTube directly */ }
   const res = await outboundFetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=en`, { headers: HEADERS, timeoutMs: 10000 });
   if (!res.ok) return null;
   const html = await res.text();
