@@ -67,7 +67,10 @@ function normalize(source: Source, row: Download): QueueItem {
     savePath: row.savePath,
     size: row.size === undefined ? undefined : `${(row.size / 1024 ** 3).toFixed(1)} GB`,
     ...(row.statusMessage ? { message: row.statusMessage } : {}),
-    speed: row.speed === undefined ? undefined : `${(row.speed / 1024 ** 2).toFixed(1)} MB/s`,
+    // A momentary 0 (between peers, waiting on a tracker) is real but looks like the app is stuck; the
+    // page says "Waiting for data" instead of a precise-looking "0.0 MB/s" that never changes. KB/s below
+    // 1 MB/s too, so a slow public-tracker torrent reads as "38 KB/s" rather than a misleadingly exact "0.0".
+    speed: row.speed === undefined ? undefined : row.speed < 1024 ? undefined : row.speed < 1024 ** 2 ? `${Math.round(row.speed / 1024)} KB/s` : `${(row.speed / 1024 ** 2).toFixed(1)} MB/s`,
     eta: row.timeleft ?? (row.eta ? new Date(row.eta).toISOString() : undefined)
   };
 }

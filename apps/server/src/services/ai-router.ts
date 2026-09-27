@@ -65,8 +65,11 @@ export function detectIntent(input: string): Intent | null {
 
   if (/\bsubtitles?\b|\bcaptions?\b/.test(text)) return { kind: 'subtitles', subject: subjectOf(text) };
 
-  if (/\b(theme|themes)\b/.test(text)) {
-    const named = /(?:to|use|switch to|change to|set to)\s+(?:the\s+)?(.+?)\s*(?:theme)?\s*$/.exec(text);
+  // "Switch to <name>" on its own names a theme without ever saying the word "theme" (it is the help
+  // text's own example), so it must be recognised on its own, not only alongside "theme"/"themes".
+  const switchTo = /^(?:please )?(?:switch to|change to|set to)\s+(?:the\s+)?(.+?)\s*(?:theme)?\s*$/.exec(text);
+  if (/\b(theme|themes)\b/.test(text) || switchTo) {
+    const named = switchTo ?? /(?:to|use|switch to|change to|set to)\s+(?:the\s+)?(.+?)\s*(?:theme)?\s*$/.exec(text);
     return { kind: 'themes', ...(named?.[1] && !/^themes?$/.test(named[1]) ? { name: named[1] } : {}) };
   }
 

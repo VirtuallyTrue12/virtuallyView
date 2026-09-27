@@ -7,6 +7,7 @@ import { getAdapter } from '../services/registry.js';
 import { getMediaRoots, isAllowedMediaFile } from '../services/media-roots.js';
 import { resolveMusicVideoPath } from '../services/music-video-library.js';
 import { extractSubtitleVtt, ffmpegAvailable, probeMedia, startTranscode, type TranscodeOptions } from '../services/transcode.js';
+import { ensureHlsSession, HLS_SEGMENT_RE, playlistPath, segmentPath, touchHlsSession } from '../services/hls-sessions.js';
 import { ratingAllowed } from '../services/parental.js';
 import { currentActor } from '../services/user-context.js';
 import { trickplayFor } from '../services/trickplay.js';
@@ -157,23 +158,32 @@ async function sendEmbeddedSubtitle(reply: FastifyReply, filePath: string, index
 }
 
 /** Stream an on-the-fly H.264/AAC MP4 conversion of a file that browsers cannot play. */
-async function streamTranscode(
-  request: FastifyRequest<{ Querystring: { start?: string; audio?: string; height?: string; burn?: string } }>,
-  reply: FastifyReply,
-  filePath: string
-) {
-  const start = Math.max(0, Number(request.query.start) || 0);
+type TranscodeQuery = { start?: string; audio?: string; height?: string; burn?: string };
+
+/** The same options a browser's query string asks for (audio track, quality cap, burned-in subtitle),
+ * shared by the progressive and HLS conversion routes so the two never disagree. */
+async function transcodeOptionsFor(filePath: string, query: TranscodeQuery): Promise<{ start: number; options: TranscodeOptions }> {
+  const start = Math.max(0, Number(query.start) || 0);
   const probe = await probeMedia(filePath);
-  const height = Math.round(Number(request.query.height) || 0);
+  const height = Math.round(Number(query.height) || 0);
   const options: TranscodeOptions = {
-    audio: Math.max(0, Math.round(Number(request.query.audio) || 0)),
+    audio: Math.max(0, Math.round(Number(query.audio) || 0)),
     ...(height >= 144 && height <= 4320 && (!probe.height || height < probe.height) ? { height } : {}),
     copyVideo: probe.videoCopyOk === true
   };
-  const burn = Number(request.query.burn);
-  if (request.query.burn !== undefined && Number.isInteger(burn) && probe.subtitleStreams?.[burn] && !probe.subtitleStreams[burn]?.text) {
+  const burn = Number(query.burn);
+  if (query.burn !== undefined && Number.isInteger(burn) && probe.subtitleStreams?.[burn] && !probe.subtitleStreams[burn]?.text) {
     options.burn = burn;
   }
+  return { start, options };
+}
+
+async function streamTranscode(
+  request: FastifyRequest<{ Querystring: TranscodeQuery }>,
+  reply: FastifyReply,
+  filePath: string
+) {
+  const { start, options } = await transcodeOptionsFor(filePath, request.query);
   const release = acquireConversion(currentActor().userId);
   if (!release) {
     return reply.code(429).header('Retry-After', '30').send({ error: 'too_many_conversions', message: 'Too many videos are being converted right now. Close another player or try again in a moment.' });
@@ -210,6 +220,31 @@ async function streamTranscode(
     .header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
     .header('Access-Control-Allow-Headers', 'Range, Content-Type')
     .send(child.stdout);
+}
+
+const SESSION_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+/** The playlist for one HLS session, starting its ffmpeg conversion if this is the first request for it. */
+async function hlsPlaylist(request: FastifyRequest<{ Querystring: TranscodeQuery }>, reply: FastifyReply, filePath: string, sessionKey: string) {
+  const { start, options } = await transcodeOptionsFor(filePath, request.query);
+  const opened = ensureHlsSession(sessionKey, currentActor().userId, filePath, start, options);
+  if (!opened.ok) return reply.code(opened.status).header('Access-Control-Allow-Origin', '*').send({ error: 'transcode_unavailable', message: opened.message });
+  const file = playlistPath(opened.dir);
+  // The first segment or two take a moment to encode; the playlist does not exist until ffmpeg writes it.
+  for (let tries = 0; tries < 40 && !existsSync(file); tries++) await wait(250);
+  if (!existsSync(file)) return reply.code(503).header('Access-Control-Allow-Origin', '*').send({ error: 'transcode_unavailable', message: 'The converter has not produced anything yet. Reload to try again.' });
+  return reply.header('Content-Type', 'application/vnd.apple.mpegurl').header('Cache-Control', 'no-store').header('Access-Control-Allow-Origin', '*').send(readFileSync(file, 'utf8'));
+}
+
+/** One segment of an HLS session already in progress. */
+function hlsSegment(reply: FastifyReply, sessionKey: string, segment: string) {
+  if (!HLS_SEGMENT_RE.test(segment)) return reply.code(400).send({ error: 'bad_request', message: 'Invalid segment name.' });
+  const dir = touchHlsSession(sessionKey);
+  if (!dir) return reply.code(404).send({ error: 'not_found', message: 'That session has ended. Reload the page to start a new one.' });
+  const file = segmentPath(dir, segment);
+  if (!existsSync(file)) return reply.code(404).send();
+  return reply.header('Content-Type', 'video/mp2t').header('Cache-Control', 'no-store').header('Access-Control-Allow-Origin', '*').send(createReadStream(file));
 }
 
 /** Browsers only load WebVTT in <track>; convert SRT/ASS sidecars on the fly. */
@@ -486,7 +521,7 @@ export default async function streamRoutes(server: FastifyInstance) {
     return mediaInfoFor(filePath);
   });
 
-  server.get<{ Params: { id: string }; Querystring: { start?: string; audio?: string; height?: string; burn?: string } }>(
+  server.get<{ Params: { id: string }; Querystring: TranscodeQuery }>(
     '/api/stream/episode/:id/transcode',
     async (request, reply) => {
       const filePath = await resolveEpisodeFile(request.params.id);
@@ -495,6 +530,20 @@ export default async function streamRoutes(server: FastifyInstance) {
       }
       return streamTranscode(request, reply, filePath);
     }
+  );
+
+  server.get<{ Params: { id: string; session: string }; Querystring: TranscodeQuery }>(
+    '/api/stream/episode/:id/hls/:session/index.m3u8',
+    async (request, reply) => {
+      if (!SESSION_RE.test(request.params.session)) return reply.code(400).send({ error: 'bad_request', message: 'Invalid session.' });
+      const filePath = await resolveEpisodeFile(request.params.id);
+      if (!isServable(filePath)) return reply.code(404).send({ error: 'not_found', message: 'This episode has no playable file on the server yet.' });
+      return hlsPlaylist(request, reply, filePath, `ep:${request.params.id}:${request.params.session}`);
+    }
+  );
+  server.get<{ Params: { id: string; session: string; segment: string } }>(
+    '/api/stream/episode/:id/hls/:session/:segment',
+    async (request, reply) => hlsSegment(reply, `ep:${request.params.id}:${request.params.session}`, request.params.segment)
   );
 
   server.get<{ Params: { id: string } }>('/api/stream/:id/info', async (request, reply) => {
@@ -506,7 +555,7 @@ export default async function streamRoutes(server: FastifyInstance) {
     return mediaInfoFor(filePath);
   });
 
-  server.get<{ Params: { id: string }; Querystring: { start?: string; audio?: string; height?: string; burn?: string } }>(
+  server.get<{ Params: { id: string }; Querystring: TranscodeQuery }>(
     '/api/stream/:id/transcode',
     async (request, reply) => {
       const item = await resolveStreamable(request.params.id);
@@ -516,6 +565,21 @@ export default async function streamRoutes(server: FastifyInstance) {
       }
       return streamTranscode(request, reply, filePath);
     }
+  );
+
+  server.get<{ Params: { id: string; session: string }; Querystring: TranscodeQuery }>(
+    '/api/stream/:id/hls/:session/index.m3u8',
+    async (request, reply) => {
+      if (!SESSION_RE.test(request.params.session)) return reply.code(400).send({ error: 'bad_request', message: 'Invalid session.' });
+      const item = await resolveStreamable(request.params.id);
+      const filePath = item?.fileInfo?.path;
+      if (!isServable(filePath)) return reply.code(404).send({ error: 'not_found', message: 'No local file is available for this item yet.' });
+      return hlsPlaylist(request, reply, filePath, `mv:${request.params.id}:${request.params.session}`);
+    }
+  );
+  server.get<{ Params: { id: string; session: string; segment: string } }>(
+    '/api/stream/:id/hls/:session/:segment',
+    async (request, reply) => hlsSegment(reply, `mv:${request.params.id}:${request.params.session}`, request.params.segment)
   );
 
   // Seek-bar preview thumbnails: JSON while they are being made, then a sprite image.

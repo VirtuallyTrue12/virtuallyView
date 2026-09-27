@@ -142,8 +142,15 @@ describe('assistant router', () => {
     ['pause Captain Marvel', 'download-action'],
     ['help', 'help'],
     ['which subtitles are missing', 'subtitles'],
-    ['switch to midnight theme', 'themes']
+    ['switch to midnight theme', 'themes'],
+    // The help text's own example ("Switch to Midnight") never says the word "theme": it must still work.
+    ['switch to midnight', 'themes']
   ])('%s -> %s', (text, kind) => expect(detectIntent(text)?.kind).toBe(kind));
+
+  it('names the theme from "switch to <name>" alone, with no need for the word "theme"', () => {
+    expect(detectIntent('switch to midnight')).toEqual({ kind: 'themes', name: 'midnight' });
+    expect(detectIntent('Switch to Midnight')).toEqual({ kind: 'themes', name: 'midnight' });
+  });
 
   it('reads a request and its type', () => {
     expect(detectIntent('request the series Severance')).toEqual({ kind: 'request', mediaType: 'series', title: 'Severance' });
@@ -218,5 +225,16 @@ describe('photo and book folders', () => {
     expect(inside(root, '/etc/passwd')).toBeNull();
     expect(listFolder(root, 'trip', /\.jpg$/i)?.files.map(f => f.name)).toEqual(['a.jpg']);
     expect(listFolder(root, '..', /\.jpg$/i)).toBeNull();
+  });
+});
+
+describe('HLS conversion for Safari and TV browsers', () => {
+  it('packages the same encode as a VOD playlist instead of one progressive stream', async () => {
+    const { ffmpegHlsArgs } = await import('../../apps/server/src/services/transcode');
+    const args = ffmpegHlsArgs('/m/a.mkv', 30, { audio: 1 });
+    expect(args).toContain('-force_key_frames'); // same 2-second cadence that paces the segments
+    expect(args).toEqual(expect.arrayContaining(['-f', 'hls', '-hls_playlist_type', 'vod', '-hls_segment_filename', 'seg%05d.ts', 'index.m3u8']));
+    expect(args).toContain('-ss');
+    expect(args[args.indexOf('-ss') + 1]).toBe('30');
   });
 });

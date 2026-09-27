@@ -100,6 +100,15 @@ describe('real download HTTP contract', () => {
     expect(rows.map((row: { status: string }) => row.status)).toEqual(['paused', 'completed', 'failed', 'unknown']);
     expect(rows[0].speed).toBe('1.0 MB/s');
   });
+  test('a momentary zero speed is left out (not shown as a misleading "0.0 MB/s"), and under 1 MB/s reads in KB/s', async () => {
+    upstream.qbittorrent.getQueue.mockResolvedValue([
+      { id: 'a', status: 'downloading', progress: 20, speed: 0 },
+      { id: 'b', status: 'downloading', progress: 20, speed: 38_912 }
+    ]);
+    const rows = (await app.inject('/api/downloads')).json();
+    expect(rows[0].speed).toBeUndefined();
+    expect(rows[1].speed).toBe('38 KB/s');
+  });
   test('partial upstream failure retains healthy rows; total failure is not empty success', async () => {
     upstream.radarr.getQueue.mockRejectedValue(new Error('offline'));
     upstream.sonarr.getQueue.mockResolvedValue([{ id: 'queue-1', status: 'queued' }]);

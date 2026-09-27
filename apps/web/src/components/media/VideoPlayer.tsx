@@ -118,8 +118,16 @@ export default function VideoPlayer({
   const [upNext, setUpNext] = useState<number | null>(null);
 
   const [cast, setCast] = useState<{ token: string; origin: string } | null>(null);
+  // Safari (and the many TV and embedded browsers built on the same engine) refuse to play a live
+  // fragmented-MP4 stream from a plain <video src> at all, even though the bytes are fine: HLS is what
+  // they actually expect for a stream whose length is not known up front, and they play it natively, no
+  // extra library needed. Everyone else keeps the existing progressive stream unchanged. A cast receiver
+  // keeps using the progressive endpoint too: it is the one format proven to work on any TV over Cast.
+  const [canNativeHls] = useState(() => typeof document !== 'undefined' && document.createElement('video').canPlayType('application/vnd.apple.mpegurl') !== '');
+  const useHls = isTranscode && canNativeHls && !cast;
+  const transcodeQuery = `start=${offset}${audioIndex ? `&audio=${audioIndex}` : ''}${quality ? `&height=${quality}` : ''}${burnIndex >= 0 ? `&burn=${burnIndex}` : ''}`;
   const baseSrc = isTranscode
-    ? `${conversionSrc}?start=${offset}${audioIndex ? `&audio=${audioIndex}` : ''}${quality ? `&height=${quality}` : ''}${burnIndex >= 0 ? `&burn=${burnIndex}` : ''}`
+    ? (useHls ? `${conversionSrc}/hls/${offset}_${audioIndex}_${quality}_${burnIndex}/index.m3u8?${transcodeQuery}` : `${conversionSrc}?${transcodeQuery}`)
     : src;
   // A cast receiver has no login cookie: it gets an absolute address with a signed, expiring token.
   const videoSrc = cast ? `${cast.origin}${baseSrc}${baseSrc.includes('?') ? '&' : '?'}st=${cast.token}` : baseSrc;

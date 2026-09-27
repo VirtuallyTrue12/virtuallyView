@@ -3865,6 +3865,9 @@ html[data-mode='light'] .login-bg-scrim {
 .album-card {
   display: grid;
   gap: 0.4rem;
+  /* A grid item's default min-width is its content's own size, not 0: a long, unbroken album title
+     (no spaces to wrap on) was stretching the card past its track and overflowing the whole row. */
+  min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-medium);
   padding: var(--spacing-sm);
@@ -4014,7 +4017,10 @@ html[data-mode='light'] .login-bg-scrim {
 
 .album-track-row {
   display: grid;
-  grid-template-columns: 2.4rem minmax(0, 1fr) auto auto;
+  /* Five children (number, title, quality, duration, the save-to-playlist button) with only four
+     columns defined left the fifth to an implicit auto-sized track, pushing the row wider than its
+     container (worst with a long quality label) instead of sharing the space the other four had. */
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto auto 2rem;
   gap: var(--spacing-md);
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);

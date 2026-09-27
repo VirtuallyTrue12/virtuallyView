@@ -211,7 +211,7 @@ function DownloadRow({ item, entry, busy, onPause, onResume, onRemove, onDeleteF
   const showResume = allowed.includes('resume') && item.status === 'paused';
   const showRemove = allowed.includes('remove');
   const showDeleteFiles = allowed.includes('delete-files') && ['completed', 'failed', 'paused', 'stalled'].includes(item.status);
-  const details = [item.size, item.speed, item.eta ? `${item.eta} left` : null].filter(Boolean) as string[];
+  const details = [item.size, item.speed ?? (item.status === 'downloading' ? 'Waiting for data' : null), item.eta ? `${item.eta} left` : null].filter(Boolean) as string[];
   const pill = STATE_PILL[item.status] ?? { tone: 'neutral' as const, label: item.status };
   const libraryTo = item.mediaId && item.status === 'completed' ? `${item.mediaType === 'series' ? '/series' : item.mediaType === 'artist' ? '/music' : '/movies'}/${encodeURIComponent(item.mediaId)}` : null;
 

@@ -215,11 +215,9 @@ export interface TranscodeOptions {
   burn?: number;
 }
 
-export function ffmpegTranscodeArgs(filePath: string, startSeconds = 0, options: TranscodeOptions = {}): string[] {
-  const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
-  // -ss before -i seeks fast on the input; output timestamps restart at zero.
-  if (startSeconds > 0) args.push('-ss', String(startSeconds));
-  args.push('-i', filePath);
+/** The `-map`/`-c:v`/`-c:a` portion shared by every output container (progressive MP4 or HLS). */
+function encodeArgs(options: TranscodeOptions): string[] {
+  const args: string[] = [];
   const audio = Number.isInteger(options.audio) && (options.audio ?? 0) >= 0 ? options.audio : 0;
   const burn = Number.isInteger(options.burn) && (options.burn ?? -1) >= 0 ? options.burn : undefined;
   const scale = options.height && options.height > 0;
@@ -238,17 +236,53 @@ export function ffmpegTranscodeArgs(filePath: string, startSeconds = 0, options:
       '-crf', scale ? '25' : '23',
       '-profile:v', 'high',
       '-pix_fmt', 'yuv420p',
-      // A source with a long keyframe interval (common in HEVC releases) made the fragmented-MP4 muxer
-      // (movflags frag_keyframe below) hold several seconds of frames before it could close a fragment,
-      // so the browser received video in bursts with a stall in between instead of a steady trickle. A
-      // keyframe every 2 seconds, on a wall-clock schedule rather than the source's own GOP, fixes that.
+      // A source with a long keyframe interval (common in HEVC releases) held several seconds of frames
+      // before a fragment (or HLS segment) could close, so the browser received video in bursts with a
+      // stall in between. A keyframe every 2 seconds, on a wall-clock schedule rather than the source's
+      // own GOP, fixes that, and also sets the pace of the HLS segments below.
       '-force_key_frames', 'expr:gte(t,n_forced*2)'
     );
     if (scale && burn === undefined) args.push('-vf', `scale=-2:${Math.round(options.height as number)}`);
   }
   args.push('-c:a', 'aac', '-b:a', '160k', '-ac', '2');
+  return args;
+}
+
+export function ffmpegTranscodeArgs(filePath: string, startSeconds = 0, options: TranscodeOptions = {}): string[] {
+  const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
+  // -ss before -i seeks fast on the input; output timestamps restart at zero.
+  if (startSeconds > 0) args.push('-ss', String(startSeconds));
+  args.push('-i', filePath, ...encodeArgs(options));
   args.push('-movflags', 'frag_keyframe+empty_moov+default_base_moof');
   args.push('-f', 'mp4', 'pipe:1');
+  return args;
+}
+
+/**
+ * Same conversion, packaged as HLS (a growing, seekable playlist plus small .ts segments) instead of one
+ * progressive stream. Safari, and the many TV and embedded browsers built on the same engine, refuse to
+ * play a live fragmented-MP4 stream from a plain `<video src>` at all ("could not decode the video") even
+ * though the bytes are perfectly good H.264/AAC; HLS is what those browsers actually expect for a stream
+ * whose length is not known up front, and it plays there natively, with no extra library.
+ */
+// The playlist and segments are written as bare relative names: the caller spawns ffmpeg with its
+// working directory set to the session's own temp folder, so nothing here needs an absolute path
+// (and the .m3u8 never ends up with a filesystem path baked into a segment URL).
+export const HLS_PLAYLIST = 'index.m3u8';
+export const HLS_SEGMENT_PATTERN = 'seg%05d.ts';
+
+export function ffmpegHlsArgs(filePath: string, startSeconds = 0, options: TranscodeOptions = {}): string[] {
+  const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
+  if (startSeconds > 0) args.push('-ss', String(startSeconds));
+  args.push('-i', filePath, ...encodeArgs(options));
+  args.push(
+    '-f', 'hls',
+    '-hls_time', '2',
+    '-hls_playlist_type', 'vod',
+    '-hls_flags', 'independent_segments+temp_file',
+    '-hls_segment_filename', HLS_SEGMENT_PATTERN,
+    HLS_PLAYLIST
+  );
   return args;
 }
 

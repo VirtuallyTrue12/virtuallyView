@@ -28,6 +28,8 @@ The server checks each file. If the browser can play it as it is, it is sent as 
 
 Picture subtitles (PGS, VobSub) are drawn onto the video, so they only work while the file is being converted.
 
+**When a file needs converting** (MKV, HEVC, an audio track or subtitle Safari can't take directly), Safari and the TV/embedded browsers built on its engine (WebKit) get that conversion as HLS instead of one continuous stream: those browsers play HLS natively and have never reliably supported a live, still-growing MP4 stream from a plain video tag, no matter how correct its bytes are. Chromium and Firefox, which already handled the continuous stream fine, are unchanged.
+
 ## Casting
 
 | Target | Status |
