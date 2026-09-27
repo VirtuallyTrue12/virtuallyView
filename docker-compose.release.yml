@@ -7,18 +7,18 @@
 # "docker compose up -d". Override with VV_VERSION=<x.y.z> to pin another one.
 services:
   app:
-    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.2.0}
+    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.3.0}
     build: !reset null
     pull_policy: missing
   provision:
-    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.2.0}
+    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.3.0}
     build: !reset null
     pull_policy: missing
   ytdlp:
-    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.2.0}
+    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.3.0}
     build: !reset null
     pull_policy: missing
   helper:
-    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.2.0}
+    image: ghcr.io/virtuallytrue12/virtuallyview:${VV_VERSION:-0.3.0}
     build: !reset null
     pull_policy: missing
