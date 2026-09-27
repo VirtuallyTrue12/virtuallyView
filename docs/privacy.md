@@ -97,3 +97,9 @@ This path has the same wiring fixes as the free one (the overlay used to be reje
 ### Why Tor is not offered for downloads
 
 BitTorrent over Tor leaks your real IP through peer exchange, is blocked by most trackers, and violates Tor's exit policy. For search, which is plain web traffic, use the Tor section above.
+
+## Third-party requests your browser makes directly
+
+Everything above is about traffic the *server* makes on your behalf, which you can route through Tor or a VPN. One thing is different: the web app's own page loads its typefaces from **Google Fonts** (`fonts.googleapis.com`, `fonts.gstatic.com`) directly in your browser, not through the server. That request happens on every page load and is visible to Google (and to anyone able to see your browser's outbound traffic) the same as loading a font from any other site would be. It carries no account or session data, only the font request itself. If this matters to you, block those two domains at the network or browser level; the app falls back to system fonts and otherwise works the same.
+
+The video player's iframe (when the optional Videos feature points at a public Invidious instance instead of the bundled one) is the other case where your browser talks to a third party directly rather than through the server — see [videos.md](videos.md) for that.

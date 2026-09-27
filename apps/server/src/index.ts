@@ -113,6 +113,20 @@ const server = Fastify({
   trustProxy: trustProxySetting() as boolean | string[],
   bodyLimit: 2 * 1024 * 1024
 });
+// Baseline security headers on every response. No Content-Security-Policy here on purpose: the app loads
+// posters and cover art from several public providers and embeds a couple of optional services (Videos,
+// Kiwix) in iframes on their own ports, and a CSP written without exhaustively knowing every one of those
+// addresses risks silently breaking a page rather than protecting it; the three headers below carry no
+// such risk and close the concrete gap that matters most for a browser dashboard with no login-attempt
+// lockout beyond rate limiting: a hostile page framing this one to trick an administrator into clicking
+// something ("clickjacking").
+server.addHook('onSend', (_request, reply, payload, done) => {
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('X-Frame-Options', 'SAMEORIGIN');
+  reply.header('Referrer-Policy', 'same-origin');
+  done(null, payload);
+});
+
 const rateWindowMs = 60_000;
 // Counts API calls per address. Pages, assets and media streams are exempt:
 // a video makes hundreds of range requests and a household shares one address.

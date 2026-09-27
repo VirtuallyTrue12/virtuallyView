@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- **Added.** Every response now carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` and `Referrer-Policy: same-origin`, closing the concrete gap that matters most for a browser dashboard: a hostile page framing this one to trick an administrator into clicking something.
+- **Added.** The docs now say plainly that the web app loads its fonts from Google Fonts directly in your browser - the one third-party request that does not go through the server and so cannot be routed through Tor or a VPN. See [privacy.md](docs/privacy.md).
 - **Fixed.** A suffix byte-range request ("give me the last 500 bytes", how a player finds the end of a file to read its index) was answered with the *first* 500 bytes instead - silently, with a normal-looking 206 response - which is the classic "seeking plays the wrong part" symptom. Verified against a real file end to end: the exact bytes now match. The same fix applies to both video and music streaming.
 - **Fixed.** The live outbound-proxy connectivity test (Settings > Network) spelled out the proxy's address and port in its response to anyone signed in, not only administrators, because its route did not match the prefix meant to protect it (a typo: `/api/settings/` instead of `/api/server-settings/`). It is now admin-only, matching every other server-wiring detail.
 - **Fixed.** A signed cast/TV playback link kept working for the rest of its 6-hour life after the account it was issued to was deleted (or, for a link issued while an account still existed, the check that should refuse it once removed): it was silently treated as an anonymous, unrestricted guest instead of being refused. A link for an account that no longer exists is now refused outright.
