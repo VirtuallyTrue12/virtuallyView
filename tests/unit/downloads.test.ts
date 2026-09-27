@@ -57,6 +57,20 @@ describe('real download HTTP contract', () => {
     expect(rows.filter((r: { mediaId: string }) => r.mediaId === 'sonarr-7')).toHaveLength(3);
   });
 
+  test('several episodes of one season-pack torrent (same downloadId) collapse into a single row, not one per episode', async () => {
+    // Sonarr reports one queue entry per file in the pack, but all share the same downloadId (the
+    // client's own torrent hash): that is the real, physical download, and must read as one row.
+    const hash = 'cd'.repeat(20);
+    upstream.sonarr.getQueue.mockResolvedValue([
+      { id: 'queue-301', downloadId: hash.toUpperCase(), mediaId: 'sonarr-9', episodeId: 301, title: 'Show S08E01', status: 'downloading', progress: 55 },
+      { id: 'queue-302', downloadId: hash.toUpperCase(), mediaId: 'sonarr-9', episodeId: 302, title: 'Show S08E02', status: 'downloading', progress: 55 },
+      { id: 'queue-303', downloadId: hash.toUpperCase(), mediaId: 'sonarr-9', episodeId: 303, title: 'Show S08E03', status: 'downloading', progress: 55 }
+    ]);
+    const rows = (await app.inject('/api/downloads')).json();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ mediaId: 'sonarr-9', progress: 55 });
+  });
+
   test('artwork fallback resolves provider art for a title missing from the library', async () => {
     const poster = 'https://image.tmdb.org/t/p/w500/abc123.jpg';
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(

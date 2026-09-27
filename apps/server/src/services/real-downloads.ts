@@ -212,13 +212,32 @@ export async function getDownloads(): Promise<QueueItem[]> {
   const rows = results.flatMap(result => result.rows);
   const clients = rows.filter(row => ['qbittorrent', 'nzbget'].includes(row.sourceClient));
   const merged = [...clients];
+  // Sonarr (and Lidarr) report one queue entry per *file* - one per episode in a season pack, one per
+  // track in an album - even though they all belong to the same physical transfer. downloadId is the
+  // download client's own torrent/nzb id and is identical across every one of those entries, so this
+  // collapses them into a single row before anything else runs. mediaId alone is never used for this:
+  // it only names the show or artist, not the episode or track, so two genuinely different episodes
+  // downloading at once would wrongly collapse into one and silently drop the rest.
+  const byDownloadId = new Map<string, QueueItem>();
+  const dedupedManagers: QueueItem[] = [];
+  for (const manager of rows.filter(row => !clients.includes(row))) {
+    const transfer = manager.downloadId?.toLowerCase();
+    const existing = transfer ? byDownloadId.get(transfer) : undefined;
+    if (existing) {
+      existing.reportedBy = [...new Set([...existing.reportedBy, manager.sourceClient])];
+      if (manager.progress > existing.progress) existing.progress = manager.progress;
+      continue;
+    }
+    dedupedManagers.push(manager);
+    if (transfer) byDownloadId.set(transfer, manager);
+  }
   // A client row a manager row has already claimed (via a hash match or the mediaId fallback below) must
   // never be reused for a different manager row: `mediaId` is only the show or artist, not the episode or
   // track, so once it is stamped onto one client row by the first match, that same mediaId would otherwise
   // also "match" every other episode of the same show still downloading, collapsing several real downloads
   // into one and silently dropping the rest.
   const claimed = new Set<QueueItem>();
-  for (const manager of rows.filter(row => !clients.includes(row))) {
+  for (const manager of dedupedManagers) {
     // A title is NOT an identity: different releases often share a title.
     // Merge by download ID first (torrent hashes), then by the media identity
     // both sources report, so a completed movie never reads as two downloads.

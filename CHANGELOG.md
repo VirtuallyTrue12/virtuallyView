@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Fixed.** A season-pack torrent (or an album) showed up as one Downloads row per episode/track instead of one row for the whole transfer: Sonarr and Lidarr report a separate queue entry per file even though they all share the same underlying torrent, and nothing collapsed those back together. Confirmed live: a stuck queue with 184 rows for a handful of real torrents dropped to 29, one per actual transfer.
 - **Fixed.** A restricted account's age limit was only checked on the movie/show detail page and playback - the trailer, cast, synopsis and diagnostic ("verify") lookups took a title id directly and skipped the check, so a restricted viewer who knew or guessed an id could still see an above-limit title's trailer, cast and synopsis. All four now apply the same limit.
 - **Added.** Every response now carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` and `Referrer-Policy: same-origin`, closing the concrete gap that matters most for a browser dashboard: a hostile page framing this one to trick an administrator into clicking something.
 - **Added.** The docs now say plainly that the web app loads its fonts from Google Fonts directly in your browser - the one third-party request that does not go through the server and so cannot be routed through Tor or a VPN. See [privacy.md](docs/privacy.md).
