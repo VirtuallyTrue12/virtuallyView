@@ -13,7 +13,7 @@ import { ffmpegHlsArgs, resolveBinary, HLS_PLAYLIST, HLS_SEGMENT_PATTERN, type T
  * reload, a second tab) reuses the ffmpeg already running instead of starting another.
  */
 
-interface Session { dir: string; process: ChildProcess; release: () => void; lastAccess: number; ended: boolean }
+interface Session { dir: string; process: ChildProcess; owners: Map<string, () => void>; lastAccess: number; ended: boolean }
 
 const sessions = new Map<string, Session>();
 const IDLE_MS = 25_000;
@@ -26,7 +26,7 @@ function cleanup(key: string): void {
   s.ended = true;
   try { s.process.kill('SIGKILL'); } catch { /* already gone */ }
   try { rmSync(s.dir, { recursive: true, force: true }); } catch { /* best effort */ }
-  s.release();
+  for (const release of s.owners.values()) release();
 }
 
 // A session nobody has asked for in a while (the tab was closed, or the player moved on) is torn down;
@@ -39,10 +39,24 @@ sweep.unref();
 
 export type HlsStart = { ok: true; dir: string } | { ok: false; status: number; message: string };
 
-/** Starts the session's ffmpeg if it is not already running, and returns where its files land. */
+/**
+ * Starts the session's ffmpeg if it is not already running, and returns where its files land. The
+ * session key is derived from the file and playback options, not the viewer, so two different people
+ * watching the same thing at the same quality share one ffmpeg process - but each still has to have a
+ * free conversion slot of their own: joining an already-running session someone else started must not
+ * be a free way around this account's own concurrent-conversion limit.
+ */
 export function ensureHlsSession(key: string, userId: string, filePath: string, startSeconds: number, options: TranscodeOptions): HlsStart {
   const existing = sessions.get(key);
-  if (existing && !existing.ended) { existing.lastAccess = Date.now(); return { ok: true, dir: existing.dir }; }
+  if (existing && !existing.ended) {
+    if (!existing.owners.has(userId)) {
+      const release = acquireConversion(userId);
+      if (!release) return { ok: false, status: 429, message: 'Too many videos are being converted right now. Close another player or try again in a moment.' };
+      existing.owners.set(userId, release);
+    }
+    existing.lastAccess = Date.now();
+    return { ok: true, dir: existing.dir };
+  }
 
   const ffmpeg = resolveBinary('ffmpeg');
   if (!ffmpeg) return { ok: false, status: 503, message: 'This file needs conversion, but ffmpeg is not installed on the server.' };
@@ -65,7 +79,7 @@ export function ensureHlsSession(key: string, userId: string, filePath: string, 
   child.on('error', () => cleanup(key));
   const timer = setTimeout(() => cleanup(key), CONVERSION_MAX_MS);
   timer.unref();
-  sessions.set(key, { dir, process: child, release, lastAccess: Date.now(), ended: false });
+  sessions.set(key, { dir, process: child, owners: new Map([[userId, release]]), lastAccess: Date.now(), ended: false });
   return { ok: true, dir };
 }
 
