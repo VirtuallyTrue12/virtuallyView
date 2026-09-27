@@ -9,6 +9,7 @@ import { resolveMusicVideoPath } from '../services/music-video-library.js';
 import { extractSubtitleVtt, ffmpegAvailable, probeMedia, startTranscode, type TranscodeOptions } from '../services/transcode.js';
 import { ensureHlsSession, HLS_SEGMENT_RE, playlistPath, segmentPath, touchHlsSession } from '../services/hls-sessions.js';
 import { ratingAllowed } from '../services/parental.js';
+import { parseByteRange } from '../lib/byte-range.js';
 import { currentActor } from '../services/user-context.js';
 import { trickplayFor } from '../services/trickplay.js';
 import { acquireConversion, CONVERSION_MAX_MS } from '../lib/limits.js';
@@ -60,20 +61,15 @@ function serveMediaFile(
   const range = request.headers.range;
 
   if (range) {
-    const match = /bytes=(\d*)-(\d*)/.exec(range);
-    const start = match?.[1] ? parseInt(match[1], 10) : 0;
-    const requestedEnd = match?.[2] ? parseInt(match[2], 10) : NaN;
-    const end = Number.isNaN(requestedEnd)
-      ? Math.min(start + 1024 * 1024 - 1, stat.size - 1)
-      : Math.min(requestedEnd, stat.size - 1);
-
-    if (Number.isNaN(start) || start < 0 || start >= stat.size) {
+    const parsed = parseByteRange(range, stat.size, 1024 * 1024);
+    if (!parsed) {
       return reply
         .code(416)
         .header('Content-Range', `bytes */${stat.size}`)
         .header('Access-Control-Allow-Origin', '*')
         .send();
     }
+    const { start, end } = parsed;
 
     return reply
       .code(206)

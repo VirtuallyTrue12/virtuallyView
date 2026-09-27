@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import type { LidarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from '../services/registry.js';
 import { isAllowedMediaFile } from './stream.js';
+import { parseByteRange } from '../lib/byte-range.js';
 import { freshCast, setCastCache } from '../services/cast.js';
 import { fetchBand, wikipediaPortrait } from '../services/cast-more.js';
 import { applyEdits, clearEdit, listEdits, saveEdit } from '../services/member-edits.js';
@@ -160,13 +161,11 @@ export default async function musicRoutes(server: FastifyInstance) {
     const range = request.headers.range;
 
     if (range) {
-      const match = /bytes=(\d*)-(\d*)/.exec(range);
-      const start = match?.[1] ? parseInt(match[1], 10) : 0;
-      const requestedEnd = match?.[2] ? parseInt(match[2], 10) : NaN;
-      const end = Number.isNaN(requestedEnd) ? stat.size - 1 : Math.min(requestedEnd, stat.size - 1);
-      if (Number.isNaN(start) || start < 0 || start >= stat.size) {
+      const parsed = parseByteRange(range, stat.size);
+      if (!parsed) {
         return reply.code(416).header('Content-Range', `bytes */${stat.size}`).send();
       }
+      const { start, end } = parsed;
       return reply
         .code(206)
         .header('Content-Type', mime)
