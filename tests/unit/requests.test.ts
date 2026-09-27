@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeAll, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createRequest, cancelRequest, stopRequest, deleteRequest, getRequests, getRequest, reviewStuckSearches, syncRequestsWithServices } from '../../apps/server/src/services/requests.js';
 import { getAdapter } from '../../apps/server/src/services/registry.js';
 import type { RadarrAdapter, SonarrAdapter, LidarrAdapter } from '@virtuallyview/integrations';
@@ -25,11 +25,12 @@ const instanceFixture = (url: unknown): Response | null =>
         ? json([{ id: 1, name: 'Standard' }])
         : null;
 describe('request pipeline', () => {
-  beforeAll(async () => {
+  beforeEach(async () => {
     // requests.ts shares the registry's singleton adapters, which are only
     // connected if apps/server/data/integrations.json happens to exist on
-    // disk. Connect them explicitly so these tests never depend on that
-    // ambient state.
+    // disk. Connect them explicitly, before every test, so these tests never
+    // depend on that ambient state and never see a previous test's cached
+    // catalogue/certification lookups (connect() clears each adapter's cache).
     await getAdapter<RadarrAdapter>('radarr').connect({ url: 'http://test-radarr', apiKey: 'test' });
     await getAdapter<SonarrAdapter>('sonarr').connect({ url: 'http://test-sonarr', apiKey: 'test' });
     await getAdapter<LidarrAdapter>('lidarr').connect({ url: 'http://test-lidarr', apiKey: 'test' });

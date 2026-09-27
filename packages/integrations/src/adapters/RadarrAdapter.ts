@@ -1,6 +1,7 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
 import { queueProblem, joinApiUrl, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { TtlCache } from '../ttl-cache.js';
 
 const ART = 'https://image.tmdb.org/t/p/w500';
 const ART_LARGE = 'https://image.tmdb.org/t/p/w1280';
@@ -18,14 +19,21 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   id = 'radarr';
   name = 'Radarr';
   private config: { url: string; apiKey: string } | null = null;
+  // getItem(id) - "which movie is this stream request for" - fetched and re-parsed the entire library on
+  // every call (there is no single-movie lookup here), which a byte-range player then does again for
+  // every range of a file. A library of any real size made that tens to hundreds of full-catalogue Radarr
+  // calls over one playback. The single key ('all') mirrors the single upstream endpoint used either way.
+  private libraryCache = new TtlCache<Media[]>(10_000, 1);
 
   async connect(config: { url: string; apiKey: string }) {
     this.config = config;
+    this.libraryCache.clear();
     return { connected: true, message: 'Connected to Radarr' };
   }
 
   async disconnect() {
     this.config = null;
+    this.libraryCache.clear();
   }
 
   async healthCheck() {
@@ -59,6 +67,12 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
 
   private async fetchRemote(query: string): Promise<Media[]> {
+    const all = await this.libraryCache.get('all', () => this.fetchAllRemote());
+    const q = query.trim().toLowerCase();
+    return q ? all.filter(m => m.title.toLowerCase().includes(q)) : all;
+  }
+
+  private async fetchAllRemote(): Promise<Media[]> {
     const { url, apiKey } = this.requireConfig();
     const res = await fetch(`${url}/api/v3/movie`, {
       headers: { 'X-Api-Key': apiKey },
@@ -89,10 +103,8 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       added?: string;
     }>;
 
-    const q = query.trim().toLowerCase();
     return data
       .filter(m => m.title)
-      .filter(m => (q ? m.title?.toLowerCase().includes(q) : true))
       .map(m => {
         const images = m.images ?? [];
         const posterImage = images.find(i => i.coverType === 'poster');

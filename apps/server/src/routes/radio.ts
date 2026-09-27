@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { Readable } from 'node:stream';
-import { countListen, favoriteStations, isPublicUrl, nowPlaying, radioCountries, radioRegions, radioTags, recentStations, searchStations, setStationFavorite, stationById, stationInfo, touchStation } from '../services/radio.js';
+import { countListen, favoriteStations, nowPlaying, radioCountries, radioRegions, radioTags, recentStations, safeFetch, searchStations, setStationFavorite, stationById, stationInfo, touchStation } from '../services/radio.js';
 import { rewriteHls } from '../services/live-tv.js';
 import { currentActor } from '../services/user-context.js';
 
@@ -48,9 +48,9 @@ export default async function radioRoutes(server: FastifyInstance) {
 
   server.get<{ Params: { id: string } }>('/api/radio/logo/:id', async (request, reply) => {
     const station = ID.test(request.params.id) ? await stationById(request.params.id) : undefined;
-    if (!station?.favicon || !(await isPublicUrl(station.favicon))) return reply.code(404).send();
+    if (!station?.favicon) return reply.code(404).send();
     try {
-      const res = await fetch(station.favicon, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': 'virtuallyView' } });
+      const res = await safeFetch(station.favicon, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': 'virtuallyView' } });
       const type = res.headers.get('content-type') ?? '';
       const size = Number(res.headers.get('content-length') ?? 0);
       if (!res.ok || !/^image\/(png|jpe?g|webp|gif|x-icon|vnd\.microsoft\.icon)/i.test(type) || size > 400_000) return reply.code(404).send();
@@ -64,12 +64,11 @@ export default async function radioRoutes(server: FastifyInstance) {
   server.get<{ Params: { id: string } }>('/api/radio/stream/:id', async (request, reply) => {
     const station = ID.test(request.params.id) ? await stationById(request.params.id) : undefined;
     if (!station) return reply.code(404).send({ message: 'That station is not in the directory any more.' });
-    if (!(await isPublicUrl(station.url))) return reply.code(400).send({ message: 'That station points somewhere it should not.' });
     const who = currentActor().userId;
     if ((open.get(who) ?? 0) >= OPEN_PER_PERSON) return reply.code(429).header('Retry-After', '10').send({ message: 'Too many stations are playing at once. Close one first.' });
     const controller = new AbortController();
     try {
-      const upstream = await fetch(station.url, { signal: controller.signal, headers: { 'User-Agent': 'virtuallyView', Accept: 'audio/*,*/*' }, redirect: 'follow' });
+      const upstream = await safeFetch(station.url, { signal: controller.signal, headers: { 'User-Agent': 'virtuallyView', Accept: 'audio/*,*/*' } });
       if (!upstream.ok || !upstream.body) return reply.code(502).send({ message: `The station answered ${upstream.status}. It may be off the air.` });
       const type = upstream.headers.get('content-type') ?? '';
       if (/mpegurl/i.test(type) || /\.m3u8?(\?|$)/i.test(station.url)) {
@@ -84,6 +83,7 @@ export default async function radioRoutes(server: FastifyInstance) {
       stream.on('error', () => undefined);
       return reply.header('Content-Type', /^audio\//i.test(type) || /ogg|aac|mpeg/i.test(type) ? type : 'audio/mpeg').header('Cache-Control', 'no-store').header('X-Accel-Buffering', 'no').send(stream);
     } catch (e) {
+      if (e instanceof Error && e.message === 'That address is not allowed.') return reply.code(400).send({ message: 'That station points somewhere it should not.' });
       return reply.code(502).send({ message: e instanceof Error && e.name === 'TimeoutError' ? 'The station did not answer.' : 'The station could not be reached. It may be off the air.' });
     }
   });

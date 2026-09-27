@@ -1,6 +1,7 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
 import { runArrCommand, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { TtlCache } from '../ttl-cache.js';
 
 export interface SonarrEpisode {
   id: string;
@@ -19,14 +20,20 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   id = 'sonarr';
   name = 'Sonarr';
   private config: { url: string; apiKey: string } | null = null;
+  // A byte-range video player asks "is this episode within the viewer's age limit" again for every range
+  // of a file and every HLS segment: tens or hundreds of times over one playback, each one otherwise two
+  // fresh Sonarr calls (the episode, then its series). The certification genuinely cannot change in 15s.
+  private certificationCache = new TtlCache<string | undefined>(15_000);
 
   async connect(config: { url: string; apiKey: string }) {
     this.config = config;
+    this.certificationCache.clear();
     return { connected: true, message: 'Connected to Sonarr' };
   }
 
   async disconnect() {
     this.config = null;
+    this.certificationCache.clear();
   }
 
   async healthCheck() {
@@ -205,16 +212,18 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
 
   /** The age rating of an episode's parent series. Throws when it cannot be determined. */
   async getEpisodeCertification(episodeId: string): Promise<string | undefined> {
-    const { url, apiKey } = this.requireConfig();
-    const numeric = episodeId.startsWith('episode-') ? episodeId.slice('episode-'.length) : episodeId;
-    const epRes = await fetch(`${url}/api/v3/episode/${encodeURIComponent(numeric)}`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(4000) });
-    if (!epRes.ok) throw new Error('episode not found');
-    const { seriesId } = (await epRes.json()) as { seriesId?: number };
-    if (!seriesId) throw new Error('episode has no series');
-    const seriesRes = await fetch(`${url}/api/v3/series/${seriesId}`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(4000) });
-    if (!seriesRes.ok) throw new Error('series not found');
-    const { certification } = (await seriesRes.json()) as { certification?: string };
-    return certification;
+    return this.certificationCache.get(episodeId, async () => {
+      const { url, apiKey } = this.requireConfig();
+      const numeric = episodeId.startsWith('episode-') ? episodeId.slice('episode-'.length) : episodeId;
+      const epRes = await fetch(`${url}/api/v3/episode/${encodeURIComponent(numeric)}`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(4000) });
+      if (!epRes.ok) throw new Error('episode not found');
+      const { seriesId } = (await epRes.json()) as { seriesId?: number };
+      if (!seriesId) throw new Error('episode has no series');
+      const seriesRes = await fetch(`${url}/api/v3/series/${seriesId}`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(4000) });
+      if (!seriesRes.ok) throw new Error('series not found');
+      const { certification } = (await seriesRes.json()) as { certification?: string };
+      return certification;
+    });
   }
 
   /** Folders in this app's root folders that hold files it does not track yet. */

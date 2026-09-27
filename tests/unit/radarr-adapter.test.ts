@@ -136,6 +136,24 @@ describe('RadarrAdapter', () => {
     expect(items[1].status).toBe('available');
   });
 
+  test('getItem, getItems and search share one cached fetch of the catalogue instead of one full re-fetch each', async () => {
+    await adapter.connect({ url: 'http://localhost:7878', apiKey: 'key' });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: 1, title: 'Dune', hasFile: true }, { id: 2, title: 'Arrival', hasFile: true }]
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    // A byte-range video player asks "which movie is this" again for every range of a file; without a
+    // cache this was a fresh full-catalogue Radarr call every single time.
+    expect(await adapter.getItem('radarr-1')).toMatchObject({ title: 'Dune' });
+    expect(await adapter.getItem('radarr-1')).toMatchObject({ title: 'Dune' });
+    expect(await adapter.getItem('radarr-2')).toMatchObject({ title: 'Arrival' });
+    expect(await adapter.getItems()).toHaveLength(2);
+    expect(await adapter.search('dune')).toEqual([expect.objectContaining({ title: 'Dune' })]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   test('remove() calls the real DELETE endpoint', async () => {
     await adapter.connect({ url: 'http://localhost:7878', apiKey: 'key' });
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });

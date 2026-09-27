@@ -153,28 +153,64 @@ export function countListen(id: string): void {
   void directory(`/json/url/${id}`, 30_000).catch(() => undefined);
 }
 
+/** True for a real, routable public IPv4 address: never loopback, a private range, link-local (also where
+ * cloud metadata endpoints live, e.g. 169.254.169.254), CGNAT, or reserved/multicast. */
+function isPublicIPv4(address: string): boolean {
+  const parts = address.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  const [p, q] = parts as [number, number];
+  return !(p === 10 || p === 127 || p === 0 || (p === 172 && q >= 16 && q <= 31) || (p === 192 && q === 168) || (p === 169 && q === 254) || (p === 100 && q >= 64 && q <= 127) || p >= 224);
+}
+
+/** Same check for one resolved address, IPv4 or IPv6 — including an IPv4-mapped IPv6 address
+ * (`::ffff:a.b.c.d`), which is a real, connectable route to that IPv4 address and not a distinct case:
+ * checking only the bare private/link-local IPv6 ranges and missing this form entirely (as an earlier
+ * version of this check did, letting `::ffff:169.254.169.254` straight through) is a real SSRF hole, not
+ * a theoretical one, since a DNS response fully controls which form an attacker-chosen address arrives in. */
+function isPublicAddress(rawAddress: string): boolean {
+  const a = rawAddress.toLowerCase();
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(a);
+  if (mapped) return isPublicIPv4(mapped[1]!);
+  if (a.includes(':')) return !(a === '::' || a === '::1' || a.startsWith('fc') || a.startsWith('fd') || a.startsWith('fe80'));
+  return isPublicIPv4(a);
+}
+
 /** Streams come from a public list: never let one point this server at something inside the private network. */
 export async function isPublicUrl(url: string): Promise<boolean> {
   try {
     const u = new URL(url);
     if (!/^https?:$/.test(u.protocol)) return false;
-    const addresses = isIP(u.hostname) ? [{ address: u.hostname }] : await lookup(u.hostname, { all: true });
-    return addresses.length > 0 && addresses.every(({ address }) => {
-      const a = address.toLowerCase();
-      if (a.includes(':')) return !(a === '::1' || a.startsWith('fc') || a.startsWith('fd') || a.startsWith('fe80') || a.startsWith('::ffff:127.') || a.startsWith('::ffff:10.') || a.startsWith('::ffff:192.168.'));
-      const [p, q] = a.split('.').map(Number) as [number, number];
-      return !(p === 10 || p === 127 || p === 0 || (p === 172 && q >= 16 && q <= 31) || (p === 192 && q === 168) || (p === 169 && q === 254) || (p === 100 && q >= 64 && q <= 127) || p >= 224);
-    });
+    // A literal IPv6 URL keeps its brackets in .hostname ("[::1]"); isIP and dns.lookup both need them gone.
+    const host = u.hostname.replace(/^\[|\]$/g, '');
+    const addresses = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
+    return addresses.length > 0 && addresses.every(({ address }) => isPublicAddress(address));
   } catch { return false; }
+}
+
+/**
+ * A public-only fetch that re-checks the address on every redirect hop, not only the first: `redirect:
+ * 'follow'` trusts that the one check done for the original URL still holds after a 3xx points somewhere
+ * else, which a compromised directory entry, or a DNS answer that changes between the check and the
+ * connection, can defeat (classic SSRF-via-redirect). Each hop is validated before it is ever requested.
+ */
+export async function safeFetch(url: string, init: { headers?: Record<string, string>; signal?: AbortSignal } = {}, redirectsLeft = 5): Promise<Response> {
+  if (!(await isPublicUrl(url))) throw new Error('That address is not allowed.');
+  const res = await fetch(url, { ...init, redirect: 'manual' });
+  const location = res.headers.get('location');
+  if (res.status >= 300 && res.status < 400 && location && redirectsLeft > 0) {
+    const next = new URL(location, url).toString();
+    void res.body?.cancel();
+    return safeFetch(next, init, redirectsLeft - 1);
+  }
+  return res;
 }
 
 /** What the station says is playing right now (its ICY title), read from a short second connection. */
 export async function nowPlaying(url: string): Promise<string | null> {
-  if (!(await isPublicUrl(url))) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(url, { headers: { 'Icy-MetaData': '1', 'User-Agent': 'virtuallyView' }, signal: controller.signal, redirect: 'follow' });
+    const res = await safeFetch(url, { headers: { 'Icy-MetaData': '1', 'User-Agent': 'virtuallyView' }, signal: controller.signal });
     const every = Number(res.headers.get('icy-metaint'));
     if (!res.ok || !res.body || !Number.isInteger(every) || every <= 0 || every > 65536) return null;
     const reader = res.body.getReader();

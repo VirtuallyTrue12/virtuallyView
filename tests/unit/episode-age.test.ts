@@ -67,3 +67,19 @@ describe('episode playback follows the parent series age limit', () => {
     expect((await status(ROUTES[0]!, { userId: 'u2', username: 'grown', role: 'user' })).statusCode).toBe(404);
   });
 });
+
+describe('the certification lookup itself is cached', () => {
+  test('a byte-range player asking again and again for the same episode does not re-hit Sonarr each time', async () => {
+    const { SonarrAdapter } = await import('@virtuallyview/integrations');
+    const adapter = new SonarrAdapter();
+    await adapter.connect({ url: 'http://localhost:8989', apiKey: 'key' });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ seriesId: 7 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ certification: 'TV-MA' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    for (let i = 0; i < 5; i++) expect(await adapter.getEpisodeCertification('episode-101')).toBe('TV-MA');
+    // One call for the episode, one for its series - not one pair per request.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
+  });
+});
