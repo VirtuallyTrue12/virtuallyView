@@ -129,9 +129,16 @@ setInterval(() => {
 }, 30_000).unref();
 const metrics = { requests: 0, errors: 0, timeouts: 0, startedAt: new Date().toISOString() };
 
-/** Session cookie; marked Secure whenever the request arrived over HTTPS (directly or via a reverse proxy). */
+/**
+ * Session cookie; marked Secure whenever the request arrived over HTTPS (directly or via a reverse proxy).
+ * SameSite=Lax, not Strict: every write route already needs a session with the right role, so Lax loses no
+ * real protection here (a cross-site request only carries the cookie on a plain top-level GET navigation,
+ * never on the POST/PUT/DELETE calls that change anything) while avoiding a real cost: several TV and
+ * embedded browsers have had bugs that drop a Strict cookie set right after sign-in, silently leaving the
+ * person signed out.
+ */
 function sessionCookie(token: string, maxAge: number, secure: boolean): string {
-  return `vv_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
+  return `vv_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
 }
 
 function deviceLabel(ua: string | undefined): string {

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fixed.** The sign-in cookie was SameSite=Strict, which some TV and embedded browsers have had bugs with (dropping it right after sign-in and leaving the person stuck on the login screen). It is now SameSite=Lax, which every write route already needs a signed-in session with the right role to use, so nothing is less protected.
 - **Added.** Radio's Now Playing: pressing the station on the player bar opens a full-screen view, the same idea as the music player's (big colour badge or picture, a live pill, volume), instead of just the compact bar.
 - **Fixed.** The hero on Home never played a downloaded show's own file: TV shows fell straight to an online trailer lookup (which can say "video unavailable"), while movies already previewed a random minute of the real file. A show with downloaded episodes now does the same.
 - **Fixed.** Safari, and several TV and embedded browsers, refused to play a good number of downloaded files outright ("could not decode the video") because the server sent the wrong Content-Type for their extension (`.m4v` served as a generic download, and `.ts`, `.m2ts`, `.wmv`, `.mpg`, `.mpeg` and `.vob` were never given one at all). Chromium browsers mostly ignore that and played the file anyway, which is why it looked fine on one system and not another. All of them now get a real video type.
