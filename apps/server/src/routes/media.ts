@@ -398,6 +398,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
     try {
       const item = (await adapter.getItem(id)) as (LibraryItem & { id?: string }) | null;
       if (!item || item.id !== id) return { youtubeId: null };
+      if (!ratingAllowed(item.certification)) return reply.code(403).send({ error: 'age_restricted', message: 'This title is above the age limit set for your account.' });
       const tmdbId = (item.provider?.metadata as { tmdbId?: number } | undefined)?.tmdbId;
       const youtubeId = await findTrailer(kind, item.title, item.year, tmdbId);
       reply.header('Cache-Control', 'public, max-age=3600');
@@ -507,6 +508,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
     if (!item) {
       return reply.code(404).send({ error: 'not_found', message: `No media with id "${id}".` });
     }
+    if (!ratingAllowed(item.certification)) return reply.code(403).send({ error: 'age_restricted', message: 'This title is above the age limit set for your account.' });
 
     const checkUrl = async (url: string, expect: 'video' | 'image') => {
       // External artwork is fetched by the browser; the server container may not
@@ -582,6 +584,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
     if (!item) {
       return reply.code(404).send({ error: 'not_found', message: `No media with id "${id}".` });
     }
+    if (!ratingAllowed(item.certification)) return reply.code(403).send({ error: 'age_restricted', message: 'This title is above the age limit set for your account.' });
 
     const cached = descCache.get(id);
     if (cached) return { id, title: item.title, ...cached };
@@ -637,6 +640,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
       }
       movie = { id, title: pending.title, type: 'movie', status: 'requested', createdAt: new Date(pending.createdAt), updatedAt: new Date(pending.updatedAt) } as LibraryItem;
     }
+    if (!ratingAllowed(movie.certification)) return reply.code(403).send({ error: 'age_restricted', message: 'This title is above the age limit set for your account.' });
     const fresh = freshCast(id);
     if (fresh) return { mediaId: id, title: movie.title, cast: fresh.cast, source: 'cache', fetchedAt: fresh.fetchedAt };
     // Radarr already holds the film's credits with portraits: fast, and it works with no internet lookups.
@@ -654,12 +658,13 @@ export default async function mediaRoutes(server: FastifyInstance) {
   // A series' people: the leads first, then the recurring and supporting cast.
   server.get<{ Params: { id: string } }>('/api/series/:id/cast', async (request, reply) => {
     const { id } = request.params;
-    const key = `series:${id}`;
-    const fresh = freshCast(key);
-    if (fresh) return { mediaId: id, cast: fresh.cast, source: 'cache' };
     let series: LibraryItem | null = null;
     try { series = (await seriesAdapter.getItem(id)) as LibraryItem | null; } catch { /* offline */ }
     if (!series) return reply.code(404).send({ error: 'not_found', message: `No TV show found with id "${id}".` });
+    if (!ratingAllowed(series.certification)) return reply.code(403).send({ error: 'age_restricted', message: 'This title is above the age limit set for your account.' });
+    const key = `series:${id}`;
+    const fresh = freshCast(key);
+    if (fresh) return { mediaId: id, cast: fresh.cast, source: 'cache' };
     const meta = (series.provider?.metadata ?? {}) as { tmdbId?: number; tvMazeId?: number };
     const cast = await seriesCast({ tmdbId: meta.tmdbId, tvMazeId: meta.tvMazeId });
     if (cast.length) setCastCache(key, cast, 'tmdb');

@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Fixed.** A restricted account's age limit was only checked on the movie/show detail page and playback - the trailer, cast, synopsis and diagnostic ("verify") lookups took a title id directly and skipped the check, so a restricted viewer who knew or guessed an id could still see an above-limit title's trailer, cast and synopsis. All four now apply the same limit.
 - **Added.** Every response now carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` and `Referrer-Policy: same-origin`, closing the concrete gap that matters most for a browser dashboard: a hostile page framing this one to trick an administrator into clicking something.
 - **Added.** The docs now say plainly that the web app loads its fonts from Google Fonts directly in your browser - the one third-party request that does not go through the server and so cannot be routed through Tor or a VPN. See [privacy.md](docs/privacy.md).
 - **Fixed.** A suffix byte-range request ("give me the last 500 bytes", how a player finds the end of a file to read its index) was answered with the *first* 500 bytes instead - silently, with a normal-looking 206 response - which is the classic "seeking plays the wrong part" symptom. Verified against a real file end to end: the exact bytes now match. The same fix applies to both video and music streaming.
