@@ -26,7 +26,7 @@ import { retryDownload } from './retry.js';
 export type Trouble = 'stalled' | 'metadata' | 'import' | 'other';
 export interface DoctorEntry { id: string; title: string; kind: Trouble; since: string; fixAt: string | null; gaveUp: boolean; needsYou: string | null }
 
-export const GRACE_MINUTES: Record<Trouble, number> = { stalled: 45, metadata: 90, import: 20, other: 60 };
+export const GRACE_MINUTES: Record<Trouble, number> = { stalled: 25, metadata: 90, import: 20, other: 60 };
 export const MAX_FIXES_PER_DAY = 3;
 const TICK_MS = 5 * 60_000;
 
