@@ -28,6 +28,12 @@ describe('real download HTTP contract', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()[0]).toMatchObject({ id: `queue-${source}-17`, progress: 63, mediaId: `${source}-2`, sourceClient: source, eta: '00:10:00', size: '1.0 GB' });
   });
+
+  test('a Lidarr timeleft with .NET\'s full sub-second precision is trimmed to whole seconds', async () => {
+    upstream.lidarr.getQueue.mockResolvedValue([{ id: 'queue-17', sourceClient: 'lidarr', title: 'Fixture', status: 'downloading', progress: 10, mediaId: 'lidarr-2', timeleft: '00:11:47.6789973' }]);
+    const response = await app.inject('/api/downloads');
+    expect(response.json()[0].eta).toBe('00:11:47');
+  });
   test('one transfer reported by Radarr and qBittorrent becomes one actionable row', async () => {
     const hash = 'ab'.repeat(20);
     upstream.radarr.getQueue.mockResolvedValue([{ id: 'queue-17', downloadId: hash.toUpperCase(), mediaId: 'radarr-3', title: 'Manager title', status: 'downloading', progress: 40 }]);
