@@ -2,6 +2,7 @@ import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
 import { artProxyUrl } from '../art-proxy.js';
 import { runArrCommand, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
 
 export interface LidarrAlbum {
   id: number;
@@ -67,6 +68,11 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     } catch {
       return { healthy: false, status: 'offline' };
     }
+  }
+
+  async setMinimumSeeders(minimum: number): Promise<MinimumSeedersResult> {
+    if (!this.config) return { success: false, message: 'Lidarr is not connected.', updated: 0, skipped: 0 };
+    return setMinimumSeeders(this.config, minimum, '/api/v1');
   }
 
   async getStatus() {

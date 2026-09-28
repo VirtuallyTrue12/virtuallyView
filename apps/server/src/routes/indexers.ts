@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { ProwlarrAdapter, ProwlarrIndexerDefinition } from '@virtuallyview/integrations';
+import type { ProwlarrAdapter, ProwlarrIndexerDefinition, RadarrAdapter, SonarrAdapter, LidarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from '../services/registry.js';
 import { getRequests } from '../services/requests.js';
 
@@ -90,6 +90,22 @@ export default async function indexerRoutes(server: FastifyInstance) {
     } catch (error) {
       return reply.code(502).send({ success: false, message: error instanceof Error ? error.message : 'Prowlarr is not reachable.' });
     }
+  });
+
+  // Sets "Minimum Seeders" on every torrent indexer across Radarr, Sonarr and Lidarr, so a dead release
+  // (nobody sharing it) is never picked by an automatic grab in the first place. Each service keeps its
+  // own copy of indexer settings even though Prowlarr is what added them, so all three need this.
+  server.post<{ Body: { minimum?: number } }>('/api/indexers/minimum-seeders', async (request, reply) => {
+    const minimum = Number(request.body?.minimum);
+    if (!Number.isInteger(minimum) || minimum < 0 || minimum > 1000) {
+      return reply.code(400).send({ message: 'Choose a whole number of seeders, 0 to 1000.' });
+    }
+    const [radarr, sonarr, lidarr] = await Promise.all([
+      getAdapter<RadarrAdapter>('radarr').setMinimumSeeders(minimum).catch(error => ({ success: false, message: error instanceof Error ? error.message : 'Radarr is not reachable.', updated: 0, skipped: 0 })),
+      getAdapter<SonarrAdapter>('sonarr').setMinimumSeeders(minimum).catch(error => ({ success: false, message: error instanceof Error ? error.message : 'Sonarr is not reachable.', updated: 0, skipped: 0 })),
+      getAdapter<LidarrAdapter>('lidarr').setMinimumSeeders(minimum).catch(error => ({ success: false, message: error instanceof Error ? error.message : 'Lidarr is not reachable.', updated: 0, skipped: 0 }))
+    ]);
+    return { radarr, sonarr, lidarr };
   });
 
   server.delete<{ Params: { id: string } }>('/api/indexers/:id', async (request, reply) => {

@@ -1,6 +1,7 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
 import { queueProblem, joinApiUrl, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
 import { TtlCache } from '../ttl-cache.js';
 
 const ART = 'https://image.tmdb.org/t/p/w500';
@@ -47,6 +48,11 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     } catch {
       return { healthy: false, status: 'offline' };
     }
+  }
+
+  async setMinimumSeeders(minimum: number): Promise<MinimumSeedersResult> {
+    if (!this.config) return { success: false, message: 'Radarr is not connected.', updated: 0, skipped: 0 };
+    return setMinimumSeeders(this.config, minimum, '/api/v3');
   }
 
   async getStatus() {

@@ -8,3 +8,4 @@ export { BazarrAdapter, type SubtitleWantedItem } from './adapters/BazarrAdapter
 export { QBittorrentAdapter, type TorrentInfo } from './adapters/QBittorrentAdapter.js';
 export { NZBGetAdapter } from './adapters/NZBGetAdapter.js';
 export { artProxyUrl, ART_HOST } from './art-proxy.js';
+export { setMinimumSeeders, type MinimumSeedersResult } from './indexer-seeders.js';
