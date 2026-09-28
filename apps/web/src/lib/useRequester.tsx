@@ -4,7 +4,7 @@ import { CandidatePicker } from '../components/requests/CandidatePicker';
 import { ReleaseNotice } from '../components/requests/ReleaseNotice';
 import { submitRequest, type RequestCandidate, type RequestOutcome } from './request-selection';
 
-interface Base { title: string; year?: number; mediaType: MediaKind; poster?: string }
+interface Base { title: string; year?: number; mediaType: MediaKind; poster?: string; qualityProfile?: string }
 interface Pending { base: Base; candidates: RequestCandidate[]; message?: string }
 
 /**
@@ -39,10 +39,10 @@ export function useRequester(onDone: (outcome: RequestOutcome, base: Base) => vo
     setPending({ base, candidates, ...(message ? { message } : {}) });
   }, []);
 
-  const pick = async (candidate: RequestCandidate) => {
+  const pick = async (candidate: RequestCandidate, qualityProfile?: string) => {
     if (!pending) return;
     setBusy(true);
-    const base = { title: candidate.title, year: candidate.year, mediaType: candidate.type, selectedProviderId: candidate.providerId, ...(candidate.poster ? { poster: candidate.poster } : {}) };
+    const base = { title: candidate.title, year: candidate.year, mediaType: candidate.type, selectedProviderId: candidate.providerId, ...(candidate.poster ? { poster: candidate.poster } : {}), ...(qualityProfile ? { qualityProfile } : {}) };
     const outcome = await submitRequest(base);
     setBusy(false);
     if (outcome.kind === 'ambiguous') {
@@ -65,7 +65,8 @@ export function useRequester(onDone: (outcome: RequestOutcome, base: Base) => vo
       {...(pending.message ? { message: pending.message } : {})}
       candidates={pending.candidates}
       busy={busy}
-      onPick={c => void pick(c)}
+      initialQuality={pending.base.qualityProfile ?? ''}
+      onPick={(c, quality) => void pick(c, quality)}
       onClose={() => setPending(null)}
     />
   ) : null;

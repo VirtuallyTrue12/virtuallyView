@@ -1,18 +1,20 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { RequestCandidate } from '../../lib/request-selection';
 import { QualitySelect } from './QualitySelect';
 import { SvgIcon } from '../ui/SvgIcon';
 
 const KIND: Record<string, string> = { movie: 'Movie', series: 'TV show', artist: 'Artist' };
 
-export function CandidatePicker({ title, message, candidates, busy, onPick, onClose }: {
+export function CandidatePicker({ title, message, candidates, busy, initialQuality = '', onPick, onClose }: {
   title: string;
   message?: string;
   candidates: RequestCandidate[];
   busy: boolean;
-  onPick: (candidate: RequestCandidate) => void;
+  initialQuality?: string;
+  onPick: (candidate: RequestCandidate, qualityProfile: string) => void;
   onClose: () => void;
 }) {
+  const [quality, setQuality] = useState(initialQuality);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -44,7 +46,7 @@ export function CandidatePicker({ title, message, candidates, busy, onPick, onCl
                 <span className="picker-meta">{KIND[c.type] ?? c.type} · {c.provider.toUpperCase()} #{c.providerId.slice(0, 8)}</span>
                 {c.overview && <p className="picker-overview">{c.overview}</p>}
               </div>
-              <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => onPick(c)}>
+              <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => onPick(c, quality)}>
                 {busy ? '…' : 'Request'}
               </button>
             </div>
@@ -53,7 +55,7 @@ export function CandidatePicker({ title, message, candidates, busy, onPick, onCl
         {candidates[0] && (
           <div className="picker-foot">
             <span className="picker-hint">Quality is used for the title you pick.</span>
-            <QualitySelect mediaType={candidates[0].type as 'movie' | 'series' | 'artist'} />
+            <QualitySelect mediaType={candidates[0].type as 'movie' | 'series' | 'artist'} value={quality} onChange={setQuality} />
           </div>
         )}
       </div>

@@ -227,6 +227,13 @@ function encodeArgs(options: TranscodeOptions): string[] {
   } else {
     args.push('-map', '0:v:0', '-map', `0:a:${audio}?`);
   }
+  // Only video and audio are mapped above, but ffmpeg still copies the source's chapter markers into a
+  // separate text track by default. A release with many auto-generated scene-chapter markers (common in
+  // WEBDL rips) then produces a THIRD, unmapped track in the fragmented output, which some browsers'
+  // stricter demuxers refuse outright ("could not decode the video") even though the video/audio are
+  // perfectly fine on their own. Nothing here uses chapter markers from the transcoded stream itself
+  // (the player reads them separately, from ffprobe on the source file), so they are dropped.
+  args.push('-map_chapters', '-1');
   if (options.copyVideo && !scale && burn === undefined) {
     args.push('-c:v', 'copy');
   } else {

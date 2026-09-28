@@ -285,6 +285,45 @@ describe('pick a release by hand', () => {
   });
 });
 
+describe('request quality does not carry over between unrelated requests', () => {
+  it('applies a chosen quality to the request it was made for, then starts the next one back at the default', async () => {
+    const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    await page.route('**/api/quality-profiles**', r => r.fulfill(json({ profiles: [{ id: 1, name: 'Any' }, { id: 3, name: 'Standard' }, { id: 2, name: 'Lossless' }], defaultName: 'Standard' })));
+    const posted: Array<Record<string, unknown>> = [];
+    await page.route('**/api/requests', r => {
+      const body = r.request().postDataJSON();
+      posted.push(body);
+      return r.fulfill(json({ ok: true, message: `Requested "${body.title}".`, request: { id: `request-${posted.length}`, title: body.title, status: 'searching' } }));
+    });
+
+    await page.route('**/api/search/all**', r => {
+      const q = new URL(r.request().url()).searchParams.get('q') ?? '';
+      const title = q === 'metallica' ? 'Metallica' : 'Juice WRLD';
+      return r.fulfill(json({ query: q, library: [], movies: [], series: [], artists: [{ provider: 'musicbrainz', providerId: q, title, type: 'artist' }], tracks: [] }));
+    });
+
+    await page.goto(base + '/search?q=metallica');
+    await page.getByRole('radio', { name: 'Artists' }).click();
+    await page.locator('.result-card').getByText('Metallica').waitFor();
+    await page.getByLabel('Download quality').selectOption('Lossless');
+    await page.locator('.result-card').getByRole('button', { name: 'Add to Music', exact: true }).click();
+    await page.getByText('Requested "Metallica".').waitFor();
+    expect(posted).toEqual([{ title: 'Metallica', mediaType: 'artist', selectedProviderId: 'metallica', qualityProfile: 'Lossless' }]);
+    // The dropdown itself resets back to Default once the request completes.
+    expect(await page.getByLabel('Download quality').inputValue()).toBe('');
+
+    // A second, unrelated artist request must not inherit Metallica's Lossless choice.
+    await page.getByPlaceholder(/Search movies/i).fill('juice wrld');
+    await page.keyboard.press('Enter');
+    await page.locator('.result-card').getByText('Juice WRLD').waitFor();
+    expect(await page.getByLabel('Download quality').inputValue()).toBe('');
+    await page.locator('.result-card').getByRole('button', { name: 'Add to Music', exact: true }).click();
+    await page.getByText('Requested "Juice WRLD".').waitFor();
+    expect(posted[1]).toEqual({ title: 'Juice WRLD', mediaType: 'artist', selectedProviderId: 'juice wrld' });
+    expect(errors).toEqual([]);
+  });
+});
+
 describe('upgrade music quality', () => {
   it('tells the person it takes time, then moves the artist to Best available and searches', async () => {
     const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });

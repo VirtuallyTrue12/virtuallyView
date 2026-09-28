@@ -74,6 +74,15 @@ describe('live transcode smoothness', () => {
     const args = ffmpegTranscodeArgs('/m/a.mkv', 0, { copyVideo: true });
     expect(args).not.toContain('-force_key_frames');
   });
+
+  it('drops the source\'s chapter markers instead of copying them into an unmapped third track', () => {
+    // Only video and audio are ever -map'd, but ffmpeg copies chapters into a text track by default
+    // regardless of -map. A release with many chapter markers (common in WEBDL rips) then produces a
+    // third, unmapped track in the fragmented output that some browsers' demuxers refuse outright.
+    const args = ffmpegTranscodeArgs('/m/a.mkv', 0, {});
+    expect(args).toContain('-map_chapters');
+    expect(args[args.indexOf('-map_chapters') + 1]).toBe('-1');
+  });
 });
 
 import { cinemaNotice, isStillInCinemas, warningsFor } from '../../apps/server/src/services/release-check';

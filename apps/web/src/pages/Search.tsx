@@ -57,6 +57,8 @@ export default function Search() {
   const [query, setQuery] = useState(() => params.get('q') ?? '');
   const [active, setActive] = useState(() => (params.get('q') ?? '').trim());
   const [filter, setFilter] = useState<Filter>('all');
+  const [quality, setQuality] = useState<Partial<Record<'movie' | 'series' | 'artist', string>>>({});
+  const qualityKind = filter === 'series' ? 'series' : filter === 'artist' ? 'artist' : 'movie';
   const [data, setData] = useState<SearchAll | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +77,7 @@ export default function Search() {
   const requester = useRequester((outcome, base) => {
     setNotice({ tone: outcome.kind === 'ok' ? 'ok' : 'err', text: outcome.message });
     if (outcome.kind === 'ok' && lastKey) setRequested(prev => new Set(prev).add(lastKey));
-    void base;
+    setQuality(q => ({ ...q, [base.mediaType]: '' }));
   });
 
   useEffect(() => { api.dashboard().then(setTrending).catch(() => {}); inputRef.current?.focus(); }, []);
@@ -145,13 +147,14 @@ export default function Search() {
     const key = `${c.type}:${c.providerId}`;
     setLastKey(key);
     setNotice(null);
-    void requester.submit({ title: c.title, ...(c.year ? { year: c.year } : {}), mediaType: c.type, selectedProviderId: c.providerId, ...(c.poster ? { poster: c.poster } : {}) });
+    const q = quality[c.type as 'movie' | 'series' | 'artist'];
+    void requester.submit({ title: c.title, ...(c.year ? { year: c.year } : {}), mediaType: c.type, selectedProviderId: c.providerId, ...(c.poster ? { poster: c.poster } : {}), ...(q ? { qualityProfile: q } : {}) });
   };
 
   const requestArtist = (name: string) => {
     setLastKey(`artist-name:${name}`);
     setNotice(null);
-    void requester.submit({ title: name, mediaType: 'artist' });
+    void requester.submit({ title: name, mediaType: 'artist', ...(quality.artist ? { qualityProfile: quality.artist } : {}) });
   };
 
   const counts = useMemo(() => ({
@@ -210,7 +213,7 @@ export default function Search() {
       {(active || query.trim().length >= 2) && (
         <div className="search-filters">
           <Seg<Filter> label="Result type" value={filter} onChange={setFilter} options={FILTERS.map(f => ({ value: f.key, label: f.label, ...(f.key !== 'all' && data ? { count: counts[f.key] } : {}) }))} />
-          <QualitySelect mediaType={filter === 'series' ? 'series' : filter === 'artist' ? 'artist' : 'movie'} compact />
+          <QualitySelect mediaType={qualityKind} value={quality[qualityKind] ?? ''} onChange={v => setQuality(q => ({ ...q, [qualityKind]: v }))} compact />
         </div>
       )}
 

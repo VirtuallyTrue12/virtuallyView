@@ -1,5 +1,4 @@
 import type { MediaKind, RequestItem } from './api';
-import { getPreferredQuality } from './quality';
 
 export interface RequestCandidate {
   provider: 'tmdb' | 'tvdb' | 'musicbrainz';
@@ -52,7 +51,7 @@ export async function submitRequest(body: {
   releaseChoice?: 'wait' | 'now';
 }): Promise<RequestOutcome> {
   try {
-    const quality = body.qualityProfile ?? getPreferredQuality(body.mediaType);
+    const quality = body.qualityProfile;
     const response = await fetch('/api/requests', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

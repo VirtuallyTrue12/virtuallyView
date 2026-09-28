@@ -25,12 +25,14 @@ export default function MovieDetails() {
   const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const requester = useRequester(outcome => {
     setNotice({ tone: outcome.kind === 'ok' ? 'ok' : 'err', text: outcome.message });
+    setQuality('');
   });
   const requestBusy = requester.busy;
   const [description, setDescription] = useState<MediaDescription | null>(null);
   // When the request lookup finds several titles, the server returns them with
   // a 409 so the user picks the exact release instead of guessing.
   const [watchProgress, setWatchProgress] = useState<{ positionSeconds: number; durationSeconds: number; percent: number } | null>(null);
+  const [quality, setQuality] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [replacing, setReplacing] = useState(false);
   const [dialog, setDialog] = useState<null | 'checks' | 'remove'>(null);
@@ -114,7 +116,8 @@ export default function MovieDetails() {
     void requester.submit({
       title: movie.title, mediaType: 'movie',
       ...(movie.year ? { year: movie.year } : {}),
-      ...(tmdb ? { selectedProviderId: String(tmdb) } : {})
+      ...(tmdb ? { selectedProviderId: String(tmdb) } : {}),
+      ...(quality ? { qualityProfile: quality } : {})
     });
   };
 
@@ -193,7 +196,7 @@ export default function MovieDetails() {
                     <SvgIcon name="play" size={18} /> {watchProgress ? 'Resume' : 'Play'}
                   </button>
                 )}
-                {(movie.status === 'missing' || movie.status === 'requested') && <QualitySelect mediaType="movie" compact />}
+                {(movie.status === 'missing' || movie.status === 'requested') && <QualitySelect mediaType="movie" value={quality} onChange={setQuality} compact />}
                 {(movie.status === 'missing' || movie.status === 'requested') && (
                   <button className="btn btn-primary btn-lg" type="button" onClick={addToLibrary} disabled={requestBusy}>
                     <SvgIcon name={movie.status === 'requested' ? 'check' : 'plus'} size={18} /> {requestBusy ? 'Looking it up…' : movie.status === 'requested' ? 'Requested' : 'Request'}

@@ -6,10 +6,12 @@ import { QualitySelect } from '../requests/QualitySelect';
 /** Search for an artist by name and add them to the Music library. */
 export function AddArtist({ onAdded, bare }: { onAdded?: () => void; bare?: boolean }) {
   const [name, setName] = useState('');
+  const [quality, setQuality] = useState('');
   const [looking, setLooking] = useState(false);
   const [note, setNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const requester = useRequester(outcome => {
     setNote({ tone: outcome.kind === 'ok' ? 'ok' : 'err', text: outcome.message });
+    setQuality('');
     if (outcome.kind === 'ok') { setName(''); onAdded?.(); }
   });
 
@@ -21,7 +23,7 @@ export function AddArtist({ onAdded, bare }: { onAdded?: () => void; bare?: bool
     try {
       const { candidates } = await lookupRequestCandidates(term, 'artist');
       if (candidates.length === 0) setNote({ tone: 'err', text: `No artist found for "${term}".` });
-      else requester.openPicker({ title: term, mediaType: 'artist' }, candidates, `Pick the artist to add to your Music library.`);
+      else requester.openPicker({ title: term, mediaType: 'artist', ...(quality ? { qualityProfile: quality } : {}) }, candidates, `Pick the artist to add to your Music library.`);
     } catch (err) {
       setNote({ tone: 'err', text: (err as Error).message });
     } finally {
@@ -47,7 +49,7 @@ export function AddArtist({ onAdded, bare }: { onAdded?: () => void; bare?: bool
           {looking ? 'Searching…' : 'Find artist'}
         </button>
       </div>
-      <div className="add-artist-quality"><span>Quality</span><QualitySelect mediaType="artist" compact /></div>
+      <div className="add-artist-quality"><span>Quality</span><QualitySelect mediaType="artist" value={quality} onChange={setQuality} compact /></div>
       {note && <div className={`notice notice--${note.tone}`}>{note.text}</div>}
       {requester.picker}
     </>

@@ -26,6 +26,7 @@ export function Hero({ items }: { items: HeroCandidate[] }) {
   const [trailerState, setTrailerState] = useState<TrailerState>('idle');
   const [youtubeId, setYoutubeId] = useState<string | null>(null);
   const [showTrailer, setShowTrailer] = useState(false);
+  const [quality, setQuality] = useState('');
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,7 +61,7 @@ export function Hero({ items }: { items: HeroCandidate[] }) {
     toastTimer.current = setTimeout(() => setToast(null), 2600);
   };
 
-  const requester = useRequester(outcome => showToast(outcome.message));
+  const requester = useRequester(outcome => { showToast(outcome.message); setQuality(''); });
 
   // Play the local file (muted), from a random one-minute window so the hero
   // previews the movie without spoiling its opening scenes. Runs from a user
@@ -240,7 +241,8 @@ export function Hero({ items }: { items: HeroCandidate[] }) {
     void requester.submit({
       title: item.title,
       ...(item.year ? { year: item.year } : {}),
-      mediaType: item.type === 'series' ? 'series' : item.type === 'artist' ? 'artist' : 'movie'
+      mediaType: item.type === 'series' ? 'series' : item.type === 'artist' ? 'artist' : 'movie',
+      ...(quality ? { qualityProfile: quality } : {})
     });
   };
 
@@ -360,7 +362,7 @@ export function Hero({ items }: { items: HeroCandidate[] }) {
             </>
           ) : (
             <>
-              <QualitySelect mediaType={item.type === 'series' ? 'series' : item.type === 'artist' ? 'artist' : 'movie'} compact />
+              <QualitySelect mediaType={item.type === 'series' ? 'series' : item.type === 'artist' ? 'artist' : 'movie'} value={quality} onChange={setQuality} compact />
               <button className="btn btn-primary" type="button" onClick={requestMovie} disabled={requester.busy}>
                 {requester.busy ? 'Requesting…' : 'Request'}
               </button>
