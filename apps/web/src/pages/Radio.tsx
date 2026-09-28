@@ -136,7 +136,10 @@ export default function Radio() {
           {tags.length > 0 && (
             <ScrollRow label="Genres" className="rd-tags">
               <button type="button" className={`rd-chip${tag === '' ? ' is-on' : ''}`} onClick={() => setTag('')}>All styles</button>
-              {tags.map(t => <button key={t.name} type="button" className={`rd-chip${tag === t.name ? ' is-on' : ''}`} onClick={() => setTag(tag === t.name ? '' : t.name)}>{t.name}</button>)}
+              {/* Pinned first regardless of rank: stations that simulcast a real terrestrial FM broadcast,
+                  the same "fm" tag Radio Browser itself uses, easy to find without scrolling the genre list. */}
+              <button type="button" className={`rd-chip${tag === 'fm' ? ' is-on' : ''}`} onClick={() => setTag(tag === 'fm' ? '' : 'fm')}>FM stations</button>
+              {tags.filter(t => t.name !== 'fm').map(t => <button key={t.name} type="button" className={`rd-chip${tag === t.name ? ' is-on' : ''}`} onClick={() => setTag(tag === t.name ? '' : t.name)}>{t.name}</button>)}
             </ScrollRow>
           )}
           {worldwide && <p className="ui-help">Searching every country.</p>}

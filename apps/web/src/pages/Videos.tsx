@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, type VideoResult } from '../lib/api';
 import { EmptyState, PageHeader, Seg } from '../components/ui/Page';
 import { SvgIcon } from '../components/ui/SvgIcon';
-import { Dialog } from '../components/ui/Dialog';
 
 type View = 'search' | 'history';
 
@@ -35,6 +35,7 @@ function VideoCard({ video, onPlay, onRemove }: { video: VideoResult; onPlay: ()
 /** YouTube, through Invidious: search, watch (Invidious embeds and plays it), and a watch history kept only on this server.
  * The local history stays useful even while the video service itself is off or unreachable; only search and playback need it. */
 export default function Videos() {
+  const navigate = useNavigate();
   const [view, setView] = useState<View>('search');
   const [available, setAvailable] = useState<boolean | null>(null);
   const [typed, setTyped] = useState('');
@@ -43,7 +44,6 @@ export default function Videos() {
   const [history, setHistory] = useState<VideoResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [playing, setPlaying] = useState<{ video: VideoResult; embed: string } | null>(null);
 
   const loadHistory = useCallback(() => { api.videoHistory().then(r => setHistory(r.history)).catch(() => undefined); }, []);
   useEffect(() => { api.videosStatus().then(r => setAvailable(r.available)).catch(() => setAvailable(false)); loadHistory(); }, [loadHistory]);
@@ -57,13 +57,7 @@ export default function Videos() {
     return () => { alive = false; };
   }, [view, query, available]);
 
-  const play = (video: VideoResult) => {
-    api.video(video.id).then(r => {
-      if (!r.embed) { setError('This video cannot be played: the video service is off.'); return; }
-      setPlaying({ video: r.video, embed: r.embed });
-      void api.videoWatched(video.id).then(loadHistory).catch(() => undefined);
-    }).catch(err => setError((err as Error).message));
-  };
+  const play = (video: VideoResult) => navigate(`/videos/watch/${encodeURIComponent(video.id)}`);
 
   const removeHistory = (id: string) => { setHistory(h => h.filter(v => v.id !== id)); void api.removeVideoHistory(id).catch(loadHistory); };
   const clearHistory = () => { setHistory([]); void api.clearVideoHistory().catch(loadHistory); };
@@ -103,21 +97,6 @@ export default function Videos() {
         <ul className="vid-grid">
           {shown.map(v => <VideoCard key={v.id} video={v} onPlay={() => play(v)} onRemove={view === 'history' ? () => removeHistory(v.id) : undefined} />)}
         </ul>
-      )}
-      {playing && (
-        <Dialog open title={playing.video.title} onClose={() => setPlaying(null)} wide>
-          <div className="vid-player">
-            <iframe
-              src={playing.embed} title={playing.video.title}
-              allow="autoplay; fullscreen; picture-in-picture"
-              allowFullScreen
-              sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <p className="vid-player-sub">{playing.video.channel}{playing.video.views ? ` · ${views(playing.video.views)}` : ''}</p>
-          {playing.video.description && <p className="vid-player-desc">{playing.video.description}</p>}
-        </Dialog>
       )}
     </main>
   );

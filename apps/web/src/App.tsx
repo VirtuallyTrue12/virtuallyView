@@ -27,6 +27,7 @@ const Person = lazy(() => import('./pages/Person'));
 const LiveTV = lazy(() => import('./pages/LiveTV'));
 const Radio = lazy(() => import('./pages/Radio'));
 const Videos = lazy(() => import('./pages/Videos'));
+const VideoWatch = lazy(() => import('./pages/VideoWatch'));
 const Photos = lazy(() => import('./pages/Photos'));
 const Books = lazy(() => import('./pages/Books'));
 const Wiki = lazy(() => import('./pages/Wiki'));
@@ -172,6 +173,7 @@ export default function App() {
         <Route path="/live" element={<LiveTV />} />
         <Route path="/radio" element={<Radio />} />
         <Route path="/videos" element={<Videos />} />
+        <Route path="/videos/watch/:id" element={<VideoWatch />} />
         <Route path="/photos" element={<Photos />} />
         <Route path="/books" element={<Books />} />
         <Route path="/wiki" element={<Wiki />} />

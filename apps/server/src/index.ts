@@ -116,14 +116,18 @@ const server = Fastify({
 // Baseline security headers on every response. No Content-Security-Policy here on purpose: the app loads
 // posters and cover art from several public providers and embeds a couple of optional services (Videos,
 // Kiwix) in iframes on their own ports, and a CSP written without exhaustively knowing every one of those
-// addresses risks silently breaking a page rather than protecting it; the three headers below carry no
-// such risk and close the concrete gap that matters most for a browser dashboard with no login-attempt
-// lockout beyond rate limiting: a hostile page framing this one to trick an administrator into clicking
-// something ("clickjacking").
+// addresses risks silently breaking a page rather than protecting it. Referrer-Policy is
+// strict-origin-when-cross-origin, not the stricter same-origin: that is already every modern browser's own
+// default when no policy is set at all, so it adds no real exposure, and it is also what the hero's YouTube
+// trailer embed needs - YouTube's iframe player depends on seeing this site's origin as a referrer to
+// initialize, and a same-origin policy strips that entirely, which is exactly what "Video player
+// configuration error" over the trailer means. The other two close the concrete gap that matters most for
+// a browser dashboard with no login-attempt lockout beyond rate limiting: a hostile page framing this one
+// to trick an administrator into clicking something ("clickjacking").
 server.addHook('onSend', (_request, reply, payload, done) => {
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('X-Frame-Options', 'SAMEORIGIN');
-  reply.header('Referrer-Policy', 'same-origin');
+  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   done(null, payload);
 });
 

@@ -991,11 +991,12 @@ describe('Videos (Invidious)', () => {
     await page.getByPlaceholder('Search YouTube').fill('virtuallyview');
     await page.getByRole('button', { name: `Play ${video.title}` }).waitFor();
     await page.getByRole('button', { name: `Play ${video.title}` }).click();
-    await page.getByRole('dialog', { name: video.title }).waitFor();
+    // Its own page (a real, linkable URL), not a popup over the search results.
+    await page.waitForURL(`**/videos/watch/${video.id}`);
     expect(await page.locator('.vid-player iframe').getAttribute('src')).toBe(`http://invidious.local/embed/${video.id}?local=true`);
     await page.waitForTimeout(150);
     expect(watched).toEqual([video.id]);
-    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Back' }).click();
     await page.getByRole('radio', { name: /History/ }).click();
     await page.getByRole('button', { name: `Play ${video.title}` }).waitFor();
     await page.getByRole('button', { name: `Remove ${video.title} from history` }).click();

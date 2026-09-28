@@ -13,6 +13,17 @@ import { Highlights } from '../components/live/Highlights';
 interface Recording { id: string; title: string; channel: string; startedAt: string; endsAt: string; state: 'recording' | 'done' | 'failed' | 'stopped'; message?: string; sizeBytes: number }
 type View = 'favorites' | 'recent' | 'channels' | 'guide' | 'recordings';
 const PUBLIC_LIST = 'https://iptv-org.github.io/iptv/index.m3u';
+// Smaller, category-scoped mirrors of the same free public project: adding one of these instead of (or
+// alongside) the full combined list gives a more curated set, since the combined list mixes in every
+// geo-blocked and dead stream from every country and category at once.
+const SUGGESTED_LISTS: { name: string; url: string }[] = [
+  { name: 'Free public: News', url: 'https://iptv-org.github.io/iptv/categories/news.m3u' },
+  { name: 'Free public: Sports', url: 'https://iptv-org.github.io/iptv/categories/sports.m3u' },
+  { name: 'Free public: Movies', url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
+  { name: 'Free public: Music', url: 'https://iptv-org.github.io/iptv/categories/music.m3u' },
+  { name: 'Free public: Kids', url: 'https://iptv-org.github.io/iptv/categories/kids.m3u' },
+  { name: 'Free public: Documentary', url: 'https://iptv-org.github.io/iptv/categories/documentary.m3u' }
+];
 const mb = (b: number) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : `${Math.max(1, Math.round(b / 1024 ** 2))} MB`);
 const PAGE = 120;
 
@@ -345,9 +356,16 @@ function SourcesDialog({ open, onClose, playlists, onChanged }: { open: boolean;
         {err && <div className="notice notice--err" role="alert">{err}</div>}
         <div className="st-connect-actions">
           <button className="btn btn-primary" type="submit" disabled={busy || !url.trim()}>{busy ? 'Adding…' : 'Add playlist'}</button>
-          <button type="button" className="btn btn-secondary" disabled={busy} onClick={e => void add(e as unknown as FormEvent, { name: 'Free public channels (iptv-org)', url: PUBLIC_LIST })}>Add the free public list</button>
         </div>
       </form>
+      <p className="dlg-help" style={{ marginTop: '1rem' }}>Or add one of these free public lists (same project, split by category so you are not pulling in every geo-blocked channel from every country at once):</p>
+      <div className="st-connect-actions">
+        {[{ name: 'Free public: Everything', url: PUBLIC_LIST }, ...SUGGESTED_LISTS]
+          .filter(s => !playlists.some(p => p.url === s.url))
+          .map(s => (
+            <button key={s.url} type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={e => void add(e as unknown as FormEvent, s)}>{s.name}</button>
+          ))}
+      </div>
     </Dialog>
   );
 }
