@@ -522,6 +522,17 @@ describe('e2e: streaming + transcode fallback', () => {
     expect((await req('GET', '/api/stream/episode/e2e-episode/transcode')).status).toBe(404);
     expect((await req('GET', '/api/stream/episode/e2e-episode')).status).toBe(404);
 
+    // The HLS routes must exist at exactly the path VideoPlayer builds (…/transcode/hls/…), not a
+    // sibling path: a mismatch here 404s through the generic route-not-found handler instead of this
+    // route's own "no file" message, which is how Safari and every WebKit-based TV browser silently
+    // never played a converted file at all despite the server being perfectly healthy.
+    const episodeHls = await req('GET', '/api/stream/episode/e2e-episode/transcode/hls/session1/index.m3u8');
+    expect(episodeHls.status).toBe(404);
+    expect(episodeHls.json.message).toBe('This episode has no playable file on the server yet.');
+    const movieHls = await req('GET', '/api/stream/e2e-movie/transcode/hls/session1/index.m3u8');
+    expect(movieHls.status).toBe(404);
+    expect(movieHls.json.message).toBe('No local file is available for this item yet.');
+
     const subs = await req('GET', '/api/stream/e2e-movie/subtitles');
     expect(subs.status).toBe(200);
     expect(subs.json.subtitles).toHaveLength(0);

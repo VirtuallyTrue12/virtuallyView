@@ -529,7 +529,7 @@ export default async function streamRoutes(server: FastifyInstance) {
   );
 
   server.get<{ Params: { id: string; session: string }; Querystring: TranscodeQuery }>(
-    '/api/stream/episode/:id/hls/:session/index.m3u8',
+    '/api/stream/episode/:id/transcode/hls/:session/index.m3u8',
     async (request, reply) => {
       if (!SESSION_RE.test(request.params.session)) return reply.code(400).send({ error: 'bad_request', message: 'Invalid session.' });
       const filePath = await resolveEpisodeFile(request.params.id);
@@ -538,7 +538,7 @@ export default async function streamRoutes(server: FastifyInstance) {
     }
   );
   server.get<{ Params: { id: string; session: string; segment: string } }>(
-    '/api/stream/episode/:id/hls/:session/:segment',
+    '/api/stream/episode/:id/transcode/hls/:session/:segment',
     async (request, reply) => hlsSegment(reply, `ep:${request.params.id}:${request.params.session}`, request.params.segment)
   );
 
@@ -564,7 +564,7 @@ export default async function streamRoutes(server: FastifyInstance) {
   );
 
   server.get<{ Params: { id: string; session: string }; Querystring: TranscodeQuery }>(
-    '/api/stream/:id/hls/:session/index.m3u8',
+    '/api/stream/:id/transcode/hls/:session/index.m3u8',
     async (request, reply) => {
       if (!SESSION_RE.test(request.params.session)) return reply.code(400).send({ error: 'bad_request', message: 'Invalid session.' });
       const item = await resolveStreamable(request.params.id);
@@ -574,7 +574,7 @@ export default async function streamRoutes(server: FastifyInstance) {
     }
   );
   server.get<{ Params: { id: string; session: string; segment: string } }>(
-    '/api/stream/:id/hls/:session/:segment',
+    '/api/stream/:id/transcode/hls/:session/:segment',
     async (request, reply) => hlsSegment(reply, `mv:${request.params.id}:${request.params.session}`, request.params.segment)
   );
 
