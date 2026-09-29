@@ -216,9 +216,6 @@ export default function ArtistDetails() {
             </div>
           </header>
 
-          {members?.kind === 'band' && <BandMembers artistId={artist.id} people={members.people} removed={members.removed} isAdmin={isAdmin} loading={membersLoading} onChanged={reloadMembers} />}
-          {membersLoading && !members && <CastRow title="Band members" people={[]} loading />}
-
           <section className="album-section" aria-label="Albums">
             <div className="rail-head">
               <h2 className="rail-title">Albums</h2>
@@ -245,6 +242,9 @@ export default function ArtistDetails() {
           </section>
 
           {isLidarr && <ArtistVideos artistId={artist.id} artistName={artist.title} refreshKey={videosKey} />}
+
+          {members?.kind === 'band' && <BandMembers artistId={artist.id} people={members.people} removed={members.removed} isAdmin={isAdmin} loading={membersLoading} onChanged={reloadMembers} />}
+          {membersLoading && !members && <CastRow title="Band members" people={[]} loading />}
 
           <Dialog open={dialog === 'artwork'} onClose={() => setDialog(null)} title="Artwork" wide>
             <div className="art-dialog-head">

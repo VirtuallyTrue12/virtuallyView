@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Changed.** Artist page: Band members now sits below Albums, not above.
 - **Fixed.** A Lidarr download's time-left showed .NET's full sub-second precision verbatim ("00:11:47.6789973" instead of "00:11:47"); Radarr and Sonarr were unaffected. Trimmed to whole seconds like every other source.
 - **Fixed.** Safari, and every WebKit-based TV browser, could not play any converted video at all: the player built the HLS request at `.../transcode/hls/...`, but the server only ever registered the route at `.../hls/...` (no `/transcode/` segment), so every request 404'd before ffmpeg was ever asked to convert anything. This was not new today; it predates this release. Confirmed live end to end against a real episode: the playlist and a real segment both now return 200 with real bytes, instead of a 404 that the player reported as a generic "could not decode" error.
 - **Changed.** The below-player area (file details, Watch together, Get subtitles) had no padding or visual separation from the black background, sitting flush against the left edge with no card around the file-details grid. It's now padded, centered and given a proper card background, matching the rest of the app.
