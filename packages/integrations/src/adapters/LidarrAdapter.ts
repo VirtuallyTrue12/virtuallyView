@@ -353,6 +353,15 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     return { ...result, count: wanted.length };
   }
 
+  /**
+   * Search for every missing album across the whole library, not just one artist. RSS only catches a
+   * release as it is published; an artist added (or a search that failed) days or weeks ago otherwise
+   * just sits missing forever with nothing retrying it.
+   */
+  async searchAllMissing(): Promise<{ success: boolean; message: string }> {
+    return runArrCommand(this.requireConfig(), 'v1', { name: 'MissingAlbumSearch' }, 'a search for every missing album');
+  }
+
   /** Ask Lidarr to look for an album's missing tracks. */
   async searchAlbum(albumId: number): Promise<{ success: boolean; message: string }> {
     const { url, apiKey } = this.requireConfig();

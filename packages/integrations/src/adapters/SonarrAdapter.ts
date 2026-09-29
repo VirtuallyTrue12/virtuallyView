@@ -368,6 +368,15 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     return { ...result, count: missing.length };
   }
 
+  /**
+   * Search for every missing episode across the whole library, not just one show. RSS only catches a
+   * release as it is published; a show added (or a search that failed) days or weeks ago otherwise just
+   * sits missing forever with nothing retrying it.
+   */
+  async searchAllMissing(): Promise<{ success: boolean; message: string }> {
+    return runArrCommand(this.requireConfig(), 'v3', { name: 'MissingEpisodeSearch' }, 'a search for every missing episode');
+  }
+
   /** Rescan disk for new/changed files and refresh metadata ("Scan library"). */
   async scanLibrary(): Promise<{ success: boolean; message: string }> {
     const { url, apiKey } = this.requireConfig();

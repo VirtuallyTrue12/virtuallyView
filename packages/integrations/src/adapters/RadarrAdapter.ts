@@ -1,6 +1,6 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
-import { queueProblem, joinApiUrl, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { queueProblem, joinApiUrl, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, runArrCommand, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
 import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
 import { TtlCache } from '../ttl-cache.js';
 
@@ -53,6 +53,15 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   async setMinimumSeeders(minimum: number): Promise<MinimumSeedersResult> {
     if (!this.config) return { success: false, message: 'Radarr is not connected.', updated: 0, skipped: 0 };
     return setMinimumSeeders(this.config, minimum, '/api/v3');
+  }
+
+  /**
+   * Search for every missing movie across the whole library, not just one title. RSS only catches a
+   * release as it is published; a movie added (or a search that failed) days or weeks ago otherwise
+   * just sits missing forever with nothing retrying it.
+   */
+  async searchAllMissing(): Promise<{ success: boolean; message: string }> {
+    return runArrCommand(this.requireConfig(), 'v3', { name: 'MissingMoviesSearch' }, 'a search for every missing movie');
   }
 
   async getStatus() {

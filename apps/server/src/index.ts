@@ -56,6 +56,7 @@ import { startAutoBackup } from './services/backup.js';
 import { startAiDigest } from './services/ai-digest.js';
 import { startAutoUpdate } from './services/auto-update.js';
 import { startDownloadDoctor } from './services/download-doctor.js';
+import { startBacklogSearch } from './services/backlog-search.js';
 import { startAutoHeal } from './services/auto-repair.js';
 import { startMusicVideoFiler } from './services/music-video-library.js';
 import { startRequestSync } from './services/requests.js';
@@ -525,6 +526,7 @@ const start = async () => {
   startAiDigest();
   startAutoUpdate();
   startDownloadDoctor();
+  startBacklogSearch();
   startAutoHeal();
   startMusicVideoFiler();
   try {
