@@ -34,6 +34,11 @@ location / {
   proxy_set_header X-Forwarded-For $remote_addr;
   proxy_buffering off;
   client_max_body_size 1g;
+  # nginx's own default (60s) is shorter than some of the app's own upstream waits (an indexer
+  # test can legitimately take up to 115s): without this, testing an indexer or searching for a
+  # release can hit nginx's timeout first, and you get a bare proxy error page instead of the
+  # app's actual answer.
+  proxy_read_timeout 180s;
 }
 ```
 

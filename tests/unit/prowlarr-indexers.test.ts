@@ -23,6 +23,15 @@ describe('Prowlarr sources', () => {
     expect(list.find(i => i.id === 2)?.failingUntil).toBeUndefined();
   });
 
+  it('getIndexers reads Prowlarr\'s real field name (enable), not enabled', async () => {
+    // Prowlarr's IndexerResource serialises this as "enable"; reading "enabled" (which Prowlarr never
+    // sends) silently reports every indexer as disabled, even a genuinely running one.
+    vi.stubGlobal('fetch', vi.fn(async () => json([{ id: 1, name: 'Internet Archive', enable: true }, { id: 2, name: 'Off', enable: false }])));
+    const list = await (await adapter()).getIndexers();
+    expect(list.find(i => i.id === 1)?.enabled).toBe(true);
+    expect(list.find(i => i.id === 2)?.enabled).toBe(false);
+  });
+
   it('turns a timed-out test into plain words', async () => {
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'POST'
       ? json([{ errorMessage: "Unable to connect to indexer, indexer's server is unavailable. Try again later. Http request timed out" }], 400)

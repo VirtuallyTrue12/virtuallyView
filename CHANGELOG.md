@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- **Fixed.** Settings > Health falsely reported every Prowlarr indexer as disabled, always: `getIndexers()` read the field name `enabled`, but Prowlarr serialises it as `enable`. Confirmed live: "50 configured; 50 enabled" now, was "0 enabled" before.
+- **Fixed.** The nginx reverse-proxy example in the HTTPS guide had no read timeout, so nginx's own 60s default could cut off an indexer test or release search (which can legitimately take up to 115s) before the app's own answer arrived, showing a bare proxy error instead. Added `proxy_read_timeout 180s;`.
 - **Fixed.** A missing movie, episode or album only ever got searched once - on add, and again only if RSS happened to catch a new release. A failed search, a briefly-down indexer, or a title added before an indexer existed left it missing forever with nothing retrying it, which is why a library could sit well under half downloaded with an empty queue. Radarr, Sonarr and Lidarr are now asked to search their own missing backlog every 6 hours, the same command "Search all missing" runs by hand. Confirmed live: 201 missing Sonarr episodes and 15 missing Lidarr items, both accepted and started.
 - **Changed.** Artist page: Band members now sits below Albums, not above.
 - **Fixed.** A Lidarr download's time-left showed .NET's full sub-second precision verbatim ("00:11:47.6789973" instead of "00:11:47"); Radarr and Sonarr were unaffected. Trimmed to whole seconds like every other source.

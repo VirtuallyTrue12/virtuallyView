@@ -224,11 +224,12 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
       signal: AbortSignal.timeout(4000)
     });
     if (!res.ok) throw new Error(`Prowlarr returned ${res.status} while listing indexers.`);
-    const data = (await res.json()) as Array<{ id?: number; name?: string; enabled?: boolean; definitionName?: string }>;
+    // Prowlarr's IndexerResource serialises this field as `enable`, not `enabled` (see listIndexers above).
+    const data = (await res.json()) as Array<{ id?: number; name?: string; enable?: boolean; definitionName?: string }>;
     return data.map(x => ({
       id: x.id ?? 0,
       name: x.name ?? '',
-      enabled: !!x.enabled,
+      enabled: x.enable !== false,
       definitionName: x.definitionName ?? 'Indexer'
     }));
   }
