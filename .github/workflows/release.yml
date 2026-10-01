@@ -38,7 +38,7 @@ jobs:
 
       # Build once locally and inspect it. If anything private got into the image, nothing is published.
       - name: Build for inspection
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -71,7 +71,7 @@ jobs:
             type=raw,value=latest
 
       - name: Publish
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
