@@ -3,6 +3,7 @@ import { Media, MediaStatus, Download } from '@virtuallyview/types';
 import { artProxyUrl } from '../art-proxy.js';
 import { runArrCommand, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
 import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
+import { TtlCache } from '../ttl-cache.js';
 
 export interface LidarrAlbum {
   id: number;
@@ -47,14 +48,17 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   id = 'lidarr';
   name = 'Lidarr';
   private config: { url: string; apiKey: string } | null = null;
+  private libraryCache = new TtlCache<Media[]>(20_000, 1, 5 * 60_000);
 
   async connect(config: { url: string; apiKey: string }) {
     this.config = config;
+    this.libraryCache.clear();
     return { connected: true, message: 'Connected to Lidarr' };
   }
 
   async disconnect() {
     this.config = null;
+    this.libraryCache.clear();
   }
 
   async healthCheck() {
@@ -92,25 +96,14 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     return this.config;
   }
 
-  private artistCache: { at: number; items: Media[] } | null = null;
-
   /**
-   * The artist list backs every artist/album page. Refetching it (4s timeout)
-   * on each navigation made rapid album -> artist -> album browsing fail
-   * whenever Lidarr was briefly slow, so a fresh copy is reused for 20s and a
-   * stale one still serves when Lidarr errors.
+   * The artist list backs every artist/album page. Refetching it (4s timeout) on each navigation made
+   * rapid album -> artist -> album browsing fail whenever Lidarr was briefly slow, so a fresh copy is
+   * reused for 20s and a stale one (up to 5 minutes old) still serves when a refresh errors.
    */
   private async fetchRemote(query: string): Promise<Media[]> {
+    const items = await this.libraryCache.get('all', () => this.fetchArtistList());
     const q = query.trim().toLowerCase();
-    const now = Date.now();
-    if (!this.artistCache || now - this.artistCache.at > 20_000) {
-      try {
-        this.artistCache = { at: now, items: await this.fetchArtistList() };
-      } catch (error) {
-        if (!this.artistCache || now - this.artistCache.at > 5 * 60_000) throw error;
-      }
-    }
-    const items = this.artistCache!.items;
     return q ? items.filter(a => a.title.toLowerCase().includes(q)) : items;
   }
 
@@ -192,7 +185,7 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
 
   async add(req: RequestSelectionInput): Promise<RequestAddResult> {
-    this.artistCache = null;
+    this.libraryCache.clear();
     const { url, apiKey } = this.requireConfig();
     const selection = await this.resolveCandidate(req).catch(error => ({ failure: {
       success: false, message: error instanceof Error ? error.message : 'Lidarr metadata lookup failed.'
@@ -270,14 +263,14 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       }),
       signal: AbortSignal.timeout(45_000)
     });
-    this.artistCache = null;
+    this.libraryCache.clear();
     if (!res.ok) return { failure: `Lidarr rejected the artist (status ${res.status}).` };
     const added = await res.json() as { id: number; artistName: string; path?: string };
     return { id: added.id, name: added.artistName, path: added.path ?? `${targets.rootFolderPath}/${added.artistName}` };
   }
 
   async remove(mediaId: string, deleteFiles = false): Promise<{ success: boolean; message: string }> {
-    this.artistCache = null;
+    this.libraryCache.clear();
     const { url, apiKey } = this.requireConfig();
     const numericId = mediaId.startsWith('lidarr-') ? mediaId.slice('lidarr-'.length) : mediaId;
     const res = await fetch(`${url}/api/v1/artist/${numericId}?deleteFiles=${deleteFiles}`, {
@@ -305,14 +298,15 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       const progress = total > 0
         ? Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)))
         : 0;
+      const p = queueProblem(q);
       return {
         id: `queue-${String(q.id ?? '')}`,
         sourceClient: 'lidarr',
         downloadId: typeof q.downloadId === 'string' ? q.downloadId : undefined,
         mediaId: q.artistId ? `lidarr-${String(q.artistId)}` : undefined,
         ...(Number.isInteger(q.albumId) ? { albumId: q.albumId as number } : {}),
-        status: queueProblem(q).status ?? String((q.status ?? '') as string).toLowerCase(),
-        ...(queueProblem(q).message ? { statusMessage: queueProblem(q).message } : {}),
+        status: p.status ?? String((q.status ?? '') as string).toLowerCase(),
+        ...(p.message ? { statusMessage: p.message } : {}),
         progress,
         title: (q.title as string) ?? 'Unknown download',
         size: total > 0 ? total : undefined,

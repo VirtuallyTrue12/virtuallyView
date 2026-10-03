@@ -24,7 +24,7 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   // every call (there is no single-movie lookup here), which a byte-range player then does again for
   // every range of a file. A library of any real size made that tens to hundreds of full-catalogue Radarr
   // calls over one playback. The single key ('all') mirrors the single upstream endpoint used either way.
-  private libraryCache = new TtlCache<Media[]>(10_000, 1);
+  private libraryCache = new TtlCache<Media[]>(10_000, 1, 5 * 60_000);
 
   async connect(config: { url: string; apiKey: string }) {
     this.config = config;
@@ -305,13 +305,14 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       const progress = total > 0
         ? Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)))
         : 0;
+      const p = queueProblem(q);
       return {
         id: `queue-${String(q.id ?? '')}`,
         sourceClient: 'radarr',
         downloadId: typeof q.downloadId === 'string' ? q.downloadId : undefined,
         mediaId: q.movieId ? `radarr-${String(q.movieId)}` : undefined,
-        status: queueProblem(q).status ?? String((q.status ?? '') as string).toLowerCase(),
-        ...(queueProblem(q).message ? { statusMessage: queueProblem(q).message } : {}),
+        status: p.status ?? String((q.status ?? '') as string).toLowerCase(),
+        ...(p.message ? { statusMessage: p.message } : {}),
         progress,
         title: (q.title as string) ?? 'Unknown download',
         size: total > 0 ? total : undefined,

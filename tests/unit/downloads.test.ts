@@ -147,6 +147,15 @@ describe('real download HTTP contract', () => {
     expect(rows[0].speed).toBeUndefined();
     expect(rows[1].speed).toBe('38 KB/s');
   });
+  test('a stale "stalled" statusMessage from the manager does not overwrite a client row that is genuinely moving', async () => {
+    const hash = 'ab'.repeat(20);
+    upstream.radarr.getQueue.mockResolvedValue([{ id: 'queue-17', downloadId: hash.toUpperCase(), mediaId: 'radarr-3', title: 'Manager title', status: 'warning', statusMessage: 'The download is stalled with no connections', progress: 40 }]);
+    upstream.qbittorrent.getQueue.mockResolvedValue([{ id: hash, title: 'Client release', status: 'downloading', progress: 55, speed: 1048576 }]);
+    const rows = (await app.inject('/api/downloads')).json();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('downloading');
+    expect(rows[0].speed).toBe('1.0 MB/s');
+  });
   test('partial upstream failure retains healthy rows; total failure is not empty success', async () => {
     upstream.radarr.getQueue.mockRejectedValue(new Error('offline'));
     upstream.sonarr.getQueue.mockResolvedValue([{ id: 'queue-1', status: 'queued' }]);

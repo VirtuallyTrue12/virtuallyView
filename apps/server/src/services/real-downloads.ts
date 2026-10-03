@@ -268,9 +268,14 @@ export async function getDownloads(): Promise<QueueItem[]> {
     byMediaId.reportedBy = [...new Set([...byMediaId.reportedBy, manager.sourceClient])];
     byMediaId.mediaId ??= manager.mediaId;
     byMediaId.mediaType ??= manager.mediaType;
-    // Imported/failed state belongs to the manager; transfer progress and
-    // controls belong to the client. Keep the client ID so actions stay real.
-    if (manager.status === 'importing' || manager.status === 'failed' || manager.status === 'stalled') byMediaId.status = manager.status;
+    // Imported/failed state belongs to the manager; transfer progress and controls belong to the
+    // client. Keep the client ID so actions stay real. A manager's "stalled" can be a stale
+    // statusMessage still sitting in its queue row from before the transfer actually started moving;
+    // the client's own live speed is the more trustworthy signal for whether data is really flowing.
+    // QueueItem.speed is only ever set when real throughput was reported (see normalize() above), so
+    // its mere presence here already means "data is moving right now".
+    const managerSaysStalledButClientIsMoving = manager.status === 'stalled' && !!byMediaId.speed;
+    if ((manager.status === 'importing' || manager.status === 'failed' || manager.status === 'stalled') && !managerSaysStalledButClientIsMoving) byMediaId.status = manager.status;
     if (manager.message) byMediaId.message = manager.message;
   }
   // Names are cleaned last, after library matching used the raw ones.

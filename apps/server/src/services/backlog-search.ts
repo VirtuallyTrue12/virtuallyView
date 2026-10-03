@@ -8,8 +8,13 @@ import { getAdapter } from './registry.js';
  * added before an indexer existed) - nothing asks again unless a person opens the app and presses search
  * by hand. This periodically asks each service to search everything it still has missing, the same
  * library-wide command "Search all missing" runs by hand, just on a schedule.
+ *
+ * A large backlog means a real burst of indexer traffic each time this runs; with the free VPN
+ * profile, that traffic shares the same tunnel as the downloads themselves (see docs/privacy.md -
+ * `SEARCH_VIA_VPN=false` routes search outside the tunnel instead). 12 hours keeps that burst
+ * infrequent without leaving a title missing for long.
  */
-const INTERVAL_MS = 6 * 3_600_000;
+const INTERVAL_MS = 12 * 3_600_000;
 
 export async function runBacklogSearch(): Promise<void> {
   await Promise.allSettled([

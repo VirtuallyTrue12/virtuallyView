@@ -119,6 +119,18 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
     })).filter(d => d.definitionName);
   }
 
+  private async firstAppProfileId(): Promise<number> {
+    try {
+      const { url } = this.requireConfig();
+      const res = await fetch(`${url}/api/v1/appprofile`, { headers: this.headers(), signal: AbortSignal.timeout(6000) });
+      if (!res.ok) return 1;
+      const profiles = (await res.json()) as Array<{ id?: number }>;
+      return profiles.find(p => typeof p.id === 'number')?.id ?? 1;
+    } catch {
+      return 1;
+    }
+  }
+
   async addIndexer(definitionName: string): Promise<{ success: boolean; message: string; id?: number }> {
     const { url } = this.requireConfig();
     const schemaRes = await fetch(`${url}/api/v1/indexer/schema`, { headers: this.headers(), signal: AbortSignal.timeout(15000) });
@@ -126,7 +138,11 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
     const schema = ((await schemaRes.json()) as Array<Record<string, unknown>>).find(r => (r.definitionName ?? r.implementationName) === definitionName);
     if (!schema) return { success: false, message: `Prowlarr has no indexer called "${definitionName}".` };
     if (schema.privacy !== 'public') return { success: false, message: 'That indexer needs an account. Add it in Prowlarr itself so you can enter your credentials.' };
-    const body = { ...schema, name: String(schema.name ?? definitionName), enable: true, appProfileId: 1, tags: [] };
+    // 1 is Prowlarr's own default sync profile, but a person who deletes or renames their profiles
+    // would then get indexers silently attached to nothing - never reaching Radarr/Sonarr/Lidarr, with
+    // nothing here to say so. Read whichever profile actually exists.
+    const appProfileId = await this.firstAppProfileId();
+    const body = { ...schema, name: String(schema.name ?? definitionName), enable: true, appProfileId, tags: [] };
     const res = await fetch(`${url}/api/v1/indexer`, { method: 'POST', headers: this.headers(), body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
     if (!res.ok) {
       const detail = await res.text().catch(() => '');

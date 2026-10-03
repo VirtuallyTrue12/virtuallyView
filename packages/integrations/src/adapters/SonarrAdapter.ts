@@ -25,16 +25,27 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   // of a file and every HLS segment: tens or hundreds of times over one playback, each one otherwise two
   // fresh Sonarr calls (the episode, then its series). The certification genuinely cannot change in 15s.
   private certificationCache = new TtlCache<string | undefined>(15_000);
+  // resolveStreamable (stream.ts) calls getItem for every byte range and every HLS segment of a TV
+  // playback: without this, that is a full-library /api/v3/series fetch on every single one. Radarr
+  // already has this; Sonarr was missed in that pass even though TV generates more of this traffic
+  // than movies ever did.
+  private libraryCache = new TtlCache<Media[]>(10_000, 1, 5 * 60_000);
+  // getEpisodeFile is two sequential, uncached fetches (episode, then episode-file); every episode
+  // stream route calls it (stream, subtitles, trickplay, HLS playlist, every HLS segment). A file's
+  // path for a given episode cannot change in 10s.
+  private episodeFileCache = new TtlCache<{ path: string; size?: number } | null>(10_000);
 
   async connect(config: { url: string; apiKey: string }) {
     this.config = config;
     this.certificationCache.clear();
+    this.libraryCache.clear();
     return { connected: true, message: 'Connected to Sonarr' };
   }
 
   async disconnect() {
     this.config = null;
     this.certificationCache.clear();
+    this.libraryCache.clear();
   }
 
   async healthCheck() {
@@ -73,6 +84,12 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
 
   private async fetchRemote(query: string): Promise<Media[]> {
+    const all = await this.libraryCache.get('all', () => this.fetchAllRemote());
+    const q = query.trim().toLowerCase();
+    return q ? all.filter(s => s.title?.toLowerCase().includes(q)) : all;
+  }
+
+  private async fetchAllRemote(): Promise<Media[]> {
     const { url, apiKey } = this.requireConfig();
     const res = await fetch(`${url}/api/v3/series`, {
       headers: { 'X-Api-Key': apiKey },
@@ -100,10 +117,8 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       added?: string;
     }>;
 
-    const q = query.trim().toLowerCase();
     return data
       .filter(s => s.title)
-      .filter(s => (q ? s.title?.toLowerCase().includes(q) : true))
       .map(s => {
         const images = s.images ?? [];
         const baseUrl = url.replace(/\/api\/v3\/?$/, '').replace(/sonarr:\d+/, 'localhost:8989');
@@ -197,23 +212,25 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
 
   /** Resolve the on-disk path for one episode via its episode file. */
   async getEpisodeFile(episodeId: string): Promise<{ path: string; size?: number } | null> {
-    const { url, apiKey } = this.requireConfig();
-    const numeric = episodeId.startsWith('episode-') ? episodeId.slice('episode-'.length) : episodeId;
-    const epRes = await fetch(`${url}/api/v3/episode/${encodeURIComponent(numeric)}`, {
-      headers: { 'X-Api-Key': apiKey },
-      signal: AbortSignal.timeout(4000)
+    return this.episodeFileCache.get(episodeId, async () => {
+      const { url, apiKey } = this.requireConfig();
+      const numeric = episodeId.startsWith('episode-') ? episodeId.slice('episode-'.length) : episodeId;
+      const epRes = await fetch(`${url}/api/v3/episode/${encodeURIComponent(numeric)}`, {
+        headers: { 'X-Api-Key': apiKey },
+        signal: AbortSignal.timeout(4000)
+      });
+      if (!epRes.ok) return null;
+      const ep = (await epRes.json()) as { episodeFileId?: number };
+      if (!ep.episodeFileId) return null;
+      const fileRes = await fetch(`${url}/api/v3/episodefile/${ep.episodeFileId}`, {
+        headers: { 'X-Api-Key': apiKey },
+        signal: AbortSignal.timeout(4000)
+      });
+      if (!fileRes.ok) return null;
+      const file = (await fileRes.json()) as { path?: string; size?: number };
+      if (!file.path) return null;
+      return { path: file.path, size: file.size };
     });
-    if (!epRes.ok) return null;
-    const ep = (await epRes.json()) as { episodeFileId?: number };
-    if (!ep.episodeFileId) return null;
-    const fileRes = await fetch(`${url}/api/v3/episodefile/${ep.episodeFileId}`, {
-      headers: { 'X-Api-Key': apiKey },
-      signal: AbortSignal.timeout(4000)
-    });
-    if (!fileRes.ok) return null;
-    const file = (await fileRes.json()) as { path?: string; size?: number };
-    if (!file.path) return null;
-    return { path: file.path, size: file.size };
   }
 
   /** The age rating of an episode's parent series. Throws when it cannot be determined. */
@@ -318,14 +335,15 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       const progress = total > 0
         ? Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)))
         : 0;
+      const p = queueProblem(q);
       return {
         id: `queue-${String(q.id ?? '')}`,
         sourceClient: 'sonarr',
         downloadId: typeof q.downloadId === 'string' ? q.downloadId : undefined,
         mediaId: q.seriesId ? `sonarr-${String(q.seriesId)}` : undefined,
         ...(Number.isInteger(q.episodeId) ? { episodeId: q.episodeId as number } : {}),
-        status: queueProblem(q).status ?? String((q.status ?? '') as string).toLowerCase(),
-        ...(queueProblem(q).message ? { statusMessage: queueProblem(q).message } : {}),
+        status: p.status ?? String((q.status ?? '') as string).toLowerCase(),
+        ...(p.message ? { statusMessage: p.message } : {}),
         progress,
         title: (q.title as string) ?? 'Unknown download',
         size: total > 0 ? total : undefined,

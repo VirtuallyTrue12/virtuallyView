@@ -8,15 +8,27 @@
  */
 export class TtlCache<T> {
   private entries = new Map<string, { value: T; at: number }>();
-  constructor(private ttlMs: number, private max = 500) {}
+  /**
+   * `staleMs`, when set, is how long a value already served keeps answering if a refresh fails (a
+   * brief Radarr/Sonarr restart or timeout), instead of throwing straight through. Left unset (the
+   * default) a failure always throws - the right choice for anything security-relevant, like an age
+   * rating: an answer that cannot be confirmed must fail closed, never silently serve a stale "allowed".
+   * It is for availability caches (a library list) where a few-minutes-old answer beats a dead stream.
+   */
+  constructor(private ttlMs: number, private max = 500, private staleMs = 0) {}
 
   async get(key: string, fill: () => Promise<T>): Promise<T> {
     const hit = this.entries.get(key);
     if (hit && Date.now() - hit.at < this.ttlMs) return hit.value;
-    const value = await fill();
-    if (this.entries.size >= this.max) this.entries.delete(this.entries.keys().next().value as string);
-    this.entries.set(key, { value, at: Date.now() });
-    return value;
+    try {
+      const value = await fill();
+      if (this.entries.size >= this.max) this.entries.delete(this.entries.keys().next().value as string);
+      this.entries.set(key, { value, at: Date.now() });
+      return value;
+    } catch (error) {
+      if (hit && this.staleMs > 0 && Date.now() - hit.at < this.staleMs) return hit.value;
+      throw error;
+    }
   }
 
   /** Drops one key (or everything) so the next read is fresh — used right after a change this cache would otherwise still be serving stale. */
