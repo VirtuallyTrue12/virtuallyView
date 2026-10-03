@@ -11,7 +11,6 @@ const TTL_MS = 3 * 3_600_000;
 const MAX_BYTES = 120 * 1024 * 1024;
 const cache = new Map<string, { at: number; byChannel: Map<string, Programme[]> }>();
 const loading = new Map<string, Promise<void>>();
-export const clearGuideCache = (): void => { cache.clear(); loading.clear(); };
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 const decode = (text: string) => text.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e: string) => {

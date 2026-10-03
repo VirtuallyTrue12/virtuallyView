@@ -31,13 +31,6 @@ export function lookupRequestCandidates(title: string, mediaType: MediaKind): Pr
   return fetchSelection(`/api/requests/candidates?${new URLSearchParams({ title, mediaType })}`);
 }
 
-export function confirmRequestCandidate(candidate: RequestCandidate): Promise<SelectionResult> {
-  return fetchSelection('/api/requests', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: candidate.title, year: candidate.year, mediaType: candidate.type, selectedProviderId: candidate.providerId, ...(candidate.poster ? { poster: candidate.poster } : {}) })
-  });
-}
-
 export type RequestOutcome =
   | { kind: 'ok'; message: string; request?: RequestItem }
   | { kind: 'ambiguous'; message: string; candidates: RequestCandidate[] }

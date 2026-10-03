@@ -1,6 +1,6 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
-import { queueProblem, joinApiUrl, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, runArrCommand, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { queueProblem, joinApiUrl, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, runArrCommand, arrHealthCheck, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
 import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
 import { TtlCache } from '../ttl-cache.js';
 
@@ -38,16 +38,7 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
 
   async healthCheck() {
-    if (!this.config) return { healthy: false, status: 'offline' };
-    try {
-      const res = await fetch(`${this.config.url}/api/v3/system/status`, {
-        headers: { 'X-Api-Key': this.config.apiKey },
-        signal: AbortSignal.timeout(2500)
-      });
-      return { healthy: res.ok, status: res.ok ? 'online' : 'offline' };
-    } catch {
-      return { healthy: false, status: 'offline' };
-    }
+    return arrHealthCheck(this.config, 'v3');
   }
 
   async setMinimumSeeders(minimum: number): Promise<MinimumSeedersResult> {
@@ -126,7 +117,7 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
         const backdropImage = images.find(i => i.coverType === 'fanart');
         const posterRaw = posterImage?.remoteUrl ?? posterImage?.url ?? '';
         const backdropRaw = backdropImage?.remoteUrl ?? backdropImage?.url ?? '';
-        const baseUrl = url.replace(/\/api\/v3\/?$/, '').replace(/radarr:\d+/, 'localhost:7878').replace(/sonarr:\d+/, 'localhost:8989').replace(/prowlarr:\d+/, 'localhost:9696').replace(/lidarr:\d+/, 'localhost:8686');
+        const baseUrl = url.replace(/\/api\/v3\/?$/, '').replace(/radarr:\d+/, 'localhost:7878');
         const poster = posterRaw.startsWith('http') ? posterRaw : posterRaw ? `${baseUrl}${posterRaw}` : '';
         const backdrop = backdropRaw.startsWith('http') ? backdropRaw : backdropRaw ? `${baseUrl}${backdropRaw}` : '';
         const hasFile = !!m.hasFile;

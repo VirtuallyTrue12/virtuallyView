@@ -89,12 +89,4 @@ export function tmdbArt(poster?: string, backdrop?: string) {
   return { poster: posterUrl, backdrop: backdropUrl };
 }
 
-export function clearTmdbCache() {
-  cache.clear();
-}
-
-export function tmdbCacheSize() {
-  return cache.size;
-}
-
 export { titleCase };

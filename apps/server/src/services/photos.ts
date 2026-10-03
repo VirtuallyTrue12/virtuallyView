@@ -63,7 +63,6 @@ export function validBookPath(relative: unknown): string | null {
 }
 export const favoriteBooks = (): string[] => listFlagged('favorite').filter(f => f.mediaType === 'book').map(f => f.mediaId);
 export const setBookFavorite = (relative: string, favorite: boolean): void => { setFlags('book', relative, { favorite }); };
-export const resetPhotoCache = (): void => { cache = null; bookCache = null; };
 
 /** A photo path from a client: only ones that exist inside the photos folder count. */
 export function validPhotoPath(relative: unknown): string | null {

@@ -310,3 +310,17 @@ export async function runArrCommand(
   if (!res.ok) return { success: false, message: `The service could not start ${what} (status ${res.status}).` };
   return { success: true, message: `Started ${what}. New downloads appear on the Downloads page.` };
 }
+
+/** A quick, uniform "is it up" check shared by every *arr adapter - only the API version differs. */
+export async function arrHealthCheck(config: { url: string; apiKey: string } | null, version: 'v1' | 'v3'): Promise<{ healthy: boolean; status: string }> {
+  if (!config) return { healthy: false, status: 'offline' };
+  try {
+    const res = await fetch(`${config.url}/api/${version}/system/status`, {
+      headers: { 'X-Api-Key': config.apiKey },
+      signal: AbortSignal.timeout(2500)
+    });
+    return { healthy: res.ok, status: res.ok ? 'online' : 'offline' };
+  } catch {
+    return { healthy: false, status: 'offline' };
+  }
+}

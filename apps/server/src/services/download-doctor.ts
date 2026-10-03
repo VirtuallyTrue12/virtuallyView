@@ -46,8 +46,6 @@ export function classify(row: Pick<QueueItem, 'status' | 'message' | 'progress'>
   return null;
 }
 
-/** How long a problem has to last before the doctor acts, in words for the page. */
-export const graceMinutes = (kind: Trouble): number => GRACE_MINUTES[kind];
 
 const titleKey = (row: QueueItem) => (row.mediaId ?? row.title).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().slice(0, 80);
 const since = (iso: string) => (Date.now() - Date.parse(iso)) / 60_000;

@@ -19,11 +19,6 @@ export interface ServiceConfig {
   enabled?: boolean;
 }
 
-export interface AdapterLike<T = unknown> {
-  connect(config: { url: string; apiKey: string }): Promise<T>;
-  disconnect(): Promise<void>;
-}
-
 export type ManagedAdapter =
   | RadarrAdapter
   | SonarrAdapter

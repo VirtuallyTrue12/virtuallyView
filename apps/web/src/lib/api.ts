@@ -1,4 +1,3 @@
-export type ItemStatus = 'available' | 'missing' | 'requested' | 'downloading' | 'importing' | 'paused';
 
 export interface MediaItem {
   id: string;

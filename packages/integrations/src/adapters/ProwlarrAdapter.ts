@@ -1,5 +1,6 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media } from '@virtuallyview/types';
+import { arrHealthCheck } from '../request-identity.js';
 
 export interface ProwlarrIndexer {
   id: number; name: string; protocol: string; privacy: string; enabled: boolean; definitionName: string;
@@ -52,16 +53,7 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
   }
 
   async healthCheck() {
-    if (!this.config) return { healthy: false, status: 'offline' };
-    try {
-      const res = await fetch(`${this.config.url}/api/v1/system/status`, {
-        headers: { 'X-Api-Key': this.config.apiKey },
-        signal: AbortSignal.timeout(2500)
-      });
-      return { healthy: res.ok, status: res.ok ? 'online' : 'offline' };
-    } catch {
-      return { healthy: false, status: 'offline' };
-    }
+    return arrHealthCheck(this.config, 'v1');
   }
 
   async getStatus() {

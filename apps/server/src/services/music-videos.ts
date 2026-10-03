@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { all, get, run } from '../db/app-db.js';
+import { all, run } from '../db/app-db.js';
 import type { TorrentInfo } from '@virtuallyview/integrations';
 import { cleanReleaseName } from './names.js';
 
@@ -178,8 +178,4 @@ export async function sweepMusicVideos(deps: FilerDeps): Promise<FileOutcome[]> 
   const outcomes: FileOutcome[] = [];
   for (const torrent of await findCandidates(deps)) outcomes.push(await fileTorrent(torrent, deps));
   return outcomes;
-}
-
-export function jobFor(hash: string) {
-  return get<JobRow>('SELECT * FROM music_video_jobs WHERE hash = ?', hash);
 }

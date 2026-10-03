@@ -18,10 +18,6 @@ export function getDownloads(): DownloadState[] {
   return downloads.map(d => ({ ...d }));
 }
 
-export function findDownload(id: string): DownloadState | undefined {
-  return downloads.find(d => d.id === id);
-}
-
 let seq = 1000;
 
 export function createDownload(input: Omit<DownloadState, 'id'> & { id?: string }): DownloadState {
@@ -68,11 +64,5 @@ export function resumeDownload(id: string): DownloadState | undefined {
 export function removeDownload(id: string): boolean {
   const before = downloads.length;
   downloads = downloads.filter(d => d.id !== id);
-  return downloads.length !== before;
-}
-
-export function removeDownloadByMediaId(mediaId: string): boolean {
-  const before = downloads.length;
-  downloads = downloads.filter(d => d.mediaId !== mediaId);
   return downloads.length !== before;
 }

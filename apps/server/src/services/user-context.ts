@@ -17,11 +17,5 @@ export function runAsActor<T>(actor: Actor, fn: () => T): T {
   return store.run(actor, fn);
 }
 
-/** Kept for callers that only know a user id. */
-export function runAsUser<T>(userId: string, fn: () => T): T {
-  return store.run({ userId, username: userId, role: 'user' }, fn);
-}
-
 export const currentActor = (): Actor => store.getStore() ?? SYSTEM;
 export const currentUserId = (): string => currentActor().userId;
-export const isAdminActor = (): boolean => currentActor().role !== 'user';

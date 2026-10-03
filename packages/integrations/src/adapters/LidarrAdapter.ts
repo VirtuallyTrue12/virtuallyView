@@ -1,7 +1,7 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
 import { artProxyUrl } from '../art-proxy.js';
-import { runArrCommand, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { runArrCommand, arrHealthCheck, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
 import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
 import { TtlCache } from '../ttl-cache.js';
 
@@ -62,16 +62,7 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
 
   async healthCheck() {
-    if (!this.config) return { healthy: false, status: 'offline' };
-    try {
-      const res = await fetch(`${this.config.url}/api/v1/system/status`, {
-        headers: { 'X-Api-Key': this.config.apiKey },
-        signal: AbortSignal.timeout(2500)
-      });
-      return { healthy: res.ok, status: res.ok ? 'online' : 'offline' };
-    } catch {
-      return { healthy: false, status: 'offline' };
-    }
+    return arrHealthCheck(this.config, 'v1');
   }
 
   async setMinimumSeeders(minimum: number): Promise<MinimumSeedersResult> {

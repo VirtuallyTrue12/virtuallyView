@@ -20,6 +20,5 @@ export function acquireConversion(userId: string): (() => void) | null {
   };
 }
 
-export const conversionLimits = { total: MAX_TOTAL, perUser: MAX_PER_USER };
 /** Longest a single conversion may run before it is stopped. */
 export const CONVERSION_MAX_MS = 12 * 3_600_000;
