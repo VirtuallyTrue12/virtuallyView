@@ -8,6 +8,12 @@
  */
 export class TtlCache<T> {
   private entries = new Map<string, { value: T; at: number }>();
+  // Single-flight: a byte-range player can fire a dozen requests for the same key within milliseconds
+  // of each other, right as a 10s TTL expires. Without this, every one of them starts its own upstream
+  // fetch before the first finishes - the exact request storm this cache exists to prevent, just moved
+  // from "always" to "right when the cache turns over". Concurrent callers for the same key instead
+  // share one in-flight fetch and get the same answer.
+  private inflight = new Map<string, Promise<T>>();
   /**
    * `staleMs`, when set, is how long a value already served keeps answering if a refresh fails (a
    * brief Radarr/Sonarr restart or timeout), instead of throwing straight through. Left unset (the
@@ -20,15 +26,23 @@ export class TtlCache<T> {
   async get(key: string, fill: () => Promise<T>): Promise<T> {
     const hit = this.entries.get(key);
     if (hit && Date.now() - hit.at < this.ttlMs) return hit.value;
-    try {
-      const value = await fill();
-      if (this.entries.size >= this.max) this.entries.delete(this.entries.keys().next().value as string);
-      this.entries.set(key, { value, at: Date.now() });
-      return value;
-    } catch (error) {
-      if (hit && this.staleMs > 0 && Date.now() - hit.at < this.staleMs) return hit.value;
-      throw error;
-    }
+    const already = this.inflight.get(key);
+    if (already) return already;
+    const promise = (async () => {
+      try {
+        const value = await fill();
+        if (this.entries.size >= this.max) this.entries.delete(this.entries.keys().next().value as string);
+        this.entries.set(key, { value, at: Date.now() });
+        return value;
+      } catch (error) {
+        if (hit && this.staleMs > 0 && Date.now() - hit.at < this.staleMs) return hit.value;
+        throw error;
+      } finally {
+        this.inflight.delete(key);
+      }
+    })();
+    this.inflight.set(key, promise);
+    return promise;
   }
 
   /** Drops one key (or everything) so the next read is fresh — used right after a change this cache would otherwise still be serving stale. */

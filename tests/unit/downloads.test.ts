@@ -63,6 +63,20 @@ describe('real download HTTP contract', () => {
     expect(rows.filter((r: { mediaId: string }) => r.mediaId === 'sonarr-7')).toHaveLength(3);
   });
 
+  test('two client rows sharing one mediaId (no hash to match by) are claimed in order, one each, not both by the first', async () => {
+    upstream.qbittorrent.getQueue.mockResolvedValue([
+      { id: 'queue-c1', mediaId: 'sonarr-9', title: 'Client A', status: 'downloading', progress: 15 },
+      { id: 'queue-c2', mediaId: 'sonarr-9', title: 'Client B', status: 'downloading', progress: 65 }
+    ]);
+    upstream.sonarr.getQueue.mockResolvedValue([
+      { id: 'queue-301', mediaId: 'sonarr-9', episodeId: 301, title: 'Show S02E01', status: 'downloading', progress: 15 },
+      { id: 'queue-302', mediaId: 'sonarr-9', episodeId: 302, title: 'Show S02E02', status: 'downloading', progress: 65 }
+    ]);
+    const rows = (await app.inject('/api/downloads')).json();
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r: { progress: number }) => r.progress).sort()).toEqual([15, 65]);
+    expect(rows.every((r: { reportedBy: string[] }) => r.reportedBy.includes('sonarr'))).toBe(true);
+  });
   test('several episodes of one season-pack torrent (same downloadId) collapse into a single row, not one per episode', async () => {
     // Sonarr reports one queue entry per file in the pack, but all share the same downloadId (the
     // client's own torrent hash): that is the real, physical download, and must read as one row.

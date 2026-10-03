@@ -35,6 +35,25 @@ describe('release picker', () => {
     expect(await picker.searchReleases('a')).toEqual([]);
   });
 
+  it('ranks a healthier swarm above an equal-seeder one with no active leechers, and a newer release on a closer tie', async () => {
+    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue([
+      release({ guid: 'magnet:?xt=urn:btih:dead', title: 'Linkin Park Meteora', seeders: 5, leechers: 0, ageDays: 10 }),
+      release({ guid: 'magnet:?xt=urn:btih:healthy', title: 'Linkin Park Meteora', seeders: 5, leechers: 8, ageDays: 10 }),
+      release({ guid: 'magnet:?xt=urn:btih:newer', title: 'Linkin Park Meteora', seeders: 5, leechers: 8, ageDays: 1 })
+    ] as never);
+    const list = await picker.searchReleases('linkin park meteora');
+    expect(list.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:newer', 'magnet:?xt=urn:btih:healthy', 'magnet:?xt=urn:btih:dead']);
+  });
+
+  it('drops a result that shares no real word with the search, however many seeders it has', async () => {
+    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue([
+      release({ guid: 'magnet:?xt=urn:btih:right', title: 'Linkin Park Meteora', seeders: 3 }),
+      release({ guid: 'magnet:?xt=urn:btih:junk', title: 'Totally Unrelated Show S01E01', seeders: 500 })
+    ] as never);
+    const list = await picker.searchReleases('linkin park meteora');
+    expect(list.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:right']);
+  });
+
   it('starts only a release the server listed, as an unmanaged download', async () => {
     const qbit = registry.getAdapter('qbittorrent') as never;
     const magnet = vi.spyOn(qbit, 'addMagnet').mockResolvedValue({ success: true, message: 'Started.' } as never);

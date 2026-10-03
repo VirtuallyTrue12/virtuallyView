@@ -40,13 +40,43 @@ export function toChoice(r: ProwlarrRelease): ReleaseChoice {
   };
 }
 
-/** Everything the search sources have for these words, best-seeded first. Dead torrents are left out. */
+/** The significant (3+ letter) words in a search, for a loose relevance check against what came back. */
+function significantWords(text: string): string[] {
+  return text.toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(w => w.length >= 3);
+}
+
+/**
+ * How well a release matches the words actually searched for, independent of seeders: an indexer's own
+ * search is fuzzy and sometimes returns results that only share one word with the query. 1 when every
+ * significant word of the query appears in the title, scaling down as fewer do; a release matching none
+ * of them is dropped outright rather than ranked low, since no amount of seeders makes it the right title.
+ */
+function relevance(title: string, queryWords: string[]): number {
+  if (queryWords.length === 0) return 1;
+  const titleWords = new Set(significantWords(title));
+  const matched = queryWords.filter(w => titleWords.has(w)).length;
+  return matched / queryWords.length;
+}
+
+/**
+ * A release's rank: seeders dominate (the main driver of real download speed), a healthier swarm
+ * (leechers actively trying to join, capped at the seeder count so a long-dead torrent with one
+ * leftover seeder and hundreds of stale leechers cannot outrank a genuinely active one) adds a little,
+ * and a newer release breaks a close tie, since a fresher encode is more often the cleaner one.
+ */
+function releaseScore(r: ProwlarrRelease): number {
+  return r.seeders * 10 + Math.min(r.leechers, r.seeders) - Math.min(r.ageDays, 3650) / 3650;
+}
+
+/** Everything the search sources have for these words, best-matched and best-seeded first. Dead torrents and off-topic results are left out. */
 export async function searchReleases(query: string): Promise<ReleaseChoice[]> {
   const q = query.trim().slice(0, 200);
   if (q.length < 2) return [];
+  const queryWords = significantWords(q);
   const found = (await getAdapter<ProwlarrAdapter>('prowlarr').searchReleases(q))
     .filter(r => r.protocol === 'torrent' && (r.seeders > 0 || r.guid.startsWith('magnet:')) && r.size > 0)
-    .sort((a, b) => b.seeders - a.seeders)
+    .filter(r => relevance(r.title, queryWords) > 0)
+    .sort((a, b) => releaseScore(b) - releaseScore(a))
     .slice(0, 60);
   remember(found);
   return found.map(toChoice);

@@ -217,7 +217,20 @@ export async function getDownloads(): Promise<QueueItem[]> {
   if (results.every(result => !result.ok)) throw new Error('Download services are unavailable. Check integrations and try again.');
   const rows = results.flatMap(result => result.rows);
   const clients = rows.filter(row => ['qbittorrent', 'nzbget'].includes(row.sourceClient));
+  const clientSet = new Set(clients);
   const merged = [...clients];
+  // O(1) lookups instead of re-scanning every client row for every manager row: on a large queue
+  // (hundreds of rows, as a season pack or album produces before dedup) that scan was the dominant
+  // cost of a call this app's own "visible tab" poll makes every few seconds.
+  const clientsByHash = new Map<string, QueueItem>();
+  const clientsByMediaId = new Map<string, QueueItem[]>();
+  for (const row of clients) {
+    if (row.sourceClient === 'qbittorrent') clientsByHash.set(row.id.slice('queue-qbittorrent-'.length).toLowerCase(), row);
+    if (row.mediaId) {
+      const list = clientsByMediaId.get(row.mediaId);
+      if (list) list.push(row); else clientsByMediaId.set(row.mediaId, [row]);
+    }
+  }
   // Sonarr (and Lidarr) report one queue entry per *file* - one per episode in a season pack, one per
   // track in an album - even though they all belong to the same physical transfer. downloadId is the
   // download client's own torrent/nzb id and is identical across every one of those entries, so this
@@ -226,7 +239,7 @@ export async function getDownloads(): Promise<QueueItem[]> {
   // downloading at once would wrongly collapse into one and silently drop the rest.
   const byDownloadId = new Map<string, QueueItem>();
   const dedupedManagers: QueueItem[] = [];
-  for (const manager of rows.filter(row => !clients.includes(row))) {
+  for (const manager of rows.filter(row => !clientSet.has(row))) {
     const transfer = manager.downloadId?.toLowerCase();
     const existing = transfer ? byDownloadId.get(transfer) : undefined;
     if (existing) {
@@ -247,18 +260,15 @@ export async function getDownloads(): Promise<QueueItem[]> {
     // A title is NOT an identity: different releases often share a title.
     // Merge by download ID first (torrent hashes), then by the media identity
     // both sources report, so a completed movie never reads as two downloads.
+    // Numeric IDs can collide between NZBGet instances. Until upstream client identity is carried
+    // explicitly, merge only torrent hashes - the same restriction as before, just an O(1) lookup now.
     const transfer = manager.downloadId?.toLowerCase();
-    const client = transfer ? clients.find(row => {
-      if (claimed.has(row)) return false;
-      const rawId = row.id.slice(`queue-${row.sourceClient}-`.length).toLowerCase();
-      // Numeric IDs can collide between NZBGet instances. Until upstream
-      // client identity is carried explicitly, merge only torrent hashes.
-      return row.sourceClient === 'qbittorrent' && /^[a-f0-9]{40}$/.test(transfer) && transfer === rawId;
-    }) : undefined;
+    const hashMatch = transfer && /^[a-f0-9]{40}$/.test(transfer) ? clientsByHash.get(transfer) : undefined;
+    const client = hashMatch && !claimed.has(hashMatch) ? hashMatch : undefined;
     // The media identity alone (mediaId, no episode/track) only ever picks a real *client* row: two manager
     // rows for the same show (different episodes) sharing that id must never merge with each other, since
     // nothing here distinguishes which one is which.
-    const byMediaId = client ?? (manager.mediaId ? clients.find(row => !claimed.has(row) && row.mediaId === manager.mediaId) : undefined);
+    const byMediaId = client ?? (manager.mediaId ? clientsByMediaId.get(manager.mediaId)?.find(row => !claimed.has(row)) : undefined);
     if (!byMediaId) {
       merged.push(manager);
       claimed.add(manager);
