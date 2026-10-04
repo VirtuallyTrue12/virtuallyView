@@ -81,6 +81,9 @@ export default function VideoPlayer({
 }: VideoPlayerProps) {
   const [pulling, setPulling] = useState(false);
   const [pullNote, setPullNote] = useState<string | null>(null);
+  // Bumped whenever the item itself changes, so a pull started on one episode can't land its
+  // result on whatever episode is showing by the time the search actually finishes.
+  const pullToken = useRef(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -298,6 +301,7 @@ export default function VideoPlayer({
     setWaiting(true);
     setPulling(false);
     setPullNote(null);
+    pullToken.current++;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, transcodeSrc]);
 
@@ -618,15 +622,21 @@ export default function VideoPlayer({
                           className="vp-menu-item"
                           disabled={pulling}
                           onClick={async () => {
+                            const token = pullToken.current;
                             setPulling(true);
                             setPullNote(null);
                             try {
                               const result = await onPullSubtitles();
+                              // The item itself may have changed while this was in flight (autoplay,
+                              // or the viewer just clicked Next) - a stale result must not land on
+                              // whatever is showing now.
+                              if (pullToken.current !== token) return;
                               setPullNote(result.message);
                             } catch (err) {
+                              if (pullToken.current !== token) return;
                               setPullNote(err instanceof Error ? err.message : 'Could not reach the server.');
                             } finally {
-                              setPulling(false);
+                              if (pullToken.current === token) setPulling(false);
                             }
                           }}
                         >{pulling ? 'Pulling subtitles...' : 'Pull subtitles'}</button>

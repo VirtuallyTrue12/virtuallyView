@@ -241,6 +241,42 @@ describe('pull subtitles', () => {
     await page.reload();
     await page.waitForSelector('.user-menu-button');
   });
+
+  it('a slow pull that is still running when the viewer skips to the next episode cannot land on it', async () => {
+    const episode = (id: string, n: number) => ({ id, seriesId: 'sonarr-501', seasonNumber: 1, episodeNumber: n, title: `Ep ${n}`, hasFile: true });
+    await page.route('**/api/series/sonarr-501', r => r.fulfill(json({ id: 'sonarr-501', title: 'Test Show', status: 'available' })));
+    await page.route('**/api/series/sonarr-501/episodes', r => r.fulfill(json({ episodes: [episode('ep-501a', 1), episode('ep-501b', 2)] })));
+    for (const id of ['ep-501a', 'ep-501b']) {
+      await page.route(`**/api/stream/episode/${id}/info`, r => r.fulfill(json({ playable: true, transcodingAvailable: false, durationSeconds: 100, container: 'mp4', videoCodec: 'h264', audioCodec: 'aac', reason: null })));
+      await page.route(`**/api/progress/episode/${id}`, r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+      await page.route(`**/api/stream/episode/${id}/subtitles`, r => r.fulfill(json({ subtitles: [] })));
+    }
+    // Episode 1's search never resolves on its own in this test - it only answers once released below,
+    // simulating a search still in flight when the viewer has already moved on.
+    let releaseEp1: (() => void) | null = null;
+    const ep1Held = new Promise<void>(resolve => { releaseEp1 = resolve; });
+    await page.route('**/api/series/sonarr-501/episodes/ep-501a/subtitles/search', async r => {
+      await ep1Held;
+      await r.fulfill(json({ success: false, message: 'STALE EPISODE 1 RESULT' }));
+    });
+
+    await page.goto(base + '/series/sonarr-501/watch/ep-501a');
+    await page.waitForSelector('.player-title');
+    await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Pull subtitles' }).click();
+    await page.getByText('Pulling subtitles...').waitFor();
+
+    await page.getByRole('button', { name: 'Next episode' }).click();
+    await page.waitForFunction(() => document.querySelector('.player-title')?.textContent?.includes('Ep 2'));
+    // Now let episode 1's long-overdue answer land, after the viewer is already on episode 2.
+    releaseEp1?.();
+    await page.waitForTimeout(300);
+
+    await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
+    await page.getByText('No subtitle files found for this title').waitFor();
+    expect(await page.locator('.vp-menu').innerText()).not.toContain('STALE EPISODE 1 RESULT');
+    expect(errors).toEqual([]);
+  });
 });
 
 describe('refresh button', () => {

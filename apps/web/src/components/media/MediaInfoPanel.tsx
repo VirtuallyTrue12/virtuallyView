@@ -10,7 +10,7 @@ export function MediaInfoPanel({ load }: { load: () => Promise<MediaPlaybackInfo
   const minutes = info.durationSeconds ? Math.round(info.durationSeconds / 60) : 0;
   const rows: Array<[string, string]> = [
     ['Resolution', [resolutionLabel(info.height), info.width && info.height ? `${info.width}×${info.height}` : ''].filter(Boolean).join(' · ')],
-    ['Container', info.container.toUpperCase()],
+    ['Container', (info.container ?? '').toUpperCase()],
     ['Video', (info.videoCodec ?? '').toUpperCase()],
     ['Audio', (info.audioTracks ?? []).map(t => `${t.title || languageName(t.language)} (${t.codec.toUpperCase()}${t.channels ? ` ${t.channels}ch` : ''})`).join(', ')],
     ['Subtitles', (info.subtitleStreams ?? []).map(t => `${t.title || languageName(t.language)}${t.text ? '' : ' (image)'}`).join(', ')],
