@@ -203,6 +203,8 @@ describe('media folder', () => {
     await page.getByRole('button', { name: 'Copy' }).click();
     await page.getByRole('button', { name: 'Copied' }).waitFor();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('/home/you/Videos/Movies');
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await page.getByText('Could not reach the open-folder helper').waitFor();
     await page.keyboard.press('Escape');
     await page.getByRole('dialog').waitFor({ state: 'detached' });
 

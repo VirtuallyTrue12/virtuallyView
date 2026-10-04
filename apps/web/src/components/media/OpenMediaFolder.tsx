@@ -5,27 +5,52 @@ import { SvgIcon } from '../ui/SvgIcon';
 
 type Kind = 'movies' | 'tv' | 'music' | 'photos' | 'books';
 
-function CopyRow({ path }: { path: string }) {
+// Matches the fixed port in scripts/open-folder-helper.mjs - a tiny opt-in helper you run on your own
+// computer (not in a container) so this button can pop the folder open in your normal file manager.
+// Only reachable when your browser and that helper are on the same computer, which is the common case
+// for a self-hosted server you also browse from; otherwise the fetch just fails and Copy still works.
+const OPEN_HELPER_PORT = 3998;
+
+function CopyRow({ path, canOpen }: { path: string; canOpen?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [openErr, setOpenErr] = useState<string | null>(null);
   return (
-    <div className="settings-row" style={{ gap: 8 }}>
-      <code style={{ flex: 1, overflowWrap: 'anywhere' }}>{path}</code>
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
-        onClick={async () => {
-          try { await navigator.clipboard.writeText(path); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
-        }}
-      ><SvgIcon name="copy" size={14} /> {copied ? 'Copied' : 'Copy'}</button>
+    <div>
+      <div className="settings-row" style={{ gap: 8 }}>
+        <code style={{ flex: 1, overflowWrap: 'anywhere' }}>{path}</code>
+        {canOpen && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={async () => {
+              setOpenErr(null);
+              try {
+                const res = await fetch(`http://localhost:${OPEN_HELPER_PORT}/open`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) });
+                if (!res.ok) throw new Error('refused');
+              } catch {
+                setOpenErr('Could not reach the open-folder helper on this computer - see docs/existing-media.md to set it up, or use Copy instead.');
+              }
+            }}
+          ><SvgIcon name="folder" size={14} /> Open</button>
+        )}
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={async () => {
+            try { await navigator.clipboard.writeText(path); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
+          }}
+        ><SvgIcon name="copy" size={14} /> {copied ? 'Copied' : 'Copy'}</button>
+      </div>
+      {openErr && <p className="dlg-help" role="alert">{openErr}</p>}
     </div>
   );
 }
 
 /**
- * Shows the real folder on your computer for a library, with a copy button, so you can find it to drag
- * files in. A browser page cannot open a native file-manager window on your own desktop - that is a
- * security boundary every browser enforces, not something this app can work around - so this shows the
- * path instead of opening it for you.
+ * Shows the real folder on your computer for a library. A browser page cannot open a native
+ * file-manager window on your own desktop by itself - that is a security boundary every browser
+ * enforces - so Open calls a small opt-in helper that runs on your own computer instead (only
+ * reachable when you browse from that same computer); Copy always works as a fallback.
  */
 export function OpenMediaFolder({ kind }: { kind: Kind }) {
   const [open, setOpen] = useState(false);
@@ -48,8 +73,8 @@ export function OpenMediaFolder({ kind }: { kind: Kind }) {
           <>
             {info.hostPath ? (
               <>
-                <p className="dlg-help">The real folder on your computer. Drag files into it directly; a rescan picks them up.</p>
-                <CopyRow path={info.hostPath} />
+                <p className="dlg-help">The real folder on your computer. Open shows it in your file manager (needs the open-folder helper running - see docs/existing-media.md); Copy lets you find and drag into it yourself.</p>
+                <CopyRow path={info.hostPath} canOpen />
               </>
             ) : (
               <p className="dlg-help">

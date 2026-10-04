@@ -18,6 +18,26 @@ You can set any mix of these. Leave a line out and that part keeps using Docker'
 
 Once a line is set, the **Media folder** button on that library's page shows the real path on your computer, with a copy button, so you can find it to drag files in. Without it, the button explains that the library is on Docker-managed storage instead.
 
+### Opening the folder with one click
+
+Containers have no access to your desktop, so **Open** needs a tiny helper running directly on your computer (not in Docker/Podman at all) that only ever opens one of the exact folders set above - never an arbitrary path - and only answers a browser that is also on this same computer. If you browse the dashboard from a different device, Open will not work there; Copy always does.
+
+Set it up once, as your own user (not root). Create `~/.config/systemd/user/open-folder-helper.service`, with the real path to this repo:
+
+```ini
+[Unit]
+Description=virtuallyView open-folder helper
+
+[Service]
+ExecStart=/usr/bin/node /path/to/virtuallyView/scripts/open-folder-helper.mjs
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Then: `systemctl --user daemon-reload && systemctl --user enable --now open-folder-helper`. It reads the same `.env` on every request, so changing `MOVIES_DIR` and friends takes effect without restarting it.
+
 ## Then tell the library about the files
 
 Files in a folder do not appear by themselves. Add each title once:
