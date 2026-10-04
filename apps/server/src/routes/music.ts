@@ -140,18 +140,18 @@ export default async function musicRoutes(server: FastifyInstance) {
     }
   });
 
-  const trackFile = async (id: string): Promise<{ safePath: string } | { error: 400 | 404; message: string }> => {
+  const trackFile = async (id: string): Promise<{ safePath: string } | { status: 400 | 404; error: 'bad_request' | 'not_found'; message: string }> => {
     const numeric = id.replace(/^track-/, '');
-    if (!/^\d+$/.test(numeric)) return { error: 400, message: 'Invalid track id.' };
+    if (!/^\d+$/.test(numeric)) return { status: 400, error: 'bad_request', message: 'Invalid track id.' };
     let file: { path: string } | null;
     try {
       file = await lidarr.getTrackFile(numeric);
     } catch {
       file = null;
     }
-    if (!file || !file.path) return { error: 404, message: 'This track has no audio file on the server yet.' };
+    if (!file || !file.path) return { status: 404, error: 'not_found', message: 'This track has no audio file on the server yet.' };
     if (!existsSync(file.path) || !isAllowedMediaFile(file.path)) {
-      return { error: 404, message: 'The audio file for this track is missing or outside the allowed media folders.' };
+      return { status: 404, error: 'not_found', message: 'The audio file for this track is missing or outside the allowed media folders.' };
     }
     return { safePath: realpathSync(file.path) };
   };
@@ -160,7 +160,7 @@ export default async function musicRoutes(server: FastifyInstance) {
   // way video does, so a library ripped with those is not simply a dead player.
   server.get<{ Params: { id: string }; Querystring: { start?: string } }>('/api/music/stream/:id/transcode', async (request, reply) => {
     const resolved = await trackFile(request.params.id);
-    if ('error' in resolved) return reply.code(resolved.error).send({ error: 'not_found', message: resolved.message });
+    if ('status' in resolved) return reply.code(resolved.status).send({ error: resolved.error, message: resolved.message });
     const start = Math.max(0, Number(request.query.start) || 0);
     const release = acquireConversion(currentActor().userId);
     if (!release) {
@@ -187,7 +187,7 @@ export default async function musicRoutes(server: FastifyInstance) {
 
   server.get<{ Params: { id: string } }>('/api/music/stream/:id', async (request, reply) => {
     const resolved = await trackFile(request.params.id);
-    if ('error' in resolved) return reply.code(resolved.error).send({ error: 'not_found', message: resolved.message });
+    if ('status' in resolved) return reply.code(resolved.status).send({ error: resolved.error, message: resolved.message });
     const safePath = resolved.safePath;
     const stat = statSync(safePath);
     const mime = audioMime(safePath);

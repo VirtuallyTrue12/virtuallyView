@@ -668,9 +668,15 @@ export const api = {
     getJSON<{ seriesId: string; episodes: EpisodeItem[] }>(`/api/series/${encodeURIComponent(id)}/episodes`),
   subtitles: (streamUrl: string) => getJSON<{ subtitles: SubtitleTrack[] }>(`${streamUrl}/subtitles`),
   pullSubtitles: async (path: string, language = 'en'): Promise<{ success: boolean; message: string }> => {
-    const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language }) });
-    const data = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string };
-    return { success: res.ok && data.success !== false, message: data.message ?? (res.ok ? 'Done.' : `Request failed (${res.status}).`) };
+    // Not found/unavailable (422/503) is an expected, displayable outcome here, not an exception - but
+    // still routed through postJSON so a 401 triggers the same session-expired flow every other
+    // mutating call gets, instead of silently showing a generic failure.
+    try {
+      const data = await postJSON<{ success?: boolean; message?: string }>(path, { language });
+      return { success: data.success !== false, message: data.message ?? 'Done.' };
+    } catch (err) {
+      return { success: false, message: err instanceof Error ? err.message : 'Request failed.' };
+    }
   },
   playlists: () => getJSON<PlaylistItem[]>('/api/playlists'),
   playlist: (id: string) => getJSON<PlaylistItem>(`/api/playlists/${encodeURIComponent(id)}`),

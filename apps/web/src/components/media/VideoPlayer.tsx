@@ -296,6 +296,8 @@ export default function VideoPlayer({
     setOffset(isTranscode ? Math.floor(startAt) : 0);
     setTime(0);
     setWaiting(true);
+    setPulling(false);
+    setPullNote(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, transcodeSrc]);
 
@@ -618,9 +620,14 @@ export default function VideoPlayer({
                           onClick={async () => {
                             setPulling(true);
                             setPullNote(null);
-                            const result = await onPullSubtitles();
-                            setPullNote(result.message);
-                            setPulling(false);
+                            try {
+                              const result = await onPullSubtitles();
+                              setPullNote(result.message);
+                            } catch (err) {
+                              setPullNote(err instanceof Error ? err.message : 'Could not reach the server.');
+                            } finally {
+                              setPulling(false);
+                            }
                           }}
                         >{pulling ? 'Pulling subtitles...' : 'Pull subtitles'}</button>
                       )}

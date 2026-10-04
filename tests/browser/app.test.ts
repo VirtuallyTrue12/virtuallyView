@@ -216,6 +216,33 @@ describe('media folder', () => {
   });
 });
 
+describe('pull subtitles', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('searches from the player menu, and an expired session during the pull returns to sign-in', async () => {
+    await page.route('**/api/movies/radarr-501', r => r.fulfill(json({ id: 'radarr-501', title: 'Test Reel', status: 'available' })));
+    await page.route('**/api/stream/radarr-501/info', r => r.fulfill(json({ playable: true, transcodingAvailable: false, durationSeconds: 100 })));
+    await page.route('**/api/progress/movie/radarr-501', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await page.route('**/api/stream/radarr-501/subtitles', r => r.fulfill(json({ subtitles: [] })));
+    await page.route('**/api/movies/radarr-501/subtitles/search', r => r.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Not signed in.' }) }));
+
+    await page.goto(base + '/movies/radarr-501/play');
+    await page.waitForSelector('.player-title');
+    await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
+    await page.getByText('No subtitle files found for this title').waitFor();
+    await page.getByRole('menuitem', { name: 'Pull subtitles' }).click();
+    // A 401 here must trip the same global session-expired flow every other mutating call gets,
+    // not just show a dead-end error inside the player menu.
+    await page.getByText('Your session expired. Please sign in again.').waitFor();
+    expect(errors).toEqual([]);
+
+    // The real session cookie was never touched (only this test's mocked route returned 401), so a
+    // plain reload picks it back up - leaves a clean, signed-in state for whatever runs next.
+    await page.reload();
+    await page.waitForSelector('.user-menu-button');
+  });
+});
+
 describe('refresh button', () => {
   it('sits in the top bar of every page, reloads the page you are on, and is absent while playing', async () => {
     for (const path of ['/', '/movies', '/requests', '/settings', '/wiki']) {

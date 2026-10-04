@@ -456,7 +456,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (!audio || !queue.length) return;
     const current = queue[Math.min(index, queue.length - 1)] ?? queue[0];
     const expected = `/api/music/stream/${current.track.id}`;
-    if (!audio.src || !audio.src.includes(expected)) {
+    // Compare against the last URL we actually chose, not audio.src itself: once a track has fallen
+    // back to /transcode (or a seek added ?start=), audio.src no longer equals the plain URL even
+    // though it is still the right track, and a substring check here matched the wrong track whenever
+    // one id was a prefix of another's (e.g. "5" inside "57").
+    if (rawSrc.current !== expected) {
       rawSrc.current = expected;
       audio.src = expected;
       if (wantPlay.current) void audio.play().catch(() => undefined);
