@@ -285,7 +285,13 @@ export function ffmpegHlsArgs(filePath: string, startSeconds = 0, options: Trans
   args.push(
     '-f', 'hls',
     '-hls_time', '2',
-    '-hls_playlist_type', 'vod',
+    // "vod" tells ffmpeg the whole playlist is already known, so it withholds index.m3u8 until the
+    // entire file has finished encoding - fine for a few seconds of test clip, but a real movie or
+    // episode can take minutes, and every request in that window saw a 503 ("has not produced anything
+    // yet") because the playlist genuinely did not exist. "event" is what this actually is - a playlist
+    // that grows as ffmpeg goes - and ffmpeg writes and updates it after every segment, so the player
+    // gets something to play within a couple of seconds like it is meant to.
+    '-hls_playlist_type', 'event',
     '-hls_flags', 'independent_segments+temp_file',
     '-hls_segment_filename', HLS_SEGMENT_PATTERN,
     HLS_PLAYLIST

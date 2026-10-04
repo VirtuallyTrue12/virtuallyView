@@ -238,11 +238,13 @@ describe('photo and book folders', () => {
 });
 
 describe('HLS conversion for Safari and TV browsers', () => {
-  it('packages the same encode as a VOD playlist instead of one progressive stream', async () => {
+  it('packages the same encode as a growing event playlist instead of one progressive stream', async () => {
     const { ffmpegHlsArgs } = await import('../../apps/server/src/services/transcode');
     const args = ffmpegHlsArgs('/m/a.mkv', 30, { audio: 1 });
     expect(args).toContain('-force_key_frames'); // same 2-second cadence that paces the segments
-    expect(args).toEqual(expect.arrayContaining(['-f', 'hls', '-hls_playlist_type', 'vod', '-hls_segment_filename', 'seg%05d.ts', 'index.m3u8']));
+    // "event", not "vod": vod withholds index.m3u8 until the whole file has finished encoding, which for
+    // a real movie or episode is minutes away - event writes and updates it after every segment instead.
+    expect(args).toEqual(expect.arrayContaining(['-f', 'hls', '-hls_playlist_type', 'event', '-hls_segment_filename', 'seg%05d.ts', 'index.m3u8']));
     expect(args).toContain('-ss');
     expect(args[args.indexOf('-ss') + 1]).toBe('30');
   });
