@@ -140,14 +140,18 @@ export default async function musicRoutes(server: FastifyInstance) {
     }
   });
 
-  const trackFile = async (id: string): Promise<{ safePath: string } | { status: 400 | 404; error: 'bad_request' | 'not_found'; message: string }> => {
+  const trackFile = async (id: string): Promise<{ safePath: string } | { status: 400 | 404 | 502; error: 'bad_request' | 'not_found' | 'lidarr_offline'; message: string }> => {
     const numeric = id.replace(/^track-/, '');
     if (!/^\d+$/.test(numeric)) return { status: 400, error: 'bad_request', message: 'Invalid track id.' };
     let file: { path: string } | null;
     try {
       file = await lidarr.getTrackFile(numeric);
-    } catch {
-      file = null;
+    } catch (error) {
+      // getTrackFile only throws when Lidarr itself is unreachable or unconfigured (requireConfig(),
+      // or the fetch failing/timing out) - a track that genuinely has no file yet resolves to null
+      // instead, so conflating the two here previously reported a transient Lidarr outage as a
+      // permanent 404, the same inconsistency every sibling route in this file already avoids.
+      return { status: 502, error: 'lidarr_offline', message: error instanceof Error ? error.message : 'Lidarr is not available.' };
     }
     if (!file || !file.path) return { status: 404, error: 'not_found', message: 'This track has no audio file on the server yet.' };
     if (!existsSync(file.path) || !isAllowedMediaFile(file.path)) {

@@ -576,6 +576,14 @@ describe('e2e: music', () => {
     const badIdTranscode = await req('GET', '/api/music/stream/not-a-number/transcode');
     expect(badIdTranscode.status).toBe(400);
     expect(badIdTranscode.json.error).toBe('bad_request');
+    // Lidarr unreachable (unconfigured here) is a service error, not "no file yet": a valid-looking
+    // track id must surface 502 lidarr_offline, the same distinction /api/artists/lidarr-2 makes above.
+    const noLidarr = await req('GET', '/api/music/stream/999999');
+    expect(noLidarr.status).toBe(502);
+    expect(noLidarr.json.error).toBe('lidarr_offline');
+    const noLidarrTranscode = await req('GET', '/api/music/stream/999999/transcode');
+    expect(noLidarrTranscode.status).toBe(502);
+    expect(noLidarrTranscode.json.error).toBe('lidarr_offline');
 
     const albums = await req('GET', '/api/artists/lidarr-9/albums');
     expect([200, 502]).toContain(albums.status);
