@@ -311,6 +311,23 @@ export function startTranscode(filePath: string, startSeconds = 0, options: Tran
   return { process: child };
 }
 
+/** Audio only: strips any attached cover art (ffprobe sees it as a video stream) and re-encodes
+ * to AAC/ADTS, a plain elementary stream any <audio> element can play progressively. */
+export function ffmpegAudioArgs(filePath: string, startSeconds = 0): string[] {
+  const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
+  if (startSeconds > 0) args.push('-ss', String(startSeconds));
+  args.push('-i', filePath, '-map', '0:a:0', '-vn', '-c:a', 'aac', '-b:a', '256k', '-f', 'adts', 'pipe:1');
+  return args;
+}
+
+/** Start an ffmpeg audio transcode to AAC/ADTS on stdout. Returns null if unavailable. */
+export function startAudioTranscode(filePath: string, startSeconds = 0): TranscodeHandle | null {
+  const ffmpeg = resolveBinary('ffmpeg');
+  if (!ffmpeg) return null;
+  const child = spawn(ffmpeg, ffmpegAudioArgs(filePath, startSeconds), { stdio: ['ignore', 'pipe', 'pipe'] });
+  return { process: child };
+}
+
 /** Extract an embedded text subtitle stream as WebVTT (bitmap subtitles are not supported). */
 export function extractSubtitleVtt(filePath: string, streamIndex: number): Promise<string | null> {
   const ffmpeg = resolveBinary('ffmpeg');

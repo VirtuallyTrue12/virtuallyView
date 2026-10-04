@@ -249,3 +249,18 @@ describe('HLS conversion for Safari and TV browsers', () => {
     expect(args[args.indexOf('-ss') + 1]).toBe('30');
   });
 });
+
+describe('audio conversion for formats a plain <audio> element cannot play', () => {
+  it('maps only the audio stream (never an attached cover image) to AAC/ADTS', async () => {
+    const { ffmpegAudioArgs } = await import('../../apps/server/src/services/transcode');
+    const args = ffmpegAudioArgs('/m/a.wma', 45);
+    expect(args).toEqual(expect.arrayContaining(['-map', '0:a:0', '-vn', '-c:a', 'aac', '-f', 'adts', 'pipe:1']));
+    expect(args).toContain('-ss');
+    expect(args[args.indexOf('-ss') + 1]).toBe('45');
+  });
+
+  it('omits -ss entirely when starting from the beginning', async () => {
+    const { ffmpegAudioArgs } = await import('../../apps/server/src/services/transcode');
+    expect(ffmpegAudioArgs('/m/a.wma')).not.toContain('-ss');
+  });
+});

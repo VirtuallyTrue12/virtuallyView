@@ -159,6 +159,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   eqBandsRef.current = eqBands;
   const eqGraph = useRef<EqGraph | null>(null);
   const shuffleOrder = useRef<number[]>([]);
+  // The plain (non-transcoded) URL for whatever is loaded now, so onError and seek know what to fall
+  // back to or restart - the element's own .src is always the URL actually in play, which may already
+  // be the /transcode one.
+  const rawSrc = useRef('');
   // True while the person wants sound: a new track then starts by itself instead of waiting for another press.
   const wantPlay = useRef(false);
 
@@ -230,7 +234,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setError(null);
     if (nextQueue.length) {
       wantPlay.current = true;
-      audio.src = `/api/music/stream/${nextQueue[target].track.id}`;
+      rawSrc.current = `/api/music/stream/${nextQueue[target].track.id}`;
+      audio.src = rawSrc.current;
       audio.currentTime = 0;
       setCurrentTime(0);
       setDuration(0);
@@ -259,6 +264,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       audio.removeAttribute('src');
       audio.load();
     }
+    rawSrc.current = '';
     shuffleOrder.current = [];
     wantPlay.current = false;
     setQueue([]);
@@ -327,6 +333,15 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const seek = useCallback((seconds: number) => {
     const audio = audioRef.current;
     if (!audio || !Number.isFinite(seconds)) return;
+    // A transcode is a live, growing stream (same reason the video player restarts on seek): there is
+    // nothing buffered to jump to, so ask ffmpeg to start over from the new position instead.
+    if (rawSrc.current && audio.src.includes('/transcode')) {
+      const wasPlaying = !audio.paused;
+      audio.src = `${rawSrc.current}/transcode?start=${Math.max(0, Math.floor(seconds))}`;
+      setCurrentTime(seconds);
+      if (wasPlaying || wantPlay.current) void audio.play().catch(() => undefined);
+      return;
+    }
     audio.currentTime = seconds;
     setCurrentTime(seconds);
   }, []);
@@ -441,7 +456,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (!audio || !queue.length) return;
     const current = queue[Math.min(index, queue.length - 1)] ?? queue[0];
     const expected = `/api/music/stream/${current.track.id}`;
-    if (!audio.src || !audio.src.endsWith(expected)) {
+    if (!audio.src || !audio.src.includes(expected)) {
+      rawSrc.current = expected;
       audio.src = expected;
       if (wantPlay.current) void audio.play().catch(() => undefined);
     }
@@ -541,7 +557,18 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         onTimeUpdate={e => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
         onDurationChange={e => setDuration((e.target as HTMLAudioElement).duration)}
         onEnded={() => goNext(true)}
-        onError={() => setError('This track could not be loaded. The file may be missing or unsupported.')}
+        onError={() => {
+          const audio = audioRef.current;
+          // The format a plain <audio> element can play is narrower than what the library actually
+          // holds (WMA, ALAC, APE rips all fail here); the first time that happens, fall back to the
+          // same server-side ffmpeg conversion the video player uses instead of just giving up.
+          if (audio && rawSrc.current && !audio.src.includes('/transcode')) {
+            audio.src = `${rawSrc.current}/transcode`;
+            void audio.play().catch(() => setError('This track could not be loaded. The file may be missing or unsupported.'));
+            return;
+          }
+          setError('This track could not be loaded. The file may be missing or unsupported.');
+        }}
       />
       {queue.length > 0 && <MusicPlayerUI />}
     </MusicContext.Provider>

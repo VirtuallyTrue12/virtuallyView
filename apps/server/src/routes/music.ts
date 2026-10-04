@@ -9,6 +9,9 @@ import { parseByteRange } from '../lib/byte-range.js';
 import { freshCast, setCastCache } from '../services/cast.js';
 import { fetchBand, wikipediaPortrait } from '../services/cast-more.js';
 import { applyEdits, clearEdit, listEdits, saveEdit } from '../services/member-edits.js';
+import { startAudioTranscode } from '../services/transcode.js';
+import { acquireConversion, CONVERSION_MAX_MS } from '../lib/limits.js';
+import { currentActor } from '../services/user-context.js';
 
 const AUDIO_MIME: Record<string, string> = {
   '.flac': 'audio/flac',
@@ -137,25 +140,55 @@ export default async function musicRoutes(server: FastifyInstance) {
     }
   });
 
-  server.get<{ Params: { id: string } }>('/api/music/stream/:id', async (request, reply) => {
-    const { id } = request.params;
+  const trackFile = async (id: string): Promise<{ safePath: string } | { error: 400 | 404; message: string }> => {
     const numeric = id.replace(/^track-/, '');
-    if (!/^\d+$/.test(numeric)) {
-      return reply.code(400).send({ error: 'bad_request', message: 'Invalid track id.' });
-    }
+    if (!/^\d+$/.test(numeric)) return { error: 400, message: 'Invalid track id.' };
     let file: { path: string } | null;
     try {
       file = await lidarr.getTrackFile(numeric);
     } catch {
       file = null;
     }
-    if (!file || !file.path) {
-      return reply.code(404).send({ error: 'not_found', message: 'This track has no audio file on the server yet.' });
-    }
+    if (!file || !file.path) return { error: 404, message: 'This track has no audio file on the server yet.' };
     if (!existsSync(file.path) || !isAllowedMediaFile(file.path)) {
-      return reply.code(404).send({ error: 'not_found', message: 'The audio file for this track is missing or outside the allowed media folders.' });
+      return { error: 404, message: 'The audio file for this track is missing or outside the allowed media folders.' };
     }
-    const safePath = realpathSync(file.path);
+    return { safePath: realpathSync(file.path) };
+  };
+
+  // A browser can't play WMA, ALAC or Monkey's Audio/APE at all; this converts on the fly the same
+  // way video does, so a library ripped with those is not simply a dead player.
+  server.get<{ Params: { id: string }; Querystring: { start?: string } }>('/api/music/stream/:id/transcode', async (request, reply) => {
+    const resolved = await trackFile(request.params.id);
+    if ('error' in resolved) return reply.code(resolved.error).send({ error: 'not_found', message: resolved.message });
+    const start = Math.max(0, Number(request.query.start) || 0);
+    const release = acquireConversion(currentActor().userId);
+    if (!release) {
+      return reply.code(429).header('Retry-After', '30').send({ error: 'too_many_conversions', message: 'Too many tracks are being converted right now. Try again in a moment.' });
+    }
+    const handle = startAudioTranscode(resolved.safePath, start);
+    if (!handle?.process.stdout) {
+      release();
+      return reply.code(503).send({ error: 'transcode_unavailable', message: 'This track needs conversion, but ffmpeg is not installed on the server.' });
+    }
+    const child = handle.process;
+    const limit = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* already exited */ } }, CONVERSION_MAX_MS);
+    child.on('close', () => { clearTimeout(limit); release(); });
+    request.raw.on('close', () => { try { child.kill('SIGKILL'); } catch { /* already exited */ } });
+    child.on('error', () => { try { reply.raw.destroy(); } catch { /* connection already gone */ } });
+    child.stderr?.on('data', () => { /* ffmpeg diagnostics are intentionally discarded */ });
+    return reply
+      .code(200)
+      .header('Content-Type', 'audio/aac')
+      .header('Cache-Control', 'no-store')
+      .header('Accept-Ranges', 'none')
+      .send(child.stdout);
+  });
+
+  server.get<{ Params: { id: string } }>('/api/music/stream/:id', async (request, reply) => {
+    const resolved = await trackFile(request.params.id);
+    if ('error' in resolved) return reply.code(resolved.error).send({ error: 'not_found', message: resolved.message });
+    const safePath = resolved.safePath;
     const stat = statSync(safePath);
     const mime = audioMime(safePath);
     const range = request.headers.range;

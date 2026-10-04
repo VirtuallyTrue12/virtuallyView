@@ -571,6 +571,7 @@ describe('e2e: music', () => {
     expect((await req('GET', '/api/artists/not-a-number/tracks')).status).toBe(400);
     expect((await req('GET', '/api/albums/not-a-number')).status).toBe(400);
     expect((await req('GET', '/api/music/stream/not-a-number')).status).toBe(400);
+    expect((await req('GET', '/api/music/stream/not-a-number/transcode')).status).toBe(400);
 
     const albums = await req('GET', '/api/artists/lidarr-9/albums');
     expect([200, 502]).toContain(albums.status);
