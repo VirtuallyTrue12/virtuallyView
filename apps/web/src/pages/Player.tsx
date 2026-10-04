@@ -116,6 +116,11 @@ export default function Player() {
             startAt={resumeStart}
             onProgress={onProgress}
             party={partyCode ? { remote: party.remote, onLocal: party.onLocal } : undefined}
+            onPullSubtitles={async () => {
+              const result = await api.pullSubtitles(`/api/movies/${encodeURIComponent(movie.id)}/subtitles/search`);
+              if (result.success) setSubTick(t => t + 1);
+              return result;
+            }}
           />
         )}
       </div>

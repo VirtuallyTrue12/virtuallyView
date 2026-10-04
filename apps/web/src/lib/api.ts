@@ -667,6 +667,11 @@ export const api = {
   serieEpisodes: (id: string) =>
     getJSON<{ seriesId: string; episodes: EpisodeItem[] }>(`/api/series/${encodeURIComponent(id)}/episodes`),
   subtitles: (streamUrl: string) => getJSON<{ subtitles: SubtitleTrack[] }>(`${streamUrl}/subtitles`),
+  pullSubtitles: async (path: string, language = 'en'): Promise<{ success: boolean; message: string }> => {
+    const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language }) });
+    const data = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string };
+    return { success: res.ok && data.success !== false, message: data.message ?? (res.ok ? 'Done.' : `Request failed (${res.status}).`) };
+  },
   playlists: () => getJSON<PlaylistItem[]>('/api/playlists'),
   playlist: (id: string) => getJSON<PlaylistItem>(`/api/playlists/${encodeURIComponent(id)}`),
   createPlaylist: (name: string) => postJSON<PlaylistItem>('/api/playlists', { name }),

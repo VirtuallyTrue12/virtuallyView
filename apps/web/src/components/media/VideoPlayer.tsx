@@ -40,6 +40,8 @@ interface VideoPlayerProps {
   chapters?: Array<{ start: number; end: number; title: string }>;
   /** TV episode: offer a manual skip near the start when the file has no chapters. */
   isEpisode?: boolean;
+  /** Shown in the subtitle menu only while there are none; searches subtitle sources for this title. */
+  onPullSubtitles?: () => Promise<{ success: boolean; message: string }>;
 }
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -75,8 +77,10 @@ const ICONS = {
 
 export default function VideoPlayer({
   src, transcodeSrc, durationSeconds, poster, title, subtitles = [], startAt = 0, autoPlay = true,
-  onProgress, onEnded, onError, next, previous, episodes, audioTracks = [], imageSubtitles = [], sourceHeight, chapters = [], isEpisode = false, party, castTranscode
+  onProgress, onEnded, onError, next, previous, episodes, audioTracks = [], imageSubtitles = [], sourceHeight, chapters = [], isEpisode = false, party, castTranscode, onPullSubtitles
 }: VideoPlayerProps) {
+  const [pulling, setPulling] = useState(false);
+  const [pullNote, setPullNote] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -603,7 +607,25 @@ export default function VideoPlayer({
                     </>
                   )}
                   {subtitles.length === 0 && imageSubtitles.length === 0 && (
-                    <div className="vp-menu-empty">No subtitle files found for this title</div>
+                    <>
+                      <div className="vp-menu-empty">No subtitle files found for this title</div>
+                      {onPullSubtitles && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="vp-menu-item"
+                          disabled={pulling}
+                          onClick={async () => {
+                            setPulling(true);
+                            setPullNote(null);
+                            const result = await onPullSubtitles();
+                            setPullNote(result.message);
+                            setPulling(false);
+                          }}
+                        >{pulling ? 'Pulling subtitles...' : 'Pull subtitles'}</button>
+                      )}
+                      {pullNote && <div className="vp-menu-empty">{pullNote}</div>}
+                    </>
                   )}
                 </div>
               )}

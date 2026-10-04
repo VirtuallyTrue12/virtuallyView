@@ -157,6 +157,11 @@ export default function EpisodePlayer() {
             next={nextEp ? { label: `${code(nextEp)} ${nextEp.title}`, onSelect: () => go(nextEp) } : undefined}
             previous={prevEp ? { label: `${code(prevEp)} ${prevEp.title}`, onSelect: () => go(prevEp) } : undefined}
             episodes={{ groups, onSelect: eid => { const t = ordered.find(e => e.id === eid); if (t) go(t); } }}
+            onPullSubtitles={async () => {
+              const result = await api.pullSubtitles(`/api/series/${encodeURIComponent(id ?? '')}/episodes/${encodeURIComponent(episodeId)}/subtitles/search`);
+              if (result.success) setSubTick(t => t + 1);
+              return result;
+            }}
           />
         )}
       </div>
