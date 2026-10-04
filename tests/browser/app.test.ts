@@ -46,7 +46,7 @@ beforeAll(async () => {
   });
   await waitFor(`${base}/api/health`);
   browser = await chromium.launch();
-  ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['clipboard-read', 'clipboard-write'] });
   page = await ctx.newPage();
   page.on('pageerror', e => errors.push(e.message));
 }, 120_000);
@@ -187,6 +187,29 @@ describe('empty library pages', () => {
       await page.waitForSelector('main');
       expect((await page.locator('main').innerText()).length).toBeGreaterThan(20);
     }
+    expect(errors).toEqual([]);
+  });
+});
+
+describe('media folder', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('shows the real host path with a copy button, and explains when there is none to show', async () => {
+    await page.route('**/api/library/folders?kind=movies', r => r.fulfill(json({ kind: 'movies', hostPath: '/home/you/Videos/Movies', extraFolders: [] })));
+    await page.goto(base + '/movies');
+    await page.getByRole('button', { name: 'Media folder' }).click();
+    await page.getByRole('dialog', { name: 'Media folder' }).waitFor();
+    await page.getByText('/home/you/Videos/Movies').waitFor();
+    await page.getByRole('button', { name: 'Copy' }).click();
+    await page.getByRole('button', { name: 'Copied' }).waitFor();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('/home/you/Videos/Movies');
+    await page.keyboard.press('Escape');
+    await page.getByRole('dialog').waitFor({ state: 'detached' });
+
+    await page.unroute('**/api/library/folders?kind=movies');
+    await page.route('**/api/library/folders?kind=movies', r => r.fulfill(json({ kind: 'movies', hostPath: null, extraFolders: [] })));
+    await page.getByRole('button', { name: 'Media folder' }).click();
+    await page.getByText('Docker-managed storage').waitFor();
     expect(errors).toEqual([]);
   });
 });

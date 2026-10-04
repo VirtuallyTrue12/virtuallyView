@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, type PhotoAlbum, type PhotoEntry } from '../lib/api';
 import { EmptyState, PageHeader, Seg } from '../components/ui/Page';
+import { OpenMediaFolder } from '../components/media/OpenMediaFolder';
 import { Dialog } from '../components/ui/Dialog';
 import { MenuItem, MoreMenu } from '../components/ui/MoreMenu';
 import { SvgIcon } from '../components/ui/SvgIcon';
@@ -131,10 +132,13 @@ export default function Photos() {
       <PageHeader
         title="Photos"
         sub={all === null ? 'Loading…' : empty ? undefined : `${count.toLocaleString()} photos${favs.size ? ` · ${favs.size} favorite${favs.size === 1 ? '' : 's'}` : ''}${albums.length ? ` · ${albums.length} album${albums.length === 1 ? '' : 's'}` : ''}`}
-        actions={!empty && all !== null ? <>
-          <button type="button" className="btn btn-primary" disabled={list.length === 0} onClick={() => list[0] && setViewer({ list, index: 0, play: true })}><SvgIcon name="play" size={17} /> Slideshow</button>
-          <button type="button" className="btn btn-secondary" disabled={list.length === 0} onClick={() => (selecting ? (setSelecting(false), setSelected(new Set())) : setSelecting(true))} aria-pressed={selecting}><SvgIcon name={selecting ? 'close' : 'check'} size={17} /> {selecting ? 'Done' : 'Select'}</button>
-        </> : undefined}
+        actions={<>
+          {!empty && all !== null && <>
+            <button type="button" className="btn btn-primary" disabled={list.length === 0} onClick={() => list[0] && setViewer({ list, index: 0, play: true })}><SvgIcon name="play" size={17} /> Slideshow</button>
+            <button type="button" className="btn btn-secondary" disabled={list.length === 0} onClick={() => (selecting ? (setSelecting(false), setSelected(new Set())) : setSelecting(true))} aria-pressed={selecting}><SvgIcon name={selecting ? 'close' : 'check'} size={17} /> {selecting ? 'Done' : 'Select'}</button>
+          </>}
+          <OpenMediaFolder kind="photos" />
+        </>}
       />
 
       {error && !empty && <div className="notice notice--err" role="alert">{error}</div>}

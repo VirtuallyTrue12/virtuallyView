@@ -388,7 +388,7 @@ const ADMIN_ONLY_WRITE = [
 ];
 // Reading how the server is wired (service addresses, what is reachable on the
 // network, how to control containers) is administrator-only too.
-const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/troubleshoot', '/api/settings/', '/api/server-settings/proxy-test', '/api/library/unmapped'];
+const ADMIN_ONLY_READ = ['/api/integrations/detect', '/api/services/config', '/api/services/status', '/api/music-videos/', '/api/releases/', '/api/youtube/', '/api/troubleshoot', '/api/settings/', '/api/server-settings/proxy-test', '/api/library/unmapped', '/api/library/folders'];
 server.addHook('preHandler', async (request, reply) => {
   if (request.method !== 'GET') return;
   const path = request.url.split('?')[0] ?? '';

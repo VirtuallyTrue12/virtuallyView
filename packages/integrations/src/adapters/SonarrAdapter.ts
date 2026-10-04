@@ -1,6 +1,6 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
-import { runArrCommand, arrHealthCheck, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { runArrCommand, arrHealthCheck, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listRootFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
 import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
 import { TtlCache } from '../ttl-cache.js';
 
@@ -243,6 +243,11 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   /** Folders in this app's root folders that hold files it does not track yet. */
   async unmappedFolders(): Promise<Array<{ name: string; path: string }>> {
     return listUnmappedFolders(this.requireConfig(), 'v3');
+  }
+
+  /** This app's own configured root folders (it can have more than one). */
+  async rootFolders(): Promise<string[]> {
+    return listRootFolders(this.requireConfig(), 'v3');
   }
 
   async lookupCandidates(title: string) {

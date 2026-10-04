@@ -6,13 +6,17 @@ By default the library lives in storage Docker manages for you, so there is no f
 MOVIES_DIR=/home/you/Videos/Movies
 TV_DIR=/home/you/Videos/TV Shows
 MUSIC_DIR=/home/you/Music
+PHOTOS_DIR=/home/you/Pictures
+BOOKS_DIR=/home/you/Books
 ```
 
 ```
 docker compose up -d
 ```
 
-You can set one, two or all three. Leave a line out and that part keeps using Docker's own storage. The apps see these folders as `/media/movies`, `/media/tv` and `/media/music`; that is what Settings, Library and quality shows, and you do not need to change it.
+You can set any mix of these. Leave a line out and that part keeps using Docker's own storage. The apps see these folders as `/media/movies`, `/media/tv`, `/media/music`, `/media/photos` and `/media/books`; that is what Settings, Library and quality shows, and you do not need to change it.
+
+Once a line is set, the **Media folder** button on that library's page shows the real path on your computer, with a copy button, so you can find it to drag files in. Without it, the button explains that the library is on Docker-managed storage instead.
 
 ## Then tell the library about the files
 

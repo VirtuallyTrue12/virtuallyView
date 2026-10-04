@@ -372,6 +372,14 @@ services:
       - VV_HELPER_URL=http://helper:8099
       - VV_SECRET_KEY=${VV_SECRET_KEY:-}
       - TRUST_PROXY=${TRUST_PROXY:-}
+      # Empty when a library uses Docker-managed storage instead of a folder on your computer (see
+      # docs/existing-media.md); the app only shows "Open Media Folder" when one of these is set, since
+      # a named Docker volume has no real path on your computer to open or drag files into.
+      - MOVIES_DIR=${MOVIES_DIR:-}
+      - TV_DIR=${TV_DIR:-}
+      - MUSIC_DIR=${MUSIC_DIR:-}
+      - PHOTOS_DIR=${PHOTOS_DIR:-}
+      - BOOKS_DIR=${BOOKS_DIR:-}
     volumes:
       - helper-shared:/shared:ro
       - secrets:/secrets:ro
@@ -379,8 +387,8 @@ services:
       - ${MOVIES_DIR:-media-movies}:/media/movies:ro
       - ${TV_DIR:-media-tv}:/media/tv:ro
       - ${MUSIC_DIR:-media-music}:/media/music:ro
-      - media-photos:/media/photos:ro
-      - media-books:/media/books:ro
+      - ${PHOTOS_DIR:-media-photos}:/media/photos:ro
+      - ${BOOKS_DIR:-media-books}:/media/books:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ready >/dev/null || exit 1"]
       interval: 10s
@@ -437,7 +445,7 @@ services:
       - "${VV_APPS_BIND:-0.0.0.0}:5000:5000"
     volumes:
       - kavita-config:/kavita/config
-      - media-books:/books:ro
+      - ${BOOKS_DIR:-media-books}:/books:ro
     restart: unless-stopped
     labels:
       - com.centurylinklabs.watchtower.enable=true
@@ -453,7 +461,7 @@ services:
       - REDIS_HOSTNAME=immich-redis
     volumes:
       - immich-upload:/data
-      - media-photos:/usr/src/app/external/photos:ro
+      - ${PHOTOS_DIR:-media-photos}:/usr/src/app/external/photos:ro
     ports:
       - "${VV_APPS_BIND:-0.0.0.0}:2283:2283"
     depends_on:

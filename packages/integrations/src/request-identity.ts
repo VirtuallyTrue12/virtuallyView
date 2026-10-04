@@ -158,6 +158,14 @@ export async function listUnmappedFolders(config: { url: string; apiKey: string 
   return roots.flatMap(r => r.unmappedFolders ?? []).filter((f): f is { name: string; path: string } => !!f.path && !!f.name && !f.name.startsWith('.'));
 }
 
+/** The root folders themselves - Radarr/Sonarr/Lidarr can each have more than one configured. */
+export async function listRootFolders(config: { url: string; apiKey: string }, api: 'v3' | 'v1'): Promise<string[]> {
+  const res = await fetch(`${config.url.replace(/\/+$/, '')}/api/${api}/rootfolder`, { headers: { 'X-Api-Key': config.apiKey }, signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`The media app returned ${res.status} while listing its folders.`);
+  const roots = (await res.json()) as Array<{ path?: string }>;
+  return roots.map(r => r.path).filter((p): p is string => !!p);
+}
+
 export async function resolveAddTargets(
   config: { url: string; apiKey: string },
   service: 'radarr' | 'sonarr' | 'lidarr',

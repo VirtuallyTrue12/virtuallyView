@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MediaCard } from '../components/media/MediaCard';
 import { api, type MediaItem } from '../lib/api';
 import { ImportExisting } from '../components/media/ImportExisting';
+import { OpenMediaFolder } from '../components/media/OpenMediaFolder';
 import { EmptyState, PageHeader } from '../components/ui/Page';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import { ScanButton } from '../components/media/ScanButton';
@@ -38,6 +39,7 @@ export default function Movies() {
           <button className="btn btn-primary" type="button" onClick={() => navigate('/search')}><SvgIcon name="plus" size={17} /> Request a title</button>
           <ImportExisting kind="movies" onImported={() => { api.movies().then(setItems).catch(() => undefined); }} />
           <ScanButton type="movie" />
+          <OpenMediaFolder kind="movies" />
         </>}
       />
 

@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Added.** A **Media folder** button on the Movies, TV, Music, Photos and Books pages shows the real folder on your computer (with a copy button) once you've set `MOVIES_DIR`/`TV_DIR`/`MUSIC_DIR`/`PHOTOS_DIR`/`BOOKS_DIR` in `.env` (docs/existing-media.md), so you can find it to drag files in - a browser can't open a native file-manager window on your desktop from inside a container, so this shows the path instead. If Radarr, Sonarr or Lidarr has extra root folders configured beyond the one this app mounts, those are listed too. Photos and Books now support the same `*_DIR` host-folder override as Movies/TV/Music already did (they were previously stuck on Docker-managed storage only).
 - **Changed.** Fetching across the app got more sophisticated, efficient and accurate in four places:
   - **Release search** ("pick a release by hand") now ranks by a composite score, not raw seeders alone - swarm health (leechers, capped so a long-dead torrent with stale leechers can't outrank a genuinely active one) and freshness break close ties - and drops any result sharing no real word with what was searched, regardless of seeders, instead of ranking off-topic junk alongside the right title.
   - **TtlCache** (the library/episode/certification caches added this week) now coalesces concurrent requests for the same cold key into one upstream fetch instead of one per caller - the exact byte-range request storm these caches exist for, just moved to the moment the cache turns over.

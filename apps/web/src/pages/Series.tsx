@@ -6,6 +6,7 @@ import { ImportExisting } from '../components/media/ImportExisting';
 import { EmptyState, PageHeader } from '../components/ui/Page';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import { ScanButton } from '../components/media/ScanButton';
+import { OpenMediaFolder } from '../components/media/OpenMediaFolder';
 import { LibraryControls, useLibraryView } from '../components/media/LibraryControls';
 
 export default function Series() {
@@ -38,6 +39,7 @@ export default function Series() {
           <button className="btn btn-primary" type="button" onClick={() => navigate('/search')}><SvgIcon name="plus" size={17} /> Request a title</button>
           <ImportExisting kind="series" onImported={() => { api.series().then(setItems).catch(() => undefined); }} />
           <ScanButton type="series" />
+          <OpenMediaFolder kind="tv" />
         </>}
       />
 
