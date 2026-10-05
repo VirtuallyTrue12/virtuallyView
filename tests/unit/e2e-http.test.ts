@@ -594,6 +594,17 @@ describe('e2e: music', () => {
   }, 30_000);
 });
 
+describe('e2e: search everything missing now', () => {
+  it('is administrator only, and starts the same sweep the 12-hour job runs on its own', async () => {
+    const cookieViewer = await viewerCookie();
+    expect((await req('POST', '/api/library/search-missing', { cookieOverride: cookieViewer })).status).toBe(403);
+    const res = await req('POST', '/api/library/search-missing', { cookieOverride: cookieAdmin });
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ ok: true });
+    expect(res.json.message).toMatch(/missing/i);
+  });
+});
+
 describe('e2e: AI assistant', () => {
   it('health/models/tools/permissions/history respond and validate', async () => {
     const health = await req('GET', '/api/ai/health');

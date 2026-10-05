@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { findUnmapped, importFolders, type ImportKind } from '../services/import-existing.js';
 import { mediaFolderInfo, type FolderKind } from '../services/media-folders.js';
+import { runBacklogSearch } from '../services/backlog-search.js';
 
 const KINDS = new Set(['movies', 'series', 'artists']);
 const FOLDER_KINDS = new Set(['movies', 'tv', 'music', 'photos', 'books']);
@@ -26,5 +27,12 @@ export default async function importExistingRoutes(server: FastifyInstance) {
     const items = (request.body?.items ?? []).filter((i): i is { path: string; providerId: string; title: string; year?: number } => typeof i.path === 'string' && typeof i.providerId === 'string' && typeof i.title === 'string');
     if (!items.length) return reply.code(400).send({ message: 'Choose at least one folder to import.' });
     return { results: await importFolders(kind as ImportKind, items) };
+  });
+
+  // The same "search everything missing" sweep already runs on its own every 12h (backlog-search.ts);
+  // this just lets an administrator ask for it right now instead of waiting out the clock.
+  server.post('/api/library/search-missing', async () => {
+    void runBacklogSearch();
+    return { ok: true, message: 'Started. Radarr, Sonarr and Lidarr are each searching everything they still have missing - this can take a few minutes per service.' };
   });
 }

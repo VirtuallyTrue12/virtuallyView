@@ -577,6 +577,7 @@ export const api = {
   setBookFavorite: (path: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/books/favorite', { path, favorite }),
   downloadDoctor: () => getJSON<{ entries: DoctorEntry[] }>('/api/downloads/doctor'),
   repairDownloads: () => postJSON<{ fixed: string[]; message: string; skippedBecauseOffline: boolean }>('/api/downloads/repair', {}),
+  searchAllMissing: () => postJSON<{ ok: boolean; message: string }>('/api/library/search-missing', {}),
   unmappedFolders: (kind: 'movies' | 'series' | 'artists') => getJSON<{ items: UnmappedFolder[] }>(`/api/library/unmapped?kind=${kind}`),
   mediaFolder: (kind: 'movies' | 'tv' | 'music' | 'photos' | 'books') => getJSON<{ kind: string; hostPath: string | null; extraFolders: string[] }>(`/api/library/folders?kind=${kind}`),
   importFolders: (kind: 'movies' | 'series' | 'artists', items: Array<{ path: string; providerId: string; title: string; year?: number }>) => postJSON<{ results: Array<{ path: string; success: boolean; message: string }> }>('/api/library/import', { kind, items }),

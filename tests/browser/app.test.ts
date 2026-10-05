@@ -169,6 +169,13 @@ describe('notifications and backup', () => {
     await page.waitForSelector('.bell-count', { state: 'detached' });
   });
 
+  it('starts a missing-content search for every service from Settings > Library', async () => {
+    await page.goto(base + '/settings?cat=library');
+    await page.getByRole('button', { name: 'Search everything missing now' }).click();
+    await page.getByText(/Radarr, Sonarr and Lidarr are each searching everything they still have missing/).waitFor();
+    expect(errors).toEqual([]);
+  });
+
   it('creates a backup you can download', async () => {
     await page.goto(base + '/settings?cat=backup');
     await page.getByRole('button', { name: 'Back up now' }).click();
