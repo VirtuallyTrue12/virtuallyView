@@ -83,5 +83,10 @@ describe('the media services tell us why a download is stuck', () => {
     expect(queueProblem({ status: 'warning', trackedDownloadStatus: 'ok', trackedDownloadState: 'downloading', errorMessage: 'The download is stalled with no connections' }).message).toMatch(/stalled/);
     expect(queueProblem({ trackedDownloadStatus: 'ok', trackedDownloadState: 'downloading' })).toEqual({});
     expect(queueProblem({ trackedDownloadStatus: 'warning', trackedDownloadState: 'importBlocked', statusMessages: [{ messages: ['Not an upgrade'] }] }).status).toBe('warning');
+    // A dead/trackerless magnet stuck fetching metadata reports "ok" (nothing is technically wrong yet)
+    // with no statusMessages - only errorMessage says anything - so the message must still come through,
+    // or the download doctor's own METADATA_RE check downstream never sees it and the row is never fixed.
+    expect(queueProblem({ trackedDownloadStatus: 'ok', trackedDownloadState: 'downloading', errorMessage: 'qBittorrent is downloading metadata' }))
+      .toEqual({ message: 'qBittorrent is downloading metadata' });
   });
 });

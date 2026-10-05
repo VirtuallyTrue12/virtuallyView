@@ -299,6 +299,14 @@ export function queueProblem(q: Record<string, unknown>): { status?: 'warning'; 
   const said = (Array.isArray(q.statusMessages) ? (q.statusMessages as Array<{ messages?: string[] }>).flatMap(m => m.messages ?? []) : []).find(Boolean)
     ?? (typeof q.errorMessage === 'string' ? q.errorMessage : '');
   if (state === 'downloading' && /stalled|no connections|no seeders/i.test(said)) return { status: 'warning', message: said };
+  // A torrent that cannot even fetch its own metadata (a dead or trackerless magnet nobody can answer)
+  // behaves exactly like "no seeders" from a person's point of view - nothing is happening and nothing
+  // ever will - but qBittorrent phrases it differently, and the download doctor's own stuck-metadata
+  // detection reads this same message text: without preserving it here, a row like this just sits
+  // looking like an ordinary slow download forever, never flagged and never replaced. Status is left
+  // alone (unlike the stalled case above) since this is still legitimately "downloading", just stuck
+  // at the very first step of it.
+  if (state === 'downloading' && /downloading metadata/i.test(said)) return { message: said };
   if (!IMPORT_FAILED.has(state) && tracked !== 'error' && !(tracked === 'warning' && state !== 'downloading')) return {};
   const messages = Array.isArray(q.statusMessages) ? q.statusMessages as Array<{ title?: string; messages?: string[] }> : [];
   const first = messages.flatMap(m => m.messages ?? []).find(Boolean) ?? (typeof q.errorMessage === 'string' ? q.errorMessage : '');
