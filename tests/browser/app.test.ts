@@ -286,6 +286,30 @@ describe('pull subtitles', () => {
   });
 });
 
+describe('plays what the browser actually can, not just what the file name predicts', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('retries through the server conversion when a file predicted compatible fails to decode anyway', async () => {
+    await page.route('**/api/movies/radarr-502', r => r.fulfill(json({ id: 'radarr-502', title: 'Bad Container', status: 'available' })));
+    // Codec names say this should direct-play; the bytes below say otherwise, same as a real file
+    // whose container is subtly broken in a way ffprobe's codec check can't see.
+    await page.route('**/api/stream/radarr-502/info', r => r.fulfill(json({ playable: true, transcodingAvailable: true, durationSeconds: 100, container: 'mp4', videoCodec: 'h264', audioCodec: 'aac', reason: null })));
+    await page.route('**/api/progress/movie/radarr-502', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await page.route('**/api/stream/radarr-502/subtitles', r => r.fulfill(json({ subtitles: [] })));
+    let transcodeRequested = false;
+    await page.route('**/api/stream/radarr-502', r => r.fulfill({ status: 200, contentType: 'video/mp4', body: 'not actually a video' }));
+    await page.route('**/api/stream/radarr-502/transcode**', r => { transcodeRequested = true; return r.fulfill({ status: 200, contentType: 'video/mp4', body: 'still not real video - this test only checks that the retry happened' }); });
+
+    await page.goto(base + '/movies/radarr-502/play');
+    await page.waitForSelector('.player-title');
+    // The element's own src moving to the transcode URL, by itself, with nothing clicked, is the
+    // retry this fix adds - both responses above are deliberately undecodable either way.
+    await page.waitForFunction(() => document.querySelector('video')?.src.includes('/transcode'), { timeout: 15_000 });
+    expect(transcodeRequested).toBe(true);
+    expect(errors).toEqual([]);
+  });
+});
+
 describe('refresh button', () => {
   it('sits in the top bar of every page, reloads the page you are on, and is absent while playing', async () => {
     for (const path of ['/', '/movies', '/requests', '/settings', '/wiki']) {

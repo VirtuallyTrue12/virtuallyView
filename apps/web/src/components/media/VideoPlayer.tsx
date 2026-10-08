@@ -453,6 +453,15 @@ export default function VideoPlayer({
         }}
         onError={e => {
           const code = e.currentTarget.error?.code;
+          // The server predicts direct play from codec/container names alone, which a real file can
+          // still defeat (a broken chapter track, a channel layout the browser's decoder won't touch,
+          // anything a name match can't see). The first time that happens, retry once through the same
+          // server-side conversion already used for files predicted to need it, instead of giving up -
+          // conversionSrc exists whenever ffmpeg is on the server at all, direct-play or not.
+          if (code === 4 && !isTranscode && conversionSrc) {
+            restartWith(() => setConverting(true));
+            return;
+          }
           reportError(code === 4
             ? 'This browser could not decode the video. Try again, or pick another source.'
             : `Playback error (code ${code ?? 'unknown'}).`);
