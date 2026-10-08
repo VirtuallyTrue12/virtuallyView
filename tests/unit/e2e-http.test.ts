@@ -1193,6 +1193,14 @@ describe('e2e: assistant rules, retries, subtitles, watch party, people', () => 
     expect((await req('GET', '/api/watch-party/ZZZZZZ', { cookieOverride: cookieAdmin })).status).toBe(404);
   }, 30_000);
 
+  it('throttles guesses at a room code well below the general API budget', async () => {
+    // A room code is the only thing standing between a guess and someone else's party, so lookups
+    // against it get their own tight limit - not the general 1500/min page-traffic budget.
+    const statuses = await Promise.all(Array.from({ length: 25 }, () => req('GET', '/api/watch-party/GUESS1', { cookieOverride: cookieAdmin })));
+    expect(statuses.filter(r => r.status === 429).length).toBeGreaterThan(0);
+    expect(statuses.every(r => r.status === 404 || r.status === 429)).toBe(true);
+  }, 30_000);
+
   it('a person nobody knows is a 404', async () => {
     const res = await req('GET', '/api/people/Zzyzx%20Qwerty%20Unknownperson', { cookieOverride: cookieAdmin });
     expect([404, 200]).toContain(res.status);

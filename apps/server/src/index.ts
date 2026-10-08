@@ -137,13 +137,19 @@ const rateWindowMs = 60_000;
 // a video makes hundreds of range requests and a household shares one address.
 const rateLimit = Number(process.env.API_RATE_LIMIT ?? 1500);
 const loginRateLimit = Number(process.env.LOGIN_RATE_LIMIT ?? 30);
+const partyCodeRateLimit = Number(process.env.WATCH_PARTY_RATE_LIMIT ?? 20);
 const loginCounts = new Map<string, { started: number; count: number }>();
 const requestCounts = new Map<string, { started: number; count: number }>();
+// A watch-party's 6-character code is the only thing standing between a guess and someone else's
+// party (its playback state and what's playing); throttled separately and much tighter than the
+// general API budget, since the general one is sized for a household's normal page traffic, not
+// for resisting an authenticated user who scripts a guessing loop against it.
+const partyCodeCounts = new Map<string, { started: number; count: number }>();
 // Counters are per address and only matter for a minute: forget the old ones so a
 // stream of different addresses cannot grow the maps without bound.
 setInterval(() => {
   const cutoff = Date.now() - rateWindowMs;
-  for (const map of [loginCounts, requestCounts]) {
+  for (const map of [loginCounts, requestCounts, partyCodeCounts]) {
     for (const [address, bucket] of map) if (bucket.started < cutoff) map.delete(address);
   }
 }, 30_000).unref();
@@ -425,6 +431,9 @@ server.addHook('preHandler', async (request, reply) => {
   // Password guessing is limited tightly per address.
   if (request.method === 'POST' && (path === '/api/auth/login' || path === '/api/auth/signup' || path === '/api/auth/quickconnect/start' || path === '/api/auth/quickconnect/approve') && bump(loginCounts) > loginRateLimit) {
     return reply.code(429).header('Retry-After', '60').send({ error: 'rate_limited', message: 'Too many sign-in attempts. Wait a minute and try again.' });
+  }
+  if (/^\/api\/watch-party\/[^/]+/.test(path) && bump(partyCodeCounts) > partyCodeRateLimit) {
+    return reply.code(429).header('Retry-After', '60').send({ error: 'rate_limited', message: 'Too many watch-party requests. Wait a minute and try again.' });
   }
   const exempt = !path.startsWith('/api/') || path.startsWith('/api/stream/') || path.startsWith('/api/music/stream/') || path.startsWith('/api/live/relay') || path.startsWith('/api/photos/') || path.startsWith('/api/art');
   if (!exempt && bump(requestCounts) > rateLimit) {

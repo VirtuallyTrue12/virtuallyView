@@ -44,14 +44,14 @@ export function notify(input: NotifyInput): void {
 }
 
 const visible = (a: Actor) =>
-  `(audience_user = '${a.userId.replace(/'/g, "''")}' OR (audience_user IS NULL AND (audience_role IS NULL${a.role !== 'user' ? " OR audience_role = 'admin'" : ''})))`;
+  `(audience_user = ? OR (audience_user IS NULL AND (audience_role IS NULL${a.role !== 'user' ? " OR audience_role = 'admin'" : ''})))`;
 
 export function listNotifications(limit = 30) {
   const a = currentActor();
   const rows = all<Row & { read: number }>(
     `SELECT n.*, EXISTS(SELECT 1 FROM notification_reads r WHERE r.user_id = ? AND r.notification_id = n.id) AS read
      FROM notifications n WHERE ${visible(a)} ORDER BY n.id DESC LIMIT ?`,
-    a.userId, limit
+    a.userId, a.userId, limit
   );
   return {
     unread: rows.filter(r => !r.read).length,
@@ -62,7 +62,7 @@ export function listNotifications(limit = 30) {
 export function markRead(ids: number[] | 'all'): void {
   const a = currentActor();
   const targets = ids === 'all'
-    ? all<{ id: number }>(`SELECT id FROM notifications WHERE ${visible(a)}`).map(r => r.id)
+    ? all<{ id: number }>(`SELECT id FROM notifications WHERE ${visible(a)}`, a.userId).map(r => r.id)
     : ids;
   for (const id of targets) {
     run('INSERT OR IGNORE INTO notification_reads (user_id, notification_id) VALUES (?, ?)', a.userId, id);
