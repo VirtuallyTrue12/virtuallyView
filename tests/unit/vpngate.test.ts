@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createServer, type Server } from 'node:net';
 import { createSocket } from 'node:dgram';
-import { answers, helloPacket, isServerHello } from '../../scripts/vpngate.mjs';
+import { answers, helloPacket, isServerHello, proxyCarriesTraffic } from '../../scripts/vpngate.mjs';
 
 const listen = (handler: (socket: import('node:net').Socket) => void) => new Promise<{ server: Server; port: number }>(res => {
   const server = createServer(handler);
@@ -46,5 +46,17 @@ describe('VPN relay liveness', () => {
     udp.on('message', (_m, rinfo) => udp.send(Buffer.from([0x40, 1, 2, 3]), rinfo.port, rinfo.address));
     expect(await answers('127.0.0.1', udp.address().port, 'udp')).toBe(true);
     udp.close();
+  });
+
+  it('catches a relay that answers the handshake but cannot actually carry traffic - the blind spot that let searches fail silently', async () => {
+    const { server, port } = await listen(socket => socket.destroy()); // accepts, then drops: handshake-only, no real proxying
+    expect(await proxyCarriesTraffic('127.0.0.1', port, 2000)).toBe(false);
+    server.close();
+  });
+
+  it('accepts a proxy that actually answers a request', async () => {
+    const { server, port } = await listen(socket => socket.end('HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n'));
+    expect(await proxyCarriesTraffic('127.0.0.1', port, 2000)).toBe(true);
+    server.close();
   });
 });

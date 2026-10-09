@@ -7,15 +7,17 @@
  *   node scripts/vpngate.mjs /gluetun/custom.ovpn [country code]          pick once
  *   node scripts/vpngate.mjs /gluetun/custom.ovpn [country code] --watch   keep it healthy
  *
- * Relays are run by volunteers and come and go, so --watch checks the chosen
- * relay every minute and, when it stops answering, writes a fresh one (gluetun
- * re-reads the file when it restarts the tunnel). VPN Gate keeps connection
- * logs: this hides your traffic from your internet provider; it is not anonymity.
+ * Relays are run by volunteers and come and go, so --watch checks the chosen relay every minute -
+ * both that it still answers the OpenVPN handshake, and that real traffic actually gets through
+ * gluetun's proxy with it - and writes a fresh one when either fails twice in a row (gluetun re-reads
+ * the file when it restarts the tunnel). VPN Gate keeps connection logs: this hides your traffic from
+ * your internet provider; it is not anonymity.
  */
 import { readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import dgram from 'node:dgram';
+import http from 'node:http';
 import { randomBytes } from 'node:crypto';
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
@@ -78,6 +80,21 @@ export const answers = (host, port, proto = 'tcp') => new Promise(ok => {
 
 const protoOf = config => (/^proto\s+udp/m.test(config) ? 'udp' : 'tcp');
 
+/**
+ * A relay can answer the OpenVPN handshake above (one packet, direct, not through the tunnel) while
+ * the tunnel it actually carries is too lossy or slow for real traffic - a volunteer server under
+ * load degrades gradually, it doesn't just go dark. That looked like Prowlarr searches failing with
+ * "proxy tunnel request ... 503" every so often while this watcher stayed silent, because it only
+ * ever checked the handshake. This checks the one thing that actually matters: can a real request get
+ * through gluetun's own proxy right now, the same path every search and download uses.
+ */
+export const proxyCarriesTraffic = (proxyHost = 'gluetun', proxyPort = 8888, timeoutMs = 8000) => new Promise(ok => {
+  const req = http.request({ host: proxyHost, port: proxyPort, path: 'http://1.1.1.1/', method: 'HEAD', timeout: timeoutMs }, res => { res.resume(); ok(true); });
+  req.on('error', () => ok(false));
+  req.on('timeout', () => { req.destroy(); ok(false); });
+  req.end();
+});
+
 // The last few relays used, so asking for "another" (a restart, or the Fix everything button) never lands on the
 // one that just had no peers, and repeated requests walk through different relays.
 const recentFile = `${out}.recent`;
@@ -110,9 +127,11 @@ setInterval(async () => {
   try {
     const config = readFileSync(out, 'utf8');
     const { host, port } = remoteOf(config);
-    if (await answers(host, port, protoOf(config))) { misses = 0; return; }
+    const handshakeOk = await answers(host, port, protoOf(config));
+    const trafficOk = handshakeOk && await proxyCarriesTraffic();
+    if (handshakeOk && trafficOk) { misses = 0; return; }
     if (++misses < 2) return;
-    console.log(`vpngate: relay ${host} stopped answering, choosing another`);
+    console.log(`vpngate: relay ${host} ${handshakeOk ? 'handshake ok but no real traffic is getting through' : 'stopped answering'}, choosing another`);
     misses = 0;
     await choose(new Set([host, current]));
   } catch (err) {
