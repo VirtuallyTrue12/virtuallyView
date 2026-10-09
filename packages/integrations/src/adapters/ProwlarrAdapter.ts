@@ -177,24 +177,57 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
     return this.config;
   }
 
-  /** Free-text release search across every source, for picking a download by hand. Prowlarr waits on
-   * every enabled indexer before answering, so a real search with many sources configured routinely
-   * takes well over a minute - confirmed live at ~91s against this install's 50 indexers. The old 75s
-   * timeout aborted before Prowlarr itself ever finished, so the first search of a session reliably
-   * failed with a "not available" error and only a retry (racing against the same real completion
-   * time) had a chance of winning. 150s gives real headroom above the measured worst case. */
-  async searchReleases(query: string): Promise<ProwlarrRelease[]> {
+  /** Indexer ids whose own tracked average response time is above the ceiling - real for a real
+   * install (confirmed live: one indexer averaging 46s, next-worst 12s, most under 4s), not a fixed
+   * list, so this holds for any install's own slow outliers rather than one indexer's name. Not
+   * reachable or no history yet counts as "not slow": there is nothing to judge an indexer by until
+   * it has actually been queried, and a reachability hiccup here should never silently narrow a
+   * search. */
+  async slowIndexerIds(ceilingMs = 15_000): Promise<Set<number>> {
     const { url, apiKey } = this.requireConfig();
-    const res = await fetch(`${url}/api/v1/search?query=${encodeURIComponent(query)}&type=search&limit=100`, {
-      headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(150_000)
+    try {
+      const res = await fetch(`${url}/api/v1/indexerstats`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return new Set();
+      const data = (await res.json()) as { indexers?: Array<{ indexerId?: number; averageResponseTime?: number }> };
+      return new Set((data.indexers ?? []).filter(i => (i.averageResponseTime ?? 0) > ceilingMs).map(i => i.indexerId ?? -1));
+    } catch {
+      return new Set();
+    }
+  }
+
+  /**
+   * Free-text release search across every source, for picking a download by hand. Prowlarr waits on
+   * every enabled indexer before answering, so one very slow source (one real install measured at an
+   * average of 46s, against a next-worst of 12s and most well under 4s) drags every search out to
+   * match it. Indexers this install has itself clocked as unusually slow are left out of this
+   * interactive search - they are still used by the automatic background search, where nobody is
+   * waiting on the result - and named in `skipped` so the person asking can see why a source they
+   * recognise is missing instead of wondering if something broke.
+   */
+  async searchReleases(query: string): Promise<{ releases: ProwlarrRelease[]; skipped: string[] }> {
+    const { url, apiKey } = this.requireConfig();
+    const slow = await this.slowIndexerIds();
+    let indexerFilter = '';
+    let skipped: string[] = [];
+    if (slow.size) {
+      const indexers = await this.getIndexers().catch(() => []);
+      const wanted = indexers.filter(i => i.enabled && !slow.has(i.id));
+      if (wanted.length) {
+        indexerFilter = `&${wanted.map(i => `indexerIds=${i.id}`).join('&')}`;
+        skipped = indexers.filter(i => i.enabled && slow.has(i.id)).map(i => i.name);
+      }
+    }
+    const res = await fetch(`${url}/api/v1/search?query=${encodeURIComponent(query)}&type=search&limit=100${indexerFilter}`, {
+      headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(60_000)
     });
     if (!res.ok) throw new Error(`Prowlarr returned ${res.status} while searching.`);
     const data = (await res.json()) as Array<Record<string, unknown>>;
-    return data.map(r => ({
+    const releases = data.map(r => ({
       guid: String(r.guid ?? ''), title: String(r.title ?? ''), indexer: String(r.indexer ?? ''), indexerId: Number(r.indexerId ?? 0),
       size: Number(r.size ?? 0), seeders: Number(r.seeders ?? 0), leechers: Number(r.leechers ?? 0), ageDays: Number(r.age ?? 0),
       protocol: String(r.protocol ?? ''), downloadUrl: String(r.downloadUrl ?? r.magnetUrl ?? '')
     })).filter(r => r.guid && r.title);
+    return { releases, skipped };
   }
 
   async search(query: string): Promise<Media[]> {

@@ -52,6 +52,35 @@ describe('Prowlarr sources', () => {
   });
 });
 
+describe('release search skips unusually slow sources', () => {
+  it('leaves a slow indexer out of the search and names it in skipped', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.includes('/indexerstats')) {
+        return json({ indexers: [{ indexerId: 1, indexerName: 'Internet Archive', averageResponseTime: 46_000 }, { indexerId: 2, indexerName: 'Fast One', averageResponseTime: 2000 }] });
+      }
+      if (url.includes('/indexer')) return json([{ id: 1, name: 'Internet Archive', enable: true }, { id: 2, name: 'Fast One', enable: true }]);
+      return json([{ guid: 'magnet:?xt=urn:btih:a', title: 'Found It' }]);
+    }));
+    const result = await (await adapter()).searchReleases('inception');
+    expect(result.skipped).toEqual(['Internet Archive']);
+    expect(result.releases.map(r => r.guid)).toEqual(['magnet:?xt=urn:btih:a']);
+    const searchCall = calls.find(u => u.includes('/search?'));
+    expect(searchCall).toContain('indexerIds=2');
+    expect(searchCall).not.toContain('indexerIds=1');
+  });
+
+  it('searches everyone when there is no history yet, or every indexer is slow', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/indexerstats')) return json({ indexers: [] });
+      return json([]);
+    }));
+    const result = await (await adapter()).searchReleases('inception');
+    expect(result.skipped).toEqual([]);
+  });
+});
+
 describe('adult sources', () => {
   it('recognises adult-only sources by category or name', () => {
     expect(isAdultIndexer('PornRips', '', [6000])).toBe(true);

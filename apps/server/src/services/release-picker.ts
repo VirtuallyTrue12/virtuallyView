@@ -68,18 +68,21 @@ function releaseScore(r: ProwlarrRelease): number {
   return r.seeders * 10 + Math.min(r.leechers, r.seeders) - Math.min(r.ageDays, 3650) / 3650;
 }
 
-/** Everything the search sources have for these words, best-matched and best-seeded first. Dead torrents and off-topic results are left out. */
-export async function searchReleases(query: string): Promise<ReleaseChoice[]> {
+/** Everything the search sources have for these words, best-matched and best-seeded first. Dead torrents and
+ * off-topic results are left out. `skipped` names any source left out of this search for being unusually slow
+ * (still used by the automatic background search) so the caller can say why, instead of it looking like a gap. */
+export async function searchReleases(query: string): Promise<{ choices: ReleaseChoice[]; skipped: string[] }> {
   const q = query.trim().slice(0, 200);
-  if (q.length < 2) return [];
+  if (q.length < 2) return { choices: [], skipped: [] };
   const queryWords = significantWords(q);
-  const found = (await getAdapter<ProwlarrAdapter>('prowlarr').searchReleases(q))
+  const { releases, skipped } = await getAdapter<ProwlarrAdapter>('prowlarr').searchReleases(q);
+  const found = releases
     .filter(r => r.protocol === 'torrent' && (r.seeders > 0 || r.guid.startsWith('magnet:')) && r.size > 0)
     .filter(r => relevance(r.title, queryWords) > 0)
     .sort((a, b) => releaseScore(b) - releaseScore(a))
     .slice(0, 60);
   remember(found);
-  return found.map(toChoice);
+  return { choices: found.map(toChoice), skipped };
 }
 
 /** Starts one release from the last search. Only a release the server itself listed can be started. */

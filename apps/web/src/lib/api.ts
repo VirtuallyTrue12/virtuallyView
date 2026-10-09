@@ -596,7 +596,7 @@ export const api = {
   youtubeDownload: (r: { id: string; title: string; artist?: string; kind?: 'Concerts' | 'Videos' }) => postJSON<{ ok: boolean; message: string; artistId: number; artistName: string; kind: string }>('/api/youtube/download', r),
   youtubeJobs: () => getJSON<{ jobs: YoutubeJob[] }>('/api/youtube/jobs'),
   youtubeCancel: (id: string) => postJSON<{ ok: boolean }>(`/api/youtube/jobs/${encodeURIComponent(id)}/cancel`),
-  searchReleases: (q: string) => getJSON<{ query: string; releases: ReleaseChoice[] }>(`/api/releases/search?q=${encodeURIComponent(q)}`),
+  searchReleases: (q: string) => getJSON<{ query: string; releases: ReleaseChoice[]; skipped: string[] }>(`/api/releases/search?q=${encodeURIComponent(q)}`),
   grabRelease: (id: string, fileAs: 'auto' | 'concert' | 'video' | 'none' = 'auto') => postJSON<{ ok: boolean; message: string; filesUnder: 'Concerts' | 'Videos' | null }>('/api/releases/grab', { id, fileAs }),
   artistVideos: (id: string) => getJSON<{ concerts: MusicVideoItem[]; videos: MusicVideoItem[] }>(`/api/artists/${encodeURIComponent(id)}/videos`),
   pendingMusicVideos: () => getJSON<{ jobs: MusicVideoJob[] }>('/api/music-videos/pending'),

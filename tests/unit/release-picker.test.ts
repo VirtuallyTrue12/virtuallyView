@@ -21,37 +21,55 @@ const release = (over: Record<string, unknown>) => ({
 
 describe('release picker', () => {
   it('lists releases best-seeded first, drops dead and non-torrent ones, and says what will be filed', async () => {
-    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue([
-      release({ guid: 'magnet:?xt=urn:btih:1', seeders: 2 }),
-      release({ guid: 'magnet:?xt=urn:btih:2', seeders: 9, title: 'Linkin Park - Live at Rock am Ring 2004 1080p' }),
-      release({ guid: 'https://x/dead.torrent', seeders: 0 }),
-      release({ guid: 'nzb-1', protocol: 'usenet', seeders: 50 }),
-      release({ guid: 'magnet:?xt=urn:btih:3', seeders: 4, title: 'Linkin Park Meteora album FLAC' })
-    ] as never);
-    const list = await picker.searchReleases('linkin park rock am ring');
-    expect(list.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:2', 'magnet:?xt=urn:btih:3', 'magnet:?xt=urn:btih:1']);
-    expect(list[0]).toMatchObject({ filesUnder: 'Concerts', quality: '1080p' });
-    expect(list[1]!.filesUnder).toBeNull();
-    expect(await picker.searchReleases('a')).toEqual([]);
+    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue({
+      releases: [
+        release({ guid: 'magnet:?xt=urn:btih:1', seeders: 2 }),
+        release({ guid: 'magnet:?xt=urn:btih:2', seeders: 9, title: 'Linkin Park - Live at Rock am Ring 2004 1080p' }),
+        release({ guid: 'https://x/dead.torrent', seeders: 0 }),
+        release({ guid: 'nzb-1', protocol: 'usenet', seeders: 50 }),
+        release({ guid: 'magnet:?xt=urn:btih:3', seeders: 4, title: 'Linkin Park Meteora album FLAC' })
+      ],
+      skipped: []
+    } as never);
+    const { choices } = await picker.searchReleases('linkin park rock am ring');
+    expect(choices.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:2', 'magnet:?xt=urn:btih:3', 'magnet:?xt=urn:btih:1']);
+    expect(choices[0]).toMatchObject({ filesUnder: 'Concerts', quality: '1080p' });
+    expect(choices[1]!.filesUnder).toBeNull();
+    expect(await picker.searchReleases('a')).toEqual({ choices: [], skipped: [] });
+  });
+
+  it('says which unusually slow sources were left out of the search', async () => {
+    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue({
+      releases: [release({ guid: 'magnet:?xt=urn:btih:ok', seeders: 3 })],
+      skipped: ['Internet Archive']
+    } as never);
+    const { skipped } = await picker.searchReleases('linkin park');
+    expect(skipped).toEqual(['Internet Archive']);
   });
 
   it('ranks a healthier swarm above an equal-seeder one with no active leechers, and a newer release on a closer tie', async () => {
-    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue([
-      release({ guid: 'magnet:?xt=urn:btih:dead', title: 'Linkin Park Meteora', seeders: 5, leechers: 0, ageDays: 10 }),
-      release({ guid: 'magnet:?xt=urn:btih:healthy', title: 'Linkin Park Meteora', seeders: 5, leechers: 8, ageDays: 10 }),
-      release({ guid: 'magnet:?xt=urn:btih:newer', title: 'Linkin Park Meteora', seeders: 5, leechers: 8, ageDays: 1 })
-    ] as never);
-    const list = await picker.searchReleases('linkin park meteora');
-    expect(list.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:newer', 'magnet:?xt=urn:btih:healthy', 'magnet:?xt=urn:btih:dead']);
+    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue({
+      releases: [
+        release({ guid: 'magnet:?xt=urn:btih:dead', title: 'Linkin Park Meteora', seeders: 5, leechers: 0, ageDays: 10 }),
+        release({ guid: 'magnet:?xt=urn:btih:healthy', title: 'Linkin Park Meteora', seeders: 5, leechers: 8, ageDays: 10 }),
+        release({ guid: 'magnet:?xt=urn:btih:newer', title: 'Linkin Park Meteora', seeders: 5, leechers: 8, ageDays: 1 })
+      ],
+      skipped: []
+    } as never);
+    const { choices } = await picker.searchReleases('linkin park meteora');
+    expect(choices.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:newer', 'magnet:?xt=urn:btih:healthy', 'magnet:?xt=urn:btih:dead']);
   });
 
   it('drops a result that shares no real word with the search, however many seeders it has', async () => {
-    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue([
-      release({ guid: 'magnet:?xt=urn:btih:right', title: 'Linkin Park Meteora', seeders: 3 }),
-      release({ guid: 'magnet:?xt=urn:btih:junk', title: 'Totally Unrelated Show S01E01', seeders: 500 })
-    ] as never);
-    const list = await picker.searchReleases('linkin park meteora');
-    expect(list.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:right']);
+    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue({
+      releases: [
+        release({ guid: 'magnet:?xt=urn:btih:right', title: 'Linkin Park Meteora', seeders: 3 }),
+        release({ guid: 'magnet:?xt=urn:btih:junk', title: 'Totally Unrelated Show S01E01', seeders: 500 })
+      ],
+      skipped: []
+    } as never);
+    const { choices } = await picker.searchReleases('linkin park meteora');
+    expect(choices.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:right']);
   });
 
   it('starts only a release the server listed, as an unmanaged download', async () => {
@@ -67,7 +85,7 @@ describe('release picker', () => {
   });
 
   it('honours "it is a concert" even when the name has no concert word, and "just download it"', async () => {
-    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue([release({ guid: 'magnet:?xt=urn:btih:plain', title: 'Linkin Park - Rock Am Ring 2004' })] as never);
+    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue({ releases: [release({ guid: 'magnet:?xt=urn:btih:plain', title: 'Linkin Park - Rock Am Ring 2004' })], skipped: [] } as never);
     await picker.searchReleases('linkin park');
     const magnet = vi.spyOn(registry.getAdapter('qbittorrent') as never, 'addMagnet').mockResolvedValue({ success: true, message: 'Started.' } as never);
     expect((await picker.grabRelease('magnet:?xt=urn:btih:plain', 'auto')).filesUnder).toBeNull();
@@ -80,7 +98,7 @@ describe('release picker', () => {
   });
 
   it('fetches a .torrent file itself and hands over the bytes', async () => {
-    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue([release({ guid: 'idx-77', seeders: 3 })] as never);
+    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue({ releases: [release({ guid: 'idx-77', seeders: 3 })], skipped: [] } as never);
     await picker.searchReleases('linkin park');
     const add = vi.spyOn(registry.getAdapter('qbittorrent') as never, 'addTorrentFile').mockResolvedValue({ success: true, message: 'Started.' } as never);
     vi.stubGlobal('fetch', vi.fn(async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 })));

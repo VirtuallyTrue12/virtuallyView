@@ -15,6 +15,7 @@ export function ReleasePicker({ initialQuery }: { initialQuery: string }) {
   const [source, setSource] = useState<'torrents' | 'youtube'>('torrents');
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<ReleaseChoice[] | null>(null);
+  const [skipped, setSkipped] = useState<string[]>([]);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [fileAs, setFileAs] = useState<'auto' | 'concert' | 'video' | 'none'>('auto');
@@ -22,8 +23,11 @@ export function ReleasePicker({ initialQuery }: { initialQuery: string }) {
 
   const search = async () => {
     if (query.trim().length < 2 || searching) return;
-    setSearching(true); setNote(null);
-    try { setResults((await api.searchReleases(query.trim())).releases); } catch (err) {
+    setSearching(true); setNote(null); setSkipped([]);
+    try {
+      const r = await api.searchReleases(query.trim());
+      setResults(r.releases); setSkipped(r.skipped ?? []);
+    } catch (err) {
       setResults(null); setNote({ text: err instanceof Error ? err.message : 'Search failed.', ok: false });
     } finally { setSearching(false); }
   };
@@ -52,7 +56,7 @@ export function ReleasePicker({ initialQuery }: { initialQuery: string }) {
           {searching ? 'Searching...' : 'Search'}
         </button>
       </div>
-      <p className="release-picker-help">Try the artist and event without extra words, for example "Linkin Park Rock am Ring 2004". Searching every source can take up to two minutes - it waits on the slowest one, not just the fast ones.</p>
+      <p className="release-picker-help">Try the artist and event without extra words, for example "Linkin Park Rock am Ring 2004". Sources this server has clocked as unusually slow are skipped here so the search stays quick - they are still used by the automatic background search.</p>
       <label className="release-picker-fileas">
         <span>When it finishes</span>
         <select className="settings-input" value={fileAs} onChange={e => setFileAs(e.target.value as typeof fileAs)}>
@@ -63,6 +67,11 @@ export function ReleasePicker({ initialQuery }: { initialQuery: string }) {
         </select>
       </label>
       {note && <p className={`release-picker-note${note.ok ? '' : ' is-error'}`} role="status">{note.text}</p>}
+      {skipped.length > 0 && (
+        <p className="release-picker-help">
+          Skipped {skipped.length === 1 ? 'one unusually slow source' : `${skipped.length} unusually slow sources`} for speed: {skipped.join(', ')}.
+        </p>
+      )}
       {results && results.length === 0 && <p className="release-picker-help">Nothing with seeders was found. Try fewer or different words.</p>}
       {results && results.length > 0 && (
         <ul className="release-list">

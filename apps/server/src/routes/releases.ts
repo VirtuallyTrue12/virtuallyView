@@ -6,7 +6,10 @@ export default async function releaseRoutes(server: FastifyInstance) {
   server.get<{ Querystring: { q?: string } }>('/api/releases/search', async (request, reply) => {
     const q = (request.query.q ?? '').trim();
     if (q.length < 2) return reply.code(400).send({ error: 'bad_request', message: 'Type at least two letters to search.' });
-    try { return { query: q, releases: await searchReleases(q) }; } catch (error) {
+    try {
+      const { choices, skipped } = await searchReleases(q);
+      return { query: q, releases: choices, skipped };
+    } catch (error) {
       return reply.code(502).send({ error: 'search_unavailable', message: error instanceof Error ? error.message : 'Search is not available.' });
     }
   });

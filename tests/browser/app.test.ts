@@ -385,7 +385,7 @@ describe('pick a release by hand', () => {
     let grabbed: unknown = null;
     await page.route('**/api/releases/search**', r => { searched = new URL(r.request().url()).searchParams.get('q') ?? ''; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ query: searched, releases: [
       { id: 'magnet:?xt=urn:btih:2', title: 'Linkin Park - Rock Am Ring 2004', cleanTitle: 'Linkin Park - Rock Am Ring 2004', indexer: 'The Pirate Bay', sizeBytes: 976_000_000, seeders: 9, ageDays: 400, quality: '', filesUnder: 'Concerts' }
-    ] }) }); });
+    ], skipped: ['Internet Archive'] }) }); });
     await page.route('**/api/releases/grab', r => { grabbed = r.request().postDataJSON(); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, message: "Downloading. It will be filed under the artist's Concerts when it finishes.", filesUnder: 'Concerts' }) }); });
     await page.goto(base + '/requests');
     await page.getByRole('button', { name: 'More for Linkin Park - Live at Rock am Ring' }).click();
@@ -396,6 +396,7 @@ describe('pick a release by hand', () => {
     await page.waitForSelector('.release-row');
     expect(searched).toBe('Linkin Park Rock am Ring 2004');
     expect(await page.locator('.release-row-meta').innerText()).toMatch(/9 seeders.*files under artist \/ Concerts/);
+    expect(await page.getByText('Internet Archive', { exact: false }).innerText()).toMatch(/Skipped one unusually slow source.*Internet Archive/);
     await page.locator('.release-row').getByRole('button', { name: 'Download' }).click();
     await page.waitForSelector('.release-picker-note');
     expect(grabbed).toEqual({ id: 'magnet:?xt=urn:btih:2', fileAs: 'auto' });
