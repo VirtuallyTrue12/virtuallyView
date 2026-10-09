@@ -177,11 +177,16 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
     return this.config;
   }
 
-  /** Free-text release search across every source, for picking a download by hand. */
+  /** Free-text release search across every source, for picking a download by hand. Prowlarr waits on
+   * every enabled indexer before answering, so a real search with many sources configured routinely
+   * takes well over a minute - confirmed live at ~91s against this install's 50 indexers. The old 75s
+   * timeout aborted before Prowlarr itself ever finished, so the first search of a session reliably
+   * failed with a "not available" error and only a retry (racing against the same real completion
+   * time) had a chance of winning. 150s gives real headroom above the measured worst case. */
   async searchReleases(query: string): Promise<ProwlarrRelease[]> {
     const { url, apiKey } = this.requireConfig();
     const res = await fetch(`${url}/api/v1/search?query=${encodeURIComponent(query)}&type=search&limit=100`, {
-      headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(75_000)
+      headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(150_000)
     });
     if (!res.ok) throw new Error(`Prowlarr returned ${res.status} while searching.`);
     const data = (await res.json()) as Array<Record<string, unknown>>;

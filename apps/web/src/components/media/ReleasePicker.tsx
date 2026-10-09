@@ -52,7 +52,7 @@ export function ReleasePicker({ initialQuery }: { initialQuery: string }) {
           {searching ? 'Searching...' : 'Search'}
         </button>
       </div>
-      <p className="release-picker-help">Try the artist and event without extra words, for example "Linkin Park Rock am Ring 2004". Searching every source can take up to a minute.</p>
+      <p className="release-picker-help">Try the artist and event without extra words, for example "Linkin Park Rock am Ring 2004". Searching every source can take up to two minutes - it waits on the slowest one, not just the fast ones.</p>
       <label className="release-picker-fileas">
         <span>When it finishes</span>
         <select className="settings-input" value={fileAs} onChange={e => setFileAs(e.target.value as typeof fileAs)}>
