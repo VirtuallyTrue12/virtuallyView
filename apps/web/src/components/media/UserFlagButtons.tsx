@@ -2,12 +2,24 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { SvgIcon } from '../ui/SvgIcon';
 
+/** A failed save says so for a few seconds instead of the button just re-enabling as if nothing happened. */
+function useFailedFlash() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (!on) return;
+    const t = window.setTimeout(() => setOn(false), 3000);
+    return () => window.clearTimeout(t);
+  }, [on]);
+  return { on, flash: () => setOn(true) };
+}
+
 type Kind = 'movie' | 'series' | 'artist' | 'episode';
 
 /** Add/remove from the signed-in user's My List. */
 export function FavoriteButton({ mediaType, mediaId, initial }: { mediaType: Kind; mediaId: string; initial?: boolean }) {
   const [on, setOn] = useState(initial === true);
   const [busy, setBusy] = useState(false);
+  const failed = useFailedFlash();
   useEffect(() => setOn(initial === true), [initial, mediaId]);
   return (
     <button
@@ -18,10 +30,11 @@ export function FavoriteButton({ mediaType, mediaId, initial }: { mediaType: Kin
       onClick={async () => {
         setBusy(true);
         try { setOn((await api.setFlags(mediaType, mediaId, { favorite: !on })).favorite); }
+        catch { failed.flash(); }
         finally { setBusy(false); }
       }}
     >
-      <SvgIcon name={on ? 'heart' : 'heart-outline'} size={16} /> {on ? 'In My List' : 'My List'}
+      <SvgIcon name={on ? 'heart' : 'heart-outline'} size={16} /> {failed.on ? 'Could not save' : on ? 'In My List' : 'My List'}
     </button>
   );
 }
@@ -32,6 +45,7 @@ export function WatchedButton({ mediaType, mediaId, initial, onChange }: {
 }) {
   const [on, setOn] = useState(initial === true);
   const [busy, setBusy] = useState(false);
+  const failed = useFailedFlash();
   useEffect(() => setOn(initial === true), [initial, mediaId]);
   return (
     <button
@@ -45,10 +59,10 @@ export function WatchedButton({ mediaType, mediaId, initial, onChange }: {
           const next = (await api.setFlags(mediaType, mediaId, { watched: !on })).watched;
           setOn(next);
           onChange?.(next);
-        } finally { setBusy(false); }
+        } catch { failed.flash(); } finally { setBusy(false); }
       }}
     >
-      {on && <SvgIcon name="check" size={16} />} {on ? 'Watched' : 'Mark watched'}
+      {on && <SvgIcon name="check" size={16} />} {failed.on ? 'Could not save' : on ? 'Watched' : 'Mark watched'}
     </button>
   );
 }

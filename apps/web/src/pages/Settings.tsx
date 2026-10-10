@@ -38,7 +38,8 @@ export default function Settings() {
 
   const visible = useMemo(() => SECTIONS.filter(s => isAdmin !== false || !s.adminOnly), [isAdmin]);
   const current: SectionId = (() => {
-    const mapped = wanted && (LEGACY[wanted] ?? wanted);
+    // A real section id wins over an old alias of the same name ("server" is both).
+    const mapped = wanted && (isSection(wanted) ? wanted : LEGACY[wanted] ?? wanted);
     if (mapped && isSection(mapped) && visible.some(s => s.id === mapped)) return mapped;
     return visible[0]?.id ?? 'appearance';
   })();

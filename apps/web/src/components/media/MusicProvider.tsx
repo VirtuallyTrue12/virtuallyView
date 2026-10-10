@@ -159,6 +159,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   eqBandsRef.current = eqBands;
   const eqGraph = useRef<EqGraph | null>(null);
   const shuffleOrder = useRef<number[]>([]);
+  // True once a shuffled pass has been dealt: when it runs out, repeat decides between a new pass and stopping.
+  const shuffleBuilt = useRef(false);
   // The plain (non-transcoded) URL for whatever is loaded now, so onError and seek know what to fall
   // back to or restart - the element's own .src is always the URL actually in play, which may already
   // be the /transcode one.
@@ -230,7 +232,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const target = nextQueue.length ? Math.max(0, Math.min(startIndex, nextQueue.length - 1)) : 0;
     setQueue(nextQueue);
     setIndex(target);
-    shuffleOrder.current = [];
+    shuffleOrder.current = []; shuffleBuilt.current = false;
     setError(null);
     if (nextQueue.length) {
       wantPlay.current = true;
@@ -265,7 +267,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       audio.load();
     }
     rawSrc.current = '';
-    shuffleOrder.current = [];
+    shuffleOrder.current = []; shuffleBuilt.current = false;
     wantPlay.current = false;
     setQueue([]);
     setIndex(0);
@@ -280,14 +282,27 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const goNext = useCallback((auto: boolean) => {
     const q = queueRef.current;
     if (!q.length) return;
+    if (auto && repeatRef.current === 'one') {
+      const audio = audioRef.current;
+      if (audio) { audio.currentTime = 0; void audio.play().catch(() => undefined); }
+      return;
+    }
     if (shuffleRef.current) {
       if (!shuffleOrder.current.length) {
+        if (auto && shuffleBuilt.current && repeatRef.current === 'off') {
+          // Every track of the shuffled pass has played: stop, as the unshuffled queue does.
+          shuffleBuilt.current = false;
+          wantPlay.current = false;
+          setPlaying(false);
+          return;
+        }
         const rest = q.map((_, i) => i).filter(i => i !== indexRef.current);
         for (let i = rest.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [rest[i], rest[j]] = [rest[j], rest[i]];
         }
         shuffleOrder.current = rest;
+        shuffleBuilt.current = true;
       }
       const nextIdx = shuffleOrder.current.shift();
       if (nextIdx === undefined) {
@@ -295,11 +310,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         return;
       }
       setIndex(nextIdx);
-      return;
-    }
-    if (auto && repeatRef.current === 'one') {
-      const audio = audioRef.current;
-      if (audio) { audio.currentTime = 0; void audio.play().catch(() => undefined); }
       return;
     }
     if (auto && indexRef.current >= q.length - 1 && repeatRef.current === 'off') {
@@ -365,7 +375,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   const toggleShuffle = useCallback(() => {
     setShuffle(prev => {
-      if (!prev) shuffleOrder.current = [];
+      if (!prev) shuffleOrder.current = []; shuffleBuilt.current = false;
       return !prev;
     });
   }, []);
@@ -381,7 +391,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (i < 0 || i >= q.length) return;
     if (q.length === 1) { stopPlayback(); return; }
     const current = indexRef.current;
-    shuffleOrder.current = [];
+    shuffleOrder.current = []; shuffleBuilt.current = false;
     setQueue(q.filter((_, at) => at !== i));
     if (i < current) setIndex(current - 1);
     else if (i === current) setIndex(Math.min(current, q.length - 2));
@@ -391,7 +401,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const q = queueRef.current;
     const current = indexRef.current;
     if (current >= q.length - 1) return;
-    shuffleOrder.current = [];
+    shuffleOrder.current = []; shuffleBuilt.current = false;
     setQueue(q.slice(0, current + 1));
   }, []);
 

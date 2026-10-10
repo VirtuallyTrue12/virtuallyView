@@ -72,7 +72,7 @@ export default function BackupPanel({ settings, onSaved }: { settings: ServerSet
             <span className="users-actions">
               <a className="btn btn-secondary btn-sm" href={`/api/backup/${encodeURIComponent(b.name)}`} download>Download</a>
               <button className="btn btn-secondary btn-sm" type="button" onClick={() => { setConfirm({ name: b.name }); setTyped(''); }}>Restore</button>
-              <button className="btn btn-secondary btn-sm" type="button" onClick={() => void api.deleteBackup(b.name).then(r => setBackups(r.backups))}>Delete</button>
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => void api.deleteBackup(b.name).then(r => setBackups(r.backups)).catch(err => setNote({ tone: 'err', text: (err as Error).message }))}>Delete</button>
             </span>
           </li>
         ))}

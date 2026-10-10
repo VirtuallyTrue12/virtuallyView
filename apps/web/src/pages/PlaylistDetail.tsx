@@ -15,7 +15,7 @@ function formatDuration(ms?: number): string {
 export default function PlaylistDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { playQueue, index, playing } = useMusicPlayer();
+  const { playQueue, entry, playing } = useMusicPlayer();
   const [playlist, setPlaylist] = useState<PlaylistItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -161,7 +161,8 @@ export default function PlaylistDetail() {
               <button type="button" className="btn btn-primary" onClick={playAll}><SvgIcon name="play" size={14} /> Play all</button>
             </div>
             {playlist.tracks.map((track, i) => {
-              const isActive = playing && index === i && queue[index]?.track.id === Number(track.trackId);
+              // Compare with what the player is really playing, not this page's own list at the player's index.
+              const isActive = playing && entry?.track.id === Number(track.trackId);
               return (
                 <div key={track.trackId} className={`album-track-row playlist-track-row${isActive ? ' is-active' : ''}`}>
                   <button type="button" className="playlist-track-main" onClick={() => playQueue(queue, i)}>

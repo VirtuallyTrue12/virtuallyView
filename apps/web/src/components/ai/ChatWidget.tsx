@@ -51,7 +51,8 @@ export default function ChatWidget() {
   const [pending, setPending] = useState<PendingConfirmation | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  const isPlayerRoute = location.pathname.includes('/play');
+  // A path segment, not a substring: /playlists/... is not a player.
+  const isPlayerRoute = /\/play(\/|$)/.test(location.pathname);
 
   useEffect(() => {
     if (isPlayerRoute) {

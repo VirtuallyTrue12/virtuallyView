@@ -78,7 +78,8 @@ export default function Radio() {
       .then(r => { if (alive) { setStations(r.stations); setMore(r.more); } })
       .catch(err => { if (alive) { setError((err as Error).message); setStations([]); setMore(false); } })
       .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+    // Leaving Browse mid-load cancels the answer, so the spinner must stop here too or it never does.
+    return () => { alive = false; setLoading(false); };
   }, [view, place, tag, query]);
 
   const loadMore = () => {

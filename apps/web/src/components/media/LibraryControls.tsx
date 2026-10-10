@@ -80,7 +80,10 @@ export function useLibraryView(items: MediaItem[], key: string) {
     return [...list].sort((a, b) => by[view.sort](a, b) || a.title.localeCompare(b.title));
   }, [items, view]);
 
-  return { view, setView, shown, genres, letters, studios, collections };
+  // Any filter in force: the controls must show whenever one is, or a small library linked to with
+  // ?studio= (or a saved filter) was narrowed with no visible way to clear it.
+  const filtered = view.state !== 'all' || !!view.genre || !!view.letter || !!view.studio || !!view.collection || !!view.query;
+  return { view, setView, shown, genres, letters, studios, collections, filtered };
 }
 
 const QUICK: StateFilter[] = ['all', 'available', 'missing', 'favorites'];

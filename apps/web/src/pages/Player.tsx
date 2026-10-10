@@ -19,7 +19,10 @@ export default function Player() {
   const [playback, setPlayback] = useState<MediaPlaybackInfo | null>(null);
   const [infoDone, setInfoDone] = useState(false);
   const { onProgress } = useProgressSaver('movie', id);
-  const partyCode = useSearchParams()[0].get('party');
+  const [params] = useSearchParams();
+  const partyCode = params.get('party');
+  // "Play from the start" on the movie page: otherwise the saved position always won.
+  const fromStart = params.get('from') === 'start';
   const party = useWatchParty(partyCode);
   const [subTick, setSubTick] = useState(0);
 
@@ -39,7 +42,8 @@ export default function Player() {
     api.movie(id).then(m => { if (!cancelled) setMovie(m); }).catch(err => { if (!cancelled) setError(err.message); });
     // Can this browser decode the file? If not, the server converts it live.
     api.mediaInfo(id).then(info => { if (!cancelled) setPlayback(info); }).catch(() => {}).finally(() => { if (!cancelled) setInfoDone(true); });
-    api.progress('movie', id)
+    if (fromStart) setResumeStart(0);
+    else api.progress('movie', id)
       .then(p => { if (!cancelled) setResumeStart(p.percent > 0 && p.percent < 96 ? p.positionSeconds : 0); })
       .catch(() => { if (!cancelled) setResumeStart(0); });
     fetch(`/api/stream/${encodeURIComponent(id)}/subtitles`)
@@ -50,7 +54,7 @@ export default function Player() {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, fromStart]);
 
   if (error) {
     return (

@@ -60,8 +60,6 @@ export default function PlaylistPicker({ tracks, title, onClose, onSaved }: Prop
     }
   };
 
-  const firstTrackId = tracks[0]?.trackId;
-
   return (
     <div className="playlist-picker">
       <div className="playlist-picker-head">
@@ -75,7 +73,8 @@ export default function PlaylistPicker({ tracks, title, onClose, onSaved }: Prop
       {playlists && playlists.length > 0 && (
         <div className="playlist-picker-list">
           {playlists.map(p => {
-            const already = firstTrackId ? p.tracks.some(t => t.trackId === firstTrackId) : false;
+            // Saved only when every track being added is already there: one shared track used to block the rest.
+            const already = tracks.length > 0 && tracks.every(tr => p.tracks.some(t => t.trackId === tr.trackId));
             return (
               <div key={p.id} className="playlist-picker-row">
                 <span className="playlist-picker-name">

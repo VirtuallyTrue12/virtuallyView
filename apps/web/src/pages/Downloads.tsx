@@ -27,6 +27,7 @@ export default function Downloads() {
   const [items, setItems] = useState<DownloadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const [view, setView] = useState<View | null>(null);
@@ -42,9 +43,10 @@ export default function Downloads() {
       setItems(list);
       return;
     }
+    // A load failure is not an action failure, and it clears itself once a poll gets through again.
     api.downloads()
-      .then(setItems)
-      .catch(err => setError(err.message))
+      .then(list => { setItems(list); setLoadError(null); })
+      .catch(err => setLoadError((err as Error).message))
       .finally(() => setLoading(false));
     api.downloadDoctor().then(r => setDoctor(new Map(r.entries.map(e => [e.id, e])))).catch(() => undefined);
   }, []);
@@ -141,10 +143,11 @@ export default function Downloads() {
       <SubNav label="Requests and downloads" items={[{ to: '/search', label: 'Find', icon: 'search' }, { to: '/requests', label: 'Requests', icon: 'list' }, { to: '/downloads', label: 'Downloads', icon: 'download', badge: live.length }]} />
 
       {error && <div className="notice notice--err" role="alert">Download action failed: {error}</div>}
+      {loadError && <div className="notice notice--err" role="alert">Could not load downloads: {loadError}</div>}
       {fixNote && <div className={`notice notice--${fixNote.tone}`} role="status">{fixNote.text}</div>}
       {attention.length > 0 && current !== 'attention' && <div className="notice notice--err" role="status">{attention.length} download{attention.length === 1 ? ' is' : 's are'} stuck. Dead ones are replaced automatically; see “Needs attention”.</div>}
       {loading && <div className="loading-state">Loading downloads...</div>}
-      {!loading && items.length === 0 && <EmptyState icon="download" title="No downloads right now" text="When you request something it appears here while it downloads, then moves to Completed once it is in your library." action={<Link to="/search" className="btn btn-primary"><SvgIcon name="search" size={16} /> Find something</Link>} />}
+      {!loading && !loadError && items.length === 0 && <EmptyState icon="download" title="No downloads right now" text="When you request something it appears here while it downloads, then moves to Completed once it is in your library." action={<Link to="/search" className="btn btn-primary"><SvgIcon name="search" size={16} /> Find something</Link>} />}
 
       {!loading && items.length > 0 && (
         <>

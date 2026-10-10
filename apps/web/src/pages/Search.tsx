@@ -69,14 +69,17 @@ export default function Search() {
   const [sugIndex, setSugIndex] = useState(-1);
   const [requested, setRequested] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
-  const [lastKey, setLastKey] = useState<string | null>(null);
+  // A ref, not state: the requester's done callback is created in the same render that sets it, and with
+  // state it read the previous key - marking the wrong card as Requested.
+  const lastKey = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const version = useRef(0);
 
   const requester = useRequester((outcome, base) => {
     setNotice({ tone: outcome.kind === 'ok' ? 'ok' : 'err', text: outcome.message });
-    if (outcome.kind === 'ok' && lastKey) setRequested(prev => new Set(prev).add(lastKey));
+    const key = lastKey.current;
+    if (outcome.kind === 'ok' && key) setRequested(prev => new Set(prev).add(key));
     setQuality(q => ({ ...q, [base.mediaType]: '' }));
   });
 
@@ -101,7 +104,8 @@ export default function Search() {
   // Full search, debounced while typing.
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) { setActive(''); setData(null); setError(null); return; }
+    // Clearing the box also cancels a search still in flight, or its results came back afterwards.
+    if (q.length < 2) { version.current++; setActive(''); setData(null); setError(null); setLoading(false); return; }
     const timer = setTimeout(() => setActive(q), 450);
     return () => clearTimeout(timer);
   }, [query]);
@@ -145,14 +149,14 @@ export default function Search() {
 
   const request = (c: SearchCandidate) => {
     const key = `${c.type}:${c.providerId}`;
-    setLastKey(key);
+    lastKey.current = key;
     setNotice(null);
     const q = quality[c.type as 'movie' | 'series' | 'artist'];
     void requester.submit({ title: c.title, ...(c.year ? { year: c.year } : {}), mediaType: c.type, selectedProviderId: c.providerId, ...(c.poster ? { poster: c.poster } : {}), ...(q ? { qualityProfile: q } : {}) });
   };
 
   const requestArtist = (name: string) => {
-    setLastKey(`artist-name:${name}`);
+    lastKey.current = `artist-name:${name}`;
     setNotice(null);
     void requester.submit({ title: name, mediaType: 'artist', ...(quality.artist ? { qualityProfile: quality.artist } : {}) });
   };
@@ -277,7 +281,7 @@ export default function Search() {
             <div className="result-grid">
               {cap(list, kind).map(c => {
                 const key = `${c.type}:${c.providerId}`;
-                return <CandidateCard key={key} c={c} requested={requested.has(key)} busy={requester.busy && lastKey === key} onRequest={() => request(c)} />;
+                return <CandidateCard key={key} c={c} requested={requested.has(key)} busy={requester.busy && lastKey.current === key} onRequest={() => request(c)} />;
               })}
             </div>
           </section>
@@ -293,7 +297,7 @@ export default function Search() {
               return (
                 <li className="song-row" key={`${t.title}-${t.artist}`}>
                   <span className="song-main"><strong>{t.title}</strong><span>{t.artist}{t.year ? ` · ${t.year}` : ''}</span></span>
-                  <button className="btn btn-secondary btn-sm" type="button" disabled={requested.has(key) || (requester.busy && lastKey === key)} onClick={() => requestArtist(t.artist)}>
+                  <button className="btn btn-secondary btn-sm" type="button" disabled={requested.has(key) || (requester.busy && lastKey.current === key)} onClick={() => requestArtist(t.artist)}>
                     {requested.has(key) ? 'Added' : `Add ${t.artist}`}
                   </button>
                 </li>

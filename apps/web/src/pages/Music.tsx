@@ -117,7 +117,7 @@ export default function Music() {
       {!loading && items.length === 0 && !error && <div className="empty-state">No music here yet. Connect your Music service and your library will appear.</div>}
       {!loading && items.length > 0 && (
         <section aria-label="Artists">
-          {items.length > 12 && <LibraryControls view={lib.view} setView={lib.setView} genres={lib.genres} letters={lib.letters} total={items.length} shown={lib.shown.length} onSurprise={surprise} showRuntime={false} />}
+          {(items.length > 12 || lib.filtered) && <LibraryControls view={lib.view} setView={lib.setView} genres={lib.genres} letters={lib.letters} total={items.length} shown={lib.shown.length} onSurprise={surprise} showRuntime={false} />}
           {lib.shown.length === 0 && <div className="empty-state">Nothing matches these filters.</div>}
           <div className="media-grid">
             {lib.shown.map(item => (

@@ -1,5 +1,5 @@
 import { DownloadPanel } from '../components/media/DownloadPanel';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { MediaCard } from '../components/media/MediaCard';
 import PlyrPlayer from '../components/media/PlyrPlayer';
@@ -39,6 +39,9 @@ export default function MovieDetails() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [castLoading, setCastLoading] = useState(false);
 
+  // Stable, or the file-details panel refetched on every re-render of this page.
+  const loadInfo = useCallback(() => api.mediaInfo(id ?? ''), [id]);
+
   useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
 
   useEffect(() => {
@@ -46,6 +49,8 @@ export default function MovieDetails() {
     let cancelled = false;
     setError(null);
     setDescription(null);
+    // Nothing from the previous movie may carry over (a "More like this" click keeps this page mounted).
+    setWatchProgress(null);
     api.movie(id)
       .then(m => {
         if (cancelled) return;
@@ -207,7 +212,7 @@ export default function MovieDetails() {
                   <WatchedButton mediaType="movie" mediaId={movie.id} initial={(movie as { watched?: boolean }).watched} onChange={w => { if (w) setWatchProgress(null); }} />
                 )}
                 <MoreMenu label="More for this movie">
-                  {movie.status === 'available' && watchProgress && <MenuItem icon="play" label="Play from the start" onSelect={() => navigate(`/movies/${movie.id}/play`)} />}
+                  {movie.status === 'available' && watchProgress && <MenuItem icon="play" label="Play from the start" onSelect={() => navigate(`/movies/${movie.id}/play?from=start`)} />}
                   {isRadarr && isAdmin && movie.status !== 'available' && <MenuItem icon="search" label="Search again" hint="Look for a better release" onSelect={() => void searchAgain()} />}
                   {isRadarr && isAdmin && <MenuItem icon="sliders-h" label="Download quality and checks" onSelect={() => setDialog('checks')} />}
                   {isAdmin && <><MenuDivider /><MenuItem icon="trash" label={inLibrary ? 'Delete movie' : 'Remove title'} danger onSelect={() => setDialog('remove')} /></>}
@@ -266,7 +271,7 @@ export default function MovieDetails() {
             {movie.studio && <div><dt>Studio</dt><dd>{movie.studio}</dd></div>}
             {movie.language && <div><dt>Language</dt><dd>{movie.language}</dd></div>}
           </dl>
-          {movie.status === 'available' && <MediaInfoPanel load={() => api.mediaInfo(movie.id)} />}
+          {movie.status === 'available' && <MediaInfoPanel load={loadInfo} />}
         </section>
       )}
 

@@ -49,7 +49,7 @@ export default function Series() {
         <EmptyState icon="tv" title="No TV shows yet" text="Request a show and every episode is searched, downloaded and filed for you. Or connect an existing TV service." action={<button className="btn btn-primary" type="button" onClick={() => navigate('/search')}>Find a show</button>} />
       )}
 
-      {!loading && !error && items.length > 12 && (
+      {!loading && !error && (items.length > 12 || lib.filtered) && (
         <LibraryControls view={lib.view} setView={lib.setView} genres={lib.genres} studios={lib.studios} studioLabel="Network" letters={lib.letters} total={items.length} shown={lib.shown.length} onSurprise={surprise} />
       )}
 

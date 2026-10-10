@@ -18,6 +18,10 @@ const RANK: Record<TitleDownload['state'], number> = { downloading: 6, importing
 let snapshot = new Map<string, TitleDownload>();
 const listeners = new Set<(next: Map<string, TitleDownload>) => void>();
 let timer: number | null = null;
+// One poll chain only. A subscribe, refresh or tab switch arriving while a fetch was in flight saw no
+// timer and started a second chain; each kept rescheduling itself forever, so every card mounted during
+// a fetch added another parallel /api/downloads loop for the rest of the session.
+let inFlight = false;
 
 function toState(status: string): TitleDownload['state'] | null {
   if (status === 'downloading' || status === 'importing' || status === 'queued' || status === 'paused' || status === 'stalled' || status === 'failed') return status;
@@ -44,21 +48,28 @@ export function summarise(rows: DownloadItem[]): Map<string, TitleDownload> {
   return out;
 }
 
+function schedule(ms: number) {
+  if (timer !== null) window.clearTimeout(timer);
+  timer = listeners.size ? window.setTimeout(poll, ms) : null;
+}
+
 async function poll() {
-  timer = null;
+  if (inFlight) return;
+  if (timer !== null) { window.clearTimeout(timer); timer = null; }
   if (!listeners.size) return;
-  if (typeof document !== 'undefined' && document.hidden) { timer = window.setTimeout(poll, IDLE_MS); return; }
+  if (typeof document !== 'undefined' && document.hidden) { schedule(IDLE_MS); return; }
   let next = snapshot;
-  try { next = summarise(await api.downloads()); } catch { /* services offline: keep the last picture */ }
+  inFlight = true;
+  try { next = summarise(await api.downloads()); } catch { /* services offline: keep the last picture */ } finally { inFlight = false; }
   snapshot = next;
   for (const listener of listeners) listener(next);
   const busy = [...next.values()].some(d => d.state === 'downloading' || d.state === 'importing' || d.state === 'queued');
-  if (listeners.size) timer = window.setTimeout(poll, busy ? ACTIVE_MS : IDLE_MS);
+  schedule(busy ? ACTIVE_MS : IDLE_MS);
 }
 
 function subscribe(listener: (next: Map<string, TitleDownload>) => void) {
   listeners.add(listener);
-  if (timer === null) void poll();
+  if (timer === null && !inFlight) void poll();
   return () => {
     listeners.delete(listener);
     if (!listeners.size && timer !== null) { window.clearTimeout(timer); timer = null; }
@@ -67,17 +78,11 @@ function subscribe(listener: (next: Map<string, TitleDownload>) => void) {
 
 if (typeof window !== 'undefined') {
   // The top-bar refresh button asks for a fresh look right now.
-  window.addEventListener('vv-refresh', () => {
-    if (!listeners.size) return;
-    if (timer !== null) window.clearTimeout(timer);
-    void poll();
-  });
+  window.addEventListener('vv-refresh', () => { if (listeners.size) void poll(); });
 }
 
 if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && listeners.size) { if (timer !== null) window.clearTimeout(timer); void poll(); }
-  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && listeners.size) void poll(); });
 }
 
 /** Live download state for one title (movie, show or artist id), shared by every card on the page. */

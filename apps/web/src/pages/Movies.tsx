@@ -49,7 +49,7 @@ export default function Movies() {
         <EmptyState icon="film" title="No movies yet" text="Request a title and it will search, download and appear here by itself. Or connect an existing Movies service." action={<button className="btn btn-primary" type="button" onClick={() => navigate('/search')}>Find a movie</button>} />
       )}
 
-      {!loading && !error && items.length > 12 && (
+      {!loading && !error && (items.length > 12 || lib.filtered) && (
         <LibraryControls view={lib.view} setView={lib.setView} genres={lib.genres} studios={lib.studios} collections={lib.collections} letters={lib.letters} total={items.length} shown={lib.shown.length} onSurprise={surprise} />
       )}
 

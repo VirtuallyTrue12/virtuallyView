@@ -483,6 +483,22 @@ async function requestJSON<T>(method: string, path: string, body?: unknown): Pro
   return res.json();
 }
 
+// What this browser can decode beyond the baseline, so the server can direct-play HEVC here instead of
+// converting it (Chromium on a Mac, Safari, Edge with the HEVC extension all decode it in hardware).
+let codecCache: string | null = null;
+function codecQuery(): string {
+  if (codecCache !== null) return codecCache;
+  try {
+    const v = document.createElement('video');
+    const hevc = v.canPlayType('video/mp4; codecs="hvc1.1.6.L120.90"') !== '';
+    const hevc10 = v.canPlayType('video/mp4; codecs="hvc1.2.4.L120.90"') !== '';
+    codecCache = hevc ? `?hevc=1${hevc10 ? '&hevc10=1' : ''}` : '';
+  } catch {
+    codecCache = '';
+  }
+  return codecCache;
+}
+
 function getJSON<T>(path: string): Promise<T> {
   return requestJSON<T>('GET', path);
 }
@@ -647,8 +663,8 @@ export const api = {
     });
   },
   systemStorage: () => getJSON<StorageReport>('/api/system/storage'),
-  mediaInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/${encodeURIComponent(id)}/info`),
-  episodeInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/episode/${encodeURIComponent(id)}/info`),
+  mediaInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/${encodeURIComponent(id)}/info${codecQuery()}`),
+  episodeInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/episode/${encodeURIComponent(id)}/info${codecQuery()}`),
   dashboard: () => getJSON<Dashboard>('/api/dashboard'),
   movies: () => getJSON<MediaItem[]>('/api/movies'),
   movie: (id: string) => getJSON<MediaItem>(`/api/movies/${encodeURIComponent(id)}`),
@@ -699,8 +715,14 @@ export const api = {
   removeDownload: (id: string) => postJSON<{ success: boolean; id: string }>(`/api/downloads/${encodeURIComponent(id)}/remove`),
   deleteDownloadFiles: (id: string) => postJSON<{ success: boolean; id: string; message: string }>(`/api/downloads/${encodeURIComponent(id)}/delete-files`),
   requests: async () => {
-    const result = await getJSON<{ items: RequestItem[] }>('/api/requests?limit=100');
-    return result.items;
+    // Every page, not just the first 100: past that, older requests were invisible and could not be acted on.
+    const items: RequestItem[] = [];
+    for (let page = 1; page <= 50; page++) {
+      const result = await getJSON<{ items: RequestItem[]; hasMore?: boolean }>(`/api/requests?limit=100&page=${page}`);
+      items.push(...result.items);
+      if (!result.hasMore) break;
+    }
+    return items;
   },
   request: (id: string) => getJSON<RequestItem>(`/api/requests/${encodeURIComponent(id)}`),
   indexers: () => getJSON<{ indexers: Indexer[] }>('/api/indexers'),

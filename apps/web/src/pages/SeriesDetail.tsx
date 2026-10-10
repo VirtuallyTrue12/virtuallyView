@@ -269,8 +269,10 @@ export default function SeriesDetail() {
                     title={episode.watched ? 'Mark as unwatched' : 'Mark as watched'}
                     onClick={async () => {
                       const next = !episode.watched;
-                      await api.setFlags('episode', episode.id, { watched: next });
-                      setEpisodes(list => list.map(e => (e.id === episode.id ? { ...e, watched: next, ...(next ? { watchProgress: 0 } : {}) } : e)));
+                      try {
+                        await api.setFlags('episode', episode.id, { watched: next });
+                        setEpisodes(list => list.map(e => (e.id === episode.id ? { ...e, watched: next, ...(next ? { watchProgress: 0 } : {}) } : e)));
+                      } catch (err) { setNotice({ tone: 'err', text: (err as Error).message }); }
                     }}
                   ><SvgIcon name="check" size={14} /></button>
                 )}
