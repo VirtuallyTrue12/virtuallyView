@@ -13,10 +13,13 @@ import { ffmpegHlsArgs, resolveBinary, HLS_PLAYLIST, HLS_SEGMENT_PATTERN, type T
  * reload, a second tab) reuses the ffmpeg already running instead of starting another.
  */
 
-interface Session { dir: string; process: ChildProcess; owners: Map<string, () => void>; lastAccess: number; ended: boolean }
+interface Session { dir: string; process: ChildProcess; owners: Map<string, () => void>; lastAccess: number; ended: boolean; filePath: string }
 
 const sessions = new Map<string, Session>();
-const IDLE_MS = 25_000;
+// Long enough to pause for a few minutes and resume: once a remux finishes, the player stops asking for
+// anything until it plays again, and a 25s window deleted the session out from under a paused viewer.
+// Abandoned seek positions are cleaned up as soon as the next one starts (ensureHlsSession), not here.
+const IDLE_MS = 5 * 60_000;
 export const HLS_SEGMENT_RE = /^seg\d{5}\.ts$/;
 
 function cleanup(key: string): void {
@@ -60,6 +63,12 @@ export function ensureHlsSession(key: string, userId: string, filePath: string, 
 
   const ffmpeg = resolveBinary('ffmpeg');
   if (!ffmpeg) return { ok: false, status: 503, message: 'This file needs conversion, but ffmpeg is not installed on the server.' };
+  // A seek asks for a new session at the new offset. The viewer's previous one for the same file is done
+  // with: left to the idle sweep, it kept encoding at full speed and holding a conversion slot for 25s,
+  // right when the new position needed the CPU - and a couple of quick seeks ran into the slot limit.
+  for (const [other, s] of sessions) {
+    if (s.filePath === filePath && s.owners.size === 1 && s.owners.has(userId)) cleanup(other);
+  }
   const release = acquireConversion(userId);
   if (!release) return { ok: false, status: 429, message: 'Too many videos are being converted right now. Close another player or try again in a moment.' };
 
@@ -79,7 +88,7 @@ export function ensureHlsSession(key: string, userId: string, filePath: string, 
   child.on('error', () => cleanup(key));
   const timer = setTimeout(() => cleanup(key), CONVERSION_MAX_MS);
   timer.unref();
-  sessions.set(key, { dir, process: child, owners: new Map([[userId, release]]), lastAccess: Date.now(), ended: false });
+  sessions.set(key, { dir, process: child, owners: new Map([[userId, release]]), lastAccess: Date.now(), ended: false, filePath });
   return { ok: true, dir };
 }
 

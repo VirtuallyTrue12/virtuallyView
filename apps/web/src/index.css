@@ -5334,6 +5334,7 @@ iframe.hero-trailer { pointer-events: none; }
 
 .vp-skip { position: absolute; right: 22px; bottom: 96px; z-index: 6; padding: 10px 20px; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: var(--button-radius, 10px); background: rgba(15, 15, 22, 0.82); color: #fff; font: inherit; font-weight: 600; cursor: pointer; backdrop-filter: blur(6px); }
 .vp-skip:hover { background: #fff; color: #111; }
+.vp-quality-note { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); z-index: 6; max-width: min(560px, calc(100% - 32px)); padding: 10px 16px; border-radius: 10px; background: rgba(15, 15, 22, 0.86); color: #fff; font-size: 0.9rem; text-align: center; backdrop-filter: blur(6px); pointer-events: none; }
 .vp-bar-tick { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(0, 0, 0, 0.55); pointer-events: none; }
 
 /* Quick Connect (sign in with a code) */

@@ -20,12 +20,6 @@ describe('byte-range parsing (RFC 9110 §14.1.2)', () => {
     expect(parseByteRange('bytes=500-', SIZE)).toEqual({ start: 500, end: SIZE - 1 });
   });
 
-  it('an open-ended range with a chunk cap stays bounded instead of serving the whole rest at once', () => {
-    expect(parseByteRange('bytes=500-', SIZE, 1024)).toEqual({ start: 500, end: 1523 });
-    // Still clamped to the end of a small file even with a large chunk cap.
-    expect(parseByteRange('bytes=0-', 100, 1024)).toEqual({ start: 0, end: 99 });
-  });
-
   it('an explicit end past the end of the file is clamped, not rejected', () => {
     expect(parseByteRange(`bytes=0-${SIZE + 1000}`, SIZE)).toEqual({ start: 0, end: SIZE - 1 });
   });

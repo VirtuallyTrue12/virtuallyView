@@ -31,6 +31,8 @@ export interface MediaProbe {
   sizeBytes?: number | null;
   /** True when the video is 8-bit H.264 and can be remuxed without re-encoding. */
   videoCopyOk?: boolean;
+  /** ffprobe's pixel format for the video stream, such as yuv420p or yuv420p10le. */
+  videoPixFmt?: string | null;
   audioTracks?: AudioTrack[];
   subtitleStreams?: SubtitleStream[];
   chapters?: Chapter[];
@@ -93,7 +95,7 @@ function inferFromExtension(filePath: string): MediaProbe {
   };
 }
 
-type ProbeStreams = Pick<MediaProbe, 'videoCodec' | 'audioCodec' | 'durationSeconds' | 'width' | 'height' | 'bitrate' | 'videoCopyOk' | 'audioTracks' | 'subtitleStreams' | 'chapters'>;
+type ProbeStreams = Pick<MediaProbe, 'videoCodec' | 'audioCodec' | 'durationSeconds' | 'width' | 'height' | 'bitrate' | 'videoCopyOk' | 'videoPixFmt' | 'audioTracks' | 'subtitleStreams' | 'chapters'>;
 
 function runProbe(ffprobe: string, filePath: string): Promise<ProbeStreams | null> {
   return new Promise(resolve => {
@@ -137,6 +139,7 @@ function runProbe(ffprobe: string, filePath: string): Promise<ProbeStreams | nul
           height: video?.height ?? null,
           bitrate: Number.isFinite(bitrate) ? bitrate : null,
           videoCopyOk: video?.codec_name === 'h264' && video.pix_fmt === 'yuv420p',
+          videoPixFmt: video?.pix_fmt ?? null,
           chapters: (parsed.chapters ?? []).map((c, i) => ({ start: Number(c.start_time) || 0, end: Number(c.end_time) || 0, title: c.tags?.title ?? `Chapter ${i + 1}` })).filter(c => c.end > c.start),
           audioTracks: audio.map((a, index) => ({
             index, codec: a.codec_name ?? 'unknown', language: a.tags?.language ?? 'und',
@@ -194,6 +197,7 @@ export async function probeMedia(filePath: string): Promise<MediaProbe> {
         bitrate: streams.bitrate ?? null,
         sizeBytes,
         videoCopyOk: streams.videoCopyOk === true,
+        videoPixFmt: streams.videoPixFmt ?? null,
         audioTracks: streams.audioTracks ?? [],
         subtitleStreams: streams.subtitleStreams ?? [],
         chapters: streams.chapters ?? []
@@ -202,6 +206,25 @@ export async function probeMedia(filePath: string): Promise<MediaProbe> {
   }
   probeCache.set(filePath, { key: cacheKey, value });
   return value;
+}
+
+/** What the browser asking says it can decode beyond the baseline every browser handles. */
+export interface ClientCodecs { hevc?: boolean; hevc10?: boolean }
+
+/**
+ * The probe's own verdict assumes the lowest common denominator, so HEVC is always "needs conversion".
+ * Chromium on a Mac, Safari and Edge with the HEVC extension decode it in hardware, though: for a browser
+ * that says so, an HEVC file in a container it plays (mp4/m4v/mov) direct-plays instead of costing a
+ * full software re-encode on the server - the single most expensive thing this app does. If the browser
+ * was wrong, the player's own decode-failure retry still falls back to conversion.
+ */
+export function playableFor(probe: MediaProbe, caps: ClientCodecs): boolean {
+  if (probe.playable) return true;
+  if (probe.videoCodec !== 'hevc' || !caps.hevc) return false;
+  if (!['mp4', 'm4v', 'mov'].includes(probe.container)) return false;
+  if (probe.audioCodec && !BROWSER_AUDIO.has(probe.audioCodec)) return false;
+  const tenBit = /10/.test(probe.videoPixFmt ?? '');
+  return tenBit ? !!caps.hevc10 : true;
 }
 
 export interface TranscodeOptions {
@@ -213,6 +236,17 @@ export interface TranscodeOptions {
   copyVideo?: boolean;
   /** Zero-based image subtitle stream (PGS, VobSub) to draw onto the picture. Forces a re-encode. */
   burn?: number;
+  /** Source height in pixels; a re-encode of anything taller than 1080p is capped to 1080p. */
+  sourceHeight?: number;
+}
+
+/** Peak bitrate for a software re-encode at this height: CRF alone lets complex scenes spike, which
+ * arrives at the player as bursts it cannot keep ahead of over Wi-Fi. */
+function rateCap(height: number): [string, string] {
+  if (height <= 480) return ['2M', '4M'];
+  if (height <= 720) return ['4M', '8M'];
+  if (height <= 1080) return ['8M', '16M'];
+  return ['20M', '40M'];
 }
 
 /** The `-map`/`-c:v`/`-c:a` portion shared by every output container (progressive MP4 or HLS). */
@@ -220,7 +254,14 @@ function encodeArgs(options: TranscodeOptions): string[] {
   const args: string[] = [];
   const audio = Number.isInteger(options.audio) && (options.audio ?? 0) >= 0 ? options.audio : 0;
   const burn = Number.isInteger(options.burn) && (options.burn ?? -1) >= 0 ? options.burn : undefined;
-  const scale = options.height && options.height > 0;
+  const asked = options.height && options.height > 0 ? options.height : 0;
+  const copying = !!options.copyVideo && !asked && burn === undefined;
+  // A 4K source re-encoded in software at full size rarely keeps up with realtime on a home server, and
+  // no browser window needs it to; 1080p is the default ceiling unless a lower one was asked for.
+  const capped = !asked && !copying && (options.sourceHeight ?? 0) > 1080 ? 1080 : 0;
+  const target = asked || capped;
+  const scale = target > 0;
+  options = { ...options, height: target || undefined };
   if (burn !== undefined) {
     const overlay = `[0:v:0][0:s:${burn}]overlay${scale ? `,scale=-2:${Math.round(options.height as number)}` : ''}[v]`;
     args.push('-filter_complex', overlay, '-map', '[v]', '-map', `0:a:${audio}?`);
@@ -234,13 +275,16 @@ function encodeArgs(options: TranscodeOptions): string[] {
   // perfectly fine on their own. Nothing here uses chapter markers from the transcoded stream itself
   // (the player reads them separately, from ffprobe on the source file), so they are dropped.
   args.push('-map_chapters', '-1');
-  if (options.copyVideo && !scale && burn === undefined) {
+  if (copying) {
     args.push('-c:v', 'copy');
   } else {
+    const [maxrate, bufsize] = rateCap(target || options.sourceHeight || 1080);
     args.push(
       '-c:v', 'libx264',
       '-preset', 'veryfast',
       '-crf', scale ? '25' : '23',
+      '-maxrate', maxrate,
+      '-bufsize', bufsize,
       '-profile:v', 'high',
       '-pix_fmt', 'yuv420p',
       // A source with a long keyframe interval (common in HEVC releases) held several seconds of frames

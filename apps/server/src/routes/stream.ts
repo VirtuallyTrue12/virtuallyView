@@ -6,7 +6,7 @@ import type { SonarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from '../services/registry.js';
 import { getMediaRoots, isAllowedMediaFile } from '../services/media-roots.js';
 import { resolveMusicVideoPath } from '../services/music-video-library.js';
-import { extractSubtitleVtt, ffmpegAvailable, probeMedia, startTranscode, type TranscodeOptions } from '../services/transcode.js';
+import { extractSubtitleVtt, ffmpegAvailable, playableFor, probeMedia, startTranscode, type ClientCodecs, type TranscodeOptions } from '../services/transcode.js';
 import { ensureHlsSession, HLS_SEGMENT_RE, playlistPath, segmentPath, touchHlsSession } from '../services/hls-sessions.js';
 import { ratingAllowed } from '../services/parental.js';
 import { parseByteRange } from '../lib/byte-range.js';
@@ -61,7 +61,7 @@ function serveMediaFile(
   const range = request.headers.range;
 
   if (range) {
-    const parsed = parseByteRange(range, stat.size, 1024 * 1024);
+    const parsed = parseByteRange(range, stat.size);
     if (!parsed) {
       return reply
         .code(416)
@@ -97,10 +97,13 @@ function serveMediaFile(
 }
 
 /** Browser-capability summary for a media file, used to decide direct vs. transcode. */
-async function mediaInfoFor(filePath: string) {
+type CodecQuery = { hevc?: string; hevc10?: string };
+const codecsOf = (q: CodecQuery | undefined): ClientCodecs => ({ hevc: q?.hevc === '1', hevc10: q?.hevc10 === '1' });
+
+async function mediaInfoFor(filePath: string, caps: ClientCodecs = {}) {
   const probe = await probeMedia(filePath);
   return {
-    playable: probe.playable,
+    playable: playableFor(probe, caps),
     container: probe.container,
     videoCodec: probe.videoCodec,
     audioCodec: probe.audioCodec,
@@ -165,7 +168,8 @@ async function transcodeOptionsFor(filePath: string, query: TranscodeQuery): Pro
   const options: TranscodeOptions = {
     audio: Math.max(0, Math.round(Number(query.audio) || 0)),
     ...(height >= 144 && height <= 4320 && (!probe.height || height < probe.height) ? { height } : {}),
-    copyVideo: probe.videoCopyOk === true
+    copyVideo: probe.videoCopyOk === true,
+    ...(probe.height ? { sourceHeight: probe.height } : {})
   };
   const burn = Number(query.burn);
   if (query.burn !== undefined && Number.isInteger(burn) && probe.subtitleStreams?.[burn] && !probe.subtitleStreams[burn]?.text) {
@@ -174,12 +178,30 @@ async function transcodeOptionsFor(filePath: string, query: TranscodeQuery): Pro
   return { start, options };
 }
 
+// One live progressive conversion per viewer per file. A seek in converted playback starts a new one;
+// the old one used to keep running until the browser's dropped connection made it through the port
+// proxy, still holding a conversion slot and the CPU right when the new position needed both - a few
+// quick skips then hit the slot limit, which the player could only show as "could not decode".
+const liveConversions = new Map<string, import('node:child_process').ChildProcess>();
+
+async function stopPrevious(key: string): Promise<void> {
+  const old = liveConversions.get(key);
+  if (!old || old.exitCode !== null || old.signalCode !== null) return;
+  await new Promise<void>(resolve => {
+    const done = setTimeout(resolve, 2000);
+    old.once('close', () => { clearTimeout(done); resolve(); });
+    try { old.kill('SIGKILL'); } catch { clearTimeout(done); resolve(); }
+  });
+}
+
 async function streamTranscode(
   request: FastifyRequest<{ Querystring: TranscodeQuery }>,
   reply: FastifyReply,
   filePath: string
 ) {
   const { start, options } = await transcodeOptionsFor(filePath, request.query);
+  const viewerKey = `${currentActor().userId}\0${filePath}`;
+  await stopPrevious(viewerKey);
   const release = acquireConversion(currentActor().userId);
   if (!release) {
     return reply.code(429).header('Retry-After', '30').send({ error: 'too_many_conversions', message: 'Too many videos are being converted right now. Close another player or try again in a moment.' });
@@ -197,8 +219,13 @@ async function streamTranscode(
     release();
     return reply.code(503).header('Access-Control-Allow-Origin', '*').send({ error: 'transcode_unavailable', message: 'The converter could not start.' });
   }
+  liveConversions.set(viewerKey, child);
   const limit = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* already exited */ } }, CONVERSION_MAX_MS);
-  child.on('close', () => { clearTimeout(limit); release(); });
+  child.on('close', () => {
+    clearTimeout(limit);
+    release();
+    if (liveConversions.get(viewerKey) === child) liveConversions.delete(viewerKey);
+  });
   request.raw.on('close', () => {
     try { child.kill('SIGKILL'); } catch { /* already exited */ }
   });
@@ -509,12 +536,12 @@ export default async function streamRoutes(server: FastifyInstance) {
   // The player asks "can this browser play it?" before starting; when the
   // answer is no and ffmpeg is installed, it falls back to these transcode
   // routes instead of showing a decode error.
-  server.get<{ Params: { id: string } }>('/api/stream/episode/:id/info', async (request, reply) => {
+  server.get<{ Params: { id: string }; Querystring: CodecQuery }>('/api/stream/episode/:id/info', async (request, reply) => {
     const filePath = await resolveEpisodeFile(request.params.id);
     if (!isServable(filePath)) {
       return reply.code(404).send({ error: 'not_found', message: 'This episode has no playable file on the server yet.' });
     }
-    return mediaInfoFor(filePath);
+    return mediaInfoFor(filePath, codecsOf(request.query));
   });
 
   server.get<{ Params: { id: string }; Querystring: TranscodeQuery }>(
@@ -542,13 +569,13 @@ export default async function streamRoutes(server: FastifyInstance) {
     async (request, reply) => hlsSegment(reply, `ep:${request.params.id}:${request.params.session}`, request.params.segment)
   );
 
-  server.get<{ Params: { id: string } }>('/api/stream/:id/info', async (request, reply) => {
+  server.get<{ Params: { id: string }; Querystring: CodecQuery }>('/api/stream/:id/info', async (request, reply) => {
     const item = await resolveStreamable(request.params.id);
     const filePath = item?.fileInfo?.path;
     if (!isServable(filePath)) {
       return reply.code(404).send({ error: 'not_found', message: 'No local file is available for this item yet.' });
     }
-    return mediaInfoFor(filePath);
+    return mediaInfoFor(filePath, codecsOf(request.query));
   });
 
   server.get<{ Params: { id: string }; Querystring: TranscodeQuery }>(

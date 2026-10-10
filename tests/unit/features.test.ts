@@ -250,6 +250,45 @@ describe('HLS conversion for Safari and TV browsers', () => {
   });
 });
 
+describe('conversion that keeps up on a home server', () => {
+  it('caps a re-encode of a 4K source at 1080p and limits its peak bitrate', async () => {
+    const { ffmpegTranscodeArgs } = await import('../../apps/server/src/services/transcode');
+    const args = ffmpegTranscodeArgs('/m/a.mkv', 0, { sourceHeight: 2160 });
+    expect(args).toContain('scale=-2:1080');
+    expect(args[args.indexOf('-maxrate') + 1]).toBe('8M');
+  });
+
+  it('never re-encodes a stream it can copy just to apply the 1080p cap', async () => {
+    const { ffmpegTranscodeArgs } = await import('../../apps/server/src/services/transcode');
+    const args = ffmpegTranscodeArgs('/m/a.mkv', 0, { sourceHeight: 2160, copyVideo: true });
+    expect(args[args.indexOf('-c:v') + 1]).toBe('copy');
+    expect(args).not.toContain('-maxrate');
+  });
+
+  it('a lower quality the viewer picked gets a matching lower bitrate ceiling', async () => {
+    const { ffmpegTranscodeArgs } = await import('../../apps/server/src/services/transcode');
+    const args = ffmpegTranscodeArgs('/m/a.mkv', 0, { height: 720, sourceHeight: 1080 });
+    expect(args).toContain('scale=-2:720');
+    expect(args[args.indexOf('-maxrate') + 1]).toBe('4M');
+  });
+});
+
+describe('direct play of HEVC for browsers that decode it', () => {
+  const probe = (over: Record<string, unknown> = {}) => ({ playable: false, container: 'm4v', videoCodec: 'hevc', audioCodec: 'aac', durationSeconds: 1, videoPixFmt: 'yuv420p', ...over });
+  it('plays 8-bit HEVC in mp4/m4v directly when the browser says it can', async () => {
+    const { playableFor } = await import('../../apps/server/src/services/transcode');
+    expect(playableFor(probe(), { hevc: true })).toBe(true);
+    expect(playableFor(probe(), {})).toBe(false);
+  });
+  it('needs the separate 10-bit capability for Main10, and never direct-plays HEVC in mkv', async () => {
+    const { playableFor } = await import('../../apps/server/src/services/transcode');
+    expect(playableFor(probe({ videoPixFmt: 'yuv420p10le' }), { hevc: true })).toBe(false);
+    expect(playableFor(probe({ videoPixFmt: 'yuv420p10le' }), { hevc: true, hevc10: true })).toBe(true);
+    expect(playableFor(probe({ container: 'mkv' }), { hevc: true, hevc10: true })).toBe(false);
+    expect(playableFor(probe({ audioCodec: 'dts' }), { hevc: true })).toBe(false);
+  });
+});
+
 describe('audio conversion for formats a plain <audio> element cannot play', () => {
   it('maps only the audio stream (never an attached cover image) to AAC/ADTS', async () => {
     const { ffmpegAudioArgs } = await import('../../apps/server/src/services/transcode');

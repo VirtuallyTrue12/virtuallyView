@@ -32,8 +32,9 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   private libraryCache = new TtlCache<Media[]>(10_000, 1, 5 * 60_000);
   // getEpisodeFile is two sequential, uncached fetches (episode, then episode-file); every episode
   // stream route calls it (stream, subtitles, trickplay, HLS playlist, every HLS segment). A file's
-  // path for a given episode cannot change in 10s.
-  private episodeFileCache = new TtlCache<{ path: string; size?: number } | null>(10_000);
+  // path for a given episode cannot change in 10s. Served stale while refreshing for up to 5 min, like the
+  // library caches: a moved or deleted file still fails the route's own existsSync check, never serves wrong bytes.
+  private episodeFileCache = new TtlCache<{ path: string; size?: number } | null>(10_000, 500, 5 * 60_000);
 
   async connect(config: { url: string; apiKey: string }) {
     this.config = config;

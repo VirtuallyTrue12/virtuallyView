@@ -40,4 +40,29 @@ describe('TtlCache', () => {
     expect(await cache.get('k', failFill)).toBe(1);
     vi.useRealTimers();
   });
+
+  it('past its TTL, a stale-capable cache answers at once and refreshes in the background', async () => {
+    const cache = new TtlCache<number>(10_000, 500, 5 * 60_000);
+    expect(await cache.get('k', vi.fn().mockResolvedValue(1))).toBe(1);
+    vi.useFakeTimers();
+    vi.advanceTimersByTime(11_000);
+    let release: (v: number) => void = () => {};
+    const slow = vi.fn(() => new Promise<number>(r => { release = r; }));
+    // Must not wait on the slow refresh: a video seek here used to block on a whole library fetch.
+    expect(await cache.get('k', slow)).toBe(1);
+    expect(slow).toHaveBeenCalledTimes(1);
+    release(2);
+    await Promise.resolve(); await Promise.resolve();
+    expect(await cache.get('k', vi.fn())).toBe(2);
+    vi.useRealTimers();
+  });
+
+  it('without staleMs, an expired entry still waits for a fresh answer (age ratings fail closed)', async () => {
+    const cache = new TtlCache<number>(10_000);
+    expect(await cache.get('k', vi.fn().mockResolvedValue(1))).toBe(1);
+    vi.useFakeTimers();
+    vi.advanceTimersByTime(11_000);
+    await expect(cache.get('k', vi.fn().mockRejectedValue(new Error('offline')))).rejects.toThrow('offline');
+    vi.useRealTimers();
+  });
 });

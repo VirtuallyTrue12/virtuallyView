@@ -5,6 +5,11 @@ import { resolve } from 'node:path';
 import { DATA_DIR } from '../lib/paths.js';
 import { probeMedia, resolveBinary } from './transcode.js';
 
+// The preview strip reads the whole file, usually right as playback starts: idle disk priority keeps it
+// from competing with the read the viewer is actually waiting on (nice alone only lowers CPU priority).
+const IONICE = ['/usr/bin/ionice', '/bin/ionice'].find(p => existsSync(p));
+const LOW_PRIORITY = IONICE ? [IONICE, '-c3', 'nice', '-n', '15'] : ['nice', '-n', '15'];
+
 // Preview thumbnails on the seek bar: one small picture every INTERVAL seconds,
 // packed into a single sprite image made once per file by ffmpeg and cached.
 
@@ -53,7 +58,7 @@ async function generate(filePath: string, key: string): Promise<void> {
   try {
     await new Promise<void>((ok, fail) => {
       // Keyframes only: decoding every frame of a two hour film would take far longer.
-      const child = spawn('nice', ['-n', '15', ffmpeg, '-hide_banner', '-loglevel', 'error', '-nostdin', '-skip_frame', 'nokey', '-i', filePath, '-an', '-sn',
+      const child = spawn(LOW_PRIORITY[0]!, [...LOW_PRIORITY.slice(1), ffmpeg, '-hide_banner', '-loglevel', 'error', '-nostdin', '-skip_frame', 'nokey', '-i', filePath, '-an', '-sn',
         '-vf', `fps=1/${INTERVAL},scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=decrease,pad=${WIDTH}:${HEIGHT}:(ow-iw)/2:(oh-ih)/2,tile=${COLS}x${rows}`,
         '-frames:v', '1', '-q:v', '6', '-f', 'image2', '-y', partial], { stdio: ['ignore', 'ignore', 'pipe'] });
       let err = '';

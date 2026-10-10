@@ -45,6 +45,7 @@ interface VideoPlayerProps {
 }
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+const QUALITY_STEPS = [1080, 720, 480, 360];
 const HIDE_AFTER_MS = 3200;
 const UP_NEXT_SECONDS = 8;
 
@@ -114,6 +115,11 @@ export default function VideoPlayer({
   const [menu, setMenu] = useState<null | 'speed' | 'subs' | 'episodes' | 'audio' | 'quality' | 'cast'>(null);
   const [audioIndex, setAudioIndex] = useState(0);
   const [quality, setQuality] = useState(0);
+  // Stall watch: a few genuine buffering pauses in a minute (not the ones right after a start, seek or
+  // source change) means the link or the converter cannot keep up at this quality, so step down once.
+  const stalls = useRef<number[]>([]);
+  const quietUntil = useRef(Date.now() + 8000);
+  const [qualityNote, setQualityNote] = useState<string | null>(null);
   const [burnIndex, setBurnIndex] = useState(-1);
   const [visible, setVisible] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
@@ -198,7 +204,17 @@ export default function VideoPlayer({
     const max = total > 0 ? total - 0.5 : Number.POSITIVE_INFINITY;
     const t = Math.max(0, Math.min(target, max));
     setUpNext(null);
+    quietUntil.current = Date.now() + 5000;
     emit(!v.paused, t);
+    // A short skip inside what the conversion has already delivered just moves within it: restarting
+    // ffmpeg for every ±10s cost a spinner and a cold start for data that was already here.
+    const local = t - offset;
+    const within = (ranges: TimeRanges) => { for (let i = 0; i < ranges.length; i++) if (local >= ranges.start(i) && local <= ranges.end(i) - 0.5) return true; return false; };
+    if (isTranscode && local >= 0 && within(v.buffered) && within(v.seekable)) {
+      v.currentTime = local;
+      setTime(local);
+      return;
+    }
     if (isTranscode) {
       wantPlay.current = !v.paused || wantPlay.current;
       setTime(0);
@@ -208,7 +224,7 @@ export default function VideoPlayer({
       v.currentTime = t;
       setTime(t);
     }
-  }, [isTranscode, total, emit]);
+  }, [isTranscode, total, emit, offset]);
 
   // Changing audio track or quality re-runs the conversion from where we are.
   const restartWith = (apply: () => void) => {
@@ -218,6 +234,27 @@ export default function VideoPlayer({
     setWaiting(true);
     apply();
   };
+
+  // Picking a quality works the same from direct play: it switches to a conversion at that height.
+  const chooseQuality = (q: number) => restartWith(() => { if (q !== 0) setConverting(true); setQuality(q); });
+
+  const noteStall = () => {
+    const now = Date.now();
+    if (now < quietUntil.current || !conversionSrc || cast) return;
+    stalls.current = [...stalls.current.filter(at => now - at < 60_000), now];
+    if (stalls.current.length < 3) return;
+    stalls.current = [];
+    const current = quality || sourceHeight || 1080;
+    const next = QUALITY_STEPS.find(q => q < current);
+    if (!next) return;
+    chooseQuality(next);
+    setQualityNote(`Playback kept pausing to load, so quality was lowered to ${next}p. Change it any time from the quality menu.`);
+  };
+  useEffect(() => {
+    if (!qualityNote) return;
+    const t = window.setTimeout(() => setQualityNote(null), 7000);
+    return () => window.clearTimeout(t);
+  }, [qualityNote]);
 
   const sign = async (path: string) => {
     const res = await fetch('/api/stream-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
@@ -279,6 +316,8 @@ export default function VideoPlayer({
     if (firstSrc.current) { firstSrc.current = false; return; }
     const v = videoRef.current;
     if (!v) return;
+    quietUntil.current = Date.now() + 8000;
+    stalls.current = [];
     setFailed(null);
     v.load();
     if (wantPlay.current) void v.play().catch(() => setPlaying(false));
@@ -425,7 +464,7 @@ export default function VideoPlayer({
         onDoubleClick={toggleFullscreen}
         onPlay={() => { setPlaying(true); wake(); emit(true); }}
         onPause={() => { setPlaying(false); setVisible(true); emit(false); }}
-        onWaiting={() => setWaiting(true)}
+        onWaiting={() => { setWaiting(true); noteStall(); }}
         onPlaying={() => { setWaiting(false); setPlaying(true); }}
         onCanPlay={() => setWaiting(false)}
         onLoadedMetadata={e => {
@@ -492,6 +531,7 @@ export default function VideoPlayer({
         </div>
       )}
 
+      {qualityNote && <div className="vp-quality-note" role="status">{qualityNote}</div>}
       {upNext !== null && next && (
         <div className="vp-upnext" role="status">
           <span>Up next: {next.label}</span>
@@ -669,14 +709,14 @@ export default function VideoPlayer({
                 )}
               </div>
             )}
-            {isTranscode && (
+            {(isTranscode || !!conversionSrc) && !cast && (
               <div className="vp-menu-wrap">
                 <button type="button" className={`vp-btn vp-btn--text${menu === 'quality' ? ' is-on' : ''}`} onClick={() => setMenu(m => (m === 'quality' ? null : 'quality'))} title="Quality" aria-label="Quality">{quality ? `${quality}p` : 'Auto'}</button>
                 {menu === 'quality' && (
                   <div className="vp-menu" role="menu">
                     <div className="vp-menu-head">Quality</div>
-                    {[0, 1080, 720, 480, 360].filter(q => q === 0 || !sourceHeight || q < sourceHeight).map(q => (
-                      <button key={q} type="button" role="menuitem" className={`vp-menu-item${quality === q ? ' is-active' : ''}`} onClick={() => { setMenu(null); if (q !== quality) restartWith(() => setQuality(q)); }}>{q === 0 ? 'Auto (original)' : `${q}p`}</button>
+                    {[0, ...QUALITY_STEPS].filter(q => q === 0 || !sourceHeight || q < sourceHeight).map(q => (
+                      <button key={q} type="button" role="menuitem" className={`vp-menu-item${quality === q ? ' is-active' : ''}`} onClick={() => { setMenu(null); if (q !== quality) chooseQuality(q); }}>{q === 0 ? 'Auto (original)' : `${q}p`}</button>
                     ))}
                   </div>
                 )}

@@ -15,17 +15,27 @@ export class TtlCache<T> {
   // share one in-flight fetch and get the same answer.
   private inflight = new Map<string, Promise<T>>();
   /**
-   * `staleMs`, when set, is how long a value already served keeps answering if a refresh fails (a
-   * brief Radarr/Sonarr restart or timeout), instead of throwing straight through. Left unset (the
-   * default) a failure always throws - the right choice for anything security-relevant, like an age
-   * rating: an answer that cannot be confirmed must fail closed, never silently serve a stale "allowed".
-   * It is for availability caches (a library list) where a few-minutes-old answer beats a dead stream.
+   * `staleMs`, when set, is how long a value already served keeps answering past its TTL: returned at
+   * once while a refresh runs in the background, and kept if that refresh fails (a brief Radarr/Sonarr
+   * restart or timeout). Without the background part, every video seek more than a TTL after the last
+   * one waited on a full library fetch before its first byte. Left unset (the default) an expired entry
+   * always waits for a fresh answer and a failure always throws - the right choice for anything
+   * security-relevant, like an age rating: an answer that cannot be confirmed must fail closed. It is for
+   * availability caches (a library list) where a few-minutes-old answer beats a stalled stream.
    */
   constructor(private ttlMs: number, private max = 500, private staleMs = 0) {}
 
   async get(key: string, fill: () => Promise<T>): Promise<T> {
     const hit = this.entries.get(key);
     if (hit && Date.now() - hit.at < this.ttlMs) return hit.value;
+    if (hit && this.staleMs > 0 && Date.now() - hit.at < this.staleMs) {
+      void this.refresh(key, fill, hit).catch(() => undefined);
+      return hit.value;
+    }
+    return this.refresh(key, fill, hit);
+  }
+
+  private refresh(key: string, fill: () => Promise<T>, hit: { value: T; at: number } | undefined): Promise<T> {
     const already = this.inflight.get(key);
     if (already) return already;
     const promise = (async () => {

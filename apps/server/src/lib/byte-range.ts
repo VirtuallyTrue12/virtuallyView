@@ -8,12 +8,12 @@
  * end); nothing about it looks like an error, so a player just plays or seeks to the wrong content.
  */
 /**
- * `openEndedChunk`: for a range with no end ("bytes=500-", "give me the rest"), how much to actually send.
- * Left unset, that means the whole rest of the file (correct for a small audio file). A caller streaming
- * a large video passes a bounded chunk size instead, so "the rest" of a multi-gigabyte file does not mean
- * reading it all into one response; the player asks again for the next chunk via its own next range request.
+ * An open-ended range ("bytes=500-") means the whole rest of the file, even for a multi-gigabyte video:
+ * the response is a stream with TCP backpressure, never read into memory, and the browser stops reading
+ * (or cancels and re-ranges on a seek) on its own. Capping it to small chunks forced a fresh request per
+ * chunk, which over Wi-Fi or a remote link turned every chunk boundary into a chance to stall.
  */
-export function parseByteRange(header: string, size: number, openEndedChunk?: number): { start: number; end: number } | null {
+export function parseByteRange(header: string, size: number): { start: number; end: number } | null {
   const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
   if (!match) return null;
   const [, startPart, endPart] = match;
@@ -30,8 +30,7 @@ export function parseByteRange(header: string, size: number, openEndedChunk?: nu
     end = size - 1;
   } else {
     start = parseInt(startPart!, 10);
-    end = hasEnd ? Math.min(parseInt(endPart!, 10), size - 1)
-      : Math.min(start + (openEndedChunk ?? size) - 1, size - 1);
+    end = hasEnd ? Math.min(parseInt(endPart!, 10), size - 1) : size - 1;
   }
   if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start) return null;
   return { start, end };
