@@ -85,7 +85,7 @@ function cleanTimeleft(timeleft: string | undefined): string | undefined {
 export function mediaTypeOfCategory(category?: string): string | undefined {
   switch ((category ?? '').toLowerCase()) {
     case 'radarr': return 'movie';
-    case 'sonarr': return 'series';
+    case 'sonarr': case 'tv-sonarr': return 'series';
     case 'lidarr': case 'vv-concerts': case 'vv-videos': return 'artist';
     default: return undefined;
   }
@@ -207,14 +207,21 @@ async function enrichWithLibrary(rows: QueueItem[]): Promise<QueueItem[]> {
 // Only client-backed rows are exposed. Request reconciliation is tracking, not
 // a second download client; its local records must not offer synthetic controls.
 export async function getDownloads(): Promise<QueueItem[]> {
+  return (await getDownloadsDetailed()).rows;
+}
+
+/** The merged queue plus which sources actually answered this time, for callers that must tell "gone from
+ * the queue" apart from "its download client did not answer just now". */
+export async function getDownloadsDetailed(): Promise<{ rows: QueueItem[]; answered: Set<string> }> {
   const results = await Promise.all(sources.map(async source => {
     try {
-      return { ok: true, rows: (await getAdapter(source).getQueue()).map(row => normalize(source, row)) };
+      return { source, ok: true, rows: (await getAdapter(source).getQueue()).map(row => normalize(source, row)) };
     } catch {
-      return { ok: false, rows: [] as QueueItem[] };
+      return { source, ok: false, rows: [] as QueueItem[] };
     }
   }));
   if (results.every(result => !result.ok)) throw new Error('Download services are unavailable. Check integrations and try again.');
+  const answered = new Set(results.filter(r => r.ok).map(r => r.source as string));
   const rows = results.flatMap(result => result.rows);
   const clients = rows.filter(row => ['qbittorrent', 'nzbget'].includes(row.sourceClient));
   const clientSet = new Set(clients);
@@ -289,12 +296,13 @@ export async function getDownloads(): Promise<QueueItem[]> {
     if (manager.message) byMediaId.message = manager.message;
   }
   // Names are cleaned last, after library matching used the raw ones.
-  return (await enrichWithLibrary(merged)).map(row => ({
+  const cleaned = (await enrichWithLibrary(merged)).map(row => ({
     ...row,
     rawTitle: row.title,
     title: cleanReleaseName(row.title),
     qualityLabel: releaseQualityLabel(row.title)
   }));
+  return { rows: cleaned, answered };
 }
 
 export async function actOnDownload(id: string, action: DownloadAction): Promise<{ success: boolean; message: string }> {

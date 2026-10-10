@@ -1,6 +1,6 @@
 import type { RadarrAdapter, SonarrAdapter, LidarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from './registry.js';
-import { getDownloads } from './real-downloads.js';
+import { actOnDownload, getDownloads } from './real-downloads.js';
 
 export interface RetryResult { success: boolean; message: string }
 
@@ -72,5 +72,12 @@ export async function retryDownload(queueItemId: string): Promise<RetryResult> {
       }
     }
   }
-  return row.mediaId ? retryTitle(row.mediaId) : fail('Nothing links this download to a title, so it cannot be retried.');
+  if (!row.mediaId) return fail('Nothing links this download to a title, so it cannot be retried.');
+  // No media manager tracks this torrent (one picked by hand), so nothing above took it out of the client.
+  // Searching again without removing it left the dead torrent in place to be "fixed" again every tick.
+  if (hash) {
+    const removed = await actOnDownload(`queue-qbittorrent-${hash}`, 'remove').catch(() => ({ success: false, message: '' }));
+    if (!removed.success) return fail('The stuck download could not be removed from the download client.');
+  }
+  return retryTitle(row.mediaId);
 }

@@ -65,7 +65,10 @@ export async function createBackup(kind: 'manual' | 'auto' | 'pre-restore' = 'ma
 }
 
 /** Replace the current data with the contents of a backup. The server must be restarted afterwards. */
-export async function restoreBackup(archive: string): Promise<void> {
+let restoring = false;
+
+/** `stayFrozen`: the caller restarts the server to load the restore, so the database stays closed until then. */
+export async function restoreBackup(archive: string, { stayFrozen = false }: { stayFrozen?: boolean } = {}): Promise<void> {
   const listing = (await run('tar', ['-tzf', archive], { maxBuffer: 8 * 1024 * 1024 })).stdout.split('\n').filter(Boolean);
   for (const entry of listing) {
     const clean = entry.replace(/^\.\//, '');
@@ -81,13 +84,20 @@ export async function restoreBackup(archive: string): Promise<void> {
     try { manifest = JSON.parse(readFileSync(join(work, 'manifest.json'), 'utf8')); } catch { /* checked below */ }
     if (manifest.app !== 'virtuallyview') throw new Error('This is not a virtuallyView backup.');
     await createBackup('pre-restore');
-    closeDb();
+    // Frozen until the restart that loads it, or (when this process keeps running) until the copy is done.
+    closeDb(true);
+    restoring = true;
     for (const f of ['app.sqlite-wal', 'app.sqlite-shm']) rmSync(join(DATA_DIR, f), { force: true });
     for (const f of KEEP_FILES) if (existsSync(join(work, f))) cpSync(join(work, f), join(DATA_DIR, f));
     for (const d of KEEP_DIRS) if (existsSync(join(work, d))) { rmSync(join(DATA_DIR, d), { recursive: true, force: true }); cpSync(join(work, d), join(DATA_DIR, d), { recursive: true }); }
     // Old sessions belong to the old accounts.
     rmSync(join(DATA_DIR, 'sessions.json'), { force: true });
+    if (!stayFrozen) closeDb(false);
+  } catch (error) {
+    if (restoring) closeDb(false);
+    throw error;
   } finally {
+    restoring = false;
     rmSync(work, { recursive: true, force: true });
   }
 }

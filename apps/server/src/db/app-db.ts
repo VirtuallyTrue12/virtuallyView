@@ -13,8 +13,13 @@ import { DATA_DIR } from '../lib/paths.js';
  */
 let _db: DatabaseSync | null = null;
 
+// Set while a restored database is waiting for the restart that loads it: anything still holding the old
+// state in memory (the request ledger, settings) would otherwise write it straight back over the restore.
+let frozen = false;
+
 function open(): DatabaseSync {
   if (_db) return _db;
+  if (frozen) throw new Error('The server is restarting after a restore.');
   // Tests inject a throwaway directory so the ledger, caches and settings
   // never bleed between suites or into a live data dir.
   const dataDir = process.env.VV_DATA_DIR
@@ -232,8 +237,9 @@ function open(): DatabaseSync {
 }
 
 /** Close the shared handle (used before restoring a backup over the database file). */
-export function closeDb(): void {
+export function closeDb(freeze = false): void {
   if (_db) { try { _db.close(); } catch { /* already closed */ } _db = null; }
+  frozen = freeze;
 }
 
 export function db(): DatabaseSync {

@@ -129,6 +129,9 @@ export function requestStateForQueue(queueStatus: string | undefined, queueMessa
 const downloadByRequest = new Map<string, string>();
 /** When a "downloading" request first had nothing in the queue, so a brief gap around an import is not mistaken for a lost download. */
 const missingSince = new Map<string, number>();
+// When each partly-available request last asked its media manager for the missing parts.
+const lastPartialSearch = new Map<string, number>();
+const PARTIAL_SEARCH_EVERY_MS = 6 * 3_600_000;
 export const LOST_DOWNLOAD_GRACE_MS = 90_000;
 const lastLoggedProgress = new Map<string, number>();
 
@@ -298,6 +301,17 @@ type LibraryFallbackAdapter = {
  * null when the title is not in the local library, so the caller reports the
  * original lookup outcome.
  */
+/** A title already in the library but with parts missing (episodes, tracks) is not a duplicate request: it
+ * becomes a search for the missing parts, tracked like any request, instead of a flat "already available". */
+function requestRemainder(request: RequestItem, local: LibraryItem, title: string): CreateRequestResult | null {
+  const partial = completenessOf(local as Parameters<typeof completenessOf>[0]);
+  if (!isPartial(partial)) return null;
+  patch(request.id, { status: 'searching', providerId: local.id, message: `${partlyMessage(partial)} Searching for the rest.`, searchedAt: now(), searches: 1 });
+  logStatusChange(request.id, 'pending', 'searching');
+  void retryTitle(local.id).catch(() => undefined);
+  return { ok: true, request: getRequest(request.id), message: `"${title}" is partly in your library; the missing parts are being searched for.` };
+}
+
 async function tryLibraryFallback(
   adapter: LibraryFallbackAdapter,
   request: RequestItem,
@@ -307,6 +321,8 @@ async function tryLibraryFallback(
   const local = await findInLibrary(adapter, title, year);
   if (!local) return null;
   if (local.status === 'available') {
+    const remainder = requestRemainder(request, local as unknown as LibraryItem, local.title);
+    if (remainder) return remainder;
     const message = `"${local.title}" is already in your library and available.`;
     patch(request.id, { status: 'failed', message });
     logStatusChange(request.id, 'pending', 'failed');
@@ -431,6 +447,8 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
     if (matches.length > 1) throw new Error('Multiple library entries have this metadata identity. Resolve the duplicates in the media manager before requesting.');
     const inLibrary = matches[0];
     if (inLibrary?.status === 'available') {
+      const remainder = requestRemainder(request, inLibrary, candidate.title);
+      if (remainder) return remainder;
       const message = `"${candidate.title}" is already in your library and available.`;
       patch(request.id, { status: 'failed', message });
       return { ok: false, request: getRequest(request.id), message };
@@ -639,8 +657,11 @@ export async function syncRequestsWithServices(): Promise<void> {
     }
 
     for (const req of reqs) {
-      if (getRequest(req.id)?.status === 'cancelled') continue;
-      const before = getRequest(req.id)!.status;
+      // The request may have been deleted while this sync waited on the service (removing the title deletes
+      // its request): the old non-null assertion threw, and this runs un-awaited, so it took the server down.
+      const current = getRequest(req.id);
+      if (!current || current.status === 'cancelled') continue;
+      const before = current.status;
       const libraryMatches = library.filter(m => req.providerId ? m.id === req.providerId :
         req.selectedProviderId && req.metadataProvider ? matchesMetadata(m, req.metadataProvider, req.selectedProviderId) :
         normalizeTitle(m.title) === normalizeTitle(req.title) && m.year === req.year);
@@ -656,9 +677,16 @@ export async function syncRequestsWithServices(): Promise<void> {
         logStatusChange(req.id, before, 'available');
         logEvent(req.id, 'Imported into the library and ready to play');
         lastLoggedProgress.delete(req.id);
-        // A music request with tracks missing that nothing is fetching keeps saying so, instead of claiming all of it.
-        const note = inLibrary && (inLibrary as { type?: string }).type === 'artist' && isPartial(partial)
-          ? `${partlyMessage(partial)} Some tracks could not be found. Use "Search missing albums" on the artist page.` : undefined;
+        // A show or artist with parts missing that nothing is fetching keeps saying so, instead of claiming all
+        // of it - and asks for the missing parts again itself (at most every few hours), rather than leaving a
+        // half-downloaded series marked done until someone notices and searches by hand.
+        const kind = (inLibrary as { type?: string }).type;
+        const note = isPartial(partial) && (kind === 'artist' || kind === 'series')
+          ? `${partlyMessage(partial)} The rest is being searched for again automatically.` : undefined;
+        if (note && localId && Date.now() - (lastPartialSearch.get(req.id) ?? 0) > PARTIAL_SEARCH_EVERY_MS) {
+          lastPartialSearch.set(req.id, Date.now());
+          void retryTitle(localId).catch(() => undefined);
+        }
         patch(req.id, { status: 'available', progress: isPartial(partial) ? Math.round((partial.have / partial.total) * 100) : 100, message: note });
         const mediaId = (inLibrary as unknown as { id: string }).id;
         await syncDownload(getRequest(req.id)!, mediaId);
@@ -741,9 +769,9 @@ export async function reviewStuckSearches(now = Date.now()): Promise<void> {
 export function startRequestSync(intervalMs = 15000): NodeJS.Timeout {
   let reviewing = false;
   return setInterval(() => {
-    void syncRequestsWithServices();
+    void syncRequestsWithServices().catch(() => undefined);
     if (reviewing) return;
     reviewing = true;
-    void reviewStuckSearches().finally(() => { reviewing = false; });
+    void reviewStuckSearches().catch(() => undefined).finally(() => { reviewing = false; });
   }, intervalMs);
 }

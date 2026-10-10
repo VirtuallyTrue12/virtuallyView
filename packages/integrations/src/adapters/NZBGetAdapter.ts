@@ -70,7 +70,10 @@ export class NZBGetAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
   async remove(id: string) {
     try {
-      await this.rpc('editqueue', ['GroupDelete', [id]]);
+      // editqueue(Command, Param, IDs): the IDs are the third argument and numeric. Passing them as the
+      // second (Param) meant NZBGet received no IDs and every Remove silently did nothing.
+      const ok = await this.rpc('editqueue', ['GroupDelete', '', [Number(id)]]);
+      if (ok === false) return { success: false, message: 'NZBGet did not remove that download.' };
       return { success: true, message: 'Removed from NZBGet.' };
     } catch (error) {
       return { success: false, message: error instanceof Error ? error.message : 'NZBGet could not remove that download.' };
@@ -82,8 +85,9 @@ export class NZBGetAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       id: String(group.NZBID ?? group.ID ?? ''),
       sourceClient: 'nzbget',
       status: String(group.Status ?? 'queued').toLowerCase(),
-      progress: Number(group.DownloadedSizeMB) && Number(group.NZBSizeMB)
-        ? Math.round((Number(group.DownloadedSizeMB) / Number(group.NZBSizeMB)) * 100)
+      // listgroups reports FileSizeMB and RemainingSizeMB; there is no NZBSizeMB, so this was always 0%.
+      progress: Number(group.FileSizeMB) > 0
+        ? Math.max(0, Math.min(100, Math.floor(((Number(group.FileSizeMB) - Number(group.RemainingSizeMB ?? 0)) / Number(group.FileSizeMB)) * 100)))
         : 0,
       title: String(group.NZBName ?? group.Name ?? 'Unknown download')
     } as Download & { title: string })) as Download[];

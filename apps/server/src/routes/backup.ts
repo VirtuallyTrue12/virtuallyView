@@ -51,7 +51,7 @@ export default async function backupRoutes(server: FastifyInstance) {
     if (currentActor().role === 'user') return denied(reply);
     const file = backupPath(request.params.name);
     if (!file) return reply.code(404).send({ message: 'No such backup.' });
-    try { await restoreBackup(file); } catch (error) { return reply.code(422).send({ message: error instanceof Error ? error.message : 'The restore failed.' }); }
+    try { await restoreBackup(file, { stayFrozen: process.env.VV_NO_RESTART !== '1' }); } catch (error) { return reply.code(422).send({ message: error instanceof Error ? error.message : 'The restore failed.' }); }
     return finish(reply);
   });
 
@@ -63,7 +63,7 @@ export default async function backupRoutes(server: FastifyInstance) {
     try {
       const file = join(dir, 'upload.tar.gz');
       writeFileSync(file, body);
-      await restoreBackup(file);
+      await restoreBackup(file, { stayFrozen: process.env.VV_NO_RESTART !== '1' });
     } catch (error) {
       return reply.code(422).send({ message: error instanceof Error ? error.message : 'The restore failed.' });
     } finally {

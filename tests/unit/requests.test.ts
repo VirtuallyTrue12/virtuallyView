@@ -284,7 +284,7 @@ describe('request pipeline', () => {
     queue.mockResolvedValue([] as never);
     await syncRequestsWithServices();
     expect(getRequest(id)?.status).toBe('available');
-    expect(getRequest(id)?.message).toMatch(/Partly available: 39 of 107 tracks\..*Search missing albums/);
+    expect(getRequest(id)?.message).toMatch(/Partly available: 39 of 107 tracks\..*searched for again automatically/);
     expect(getRequest(id)?.progress).toBe(36);
 
     // Once everything is there, the note goes away.

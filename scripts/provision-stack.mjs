@@ -329,7 +329,11 @@ const DOWNLOAD_CLIENTS = [
     fields: app => [
       { name: 'host', value: QBIT.host }, { name: 'port', value: QBIT.port },
       { name: 'username', value: QBIT.username }, { name: 'password', value: QBIT.password },
-      { name: 'category', value: app.category }, { name: 'useSsl', value: false }
+      // The field is per app (movieCategory/tvCategory/musicCategory); a plain "category" was silently
+      // ignored. Values match each app's own default, so existing installs and their in-flight downloads
+      // keep exactly the category they already use.
+      { name: app.name === 'Sonarr' ? 'tvCategory' : app.name === 'Lidarr' ? 'musicCategory' : 'movieCategory', value: app.name === 'Sonarr' ? 'tv-sonarr' : app.category },
+      { name: 'useSsl', value: false }
     ]
   },
   {

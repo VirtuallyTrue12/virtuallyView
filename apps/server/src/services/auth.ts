@@ -548,12 +548,14 @@ export function changeOwnPassword(id: string, current: string, next: string, kee
   if (typeof current !== 'string' || !verifyPassword(account.passwordHash, current)) {
     return { ok: false, message: 'Current password is incorrect.' };
   }
+  loadSessions();
+  const kept = keepToken ? sessions.get(tokenKey(keepToken)) : undefined;
   const result = setUserPassword(id, next);
   if (!result.ok) return result;
-  // setUserPassword signed everything out; re-issue nothing, caller keeps its own session.
+  // setUserPassword signed everything out; the device that made the change stays signed in exactly as it
+  // was. Re-issuing it with a fresh 24h lifetime quietly ended a 30-day "stay signed in" session next day.
   if (keepToken) {
-    loadSessions();
-    sessions.set(tokenKey(keepToken), { expiresAt: Date.now() + SESSION_LIFETIME_MS, userId: id, createdAt: Date.now() });
+    sessions.set(tokenKey(keepToken), kept && kept.userId === id ? kept : { expiresAt: Date.now() + SESSION_LIFETIME_MS, userId: id, createdAt: Date.now() });
     persistSessions();
   }
   return { ok: true };

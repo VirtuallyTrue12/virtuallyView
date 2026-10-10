@@ -1,7 +1,7 @@
 import type { QBittorrentAdapter } from '@virtuallyview/integrations';
 import { all, get, run } from '../db/app-db.js';
 import { getAdapter } from './registry.js';
-import { getDownloads, type QueueItem } from './real-downloads.js';
+import { getDownloadsDetailed, type QueueItem } from './real-downloads.js';
 import { getServerSettings } from './server-settings.js';
 import { notify } from './notifications.js';
 import { retryDownload } from './retry.js';
@@ -41,6 +41,10 @@ export function classify(row: Pick<QueueItem, 'status' | 'message' | 'progress'>
   if (METADATA_RE.test(message) && row.progress < 1 && row.status !== 'completed') return { kind: 'metadata', needsYou: null };
   if (row.status === 'failed') {
     if (ENVIRONMENT_RE.test(message)) return { kind: 'other', needsYou: 'This needs something on the server to change (free disk space or folder permissions). Another release would fail the same way.' };
+    // A failure with no explanation is the download client's own error state (qBittorrent "error" /
+    // "missing files"): almost always a full disk or a folder it cannot write. Treating it as a bad
+    // release blocklisted perfectly good downloads, three a day, while the real problem stayed.
+    if (!message.trim()) return { kind: 'other', needsYou: 'The download client reports an error with this download, usually a full disk or a folder it cannot write to. Another release would fail the same way.' };
     return { kind: 'import', needsYou: null };
   }
   return null;
@@ -67,12 +71,18 @@ export async function runDoctor(options: { force?: boolean } = {}): Promise<Doct
   running = true;
   try {
     let rows: QueueItem[];
-    try { rows = await getDownloads(); } catch { return result; }
+    let answered: Set<string>;
+    try { ({ rows, answered } = await getDownloadsDetailed()); } catch { return result; }
     const troubled = rows.map(row => ({ row, c: classify(row) })).filter((x): x is { row: QueueItem; c: NonNullable<ReturnType<typeof classify>> } => x.c !== null);
 
     // Forget rows that healed or left the queue.
     const live = new Set(troubled.map(t => t.row.id));
-    for (const stored of all<{ key: string }>('SELECT key FROM download_doctor')) if (!live.has(stored.key)) run('DELETE FROM download_doctor WHERE key = ?', stored.key);
+    // Only when its own source answered: qBittorrent behind the VPN times out now and then, and treating that
+    // as "healed" reset every grace period and dropped the gave-up flag, so nothing ever got replaced.
+    for (const stored of all<{ key: string }>('SELECT key FROM download_doctor')) {
+      const source = /^queue-([a-z]+)-/.exec(stored.key)?.[1] ?? '';
+      if (!live.has(stored.key) && answered.has(source)) run('DELETE FROM download_doctor WHERE key = ?', stored.key);
+    }
     if (troubled.length === 0) return result;
 
     const online = await downloaderHealthy();

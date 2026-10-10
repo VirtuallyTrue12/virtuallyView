@@ -32,6 +32,9 @@ describe('download doctor: what counts as stuck', () => {
     expect(classify(row('downloading', undefined, 50))).toBeNull();
     expect(classify(row('completed', undefined, 100))).toBeNull();
     expect(classify(row('paused'))).toBeNull();
+    // The client's own error state (disk full, unwritable folder) is never blamed on the release.
+    expect(classify(row('failed', undefined, 40))).toMatchObject({ kind: 'other' });
+    expect(classify(row('failed', undefined, 40))!.needsYou).toMatch(/full disk/);
     expect(GRACE_MINUTES.import).toBeLessThan(GRACE_MINUTES.stalled);
     expect(GRACE_MINUTES.stalled).toBeLessThan(GRACE_MINUTES.metadata);
   });

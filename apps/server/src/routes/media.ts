@@ -69,10 +69,17 @@ export function mergeRequests<T extends LibraryItem>(items: T[], mediaType: 'mov
 
   const merged: T[] = items.map(i => ({ ...i }));
   const byProvider = new Map<string, T>();
+  const byMetadata = new Map<string, T>();
   const byTitle = new Map<string, T>();
   for (const item of merged) {
     if (item.id) byProvider.set(item.id, item);
-    if (item.provider?.id != null) byProvider.set(String(item.provider.id), item);
+    // Keyed by id space ("tmdb:550"), never the bare Radarr/Sonarr row number: a request still waiting for
+    // approval carries a TMDB/TVDB id, and those numbers overlap the library's own - Fight Club (TMDB 550)
+    // used to attach to whatever movie happened to be radarr-550.
+    const meta = (item.provider as { metadata?: Record<string, unknown> } | undefined)?.metadata ?? {};
+    for (const [field, space] of [['tmdbId', 'tmdb'], ['tvdbId', 'tvdb'], ['foreignArtistId', 'musicbrainz']] as const) {
+      if (meta[field] != null && meta[field] !== '') byMetadata.set(`${space}:${String(meta[field])}`, item);
+    }
     byTitle.set(titleKey(item.title, item.year), item);
   }
 
@@ -81,6 +88,7 @@ export function mergeRequests<T extends LibraryItem>(items: T[], mediaType: 'mov
     const match =
       (r.providerId ? byProvider.get(r.providerId) : undefined) ??
       (r.selectedProviderId ? byProvider.get(r.selectedProviderId) : undefined) ??
+      (r.selectedProviderId && r.metadataProvider ? byMetadata.get(`${r.metadataProvider}:${r.selectedProviderId}`) : undefined) ??
       byTitle.get(titleKey(r.title, r.year));
     if (match) {
       // The title is already in the library: keep exactly one row and reflect

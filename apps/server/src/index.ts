@@ -548,4 +548,11 @@ const start = async () => {
   }
 };
 
+// Background jobs (request sync, backups, the download doctor, digests) run fire-and-forget. One of
+// them failing in a way nobody anticipated - a file vanishing mid-read, a service dropping between two
+// calls - is a log line, not a reason for Node's default of taking the whole server down with it.
+process.on('unhandledRejection', reason => {
+  server.log.error({ err: reason }, 'unhandled rejection in a background task');
+});
+
 start();

@@ -17,7 +17,8 @@ export type JobStatus = 'filed' | 'needs_artist' | 'error' | 'skipped';
 export const VIDEO_EXT = new Set(['.mkv', '.mp4', '.m4v', '.avi', '.mov', '.ts', '.m2ts', '.webm', '.wmv', '.mpg', '.mpeg', '.vob']);
 /** Categories the person chose when they picked a release by hand (see release-picker). */
 const EXPLICIT_KIND: Record<string, VideoKind> = { 'vv-concerts': 'Concerts', 'vv-videos': 'Videos' };
-const MANAGED_CATEGORIES = new Set(['radarr', 'sonarr', 'lidarr', 'movies', 'tv', 'music', 'series']);
+// tv-sonarr is Sonarr's own default qBittorrent category, the one installs actually use.
+const MANAGED_CATEGORIES = new Set(['radarr', 'sonarr', 'tv-sonarr', 'lidarr', 'movies', 'tv', 'music', 'series']);
 
 const CONCERT_RE = /\b(full (?:show|concert|set)|live (?:at|in|from|on|@|aid|8)|live \d{4}|in concert|concert|unplugged|world tour|tour \d{4}|farewell tour|festival|rock in rio|glastonbury|wembley|acoustic sessions?)\b/i;
 const VIDEO_RE = /\b(music videos?|video (?:collection|anthology)|videography|greatest (?:hits )?videos?|the videos|mtv (?:unplugged|video))\b/i;

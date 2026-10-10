@@ -178,7 +178,8 @@ export class QBittorrentAdapter implements IntegrationAdapter<{ url: string; api
       id: t.hash ?? '',
       sourceClient: 'qbittorrent',
       status: t.state ?? 'unknown',
-      progress: Math.round((t.progress ?? 0) * 100),
+      // Floor, not round: 99.5% rounded up to 100, read as finished, and got filed before it was.
+      progress: Math.floor((t.progress ?? 0) * 100),
       speed: t.dlspeed,
       size: t.size,
       savePath: t.save_path,
