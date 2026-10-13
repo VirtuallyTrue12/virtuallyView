@@ -47,14 +47,15 @@ services:
       - OPENVPN_PASSWORD=vpn
       # Some free relays block DNS-over-TLS (port 853) and the tunnel then looks dead. DNS-over-HTTPS uses port 443.
       - DNS_UPSTREAM_RESOLVER_TYPE=DoH
+      # Cloudflare's DoH alone (the gluetun default) regularly timed out from these VPN Gate exit IPs
+      # (likely rate-limited/blocked as a known abuse source) - every tracker and DHT bootstrap hostname
+      # failed to resolve, so torrents found zero peers even though the tunnel itself worked fine. Listing
+      # several providers lets gluetun fail over to whichever one this exit IP can actually reach.
+      - DNS_UPSTREAM_RESOLVERS=cloudflare,google,quad9
       - FIREWALL_OUTBOUND_SUBNETS=10.89.0.0/16,172.16.0.0/12
-      - FIREWALL_INPUT_PORTS=8080,8888
+      - FIREWALL_INPUT_PORTS=8888
       # gluetun's own web proxy: Prowlarr sends its searches through it (never published outside the compose network).
       - HTTPPROXY=on
-    ports:
-      - "127.0.0.1:8080:8080"
-      - "127.0.0.1:6881:6881"
-      - "127.0.0.1:6881:6881/udp"
     volumes:
       - gluetun-config:/gluetun
     depends_on:
@@ -71,14 +72,12 @@ services:
       timeout: 10s
       retries: 3
 
-  qbittorrent:
-    network_mode: "service:gluetun"
-    # Start with the tunnel, not only once it is healthy: gluetun's firewall blocks everything until the
-    # tunnel is up (no leaks), and the dashboard must not refuse to start because a free relay is slow today.
-    depends_on:
-      gluetun:
-        condition: service_started
-    ports: !reset []
+  # qBittorrent deliberately stays OFF the VPN overlay (keeps the base compose file's normal
+  # networking - no override here at all): free VPN Gate relays volunteer-run OpenVPN tunnels pass
+  # normal HTTPS fine but, confirmed live, gave 0 B/s and 0 DHT nodes on every relay tried (3 different
+  # exit IPs, 2 countries) - the moment the VPN was removed, the same torrents hit several MB/s in
+  # under a minute. Prowlarr's searches (and anything else using gluetun's HTTP proxy, HTTPPROXY=on
+  # above) still go through the VPN; only the actual peer-to-peer transfer bypasses it, by request.
 
 volumes:
   gluetun-config:

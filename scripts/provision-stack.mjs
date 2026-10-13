@@ -544,6 +544,19 @@ async function ensureQbitSavePath() {
     });
     log('qBittorrent: up to 8 downloads run at once, and slow ones no longer hold up new requests');
   }
+  // qBittorrent randomizes its peer listen port by default (random_port), so it never matches the
+  // one port (6881) the compose file maps on the host - every incoming peer connection was silently
+  // dropped, no matter how many peers a tracker found. qBittorrent runs outside the VPN overlay (free
+  // relays were confirmed live to pass normal HTTPS but give 0 B/s and 0 DHT nodes for torrent traffic -
+  // search still goes through the VPN via Prowlarr's proxy, only the transfer itself does not), so it sits
+  // behind the host's real router and UPnP can actually open the port there.
+  if (prefs.random_port || prefs.listen_port !== 6881 || !prefs.upnp) {
+    await fetch(`${base}/api/v2/app/setPreferences`, {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ json: JSON.stringify({ listen_port: 6881, random_port: false, upnp: true }) })
+    });
+    log('qBittorrent: peer port pinned to 6881 and UPnP turned on so the home router opens it automatically');
+  }
   const torrents = await (await fetch(`${base}/api/v2/torrents/info`, { headers })).json();
   const stray = torrents.filter(t => !String(t.save_path).startsWith('/downloads'));
   if (stray.length) {
