@@ -119,6 +119,10 @@ export default function SeriesDetail() {
     : [];
   const totalEpisodes = (series.seasons ?? []).reduce((sum, s) => sum + s.episodes, 0);
   const availableEpisodes = (series.seasons ?? []).reduce((sum, s) => sum + (s.availableEpisodes ?? 0), 0);
+  // The backend marks a show "available" the moment it has one episode file, so the pill said "available"
+  // for a show sitting at 54/221 - show "partial" here instead whenever real episode counts disagree.
+  const displayStatus = series.status === 'available' && totalEpisodes > 0 && availableEpisodes < totalEpisodes
+    ? 'partial' : series.status;
 
   const playable = ordered.filter(e => e.hasFile);
   // Continue where the viewer left off: first partly-watched, else first unwatched.
@@ -155,7 +159,7 @@ export default function SeriesDetail() {
                 {series.quality && <span>{series.quality}</span>}
                 {series.certification && <span className="cert-badge">{series.certification}</span>}
                 {series.studio && <Link to={`/series?studio=${encodeURIComponent(series.studio)}`}>{series.studio}</Link>}
-                <StatusPill status={series.status} />
+                <StatusPill status={displayStatus} />
               </div>
 
               {sharedGenres.length > 0 && (
@@ -181,7 +185,12 @@ export default function SeriesDetail() {
                 <FavoriteButton mediaType="series" mediaId={series.id} initial={series.favorite} />
                 {isAdmin && (
                   <MoreMenu label="More for this show">
-                    {isSonarr && series.status !== 'available' && <MenuItem icon="search" label="Search for missing episodes" onSelect={() => void searchMissing()} />}
+                    {/* `series.status` turns 'available' the moment a single episode has a file, so it can't be
+                        trusted to mean "fully downloaded" - a show stuck at 54/221 episodes stayed stuck forever
+                        with no way to ask for the rest, because this used to hide on status alone. */}
+                    {isSonarr && (series.status !== 'available' || (totalEpisodes > 0 && availableEpisodes < totalEpisodes)) && (
+                      <MenuItem icon="search" label="Search for missing episodes" onSelect={() => void searchMissing()} />
+                    )}
                     {isSonarr && <MenuItem icon="sliders-h" label="Download quality and checks" onSelect={() => setDialog('checks')} />}
                     <MenuDivider />
                     <MenuItem icon="trash" label="Remove show" danger onSelect={() => setDialog('remove')} />

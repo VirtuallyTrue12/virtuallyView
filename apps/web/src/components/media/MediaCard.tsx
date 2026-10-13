@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { StatusPill } from './StatusPill';
-import type { MediaItem } from '../../lib/api';
+import type { MediaItem, SeriesSeason } from '../../lib/api';
 import { SvgIcon } from '../ui/SvgIcon';
 import { downloadLabel, useTitleDownload } from '../../lib/useDownloadProgress';
 
@@ -31,6 +31,13 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
   const download = useTitleDownload(/^(radarr|sonarr|lidarr)-/.test(item.id) ? item.id : undefined);
   const showImage = !!item.artwork?.poster && !broken;
   const percent = typeof progress === 'number' && progress > 0 ? Math.max(0, Math.min(100, progress)) : 0;
+  // A series is "available" the moment one episode has a file; show "partial" here instead of a
+  // misleading green "available" when seasons prove most episodes are still missing.
+  const seasons = (item as { seasons?: SeriesSeason[] }).seasons;
+  const seasonTotals = seasons?.reduce((sum, s) => sum + s.episodes, 0) ?? 0;
+  const seasonHave = seasons?.reduce((sum, s) => sum + (s.availableEpisodes ?? 0), 0) ?? 0;
+  const displayStatus = item.status === 'available' && seasonTotals > 0 && seasonHave < seasonTotals
+    ? 'partial' : item.status;
 
   const armPreview = () => {
     if (!item.streamUrl || previewFailed || timerRef.current) return;
@@ -94,7 +101,7 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
           />
         )}
         {showStatus && item.status && !download && (
-          <div className="media-card-badge"><StatusPill status={item.status} /></div>
+          <div className="media-card-badge"><StatusPill status={displayStatus} /></div>
         )}
         {(item.favorite || item.watched) && (
           <div className="media-card-flags" aria-hidden="true">
