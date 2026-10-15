@@ -301,9 +301,14 @@ function encodeArgs(options: TranscodeOptions): string[] {
 
 export function ffmpegTranscodeArgs(filePath: string, startSeconds = 0, options: TranscodeOptions = {}): string[] {
   const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
-  // -ss before -i seeks fast on the input; output timestamps restart at zero.
+  // -ss before -i seeks fast on the input, but does NOT rebase output timestamps to zero by itself -
+  // that only happens with a re-encode, never with stream copy. Without -avoid_negative_ts, a seek deep
+  // into the file (e.g. the video already copy-streamed, only audio re-encoded) handed the browser a
+  // brand-new resource whose first frame's timestamp was still the absolute position in the source
+  // (tens of minutes in), which Chrome's fragmented-MP4 demuxer rejects outright as undecodable - every
+  // seek failed with "This browser could not decode the video", reproducibly, confirmed live.
   if (startSeconds > 0) args.push('-ss', String(startSeconds));
-  args.push('-i', filePath, ...encodeArgs(options));
+  args.push('-i', filePath, '-avoid_negative_ts', 'make_zero', ...encodeArgs(options));
   args.push('-movflags', 'frag_keyframe+empty_moov+default_base_moof');
   args.push('-f', 'mp4', 'pipe:1');
   return args;
@@ -325,7 +330,9 @@ export const HLS_SEGMENT_PATTERN = 'seg%05d.ts';
 export function ffmpegHlsArgs(filePath: string, startSeconds = 0, options: TranscodeOptions = {}): string[] {
   const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
   if (startSeconds > 0) args.push('-ss', String(startSeconds));
-  args.push('-i', filePath, ...encodeArgs(options));
+  // Same timestamp rebase as the progressive path above: a seek must hand the player segments that
+  // start near zero, not at the absolute source-file position.
+  args.push('-i', filePath, '-avoid_negative_ts', 'make_zero', ...encodeArgs(options));
   args.push(
     '-f', 'hls',
     '-hls_time', '2',

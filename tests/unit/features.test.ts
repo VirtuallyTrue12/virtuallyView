@@ -75,6 +75,16 @@ describe('live transcode smoothness', () => {
     expect(args).not.toContain('-force_key_frames');
   });
 
+  it('rebases a mid-file seek to a zero-based timestamp, even when the video is only stream-copied', () => {
+    // -ss before -i does not reset output timestamps on its own with a stream copy (only a re-encode
+    // does that): without -avoid_negative_ts, a seek deep into the file handed the browser a fresh
+    // resource whose first frame still carried the absolute source-file timestamp, which Chrome's
+    // fragmented-MP4 demuxer rejected outright - every seek failed with "could not decode the video".
+    const args = ffmpegTranscodeArgs('/m/a.mkv', 1500, { copyVideo: true });
+    expect(args).toContain('-avoid_negative_ts');
+    expect(args[args.indexOf('-avoid_negative_ts') + 1]).toBe('make_zero');
+  });
+
   it('drops the source\'s chapter markers instead of copying them into an unmapped third track', () => {
     // Only video and audio are ever -map'd, but ffmpeg copies chapters into a text track by default
     // regardless of -map. A release with many chapter markers (common in WEBDL rips) then produces a
