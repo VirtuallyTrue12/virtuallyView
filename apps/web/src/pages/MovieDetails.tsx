@@ -193,7 +193,7 @@ export default function MovieDetails() {
               )}
 
               {movie.overview && <p className="detail-overview">{movie.overview}</p>}
-              {/^radarr-/.test(movie.id) && <DownloadPanel mediaId={movie.id} />}
+              {/^radarr-/.test(movie.id) && <DownloadPanel mediaId={movie.id} available={movie.status === 'available'} />}
 
               <div className="hero-actions">
                 {movie.status === 'available' && (

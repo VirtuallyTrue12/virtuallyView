@@ -118,6 +118,19 @@ export function timeLeft(eta: string | undefined): string {
   return `${h} h ${m ? `${m} min ` : ''}left`;
 }
 
+/**
+ * A movie already has its file; nothing about it is still "waiting to download". But its queue can
+ * still hold a leftover row forever - a duplicate grab nobody cleared, or a stale search for a better
+ * release that found no peers and gave up without ever leaving the queue - and that row's "queued"
+ * state looked identical to a first-time download that genuinely has not started yet. Confirmed live:
+ * a movie playing fine still showed "Waiting to download" because of exactly such a row. A row that is
+ * actually transferring (downloading/importing) is still worth showing even then, since a real quality
+ * upgrade in progress is useful to know about - only the inert "queued" state is suppressed.
+ */
+export function showsAsPending(download: TitleDownload, alreadyAvailable: boolean): boolean {
+  return !alreadyAvailable || download.state !== 'queued';
+}
+
 export function downloadLabel(d: TitleDownload): string {
   const pct = `${Math.round(d.progress)}%`;
   const many = d.count > 1 ? ` (${d.count} files)` : '';

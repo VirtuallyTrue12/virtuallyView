@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { downloadLabel, summarise, timeLeft } from '../../apps/web/src/lib/useDownloadProgress';
+import { downloadLabel, showsAsPending, summarise, timeLeft } from '../../apps/web/src/lib/useDownloadProgress';
 
 const row = (mediaId: string, status: string, progress: number, extra: Record<string, unknown> = {}) =>
   ({ id: `q-${mediaId}-${progress}`, title: 'x', mediaId, status, progress, ...extra }) as never;
@@ -25,5 +25,16 @@ describe('download progress on titles', () => {
     expect(timeLeft('02:05:00')).toBe('2 h 5 min left');
     expect(timeLeft('00:00:40')).toBe('less than 2 min left');
     expect(timeLeft(undefined)).toBe('');
+  });
+
+  it('stops a movie that already has its file from showing "Waiting to download" forever', () => {
+    // Confirmed live: a movie already playing fine still showed "Waiting to download", because a
+    // leftover duplicate grab from a different release sat in the queue at "queued" indefinitely -
+    // Radarr never finished cancelling it once the other release imported successfully.
+    expect(showsAsPending({ state: 'queued', progress: 0, count: 1 }, true)).toBe(false);
+    // A download actually in progress (a real quality upgrade) is still worth showing, even then.
+    expect(showsAsPending({ state: 'downloading', progress: 10, count: 1 }, true)).toBe(true);
+    // Nothing changes for a title that is not fully available yet.
+    expect(showsAsPending({ state: 'queued', progress: 0, count: 1 }, false)).toBe(true);
   });
 });

@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
-import { downloadLabel, timeLeft, useTitleDownload } from '../../lib/useDownloadProgress';
+import { downloadLabel, showsAsPending, timeLeft, useTitleDownload } from '../../lib/useDownloadProgress';
 
-/** Live download progress for one title, shown on its page while it downloads. */
-export function DownloadPanel({ mediaId }: { mediaId: string }) {
+/** Live download progress for one title, shown on its page while it downloads. `available` is true when
+ * the title already has its file (or, for a show/artist, nothing is missing): a leftover "queued" row
+ * at that point is a redundant background grab, not something still blocking playback. */
+export function DownloadPanel({ mediaId, available = false }: { mediaId: string; available?: boolean }) {
   const download = useTitleDownload(mediaId);
-  if (!download) return null;
+  if (!download || !showsAsPending(download, available)) return null;
   const left = download.state === 'downloading' ? timeLeft(download.eta) : '';
   const bits = [left, download.state === 'downloading' ? download.speed : ''].filter(Boolean);
   return (

@@ -194,7 +194,12 @@ export default function ArtistDetails() {
                 {artist.sizeOnDisk ? <span>{(artist.sizeOnDisk / 1024 ** 3).toFixed(1)} GB</span> : null}
               </p>
 
-              {isLidarr && <DownloadPanel mediaId={artist.id} />}
+              {isLidarr && (
+                <DownloadPanel
+                  mediaId={artist.id}
+                  available={!!artist.totalTrackCount && (artist.trackFileCount ?? 0) >= artist.totalTrackCount}
+                />
+              )}
 
               <div className="ah-actions">
                 {canPlay && (

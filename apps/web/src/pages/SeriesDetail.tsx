@@ -169,7 +169,9 @@ export default function SeriesDetail() {
               )}
 
               {series.overview && <p className="detail-overview">{series.overview}</p>}
-              {/^sonarr-/.test(series.id) && <DownloadPanel mediaId={series.id} />}
+              {/^sonarr-/.test(series.id) && (
+                <DownloadPanel mediaId={series.id} available={totalEpisodes > 0 && availableEpisodes >= totalEpisodes} />
+              )}
 
               <div className="hero-actions">
                 {nextEpisode ? (

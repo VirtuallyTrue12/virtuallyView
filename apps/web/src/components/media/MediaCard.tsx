@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StatusPill } from './StatusPill';
 import type { MediaItem, SeriesSeason } from '../../lib/api';
 import { SvgIcon } from '../ui/SvgIcon';
-import { downloadLabel, useTitleDownload } from '../../lib/useDownloadProgress';
+import { downloadLabel, showsAsPending, useTitleDownload } from '../../lib/useDownloadProgress';
 
 type Props = {
   item: MediaItem;
@@ -38,6 +38,15 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
   const seasonHave = seasons?.reduce((sum, s) => sum + (s.availableEpisodes ?? 0), 0) ?? 0;
   const displayStatus = item.status === 'available' && seasonTotals > 0 && seasonHave < seasonTotals
     ? 'partial' : item.status;
+  // Nothing left missing: a movie's file either exists or it doesn't, a show has every episode, an
+  // artist has every track. Only then does a leftover "queued" row (a redundant background grab, not
+  // a first-time download) stop being shown as "Waiting to download" - confirmed live, a movie playing
+  // fine still showed that label because of exactly such a row.
+  const complete = item.type === 'movie' ? item.status === 'available'
+    : item.type === 'series' ? seasonTotals > 0 && seasonHave >= seasonTotals
+    : item.type === 'artist' ? !!item.totalTrackCount && (item.trackFileCount ?? 0) >= item.totalTrackCount
+    : false;
+  const activeDownload = download && showsAsPending(download, complete) ? download : undefined;
 
   const armPreview = () => {
     if (!item.streamUrl || previewFailed || timerRef.current) return;
@@ -100,7 +109,7 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
             }}
           />
         )}
-        {showStatus && item.status && !download && (
+        {showStatus && item.status && !activeDownload && (
           <div className="media-card-badge"><StatusPill status={displayStatus} /></div>
         )}
         {(item.favorite || item.watched) && (
@@ -109,18 +118,18 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
             {item.watched && <span title="Watched"><SvgIcon name="check" size={12} /></span>}
           </div>
         )}
-        {download && (
-          <div className={`media-card-dl media-card-dl--${download.state}`} role="status" aria-label={`${item.title}: ${downloadLabel(download)}`}>
+        {activeDownload && (
+          <div className={`media-card-dl media-card-dl--${activeDownload.state}`} role="status" aria-label={`${item.title}: ${downloadLabel(activeDownload)}`}>
             <span className="media-card-dl-label">
-              {download.state === 'failed' ? <SvgIcon name="close" size={11} /> : <span className="media-card-dl-dot" aria-hidden="true" />}
-              {downloadLabel(download)}
+              {activeDownload.state === 'failed' ? <SvgIcon name="close" size={11} /> : <span className="media-card-dl-dot" aria-hidden="true" />}
+              {downloadLabel(activeDownload)}
             </span>
-            {download.state !== 'failed' && (
-              <div className="media-card-dl-track"><div className="media-card-dl-fill" style={{ width: `${download.state === 'importing' ? 100 : Math.max(2, download.progress)}%` }} /></div>
+            {activeDownload.state !== 'failed' && (
+              <div className="media-card-dl-track"><div className="media-card-dl-fill" style={{ width: `${activeDownload.state === 'importing' ? 100 : Math.max(2, activeDownload.progress)}%` }} /></div>
             )}
           </div>
         )}
-        {percent > 0 && !download && (
+        {percent > 0 && !activeDownload && (
           <div
             className="media-card-progress-track"
             role="progressbar"
