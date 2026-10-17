@@ -136,7 +136,19 @@ export default function VideoPlayer({
   // they actually expect for a stream whose length is not known up front, and they play it natively, no
   // extra library needed. Everyone else keeps the existing progressive stream unchanged. A cast receiver
   // keeps using the progressive endpoint too: it is the one format proven to work on any TV over Cast.
-  const [canNativeHls] = useState(() => typeof document !== 'undefined' && document.createElement('video').canPlayType('application/vnd.apple.mpegurl') !== '');
+  //
+  // canPlayType alone is no longer enough to tell them apart: newer Chromium builds now also answer
+  // truthy for HLS (an experimental native player of their own), but, confirmed live, Chromium's demuxer
+  // fails to parse this server's HLS output on a seek ("DEMUXER_ERROR_COULD_NOT_PARSE") - the exact
+  // "could not decode the video" every seek used to show, after the only browser that actually needs
+  // HLS here (Safari) was no longer the only one being routed onto it. A classic Safari sniff (true
+  // WebKit, not a Chromium browser merely built on it) keeps Chromium on the progressive path that is
+  // already proven to work, while still giving Safari the HLS it genuinely needs.
+  const [canNativeHls] = useState(() => {
+    if (typeof document === 'undefined' || typeof navigator === 'undefined') return false;
+    if (document.createElement('video').canPlayType('application/vnd.apple.mpegurl') === '') return false;
+    return /^((?!chrome|crios|crmo|android).)*safari/i.test(navigator.userAgent);
+  });
   const useHls = isTranscode && canNativeHls && !cast;
   const transcodeQuery = `start=${offset}${audioIndex ? `&audio=${audioIndex}` : ''}${quality ? `&height=${quality}` : ''}${burnIndex >= 0 ? `&burn=${burnIndex}` : ''}`;
   const baseSrc = isTranscode
