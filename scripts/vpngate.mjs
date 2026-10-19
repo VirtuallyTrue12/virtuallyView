@@ -100,7 +100,7 @@ export const proxyCarriesTraffic = (proxyHost = 'gluetun', proxyPort = 8888, tim
 const recentFile = `${out}.recent`;
 const recentRelays = () => { try { return JSON.parse(readFileSync(recentFile, 'utf8')).filter(x => typeof x === 'string'); } catch { return []; } };
 
-async function choose(avoid) {
+async function choose(avoid = new Set()) {
   const seen = recentRelays();
   let s;
   try { s = await pick(new Set([...avoid, ...seen])); } catch (err) { if (!seen.length) throw err; s = await pick(avoid); }
