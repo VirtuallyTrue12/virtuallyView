@@ -61,13 +61,14 @@ services:
     depends_on:
       vpngate-config:
         condition: service_healthy
-    networks:
-      default:
-        aliases:
-          - qbittorrent
+    # No "qbittorrent" network alias here any more: qBittorrent left this VPN's network, and the leftover alias made
+    # the name resolve to two containers (confirmed live), so Radarr/Sonarr/the app reached the VPN instead about
+    # half the time and grabs or download status failed at random.
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget -qO- --timeout=5 https://ipinfo.io/ip || exit 1"]
+      # gluetun's own check (it tests the tunnel itself). The old probe fetched https://ipinfo.io, which blocks
+      # VPN Gate exit IPs: the container read "unhealthy" while searches went through it fine, confirmed live.
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
