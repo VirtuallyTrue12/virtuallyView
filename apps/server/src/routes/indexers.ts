@@ -117,6 +117,15 @@ export default async function indexerRoutes(server: FastifyInstance) {
     }
   });
 
+  // A title added straight in Radarr/Sonarr/Lidarr, or imported from an existing folder, never makes a request here,
+  // so a working install with a library still read "3 of 4 done" for ever. Any title in any library counts.
+  const libraryHasTitles = async (): Promise<boolean> => {
+    for (const key of ['radarr', 'sonarr', 'lidarr']) {
+      try { if ((await (getAdapter(key) as unknown as { getItems: () => Promise<unknown[]> }).getItems()).length > 0) return true; } catch { /* service down: try the next */ }
+    }
+    return false;
+  };
+
   // First-run checklist: the things that make "request a movie" actually deliver a movie.
   server.get('/api/setup/status', async () => {
     const up = async (key: string) => { try { return (await (getAdapter(key) as unknown as Health).healthCheck()).healthy; } catch { return false; } };
@@ -137,7 +146,7 @@ export default async function indexerRoutes(server: FastifyInstance) {
           : indexers > 0 ? `${indexers} place${indexers === 1 ? '' : 's'} to search`
           : failingNames.length ? `${failingNames.join(', ')} ${failingNames.length === 1 ? 'is' : 'are'} not answering right now. Press Choose more to add another place to search.`
           : 'Where the app looks for what you request. Press Set up for me and one is added.', href: '/settings?cat=indexers' },
-      { id: 'request', label: 'Make your first request', ok: getRequests().length > 0, detail: 'Search for a title and request it', href: '/search' }
+      { id: 'request', label: 'Make your first request', ok: getRequests().length > 0 || await libraryHasTitles(), detail: 'Search for a title and request it', href: '/search' }
     ];
     return { items, complete: items.every(i => i.ok) };
   });

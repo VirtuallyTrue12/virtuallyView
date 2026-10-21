@@ -18,6 +18,17 @@ A self-hosted home for your movies, TV shows and music. One command, one page, a
 
 **Host it. Change it. Keep the keys.**
 
+**In short:** an open-source, self-hosted media server and Netflix-style streaming app for your own movies, TV shows and music. Search, request, download and watch in one place, with Radarr, Sonarr, Lidarr, Prowlarr and qBittorrent built in and set up for you, all in one Docker Compose stack. No account, no subscription, and your files stay on your machine.
+
+### Why virtuallyView
+
+- **One app instead of five.** Library, player, requests, downloads and settings in one interface. No separate media server, request app or download dashboard to wire together.
+- **Sets itself up.** One command starts everything and connects every service to every other one. No API keys to copy, no ports to match.
+- **Repairs itself.** Stuck or dead downloads are replaced with another release, a dead VPN relay is swapped for a working one, and a half-downloaded show keeps searching for the missing episodes, without you noticing.
+- **Plays anything in the browser.** Direct play when the browser can, live conversion when it cannot (MKV, HEVC, DTS, 5.1 audio), with seeking that just works.
+- **Every screen in the house.** Phones, TVs and laptops open it at the address shown in Settings, including your Tailscale address for watching away from home. Cast to Chromecast, AirPlay or DLNA.
+- **Private by default.** Searches can go through a free, no-account VPN or Tor, and nothing needs a cloud account.
+
 **If you can copy-paste one command, you can run this.** No server experience required. See it done start to finish in [install for beginners](docs/install-for-beginners.md).
 
 <p align="center">
@@ -76,7 +87,7 @@ It does not supply media and it does not replace the tools behind it. It is the 
 - **Live TV, photos and books.** Live channels from any M3U playlist with record-now, seek-bar preview thumbnails in the player, a photo browser with slideshow, and a book shelf. Cast to a TV with Chromecast, AirPlay or DLNA, no account needed ([casting](docs/casting.md)).
 - **Wiki and other apps.** Offline Wikipedia, medical and survival libraries through Kiwix, and links to Immich, Audiobookshelf and Kavita, each one command away ([wiki](docs/kiwix.md), [apps](docs/apps.md)).
 - **Optional assistant.** A local model through Ollama that can answer questions and act on your library, with confirmation for anything destructive.
-- **Privacy.** A VPN for downloads with no account (VPN Gate) or with your own provider, and Tor for search ([privacy](docs/privacy.md)). Optional automatic updates ([updates](docs/updates.md)).
+- **Privacy.** Searches through a free VPN with no account (VPN Gate), or downloads and searches through your own VPN provider, and Tor for search ([privacy](docs/privacy.md)). The free relays do not carry torrent traffic, so with them downloads go direct. Optional automatic updates ([updates](docs/updates.md)).
 - **Optional proxy.** Route the server's public lookups (metadata, covers, trailers) through Tor, SOCKS5 or HTTP.
 
 ### Limits

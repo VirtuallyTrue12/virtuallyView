@@ -143,7 +143,7 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
         )}
       </div>
       <div className="media-card-info">
-        <h3 className="media-card-title">{item.title}</h3>
+        <h3 className="media-card-title" title={item.title}>{item.title}</h3>
         <p className="media-card-sub">
           {[item.year, item.quality].filter(Boolean).join(' · ')}
         </p>

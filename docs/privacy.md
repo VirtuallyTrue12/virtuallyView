@@ -59,7 +59,7 @@ Pair it with a VPN for downloads (below): your searches and your downloads then 
 
 With either VPN below running, **searching goes through it as well** (gluetun's built-in web proxy, reachable only inside the compose network). Setup does this by itself; `SEARCH_VIA_VPN=false` in `.env` opts out. If the tunnel is down, searches wait or fail (the Health panel says so) instead of leaking. One exception: a site that blocks the VPN's address with a Cloudflare check is searched through FlareSolverr from your own connection instead of not at all; set `SEARCH_VIA_VPN=strict` to never do that. If Tor search is on, Tor is used instead.
 
-Two ways, both use [gluetun](https://github.com/qdm12/gluetun), an open-source VPN client container. Either one routes qBittorrent's traffic, and search goes with it by default (as above); browsing and every other service stay untouched.
+Two ways, both use [gluetun](https://github.com/qdm12/gluetun), an open-source VPN client container. Search goes through either one by default (as above). Your own provider also routes qBittorrent's traffic; the free one does not (below). Browsing and every other service stay untouched.
 
 ### No account (VPN Gate)
 
@@ -67,11 +67,11 @@ Two ways, both use [gluetun](https://github.com/qdm12/gluetun), an open-source V
 docker compose -f docker-compose.yml -f docker-compose.vpn-free.yml up -d
 ```
 
-Uses [VPN Gate](https://www.vpngate.net), an open academic project of the University of Tsukuba: free public relays, no sign-up. Every start picks the best reachable relay, and a small watcher swaps in a fresh one when the current relay stops answering (volunteer relays come and go; one dropped after about six hours in testing). After a swap, restart `qbittorrent` so it rejoins the new tunnel; set `VPN_SERVER_COUNTRY_CODE=NL` (any two-letter code) in `.env` to choose a country.
+Uses [VPN Gate](https://www.vpngate.net), an open academic project of the University of Tsukuba: free public relays, no sign-up. Every start picks the best reachable relay, and a small watcher checks it every minute and, when it stops carrying traffic, picks a fresh one and restarts the tunnel on it by itself (volunteer relays come and go). Set `VPN_SERVER_COUNTRY_CODE=NL` (any two-letter code) in `.env` to choose a country.
 
-**Read this before relying on it.** The relays are run by volunteers, and VPN Gate keeps connection logs. This hides your downloads from your internet provider; it is not anonymity, and speed and availability vary. If that matters, use a provider below.
+**Searches only, not downloads.** In testing, every VPN Gate relay carried ordinary web traffic but no torrent traffic at all (0 B/s and no peers, on relays in two countries), while the same torrents ran at several MB/s without it. So with this overlay qBittorrent connects directly and only searches go through the relay. To put downloads behind a VPN too, use your own provider below.
 
-Tested live: qBittorrent's traffic left through a VPN Gate relay (a different IP from the machine's own), and Radarr and Sonarr kept reaching qBittorrent through it.
+**Read this before relying on it.** The relays are run by volunteers, and VPN Gate keeps connection logs. This hides your searches from your internet provider; it is not anonymity, and speed and availability vary. If that matters, use a provider below.
 
 ### Your own provider (WireGuard)
 

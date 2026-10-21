@@ -103,7 +103,8 @@ function useFittingLinks(nav: React.RefObject<HTMLElement | null>, brand: React.
       const gap = parseFloat(cs.columnGap) || 16;
       const room = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - (brand.current?.offsetWidth ?? 0) - (tools.current?.offsetWidth ?? 0) - gap * 2;
       const between = 18;
-      const moreWidth = 78;
+      // The real "More" button (label, chevron and padding), plus a little slack for rounding.
+      const moreWidth = (bar.querySelector('.nav-more')?.getBoundingClientRect().width || 78) + 4;
       let used = moreWidth, n = 0;
       for (const w of widths) { if (used + between + w > room) break; used += between + w; n++; }
       setFit(Math.max(0, n));
@@ -111,6 +112,11 @@ function useFittingLinks(nav: React.RefObject<HTMLElement | null>, brand: React.
     compute();
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(compute) : null;
     observer?.observe(bar);
+    // The tools on the right (activity, bell, account) fill in after the first layout and get wider, without the bar
+    // itself changing size: watching only the bar left the first, too-generous fit in place, and the links spilled
+    // left under the logo (confirmed at 1280, 1100 and 900px).
+    if (tools.current) observer?.observe(tools.current);
+    if (brand.current) observer?.observe(brand.current);
     window.addEventListener('resize', compute);
     void document.fonts?.ready.then(compute);
     return () => { observer?.disconnect(); window.removeEventListener('resize', compute); };
