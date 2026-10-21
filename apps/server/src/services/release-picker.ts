@@ -45,18 +45,24 @@ function significantWords(text: string): string[] {
   return text.toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(w => w.length >= 3);
 }
 
+const YEAR = /^(19|20)\d\d$/;
+
 /**
  * How well a release matches the words actually searched for, independent of seeders: an indexer's own
- * search is fuzzy and sometimes returns results that only share one word with the query. 1 when every
- * significant word of the query appears in the title, scaling down as fewer do; a release matching none
- * of them is dropped outright rather than ranked low, since no amount of seeders makes it the right title.
+ * search is fuzzy and returns results that only share one word with the query. The fraction of the query's
+ * title words the release has. A year is not a title word: searching "Like Stars on Earth 2007" returned
+ * "28 Semaines Plus Tard 2007" at the top, a different film that matched on the year alone (confirmed live).
+ * A search that is only a year still matches on it.
  */
 function relevance(title: string, queryWords: string[]): number {
-  if (queryWords.length === 0) return 1;
+  const words = queryWords.some(w => !YEAR.test(w)) ? queryWords.filter(w => !YEAR.test(w)) : queryWords;
+  if (words.length === 0) return 1;
   const titleWords = new Set(significantWords(title));
-  const matched = queryWords.filter(w => titleWords.has(w)).length;
-  return matched / queryWords.length;
+  return words.filter(w => titleWords.has(w)).length / words.length;
 }
+
+/** Below this share of the title words, a release is a different title, not a worse copy of the same one. */
+const MIN_RELEVANCE = 0.5;
 
 /**
  * A release's rank: seeders dominate (the main driver of real download speed), a healthier swarm
@@ -78,8 +84,12 @@ export async function searchReleases(query: string): Promise<{ choices: ReleaseC
   const { releases, skipped } = await getAdapter<ProwlarrAdapter>('prowlarr').searchReleases(q);
   const found = releases
     .filter(r => r.protocol === 'torrent' && (r.seeders > 0 || r.guid.startsWith('magnet:')) && r.size > 0)
-    .filter(r => relevance(r.title, queryWords) > 0)
-    .sort((a, b) => releaseScore(b) - releaseScore(a))
+    .map(r => ({ r, match: relevance(r.title, queryWords) }))
+    .filter(x => x.match >= MIN_RELEVANCE)
+    // The right title first, then the best-seeded copy of it: seeders alone put a wrong film with more of
+    // them above the one asked for.
+    .sort((a, b) => b.match - a.match || releaseScore(b.r) - releaseScore(a.r))
+    .map(x => x.r)
     .slice(0, 60);
   remember(found);
   return { choices: found.map(toChoice), skipped };

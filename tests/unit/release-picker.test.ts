@@ -32,9 +32,10 @@ describe('release picker', () => {
       skipped: []
     } as never);
     const { choices } = await picker.searchReleases('linkin park rock am ring');
-    expect(choices.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:2', 'magnet:?xt=urn:btih:3', 'magnet:?xt=urn:btih:1']);
+    // Full matches first (best-seeded of them first), then the half match: a different album, however seeded.
+    expect(choices.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:2', 'magnet:?xt=urn:btih:1', 'magnet:?xt=urn:btih:3']);
     expect(choices[0]).toMatchObject({ filesUnder: 'Concerts', quality: '1080p' });
-    expect(choices[1]!.filesUnder).toBeNull();
+    expect(choices[2]!.filesUnder).toBeNull();
     expect(await picker.searchReleases('a')).toEqual({ choices: [], skipped: [] });
   });
 
@@ -70,6 +71,21 @@ describe('release picker', () => {
     } as never);
     const { choices } = await picker.searchReleases('linkin park meteora');
     expect(choices.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:right']);
+  });
+
+  it('does not let a different film through on the year alone, and puts the right title above better-seeded ones', async () => {
+    vi.spyOn(registry.getAdapter('prowlarr') as never, 'searchReleases').mockResolvedValue({
+      releases: [
+        release({ guid: 'magnet:?xt=urn:btih:wrong', title: '28 Semaines Plus Tard 2007 Multi 1080p BluRay', seeders: 395 }),
+        release({ guid: 'magnet:?xt=urn:btih:other', title: 'In.The.Name.Of.The.King.2007.UNRATED', seeders: 131 }),
+        release({ guid: 'magnet:?xt=urn:btih:half', title: 'Stars Earth Documentary 2007', seeders: 300 }),
+        release({ guid: 'magnet:?xt=urn:btih:right', title: 'Like Stars on Earth (2007) [BluRay] [1080p] [YTS]', seeders: 185 }),
+        release({ guid: 'magnet:?xt=urn:btih:right720', title: 'Like Stars on Earth (2007) [BluRay] [720p] [YTS]', seeders: 170 })
+      ],
+      skipped: []
+    } as never);
+    const { choices } = await picker.searchReleases('Like Stars on Earth 2007');
+    expect(choices.map(r => r.id)).toEqual(['magnet:?xt=urn:btih:right', 'magnet:?xt=urn:btih:right720', 'magnet:?xt=urn:btih:half']);
   });
 
   it('starts only a release the server listed, as an unmanaged download', async () => {
