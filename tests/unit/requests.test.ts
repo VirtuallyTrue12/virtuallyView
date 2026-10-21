@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createRequest, cancelRequest, stopRequest, deleteRequest, getRequests, getRequest, reviewStuckSearches, syncRequestsWithServices } from '../../apps/server/src/services/requests.js';
+import { createRequest, cancelRequest, stopRequest, deleteRequest, getRequests, getRequest, reviewStuckSearches, syncRequestsWithServices, nothingFoundMessage } from '../../apps/server/src/services/requests.js';
 import { getAdapter } from '../../apps/server/src/services/registry.js';
 import type { RadarrAdapter, SonarrAdapter, LidarrAdapter } from '@virtuallyview/integrations';
 
@@ -90,6 +90,20 @@ describe('request pipeline', () => {
     expect(result.request?.rootFolder).toBe('/media/movies');
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(JSON.parse(post![1]!.body as string)).toMatchObject({ tmdbId: 1, qualityProfileId: 4, rootFolderPath: '/media/movies' });
+  });
+
+  test('a request nothing can find blames the right thing: no sources, no sources for that kind, or the title', () => {
+    const only = (cats: number[], onlyStarter = false) => ({ count: 3, onlyStarter, covers: (k: 'movie' | 'series' | 'artist') => cats.includes({ movie: 2000, series: 5000, artist: 3000 }[k]) });
+    // A fresh install: an archive, a Linux tracker and concert recordings - nothing that carries films.
+    expect(nothingFoundMessage(only([3000, 7000, 8000]), 'movie')).toMatch(/none of your places to search carries movies/);
+    expect(nothingFoundMessage(only([3000, 7000, 8000]), 'series')).toMatch(/carries TV shows/);
+    expect(nothingFoundMessage(only([3000]), 'artist')).toMatch(/has it under that name/);
+    // Internet Archive claims film and TV categories, so a starter-only install must still be called out.
+    expect(nothingFoundMessage(only([2000, 3000, 5000], true), 'movie')).toMatch(/carries movies \(a new install starts with public archives only\)/);
+    expect(nothingFoundMessage(only([2000, 3000, 5000], false), 'movie')).toMatch(/has it under that name/);
+    expect(nothingFoundMessage({ count: 0, onlyStarter: false, covers: () => false }, 'movie')).toMatch(/is answering/);
+    // Prowlarr unreachable: do not guess.
+    expect(nothingFoundMessage(null, 'movie')).toMatch(/has it under that name/);
   });
 
   test('a request nobody can find says so after a while and is searched again on its own', async () => {

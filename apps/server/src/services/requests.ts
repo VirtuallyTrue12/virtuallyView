@@ -733,28 +733,51 @@ const FIRST_RETRY_MS = 30 * 60 * 1000;
 const RETRY_MS = 6 * 60 * 60 * 1000;
 export const NOTHING_FOUND_PREFIX = 'Nothing found yet';
 
-async function workingSources(): Promise<number | null> {
+const CATEGORY_FOR: Record<MediaKind, number> = { movie: 2000, series: 5000, artist: 3000 };
+const KIND_WORD: Record<MediaKind, string> = { movie: 'movies', series: 'TV shows', artist: 'music' };
+
+/** Working sources (enabled, not failing), and which of them carry each kind of media. Null when Prowlarr is unreachable. */
+/** The narrow sources a fresh install starts with (provision-stack.mjs): public archives, not general trackers. */
+const STARTER_SOURCES = new Set(['internetarchive', 'linuxtracker', 'btetree']);
+
+async function workingSources(): Promise<{ count: number; covers: (kind: MediaKind) => boolean; onlyStarter: boolean } | null> {
   try {
-    const list = (await getAdapter<ProwlarrAdapter>('prowlarr').listIndexers()).filter(i => i.enabled);
-    return list.filter(i => !i.failingUntil).length;
+    const list = (await getAdapter<ProwlarrAdapter>('prowlarr').listIndexers()).filter(i => i.enabled && !i.failingUntil);
+    // A source that does not say what it carries is given the benefit of the doubt.
+    return {
+      count: list.length,
+      covers: kind => list.some(i => !i.categories || i.categories.includes(CATEGORY_FOR[kind])),
+      // Internet Archive does list film and TV categories (public-domain titles), so categories alone could not tell
+      // that a fresh install has no general source at all - confirmed live.
+      onlyStarter: list.length > 0 && list.every(i => STARTER_SOURCES.has(i.definitionName.toLowerCase()))
+    };
   } catch {
     return null;
   }
 }
 
+/**
+ * What to tell someone whose request has found nothing for a while. A fresh install only has three narrow
+ * sources (an archive, a Linux tracker and live-concert recordings), so a film or a show can never be found
+ * there - and the old message ("none of your places to search has it under that name") blamed the title.
+ */
+export function nothingFoundMessage(sources: Awaited<ReturnType<typeof workingSources>>, kind: MediaKind): string {
+  if (sources && sources.count === 0) return `${NOTHING_FOUND_PREFIX}: none of your places to search is answering. Add one under Settings > Indexers. It is searched again automatically.`;
+  if (sources && (!sources.covers(kind) || (sources.onlyStarter && kind !== 'artist'))) return `${NOTHING_FOUND_PREFIX}: none of your places to search carries ${KIND_WORD[kind]}${sources.onlyStarter ? ' (a new install starts with public archives only)' : ''}. Add sources under Settings > Indexers ("Add all working public sources" adds every public one that answers). It is searched again automatically.`;
+  return `${NOTHING_FOUND_PREFIX}: none of your places to search has it under that name. It is searched again automatically every 6 hours. Administrators can also pick a release by hand: open this request and press "Find a release myself".`;
+}
+
 export async function reviewStuckSearches(now = Date.now()): Promise<void> {
   const stuck = requests.filter(r => r.status === 'searching' && r.providerId && !r.waitForRelease);
   if (!stuck.length) return;
-  let sources: number | null | undefined;
+  let sources: Awaited<ReturnType<typeof workingSources>> | undefined;
   for (const req of stuck) {
     const since = Date.parse(req.searchedAt ?? req.createdAt);
     if (!Number.isFinite(since)) continue;
     const waited = now - since;
     if (waited >= NOTHING_YET_MS && !req.message?.startsWith(NOTHING_FOUND_PREFIX)) {
-      sources ??= await workingSources();
-      const message = sources === 0
-        ? `${NOTHING_FOUND_PREFIX}: none of your places to search is answering. Add one under Settings > Indexers. It is searched again automatically.`
-        : `${NOTHING_FOUND_PREFIX}: none of your places to search has it under that name. It is searched again automatically every 6 hours. Administrators can also pick a release by hand: open this request and press "Find a release myself".`;
+      if (sources === undefined) sources = await workingSources();
+      const message = nothingFoundMessage(sources, req.mediaType);
       patch(req.id, { message });
       logEvent(req.id, 'No source has it yet');
     }

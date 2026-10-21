@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createServer, type Server } from 'node:net';
 import { createSocket } from 'node:dgram';
-import { answers, helloPacket, isServerHello, proxyCarriesTraffic } from '../../scripts/vpngate.mjs';
+import { answers, controlAuthToml, helloPacket, isServerHello, proxyCarriesTraffic } from '../../scripts/vpngate.mjs';
 
 const listen = (handler: (socket: import('node:net').Socket) => void) => new Promise<{ server: Server; port: number }>(res => {
   const server = createServer(handler);
@@ -58,5 +58,24 @@ describe('VPN relay liveness', () => {
     const { server, port } = await listen(socket => socket.end('HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n'));
     expect(await proxyCarriesTraffic('127.0.0.1', port, 2000)).toBe(true);
     server.close();
+  });
+
+  it('does not count gluetun answering 500 (it could not reach the site) as a working tunnel', async () => {
+    const { server, port } = await listen(socket => socket.end('HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n'));
+    expect(await proxyCarriesTraffic('127.0.0.1', port, 2000)).toBe(false);
+    server.close();
+  });
+
+  it('tries the next site when one times out, instead of rejecting a working relay over one blocked address', async () => {
+    let n = 0;
+    const { server, port } = await listen(socket => { if (n++ === 0) return; socket.end('HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n'); });
+    expect(await proxyCarriesTraffic('127.0.0.1', port, 500, ['http://a.test/', 'http://b.test/'])).toBe(true);
+    server.close();
+  });
+
+  it('writes a gluetun control-server role that can only read and set the VPN status', () => {
+    const toml = controlAuthToml('k'.repeat(48));
+    expect(toml).toContain('routes = ["GET /v1/vpn/status", "PUT /v1/vpn/status"]');
+    expect(toml).toContain('auth = "apikey"');
   });
 });

@@ -2,10 +2,19 @@ import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media } from '@virtuallyview/types';
 import { arrHealthCheck } from '../request-identity.js';
 
+const topCategories = (r: Record<string, unknown>): number[] | undefined => {
+  const cats = (r.capabilities as { categories?: Array<{ id?: number }> } | undefined)?.categories;
+  if (!Array.isArray(cats)) return undefined;
+  const ids = [...new Set(cats.map(c => Math.floor(Number(c.id) / 1000) * 1000).filter(n => n > 0 && n < 10000))];
+  return ids.length ? ids : undefined;
+};
+
 export interface ProwlarrIndexer {
   id: number; name: string; protocol: string; privacy: string; enabled: boolean; definitionName: string;
   /** Set while Prowlarr is skipping it after repeated failures. */
   failingUntil?: string;
+  /** Top-level Newznab categories it carries (2000 movies, 3000 audio, 5000 TV...), when Prowlarr says. */
+  categories?: number[];
 }
 export interface ProwlarrIndexerDefinition {
   definitionName: string; name: string; protocol: string; privacy: string; language: string; description: string;
@@ -92,6 +101,7 @@ export class ProwlarrAdapter implements IntegrationAdapter<{ url: string; apiKey
     return rows.map(r => ({
       id: Number(r.id), name: String(r.name ?? ''), protocol: String(r.protocol ?? ''), privacy: String(r.privacy ?? ''),
       enabled: r.enable !== false, definitionName: String(r.definitionName ?? ''),
+      ...(topCategories(r) ? { categories: topCategories(r) } : {}),
       ...(failing.has(Number(r.id)) ? { failingUntil: failing.get(Number(r.id)) } : {})
     }));
   }
