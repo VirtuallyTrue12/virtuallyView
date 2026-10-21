@@ -94,6 +94,9 @@ export interface RequestItem {
   updatedAt: string;
 }
 
+/** This computer's addresses on the home network and Tailscale, for opening the dashboard on another device. */
+export interface HostAddresses { addresses: Array<{ interface: string; address: string; kind: 'lan' | 'tailscale' }>; updatedAt: string | null }
+
 export interface SeriesSeason {
   number: number;
   episodes: number;
@@ -663,6 +666,7 @@ export const api = {
     });
   },
   systemStorage: () => getJSON<StorageReport>('/api/system/storage'),
+  hostAddresses: () => getJSON<HostAddresses>('/api/system/addresses'),
   mediaInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/${encodeURIComponent(id)}/info${codecQuery()}`),
   episodeInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/episode/${encodeURIComponent(id)}/info${codecQuery()}`),
   dashboard: () => getJSON<Dashboard>('/api/dashboard'),

@@ -382,6 +382,8 @@ services:
       - BOOKS_DIR=${BOOKS_DIR:-}
     volumes:
       - helper-shared:/shared:ro
+      # This computer's real network addresses (written by the netinfo service below), for "connect other devices".
+      - host-net:/host-net:ro
       - secrets:/secrets:ro
       - app-data:/app/apps/server/data
       - ${MOVIES_DIR:-media-movies}:/media/movies:ro
@@ -669,6 +671,19 @@ services:
       - helper-shared:/shared
     restart: unless-stopped
 
+  # Tells the dashboard this computer's real network addresses (Wi-Fi/LAN, Tailscale), so Settings can show the
+  # one to open on a phone or TV. The dashboard's container only sees its own internal address. Host network,
+  # no ports, writes one small file every minute (scripts/host-addresses.mjs).
+  netinfo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "scripts/host-addresses.mjs", "/host-net/addresses.json"]
+    network_mode: host
+    volumes:
+      - host-net:/host-net
+    restart: unless-stopped
+
   # Optional: search YouTube and save concerts and music videos under the
   # artist (docs/concerts-and-videos.md). Off unless you turn it on:
   #   docker compose --profile youtube up -d
@@ -725,6 +740,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  host-net:
   radarr-config:
   sonarr-config:
   prowlarr-config:

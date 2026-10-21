@@ -46,8 +46,28 @@ export function verifyStreamToken(token: string | undefined, path: string): stri
   return expected.length === given.length && timingSafeEqual(expected, given) ? userId : null;
 }
 
+export interface HostAddress { interface: string; address: string; kind: 'lan' | 'tailscale' }
+
+/**
+ * This computer's real addresses, written by the netinfo service (scripts/host-addresses.mjs), which runs on the
+ * host's network. In a container, the interfaces Node sees are the container's own (10.89.x.x), which no phone or
+ * TV can reach: that address was what cast links and "connect other devices" got. Empty when the file is missing
+ * (an install without that service, or a dev run straight on the host, where the fallback below is right anyway).
+ */
+export function hostAddresses(file = process.env.VV_HOST_NET_FILE ?? '/host-net/addresses.json'): { addresses: HostAddress[]; updatedAt: string | null } {
+  try {
+    const data = JSON.parse(readFileSync(file, 'utf8')) as { addresses?: HostAddress[]; updatedAt?: string };
+    const addresses = (data.addresses ?? []).filter(a => typeof a?.address === 'string' && (a.kind === 'lan' || a.kind === 'tailscale'));
+    return { addresses, updatedAt: data.updatedAt ?? null };
+  } catch {
+    return { addresses: [], updatedAt: null };
+  }
+}
+
 /** First private IPv4 address of this machine, for links a TV can reach. */
 export function lanAddress(): string | null {
+  const fromHost = hostAddresses().addresses.find(a => a.kind === 'lan');
+  if (fromHost) return fromHost.address;
   for (const list of Object.values(networkInterfaces())) {
     for (const item of list ?? []) {
       if (item.family === 'IPv4' && !item.internal && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(item.address)) return item.address;

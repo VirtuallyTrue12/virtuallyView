@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type ServerSettings } from '../../lib/api';
+import { api, type HostAddresses, type ServerSettings } from '../../lib/api';
 
 /** Everything an admin needs to get a phone, TV or laptop signed in. */
 export default function ConnectDevices({ settings, onSaved }: { settings: ServerSettings | null; onSaved: (s: ServerSettings) => void }) {
@@ -9,9 +9,21 @@ export default function ConnectDevices({ settings, onSaved }: { settings: Server
   const [address, setAddress] = useState('');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [host, setHost] = useState<HostAddresses | null>(null);
+  const port = here.port || String(settings?.port ?? 3000);
+  const urlFor = (ip: string) => `${here.protocol}//${ip}${port === '80' || port === '443' ? '' : `:${port}`}`;
+  const lan = host?.addresses.filter(a => a.kind === 'lan') ?? [];
+  const tailnet = host?.addresses.filter(a => a.kind === 'tailscale') ?? [];
+  // Opened as localhost with nothing saved: offer this computer's home-network address instead of a blank box.
+  const suggested = detected || (lan[0] ? urlFor(lan[0].address) : '');
 
-  useEffect(() => { setAddress(settings?.publicUrl || detected); }, [settings?.publicUrl, detected]);
+  useEffect(() => { api.hostAddresses().then(setHost).catch(() => setHost(null)); }, []);
+  useEffect(() => { setAddress(settings?.publicUrl || suggested); }, [settings?.publicUrl, suggested]);
+
+  const copy = async (text: string) => {
+    try { await navigator.clipboard.writeText(text); setCopied(text); setTimeout(() => setCopied(null), 1800); } catch { /* clipboard blocked */ }
+  };
 
   const save = async (patch: Partial<ServerSettings>, okText: string) => {
     setBusy(true);
@@ -33,8 +45,24 @@ export default function ConnectDevices({ settings, onSaved }: { settings: Server
       <h3 className="section-title">Connect other devices</h3>
       <p className="model-suggest-meta">
         Phones, TVs and other computers on your network sign in with their own account at the address below.
-        {isLocal && ' You opened this page as localhost, so enter this computer\'s network address (for example http://192.168.1.20:3000) once and it is remembered.'}
+        {isLocal && !lan.length && ' You opened this page as localhost, so enter this computer\'s network address (for example http://192.168.1.20:3000) once and it is remembered.'}
       </p>
+      {(lan.length > 0 || tailnet.length > 0) && (
+        <ul className="connect-addresses" aria-label="Addresses of this computer">
+          {lan.map(a => (
+            <li key={a.address}>
+              <span><strong>{urlFor(a.address)}</strong> <span className="model-suggest-meta">on your home network ({a.interface})</span></span>
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => void copy(urlFor(a.address))}>{copied === urlFor(a.address) ? 'Copied' : 'Copy'}</button>
+            </li>
+          ))}
+          {tailnet.map(a => (
+            <li key={a.address}>
+              <span><strong>{urlFor(a.address)}</strong> <span className="model-suggest-meta">over Tailscale, from your own devices anywhere</span></span>
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => void copy(urlFor(a.address))}>{copied === urlFor(a.address) ? 'Copied' : 'Copy'}</button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="settings-row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <input
           className="settings-input"
@@ -49,10 +77,8 @@ export default function ConnectDevices({ settings, onSaved }: { settings: Server
           className="btn btn-primary btn-sm"
           type="button"
           disabled={!address}
-          onClick={async () => {
-            try { await navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
-          }}
-        >{copied ? 'Copied' : 'Copy link'}</button>
+          onClick={() => void copy(address)}
+        >{copied === address ? 'Copied' : 'Copy link'}</button>
       </div>
       <ol className="model-suggest-meta" style={{ margin: 'var(--spacing-sm) 0', paddingLeft: '1.2rem' }}>
         <li>On the other device, join the same Wi-Fi/network and open <strong>{shown}</strong> in a browser.</li>
@@ -60,7 +86,7 @@ export default function ConnectDevices({ settings, onSaved }: { settings: Server
         <li>Tick <em>Stay signed in</em> on personal devices so it remembers them for 30 days.</li>
         <li>Can't connect? Allow port {settings?.port ?? 3000} through this computer's firewall.</li>
       </ol>
-      <label className="settings-row" style={{ gap: 8 }}>
+      <label className="settings-row" style={{ gap: 8, flexWrap: 'nowrap', alignItems: 'flex-start' }}>
         <input
           type="checkbox"
           checked={settings?.allowSignup === true}
@@ -70,7 +96,7 @@ export default function ConnectDevices({ settings, onSaved }: { settings: Server
         />
         <span>Let people create their own account from the sign-in screen (off = you add every account)</span>
       </label>
-      <label className="settings-row" style={{ gap: 8 }}>
+      <label className="settings-row" style={{ gap: 8, flexWrap: 'nowrap', alignItems: 'flex-start' }}>
         <input
           type="checkbox"
           checked={settings?.trustLocalNetwork === true}
