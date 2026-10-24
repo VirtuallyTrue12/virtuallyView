@@ -6059,7 +6059,7 @@ select.np-chip { padding-right: 0.5rem; }
 .vstage-pill { padding: 0.4rem 0.9rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: #fff; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
 .vstage-pill.is-on { background: #fff; color: #000; }
 .vstage-check { display: inline-flex; gap: 6px; align-items: center; font-size: 0.8rem; color: rgba(255,255,255,0.75); }
-.vstage-picker { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); padding: 12px; border-radius: 18px; background: rgba(10,12,20,0.7); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(16px); }
+.vstage-picker { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 200px); overflow-y: auto; padding: 12px; border-radius: 18px; background: rgba(10,12,20,0.7); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(16px); }
 .vstage.is-quiet .vstage-bar { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
 .vstage.is-quiet .vstage-close, .vstage.is-quiet .vstage-song { opacity: 0; pointer-events: none; }
 .vstage.is-auto .vstage-song { opacity: 0.85; }
@@ -6108,3 +6108,6 @@ body.has-viz-stage { overflow: hidden; }
 .rs-kind--live::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: #fff; vertical-align: 1px; animation: live-dot 1.6s ease-in-out infinite; }
 @keyframes live-dot { 50% { opacity: 0.3; } }
 .rd-live { align-self: end; padding-bottom: 6px; }
+
+.vstage-picker .viz-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 640px) { .vstage-picker .viz-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

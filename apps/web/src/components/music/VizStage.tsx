@@ -90,7 +90,7 @@ export default function VizStage() {
   const lyricState = lyrics === undefined ? 'loading' : lyrics?.synced?.length ? 'ok' : 'none';
 
   return (
-    <div ref={root} tabIndex={-1} className={`vstage${showChrome ? '' : ' is-quiet'}${auto ? ' is-auto' : ''}`} role="dialog" aria-modal="true" aria-label="Visualizer" style={{ ['--np-tint' as string]: tint }}>
+    <div ref={root} tabIndex={-1} onPointerDown={e => { if (picker && !(e.target as HTMLElement).closest('.vstage-picker, .vstage-pill')) setPicker(false); }} className={`vstage${showChrome ? '' : ' is-quiet'}${auto ? ' is-auto' : ''}`} role="dialog" aria-modal="true" aria-label="Visualizer" style={{ ['--np-tint' as string]: tint }}>
       <VizCanvas scene={viz.scene} tint={tint} className="vstage-canvas" />
       <div className="vstage-lyrics"><LyricsOverlay line={line} style={viz.lyricStyle} size="lg" state={lyricState} /></div>
       {djTalking && <span className="np-dj vstage-dj" role="status"><SvgIcon name="music-note" size={14} /> DJ on the mic</span>}

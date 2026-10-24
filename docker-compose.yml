@@ -303,7 +303,7 @@ services:
       - NZBGET_PASSWORD=${NZBGET_PASSWORD:-nzbget}
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:0.5b}
-      - PIPER_HOST=piper
+      - KITTEN_URL=http://kitten:8020
       - DASHBOARD_AUTH_PASSWORD=${DASHBOARD_AUTH_PASSWORD:-}
       - DASHBOARD_AUTH_USERNAME=${DASHBOARD_AUTH_USERNAME:-root}
       - API_RATE_LIMIT=${API_RATE_LIMIT:-120}
@@ -362,7 +362,7 @@ services:
       - NZBGET_PASSWORD=${NZBGET_PASSWORD:-nzbget}
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:0.5b}
-      - PIPER_HOST=piper
+      - KITTEN_URL=http://kitten:8020
       - SEARCH_VIA_TOR=${SEARCH_VIA_TOR:-false}
       - WATCHTOWER_URL=http://watchtower:8080
       - YTDLP_URL=http://ytdlp:8098
@@ -611,21 +611,23 @@ services:
     labels:
       - com.centurylinklabs.watchtower.enable=true
 
-  # Natural voice for DJ mode and radio announcements (Piper, runs on this
-  # machine). Without it the browser's own voice is used. Voices download on
-  # first use into piper-data.
-  piper:
-    image: rhasspy/wyoming-piper:latest
+  # Natural voice for DJ mode and radio announcements (KittenTTS, runs on
+  # this machine, CPU only). Without it the browser's own voice is used. The
+  # model downloads on first start into kitten-cache. KITTEN_MODEL picks the
+  # size: kitten-tts-nano-0.8-int8 (25 MB), -micro-0.8, -mini-0.8 (default).
+  kitten:
+    build:
+      context: docker/kitten
+    image: virtuallyview-kitten:latest
     profiles: ["ai"]
-    command: ["--voice", "en_US-ryan-high"]
+    environment:
+      - KITTEN_MODEL=${KITTEN_MODEL:-KittenML/kitten-tts-mini-0.8}
     dns:
       - 1.1.1.1
       - 8.8.8.8
     volumes:
-      - piper-data:/data
+      - kitten-cache:/cache
     restart: unless-stopped
-    labels:
-      - com.centurylinklabs.watchtower.enable=true
 
   # Optional Tor SOCKS5 proxy. No account or setup needed, unlike a VPN. Turn
   # it on with: docker compose --profile tor up -d
@@ -759,7 +761,7 @@ services:
 
 volumes:
   host-net:
-  piper-data:
+  kitten-cache:
   radarr-config:
   sonarr-config:
   prowlarr-config:

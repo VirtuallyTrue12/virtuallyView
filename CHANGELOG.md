@@ -2,9 +2,10 @@
 
 ## 0.4.0
 
+- **Added.** Seven more visualizations: Radial, Pulse, Aurora, Starfield, Ripples (on the beat), Plasma and Fire, thirteen in all. In full screen the scene picker closes when you click outside it.
 - **Added.** The visualizer now lives everywhere music plays: full screen over any page (a button on the bottom bar; the controls fade away while you watch, and Esc closes it), a live hero at the top of the Music page with the sung line, a thin spectrum along the bottom bar with the current lyric under the title, and a screensaver that starts after a minute without input and closes at the first touch.
 - **Changed.** Visualizer scenes are picked from live preview tiles, lyric style from a toggle, and equalizer presets from chips (your own presets are starred and removable), instead of dropdowns. A new Visuals tab in Now Playing holds them. The bars were redrawn: log-spaced, rounded and reflected, and no longer stuck at the top.
-- **Added.** Natural voices for DJ mode and radio announcements, from a local Piper voice service (`piper`, in the AI profile; five voices, previewable in Mix & DJ). Nothing leaves your machine and lines are cached. Without it the browser's own voice is used.
+- **Added.** Natural voices for DJ mode and radio announcements, from a local KittenTTS service (`kitten`, in the AI profile, built from docker/kitten; eight voices, previewable in Mix & DJ; about a second per line on the CPU). `KITTEN_MODEL` picks the model size. Nothing leaves your machine and lines are cached. Without it the browser's own voice is used.
 - **Fixed.** DJ mode left dead air when the browser had no voice, and the line started too late. The next song's intro now comes in under the host, the line is prepared half a minute ahead, and a missing voice never holds the music.
 - **Fixed.** Equalizer changes did nothing until the on switch was found (picking a preset or moving a slider now turns it on), and boosts could crackle (the level now drops by most of the biggest boost).
 - **Fixed.** Lyrics were missing for most songs because the lookup demanded an exact album and length. It now falls back to the title alone and a nearest-length search and strips "(feat. …)" and "- Remastered": all 30 tested songs found timed lyrics.

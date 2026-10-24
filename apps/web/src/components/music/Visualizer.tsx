@@ -9,13 +9,20 @@ import { setViz, useViz, type LyricLine, type LyricStyle, type SceneId } from '.
  */
 export const SCENES: { id: SceneId; name: string }[] = [
   { id: 'bars', name: 'Bars' },
+  { id: 'radial', name: 'Radial' },
+  { id: 'pulse', name: 'Pulse' },
   { id: 'mist', name: 'Ocean mist' },
+  { id: 'aurora', name: 'Aurora' },
   { id: 'alchemy', name: 'Alchemy' },
+  { id: 'starfield', name: 'Starfield' },
   { id: 'tunnel', name: 'Tunnel' },
+  { id: 'ripples', name: 'Ripples' },
+  { id: 'plasma', name: 'Plasma' },
+  { id: 'fire', name: 'Fire' },
   { id: 'scope', name: 'Scope' },
   { id: 'cycle', name: 'Cycle all' }
 ];
-const ORDER: SceneId[] = ['bars', 'mist', 'alchemy', 'tunnel', 'scope'];
+const ORDER: SceneId[] = SCENES.map(sc => sc.id).filter(id => id !== 'cycle');
 
 type Variant = 'full' | 'strip' | 'tile';
 
@@ -44,6 +51,15 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
     const peakVel = new Float32Array(n);
     const particles = Array.from({ length: variant === 'tile' ? 40 : 150 }, () => ({ a: Math.random() * Math.PI * 2, r: Math.random(), v: 0.002 + Math.random() * 0.006, s: 1 + Math.random() * 2.5 }));
     const [tr, tg, tb] = tint.split(',').map(x => Number(x.trim()) || 128);
+    const stars = Array.from({ length: variant === 'tile' ? 60 : 320 }, () => ({ x: (Math.random() - 0.5) * 2, y: (Math.random() - 0.5) * 2, z: Math.random() }));
+    const ripples: { r: number; life: number; hue: number }[] = [];
+    let bassAvg = 0, beatCool = 0;
+    // Pixel scenes (plasma, fire) draw into a small buffer that is scaled up: cheap and soft.
+    const lo = document.createElement('canvas');
+    lo.width = variant === 'tile' ? 64 : 160; lo.height = variant === 'tile' ? 40 : 96;
+    const loCtx = lo.getContext('2d');
+    const loImg = loCtx?.createImageData(lo.width, lo.height);
+    const heat = new Float32Array(lo.width * lo.height);
     let t = 0;
     let cycleScene: SceneId = 'bars';
     let hidden = document.hidden;
@@ -82,6 +98,11 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       if (scene === 'cycle' && t % 1500 === 0) cycleScene = ORDER[(ORDER.indexOf(cycleScene) + 1) % ORDER.length]!;
       const s: SceneId = scene === 'cycle' ? cycleScene : scene;
       const hue = (t * 0.2 + bass * 70) % 360;
+      // A beat: the bass jumps well above its running average.
+      bassAvg = bassAvg * 0.95 + bass * 0.05;
+      const beat = beatCool <= 0 && bass > 0.28 && bass > bassAvg * 1.3;
+      if (beat) beatCool = 14; else beatCool--;
+      const blitLo = () => { if (loCtx && loImg) { loCtx.putImageData(loImg, 0, 0); ctx.imageSmoothingEnabled = true; ctx.drawImage(lo, 0, 0, w, h); } };
 
       if (variant === 'strip' || s === 'bars') {
         const strip = variant === 'strip';
@@ -154,6 +175,102 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
           }
           ctx.strokeStyle = `hsla(${(hue + ring * 60) % 360},90%,62%,0.85)`; ctx.lineWidth = (variant === 'tile' ? 1 : 2) + bass * 4; ctx.stroke();
         }
+      } else if (s === 'radial') {
+        ctx.fillStyle = 'rgba(4,5,12,0.3)'; ctx.fillRect(0, 0, w, h);
+        const cx = w / 2, cy = h / 2, R = Math.min(w, h) * (0.2 + bass * 0.05), count = variant === 'tile' ? 48 : 128;
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * 0.002);
+        for (let i = 0; i < count; i++) {
+          const v = band(i % (count / 2), count / 2);
+          const len = 4 + v * Math.min(w, h) * 0.3;
+          const a = (i / count) * Math.PI * 2;
+          ctx.strokeStyle = `hsla(${(hue + (i / count) * 360) % 360},90%,${55 + v * 20}%,0.95)`;
+          ctx.lineWidth = Math.max(1.5, (Math.PI * 2 * R) / count - 2);
+          ctx.beginPath(); ctx.moveTo(Math.cos(a) * R, Math.sin(a) * R); ctx.lineTo(Math.cos(a) * (R + len), Math.sin(a) * (R + len)); ctx.stroke();
+        }
+        ctx.restore();
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.95);
+        g.addColorStop(0, `rgba(${tr},${tg},${tb},${0.5 + bass * 0.5})`); g.addColorStop(1, 'rgba(0,0,0,0.85)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 0.95, 0, Math.PI * 2); ctx.fill();
+      } else if (s === 'pulse') {
+        ctx.fillStyle = 'rgba(3,4,10,0.35)'; ctx.fillRect(0, 0, w, h);
+        const count = variant === 'tile' ? 24 : 64, bw = w / (count * 2);
+        for (let i = 0; i < count; i++) {
+          const v = band(i, count);
+          const bh = Math.max(2, v * h * 0.46);
+          ctx.fillStyle = `hsla(${(hue + i * 4) % 360},90%,${50 + v * 25}%,0.95)`;
+          // Mirrored left-right from the centre, and up-down from the middle line.
+          for (const x of [w / 2 + i * bw, w / 2 - (i + 1) * bw]) ctx.fillRect(x + 1, h / 2 - bh, bw - 2, bh * 2);
+        }
+        ctx.fillStyle = `rgba(255,255,255,${0.15 + bass * 0.5})`; ctx.fillRect(0, h / 2 - 1, w, 2);
+      } else if (s === 'aurora') {
+        ctx.fillStyle = 'rgba(2,6,14,0.35)'; ctx.fillRect(0, 0, w, h);
+        ctx.globalCompositeOperation = 'lighter';
+        const curtains = variant === 'tile' ? 3 : 5;
+        for (let c = 0; c < curtains; c++) {
+          const v = band(4 + c * 9, 50);
+          const len = h * (0.25 + v * 0.45), col = Math.max(2, w / 220), shade = (140 + c * 40 + hue * 0.3) % 360;
+          // One gradient per curtain, moved to each column's top.
+          const g = ctx.createLinearGradient(0, 0, 0, len);
+          g.addColorStop(0, `hsla(${shade},90%,60%,0)`);
+          g.addColorStop(0.3, `hsla(${shade},85%,55%,${0.03 + v * 0.07})`);
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g;
+          for (let x = 0; x < w; x += col) {
+            const top = h * (0.15 + 0.12 * Math.sin(x * (3 / w) + t * 0.01 + c * 1.7) + 0.05 * Math.sin(x * (11 / w) - t * 0.02));
+            ctx.setTransform(dpr, 0, 0, dpr, x * dpr, top * dpr);
+            ctx.fillRect(0, 0, col, len);
+          }
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      } else if (s === 'starfield') {
+        ctx.fillStyle = `rgba(0,0,6,${0.35 - bass * 0.2})`; ctx.fillRect(0, 0, w, h);
+        const speed = 0.004 + bass * 0.04 + mids * 0.01;
+        for (const st of stars) {
+          const pz = st.z; st.z -= speed;
+          if (st.z <= 0.02) { st.x = (Math.random() - 0.5) * 2; st.y = (Math.random() - 0.5) * 2; st.z = 1; continue; }
+          const sx = w / 2 + (st.x / st.z) * w * 0.5, sy = h / 2 + (st.y / st.z) * h * 0.5;
+          const px = w / 2 + (st.x / pz) * w * 0.5, py = h / 2 + (st.y / pz) * h * 0.5;
+          if (sx < 0 || sx > w || sy < 0 || sy > h) { st.z = 1; continue; }
+          ctx.strokeStyle = `hsla(${(hue + st.z * 120) % 360},80%,${70 + (1 - st.z) * 30}%,${1 - st.z})`;
+          ctx.lineWidth = (1 - st.z) * (variant === 'tile' ? 1.5 : 3);
+          ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(sx, sy); ctx.stroke();
+        }
+      } else if (s === 'ripples') {
+        ctx.fillStyle = 'rgba(2,4,10,0.18)'; ctx.fillRect(0, 0, w, h);
+        if (beat || t % 50 === 0) ripples.push({ r: 4, life: 1, hue });
+        const max = Math.hypot(w, h) / 2;
+        for (let i = ripples.length - 1; i >= 0; i--) {
+          const rp = ripples[i]!;
+          rp.r += max * 0.012 * (1 + bass); rp.life = 1 - rp.r / max;
+          if (rp.life <= 0) { ripples.splice(i, 1); continue; }
+          ctx.strokeStyle = `hsla(${rp.hue},90%,65%,${rp.life})`; ctx.lineWidth = 1 + rp.life * (variant === 'tile' ? 2 : 6);
+          ctx.beginPath(); ctx.arc(w / 2, h / 2, rp.r, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.fillStyle = `rgba(${tr},${tg},${tb},${0.4 + bass * 0.6})`; ctx.beginPath(); ctx.arc(w / 2, h / 2, Math.min(w, h) * (0.03 + bass * 0.06), 0, Math.PI * 2); ctx.fill();
+      } else if (s === 'plasma' && loImg) {
+        const W = lo.width, H = lo.height, d = loImg.data, k = t * (0.02 + mids * 0.05), amp = 1 + bass * 3;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const v = Math.sin(x * 0.09 * amp + k) + Math.sin(y * 0.11 + k * 1.3) + Math.sin((x + y) * 0.06 + k * 0.7) + Math.sin(Math.hypot(x - W / 2, y - H / 2) * 0.12 - k * 2);
+          const o = (y * W + x) * 4, c = (v + 4) / 8;
+          // Deep, not neon: the colours swing around the cover's tint and sit low, brightening with the beat.
+          const glow = 0.35 + bass * 0.45;
+          d[o] = (tr * 0.5 + 60 * (1 + Math.sin(Math.PI * (c * 2 + hue / 180)))) * glow; d[o + 1] = (tg * 0.5 + 60 * (1 + Math.sin(Math.PI * (c * 2 + hue / 180 + 0.66)))) * glow; d[o + 2] = (tb * 0.5 + 60 * (1 + Math.sin(Math.PI * (c * 2 + hue / 180 + 1.33)))) * glow; d[o + 3] = 255;
+        }
+        blitLo();
+      } else if (s === 'fire' && loImg) {
+        const W = lo.width, H = lo.height, d = loImg.data;
+        // Seed the bottom row from the spectrum, then let the heat rise and cool.
+        for (let x = 0; x < W; x++) heat[(H - 1) * W + x] = Math.min(1, band(Math.floor((x / W) * 40), 40) * 1.3 + Math.random() * 0.15);
+        for (let y = 0; y < H - 1; y++) for (let x = 0; x < W; x++) {
+          const below = (y + 1) * W;
+          heat[y * W + x] = Math.max(0, (heat[below + x]! + heat[below + Math.max(0, x - 1)]! + heat[below + Math.min(W - 1, x + 1)]! + heat[Math.min(H - 1, y + 2) * W + x]!) / 4.12 - 0.002);
+        }
+        for (let i = 0; i < W * H; i++) {
+          const v = heat[i]!, o = i * 4;
+          d[o] = Math.min(255, v * 3 * 255); d[o + 1] = Math.min(255, Math.max(0, v * 3 - 1) * 255); d[o + 2] = Math.min(255, Math.max(0, v * 3 - 2) * 255); d[o + 3] = 255;
+        }
+        blitLo();
       } else {
         ctx.fillStyle = 'rgba(0,6,4,0.3)'; ctx.fillRect(0, 0, w, h);
         ctx.beginPath();

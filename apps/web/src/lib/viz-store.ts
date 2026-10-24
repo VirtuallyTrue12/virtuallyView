@@ -5,7 +5,7 @@ import { api, type Lyrics } from './api';
  * Visualizer settings shared by every place that shows one (the bottom bar, the Music page, Now Playing and the
  * full-screen stage), so a choice made in one shows in all of them.
  */
-export type SceneId = 'bars' | 'mist' | 'alchemy' | 'tunnel' | 'scope' | 'cycle';
+export type SceneId = 'bars' | 'radial' | 'pulse' | 'mist' | 'aurora' | 'alchemy' | 'starfield' | 'tunnel' | 'ripples' | 'plasma' | 'fire' | 'scope' | 'cycle';
 export type LyricStyle = 'off' | 'karaoke' | 'roll';
 export type VizState = {
   scene: SceneId;
@@ -19,7 +19,7 @@ export type VizState = {
 };
 
 const KEY = 'vv-viz';
-const SCENE_IDS: SceneId[] = ['bars', 'mist', 'alchemy', 'tunnel', 'scope', 'cycle'];
+const SCENE_IDS: SceneId[] = ['bars', 'radial', 'pulse', 'mist', 'aurora', 'alchemy', 'starfield', 'tunnel', 'ripples', 'plasma', 'fire', 'scope', 'cycle'];
 const read = (): VizState => {
   const base: VizState = { scene: 'bars', lyricStyle: 'karaoke', screensaver: true, inPlayer: true, stage: 'closed' };
   try {

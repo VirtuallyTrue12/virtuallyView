@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { stationKind } from '../../apps/server/src/services/radio';
 import { cleanTitle } from '../../apps/server/src/routes/lyrics';
-import { wav } from '../../apps/server/src/services/tts';
 
 describe('live broadcast or fan playlist', () => {
   it('marks free do-it-yourself hosts as playlists, even when named after a real FM station', () => {
@@ -31,15 +30,5 @@ describe('lyrics title matching', () => {
     expect(cleanTitle('Bandit ft. YoungBoy Never Broke Again')).toBe('Bandit');
     expect(cleanTitle('Hide [with Seezyn]')).toBe('Hide');
     expect(cleanTitle('Righteous')).toBe('Righteous');
-  });
-});
-
-describe('spoken lines', () => {
-  it('wraps raw voice samples in a playable WAV header', () => {
-    const out = wav(Buffer.alloc(100), 22050, 2, 1);
-    expect(out.length).toBe(144);
-    expect(out.subarray(0, 4).toString()).toBe('RIFF');
-    expect(out.readUInt32LE(24)).toBe(22050);
-    expect(out.readUInt32LE(40)).toBe(100);
   });
 });
