@@ -2,6 +2,7 @@ import Hls from 'hls.js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, type RadioStation } from '../../lib/api';
 import { useMusicPlayer } from '../media/MusicProvider';
+import { radioLine, speak } from '../../lib/audio-engine';
 import { RadioBar } from './RadioBar';
 import { RadioNowPlaying } from './RadioNowPlaying';
 
@@ -20,6 +21,12 @@ interface RadioContextValue {
   toggle: () => void;
   stop: () => void;
   setVolume: (v: number) => void;
+  /** A voice says the station's name when you switch. */
+  announce: boolean;
+  setAnnounce: (on: boolean) => void;
+  /** When the sleep timer stops the radio (ms since epoch), or null. */
+  sleepAt: number | null;
+  setSleep: (minutes: number | null) => void;
 }
 
 const RadioContext = createContext<RadioContextValue | null>(null);
@@ -43,6 +50,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   const [volume, setVolumeState] = useState(readVolume);
   const [expanded, setExpanded] = useState(false);
   const retried = useRef(false);
+  const [announce, setAnnounceState] = useState(() => { try { return localStorage.getItem('vv-radio-announce') !== '0'; } catch { return true; } });
+  const [sleepAt, setSleepAt] = useState<number | null>(null);
+  const volumeRef = useRef(volume); volumeRef.current = volume;
+  const announceRef = useRef(announce); announceRef.current = announce;
 
   const release = useCallback(() => {
     hls.current?.destroy(); hls.current = null;
@@ -68,9 +79,22 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     music.stopPlayback();
     retried.current = false;
     setStation(s); setState('loading'); setError(null); setNowTitle(null);
+    const el = audio.current;
+    if (announceRef.current && el) {
+      // Like a real dial: the new station comes in low under a short announcement, then up to full volume.
+      el.volume = volumeRef.current * 0.2;
+      const extra = [s.tags[0], s.country ? `from ${s.country}` : ''].filter(Boolean).join(' ');
+      void speak(radioLine(s.name, extra)).then(() => {
+        const target = volumeRef.current;
+        let v = el.volume;
+        const id = window.setInterval(() => { v = Math.min(target, v + target / 12); el.volume = v; if (v >= target) window.clearInterval(id); }, 80);
+      });
+    }
     load(s);
     void api.radioPlayed(s.id).catch(() => undefined);
   }, [music, load]);
+  const setAnnounce = useCallback((on: boolean) => { setAnnounceState(on); try { localStorage.setItem('vv-radio-announce', on ? '1' : '0'); } catch { /* fine */ } }, []);
+  const setSleep = useCallback((minutes: number | null) => setSleepAt(minutes ? Date.now() + minutes * 60000 : null), []);
 
   const stop = useCallback(() => { release(); setStation(null); setState('idle'); setError(null); setNowTitle(null); setExpanded(false); }, [release]);
   const toggle = useCallback(() => {
@@ -82,6 +106,18 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   const setVolume = useCallback((v: number) => { setVolumeState(v); try { localStorage.setItem('vv-radio-volume', String(v)); } catch { /* fine */ } }, []);
 
   useEffect(() => { if (audio.current) audio.current.volume = volume; }, [volume]);
+
+  // Sleep timer: fade out over the last 30 seconds, then stop.
+  useEffect(() => {
+    if (!sleepAt) return;
+    const id = window.setInterval(() => {
+      const left = sleepAt - Date.now();
+      const el = audio.current;
+      if (el && left < 30000 && left > 0) el.volume = volumeRef.current * (left / 30000);
+      if (left <= 0) { window.clearInterval(id); setSleepAt(null); release(); setState('paused'); if (el) el.volume = volumeRef.current; }
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [sleepAt, release]);
 
   // Starting a song stops the radio, so two sounds never overlap.
   useEffect(() => { if (music.playing && station) stop(); }, [music.playing, station, stop]);
@@ -123,8 +159,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   }, [station, nowTitle, toggle, stop]);
 
   const value = useMemo<RadioContextValue>(
-    () => ({ station, state, error, nowTitle, volume, expanded, setExpanded, play, toggle, stop, setVolume }),
-    [station, state, error, nowTitle, volume, expanded, play, toggle, stop, setVolume]
+    () => ({ station, state, error, nowTitle, volume, expanded, setExpanded, play, toggle, stop, setVolume, announce, setAnnounce, sleepAt, setSleep }),
+    [station, state, error, nowTitle, volume, expanded, play, toggle, stop, setVolume, announce, setAnnounce, sleepAt, setSleep]
   );
   return (
     <RadioContext.Provider value={value}>

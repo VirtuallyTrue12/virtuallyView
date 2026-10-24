@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { EQ_BANDS, EQ_PRESETS, useMusicPlayer, type QueueEntry, type RepeatMode } from '../media/MusicProvider';
+import { audioEngine, speak, djLine } from '../../lib/audio-engine';
+import Visualizer, { SCENES, type LyricStyle, type SceneId } from './Visualizer';
 import { SvgIcon } from '../ui/SvgIcon';
 import LyricsPanel from '../media/LyricsPanel';
 import { SeekBar, formatClock } from './SeekBar';
@@ -129,39 +131,167 @@ function QueuePanel() {
   );
 }
 
+/** The EQ's combined response drawn as a curve over the live spectrum, so a change is visible as well as audible. */
+function EqCurve() {
+  const { eqBands, eqEnabled, preamp } = useMusicPlayer();
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const cv = ref.current;
+    const ctx = cv?.getContext('2d');
+    if (!cv || !ctx) return;
+    let raf = 0;
+    const N = 160;
+    const freqs = new Float32Array(N);
+    for (let i = 0; i < N; i++) freqs[i] = 20 * Math.pow(1000, i / (N - 1));
+    const spec = new Uint8Array(1024);
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = cv.clientWidth, h = cv.clientHeight;
+      if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const an = audioEngine.analyser;
+      const rate = audioEngine.ctx?.sampleRate ?? 48000;
+      if (an) {
+        an.getByteFrequencyData(spec);
+        ctx.fillStyle = 'rgba(212,162,78,0.18)';
+        for (let i = 0; i < N; i++) {
+          const bin = Math.min(spec.length - 1, Math.round((freqs[i]! / (rate / 2)) * an.frequencyBinCount));
+          const v = (spec[bin] ?? 0) / 255;
+          ctx.fillRect((i / N) * w, h - v * h, w / N + 0.5, v * h);
+        }
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+      for (const db of [-12, -6, 0, 6, 12]) { const y = h / 2 - (db / 15) * (h / 2); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+      const resp = audioEngine.ready ? audioEngine.response(freqs) : new Float32Array(N);
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const db = eqEnabled ? resp[i]! + preamp : 0;
+        const x = (i / (N - 1)) * w, y = h / 2 - (Math.max(-15, Math.min(15, db)) / 15) * (h / 2);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = eqEnabled ? '#d4a24e' : 'rgba(255,255,255,0.35)'; ctx.lineWidth = 2.5; ctx.stroke();
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, [eqBands, eqEnabled, preamp]);
+  return <canvas ref={ref} className="eq-curve" aria-hidden="true" />;
+}
+
 function EqualizerPanel() {
-  const { eqEnabled, eqPreset, eqBands, setEqEnabled, setEqPreset, setEqBand } = useMusicPlayer();
+  const { eqEnabled, eqPreset, eqBands, preamp, balance, leveller, customPresets, setEqEnabled, setEqPreset, setEqBand, setPreamp, setBalance, setLeveller, saveCustomPreset, deleteCustomPreset } = useMusicPlayer();
+  const [naming, setNaming] = useState<string | null>(null);
+  const fmt = (n: number) => `${n > 0 ? '+' : ''}${n} dB`;
+  const customKey = eqPreset.startsWith('custom:') ? eqPreset.slice(7) : null;
   return (
-    <div className="equalizer mp-eq">
-      <div className="equalizer-head">
-        <label className="equalizer-toggle">
+    <div className={`eq2${eqEnabled ? '' : ' is-off'}`}>
+      <div className="eq2-head">
+        <label className="eq2-switch">
           <input type="checkbox" checked={eqEnabled} onChange={e => setEqEnabled(e.target.checked)} />
-          <span>Enabled</span>
+          <span>{eqEnabled ? 'Equalizer on' : 'Equalizer off'}</span>
         </label>
-        <div className="equalizer-presets">
-          {Object.entries(EQ_PRESETS).map(([key, preset]) => (
-            <button key={key} type="button" className={`btn btn-secondary btn-sm${eqPreset === key ? ' is-active' : ''}`} onClick={() => { setEqEnabled(true); setEqPreset(key); }}>{preset.name}</button>
-          ))}
-        </div>
+        <select className="eq2-preset" value={EQ_PRESETS[eqPreset] || customKey ? eqPreset : 'custom'} onChange={e => { setEqEnabled(true); setEqPreset(e.target.value); }} aria-label="Preset">
+          {eqPreset === 'custom' && <option value="custom">Custom (unsaved)</option>}
+          <optgroup label="Presets">{Object.entries(EQ_PRESETS).map(([key, p]) => <option key={key} value={key}>{p.name}</option>)}</optgroup>
+          {customPresets.length > 0 && <optgroup label="Yours">{customPresets.map(p => <option key={p.name} value={`custom:${p.name}`}>{p.name}</option>)}</optgroup>}
+        </select>
+        {naming === null
+          ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => setNaming('')}>Save as…</button>
+          : <form className="eq2-save" onSubmit={e => { e.preventDefault(); saveCustomPreset(naming); setNaming(null); }}>
+              <input autoFocus value={naming} onChange={e => setNaming(e.target.value)} placeholder="Preset name" maxLength={30} aria-label="Preset name" />
+              <button type="submit" className="btn btn-primary btn-sm" disabled={!naming.trim()}>Save</button>
+            </form>}
+        {customKey && <button type="button" className="btn btn-secondary btn-sm" onClick={() => { deleteCustomPreset(customKey); setEqPreset('flat'); }}>Delete</button>}
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setEqPreset('flat'); setPreamp(0); setBalance(0); }}>Reset</button>
       </div>
-      <div className="equalizer-bands">
+      <EqCurve />
+      <div className="eq2-bands" onDoubleClick={e => { const i = Number((e.target as HTMLElement).dataset.band); if (Number.isInteger(i)) setEqBand(i, 0); }}>
+        <label className="eq2-band eq2-band--pre">
+          <span className="eq2-gain">{fmt(preamp)}</span>
+          <input type="range" min={-12} max={12} step={0.5} value={preamp} onChange={e => { setEqEnabled(true); setPreamp(Number(e.target.value)); }} aria-label="Preamp" />
+          <span className="eq2-label">Pre</span>
+        </label>
         {EQ_BANDS.map((band, i) => (
-          <label key={band.label} className="equalizer-band">
-            <span className="equalizer-band-gain">{(eqBands[i] ?? 0) > 0 ? `+${eqBands[i]}` : eqBands[i]} dB</span>
-            <input type="range" min={-12} max={12} step={1} value={eqBands[i] ?? 0} onChange={e => { setEqEnabled(true); setEqBand(i, Number(e.target.value)); }} aria-label={`${band.label} gain`} />
-            <span className="equalizer-band-label">{band.label}</span>
+          <label key={band.label} className="eq2-band" title="Double-click to reset">
+            <span className="eq2-gain">{fmt(eqBands[i] ?? 0)}</span>
+            <input data-band={i} type="range" min={-12} max={12} step={0.5} value={eqBands[i] ?? 0} onChange={e => { setEqEnabled(true); setEqBand(i, Number(e.target.value)); }} aria-label={`${band.label} Hz`} />
+            <span className="eq2-label">{band.label}</span>
           </label>
         ))}
+      </div>
+      <div className="eq2-extra">
+        <label className="eq2-row">
+          <span>Balance</span>
+          <input type="range" min={-1} max={1} step={0.05} value={balance} onChange={e => { setEqEnabled(true); setBalance(Number(e.target.value)); }} aria-label="Balance" />
+          <span className="eq2-val">{balance === 0 ? 'Centre' : balance < 0 ? `L ${Math.round(-balance * 100)}` : `R ${Math.round(balance * 100)}`}</span>
+        </label>
+        <label className="eq2-row eq2-row--check">
+          <input type="checkbox" checked={leveller} onChange={e => { setEqEnabled(true); setLeveller(e.target.checked); }} />
+          <span>Even out volume (quiet and loud tracks play at a similar level)</span>
+        </label>
       </div>
     </div>
   );
 }
 
-type Tab = 'queue' | 'lyrics' | 'eq';
+function useVoices(): SpeechSynthesisVoice[] {
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  useEffect(() => {
+    if (!('speechSynthesis' in window)) return;
+    const load = () => setVoices(window.speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)));
+    load();
+    window.speechSynthesis.addEventListener('voiceschanged', load);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
+  }, []);
+  return voices;
+}
+
+function MixPanel() {
+  const { crossfade, djMode, djVoice, entry, setCrossfade, setDjMode, setDjVoice } = useMusicPlayer();
+  const voices = useVoices();
+  return (
+    <div className="mix">
+      <label className="eq2-row">
+        <span>Crossfade</span>
+        <input type="range" min={0} max={12} step={1} value={crossfade} onChange={e => setCrossfade(Number(e.target.value))} aria-label="Crossfade seconds" />
+        <span className="eq2-val">{crossfade ? `${crossfade} s` : 'Off'}</span>
+      </label>
+      <p className="mix-help">The end of one track fades into the start of the next, with no gap.</p>
+      <label className="eq2-row eq2-row--check">
+        <input type="checkbox" checked={djMode} onChange={e => setDjMode(e.target.checked)} />
+        <span><strong>DJ mode</strong>: a voice introduces the next track over a smooth fade (works great with Shuffle).</span>
+      </label>
+      {djMode && (
+        <div className="mix-voice">
+          {voices.length > 0
+            ? <select value={djVoice} onChange={e => setDjVoice(e.target.value)} aria-label="DJ voice">
+                <option value="">Automatic voice</option>
+                {voices.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
+              </select>
+            : <span className="mix-help">This browser has no voices; the fades still work.</span>}
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => void speak(djLine(null, { title: entry?.track.title ?? 'your music', artist: entry?.artistTitle }), djVoice)}>Test voice</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const loadPref = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const savePref = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
+
+type Tab = 'queue' | 'lyrics' | 'eq' | 'mix';
 
 function NowPlaying() {
-  const { entry, expanded, setExpanded, currentTime, duration, error, stopPlayback } = useMusicPlayer();
+  const { entry, expanded, setExpanded, currentTime, duration, error, stopPlayback, getTime, playing, djTalking } = useMusicPlayer();
   const [tab, setTab] = useState<Tab>('queue');
+  const [viz, setViz] = useState(() => loadPref('vv-viz-on', '0') === '1');
+  const [scene, setScene] = useState<SceneId>(() => loadPref('vv-viz-scene', 'bars') as SceneId);
+  const [lyricStyle, setLyricStyle] = useState<LyricStyle>(() => loadPref('vv-viz-lyrics', 'karaoke') as LyricStyle);
+  const [vizFull, setVizFull] = useState(false);
+  useEffect(() => savePref('vv-viz-on', viz ? '1' : '0'), [viz]);
+  useEffect(() => savePref('vv-viz-scene', scene), [scene]);
+  useEffect(() => savePref('vv-viz-lyrics', lyricStyle), [lyricStyle]);
   const tint = useArtworkTint(entry?.cover);
   const sheetRef = useRef<HTMLDivElement>(null);
   const returnTo = useRef<Element | null>(null);
@@ -196,7 +326,26 @@ function NowPlaying() {
         </header>
 
         <div className="np-body">
-          <div className="np-art"><Cover src={entry.cover} label={`${entry.albumTitle ?? entry.track.title} cover`} className="mp-cover--large" /></div>
+          <div className={`np-art${viz ? ' is-viz' : ''}${vizFull ? ' is-full' : ''}`}>
+            {viz && expanded
+              ? <Visualizer scene={scene} tint={tint} lyricStyle={lyricStyle} getTime={getTime} artist={entry.artistTitle} title={entry.track.title} album={entry.albumTitle} duration={entry.track.durationMs ? entry.track.durationMs / 1000 : (duration || undefined)} playing={playing} />
+              : <Cover src={entry.cover} label={`${entry.albumTitle ?? entry.track.title} cover`} className="mp-cover--large" />}
+            {djTalking && <span className="np-dj" role="status"><SvgIcon name="music-note" size={14} /> DJ</span>}
+            <div className="np-viz-bar">
+              <button type="button" className={`np-chip${viz ? ' is-on' : ''}`} onClick={() => setViz(v => !v)} tabIndex={expanded ? 0 : -1}>{viz ? 'Cover art' : 'Visualizer'}</button>
+              {viz && <>
+                <select className="np-chip" value={scene} onChange={e => setScene(e.target.value as SceneId)} aria-label="Visualization" tabIndex={expanded ? 0 : -1}>
+                  {SCENES.map(sc => <option key={sc.id} value={sc.id}>{sc.name}</option>)}
+                </select>
+                <select className="np-chip" value={lyricStyle} onChange={e => setLyricStyle(e.target.value as LyricStyle)} aria-label="Lyrics on the visualizer" tabIndex={expanded ? 0 : -1}>
+                  <option value="karaoke">Lyrics: karaoke</option>
+                  <option value="roll">Lyrics: rolling</option>
+                  <option value="off">Lyrics: off</option>
+                </select>
+                <button type="button" className="np-chip" onClick={() => setVizFull(f => !f)} tabIndex={expanded ? 0 : -1}>{vizFull ? 'Exit full view' : 'Full view'}</button>
+              </>}
+            </div>
+          </div>
 
           <div className="np-main">
             <div className="np-meta">
@@ -212,7 +361,7 @@ function NowPlaying() {
 
           <div className="np-panel">
             <div className="np-tabs" role="tablist" aria-label="Now playing sections">
-              {([['queue', 'Up next'], ['lyrics', 'Lyrics'], ['eq', 'Equalizer']] as const).map(([key, label]) => (
+              {([['queue', 'Up next'], ['lyrics', 'Lyrics'], ['eq', 'Equalizer'], ['mix', 'Mix & DJ']] as const).map(([key, label]) => (
                 <button key={key} type="button" role="tab" aria-selected={tab === key} className={`np-tab${tab === key ? ' is-active' : ''}`} onClick={() => setTab(key)} tabIndex={expanded ? 0 : -1}>{label}</button>
               ))}
             </div>
@@ -222,6 +371,7 @@ function NowPlaying() {
                 <LyricsPanel artist={entry.artistTitle} title={entry.track.title} album={entry.albumTitle} durationSeconds={entry.track.durationMs ? entry.track.durationMs / 1000 : (duration || undefined)} currentTime={currentTime} />
               )}
               {expanded && tab === 'eq' && <EqualizerPanel />}
+              {expanded && tab === 'mix' && <MixPanel />}
             </div>
           </div>
         </div>

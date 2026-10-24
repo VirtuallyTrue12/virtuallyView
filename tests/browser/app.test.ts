@@ -555,7 +555,12 @@ describe('music player', () => {
 
     // The other tabs.
     await page.getByRole('tab', { name: 'Equalizer' }).click();
-    await page.waitForSelector('.mp-eq');
+    await page.waitForSelector('.eq2');
+    expect(await page.locator('.eq2-band').count()).toBe(11); // preamp + ten bands
+    await page.selectOption('select[aria-label="Preset"]', 'rock');
+    expect(await page.locator('.eq2-band').nth(1).locator('.eq2-gain').textContent()).toBe('+5 dB');
+    await page.getByRole('tab', { name: 'Mix & DJ' }).click();
+    await page.getByLabel('Crossfade seconds').waitFor();
     await page.getByRole('tab', { name: 'Lyrics' }).click();
     await page.getByText('No lyrics found for this track.').waitFor();
     if (shots) await page.screenshot({ path: `${shots}/player-lyrics.png` });

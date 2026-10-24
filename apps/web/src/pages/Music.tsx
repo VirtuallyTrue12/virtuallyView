@@ -28,14 +28,14 @@ export default function Music() {
 
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
-  const { playQueue } = useMusicPlayer();
+  const { shufflePlay } = useMusicPlayer();
   const [mixing, setMixing] = useState(false);
   const lib = useLibraryView(items, 'music');
   const shuffleLibrary = async () => {
     setMixing(true);
     try {
       const queue = await libraryMix(items);
-      if (queue.length) playQueue(queue, 0);
+      if (queue.length) shufflePlay(queue);
     } finally {
       setMixing(false);
     }
@@ -86,7 +86,7 @@ export default function Music() {
         </div>
         <div className="lib-actions">
           <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}><SvgIcon name="plus" size={17} /> Add artist</button>
-          <button type="button" className="btn btn-secondary" onClick={() => void shuffleLibrary()} disabled={mixing || items.length === 0}><SvgIcon name="shuffle" size={17} /> {mixing ? 'Mixing…' : 'Shuffle'}</button>
+          <button type="button" className="btn btn-secondary" onClick={() => void shuffleLibrary()} disabled={mixing || items.length === 0}><SvgIcon name="shuffle" size={17} /> {mixing ? 'Mixing…' : 'Shuffle all'}</button>
           <button type="button" className="btn btn-secondary" onClick={() => setCreatingOpen(true)}><SvgIcon name="queue" size={17} /> New playlist</button>
           <ImportExisting kind="artists" onImported={() => { api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />
           <ScanButton type="artist" />

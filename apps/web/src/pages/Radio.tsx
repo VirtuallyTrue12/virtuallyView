@@ -106,7 +106,12 @@ export default function Radio() {
         icon="radio"
         title="Radio"
         sub={view === 'browse' ? `Live stations from ${where}. Pick a country, a region or a style and press play.` : view === 'favorites' ? 'Stations you saved.' : 'Stations you listened to lately.'}
-        actions={<Seg<View> label="Radio view" value={view} onChange={setView} options={[{ value: 'browse', label: 'Browse' }, { value: 'favorites', label: 'Favorites', count: mine.favorites.length }, { value: 'recent', label: 'Recent' }]} />}
+        actions={<>
+          <button type="button" className="btn btn-secondary" disabled={!shown.length} onClick={() => { const pool = shown.filter(st => st.id !== radio.station?.id); const pick = pool[Math.floor(Math.random() * pool.length)]; if (pick) radio.play(pick); }} title="Tune to a random station from this list">
+            <SvgIcon name="shuffle" size={16} /> Surprise me
+          </button>
+          <Seg<View> label="Radio view" value={view} onChange={setView} options={[{ value: 'browse', label: 'Browse' }, { value: 'favorites', label: 'Favorites', count: mine.favorites.length }, { value: 'recent', label: 'Recent' }]} />
+        </>}
       />
 
       {view === 'browse' && (

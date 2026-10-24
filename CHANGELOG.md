@@ -2,6 +2,11 @@
 
 ## 0.4.0
 
+- **Added.** Music visualizer in Now Playing, in the spirit of the classic desktop media players: Bars and peaks, Ocean mist, Alchemy, Tunnel and Scope, or Cycle all. All original drawings, driven by what is actually playing. It has a full-view mode, and synced lyrics can sit on top as karaoke (the line fills as it is sung) or rolling lines.
+- **Added.** DJ mode and crossfade (Now Playing > Mix & DJ). The end of one track fades into the next with no gap. In DJ mode a voice introduces the next track over a dipped mix ("That was … Up next …"), using the browser's own voices, with a voice picker and a test button.
+- **Changed.** The equalizer was rebuilt. It now has ten bands (32 Hz to 16 kHz) plus a preamp, 17 presets, saving your own presets, a live response curve over the playing spectrum, balance, and "even out volume" (a gentle leveller). Double-click a band to reset it. Before, it had five bands and six presets.
+- **Changed.** Shuffle all on the Music page now shuffles the whole library (up to 40 artists, 25 tracks each) and never plays the same artist twice in a row when it can avoid it. Before, it took 6 artists × 6 tracks with a plain shuffle. The queue and position are kept for a day, so a reload or a closed tab picks up where you left off.
+- **Added.** Radio: a voice announces the station when you switch (the new station fades in under it; can be turned off), a sleep timer that fades out, and a Surprise me button that tunes a random station from the list.
 - **Fixed.** The top bar's links slid under the logo at some window widths (1280, 1100 and 900px): the number of links that fit was worked out before the right-hand buttons (activity, bell, account) had finished appearing, and never again, because only the bar's own width was watched. It is now worked out again whenever those buttons or the logo change size, using the real width of the More button. Checked at eleven widths from 390 to 1920px.
 - **Fixed.** The setup checklist stayed at "3 of 4 done" on a working install whose titles were added straight in Radarr, Sonarr or Lidarr (or imported from existing folders), because only requests made here counted. Any title in any library now counts.
 - **Changed.** Long titles on library tiles show in full on hover.

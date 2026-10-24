@@ -21,8 +21,18 @@ export async function artistMix(artist: Pick<MediaItem, 'id' | 'title' | 'artwor
 }
 
 /** A few tracks from each of several random artists, mixed together. */
-export async function libraryMix(artists: MediaItem[], artistCount = 6, perArtist = 6): Promise<QueueEntry[]> {
+/**
+ * A shuffle across the whole music library, like a streaming app's: up to 40 artists, 25 tracks each, fetched a few
+ * at a time so a big library does not flood the server. The caller spreads it so one artist never plays twice in a
+ * row (MusicProvider.shufflePlay).
+ */
+export async function libraryMix(artists: MediaItem[], artistCount = 40, perArtist = 25): Promise<QueueEntry[]> {
   const pool = shuffled(artists.filter(a => a.status === 'available' && /^lidarr-/.test(a.id))).slice(0, artistCount);
-  const parts = await Promise.all(pool.map(a => artistMix(a, perArtist).catch(() => [] as QueueEntry[])));
-  return shuffled(parts.flat());
+  const parts: QueueEntry[][] = [];
+  for (let i = 0; i < pool.length; i += 4) {
+    // (Not push(...await ...): the legacy-browser build cannot compile a spread of an await.)
+    const batch = await Promise.all(pool.slice(i, i + 4).map(a => artistMix(a, perArtist).catch(() => [] as QueueEntry[])));
+    for (const b of batch) parts.push(b);
+  }
+  return parts.flat();
 }

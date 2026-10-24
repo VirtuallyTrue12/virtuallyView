@@ -2,6 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { ReactNode } from 'react';
 import type { TrackItem } from '../../lib/api';
 import MusicPlayerUI from '../music/MusicPlayerUI';
+import { audioEngine, djLine, EQ_BANDS, EQ_PRESETS, speak } from '../../lib/audio-engine';
+
+export { EQ_BANDS, EQ_PRESETS };
 
 /**
  * One track in a play queue. Album/artist context is carried along so the
@@ -15,23 +18,7 @@ export interface QueueEntry {
   cover?: string;
 }
 
-/** Five-band equalizer. Shelves at the ends, parametric in the middle. */
-export const EQ_BANDS = [
-  { label: '60 Hz', freq: 60, type: 'lowshelf', q: 0.7 },
-  { label: '230 Hz', freq: 230, type: 'peaking', q: 0.8 },
-  { label: '910 Hz', freq: 910, type: 'peaking', q: 0.9 },
-  { label: '3.6 kHz', freq: 3600, type: 'peaking', q: 0.9 },
-  { label: '12 kHz', freq: 12000, type: 'highshelf', q: 0.7 }
-] as const;
-
-export const EQ_PRESETS: Record<string, { name: string; gains: number[] }> = {
-  flat: { name: 'Flat', gains: [0, 0, 0, 0, 0] },
-  bass: { name: 'Bass boost', gains: [7, 5, 2, 0, 0] },
-  treble: { name: 'Treble boost', gains: [0, 0, 2, 4, 6] },
-  rock: { name: 'Rock', gains: [5, 3, -1, 2, 4] },
-  pop: { name: 'Pop', gains: [-2, 2, 4, 2, -1] },
-  vocal: { name: 'Vocal', gains: [-1, -1, 2, 3, 4] }
-};
+export interface CustomPreset { name: string; gains: number[]; preamp: number }
 
 interface MusicContextValue {
   queue: QueueEntry[];
@@ -59,7 +46,20 @@ interface MusicContextValue {
   eqEnabled: boolean;
   eqPreset: string;
   eqBands: number[];
+  preamp: number;
+  balance: number;
+  leveller: boolean;
+  customPresets: CustomPreset[];
+  /** Seconds two tracks overlap when one ends (0 = straight cut). */
+  crossfade: number;
+  /** A voice says what is coming up between tracks. */
+  djMode: boolean;
+  djVoice: string;
+  /** The DJ is talking right now. */
+  djTalking: boolean;
   playQueue: (queue: QueueEntry[], startIndex?: number) => void;
+  /** Play these in a shuffled order that never puts the same artist twice in a row when it can avoid it. */
+  shufflePlay: (tracks: QueueEntry[]) => void;
   toggle: () => void;
   stopPlayback: () => void;
   nextTrack: () => void;
@@ -73,6 +73,14 @@ interface MusicContextValue {
   setEqEnabled: (enabled: boolean) => void;
   setEqPreset: (preset: string) => void;
   setEqBand: (index: number, gain: number) => void;
+  setPreamp: (db: number) => void;
+  setBalance: (pan: number) => void;
+  setLeveller: (on: boolean) => void;
+  saveCustomPreset: (name: string) => void;
+  deleteCustomPreset: (name: string) => void;
+  setCrossfade: (seconds: number) => void;
+  setDjMode: (on: boolean) => void;
+  setDjVoice: (name: string) => void;
 }
 
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -80,20 +88,15 @@ export type RepeatMode = 'off' | 'all' | 'one';
 const MusicContext = createContext<MusicContextValue | null>(null);
 
 function load(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
+  try { return localStorage.getItem(key); } catch { return null; }
 }
-
 function store(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // storage disabled (private mode): playback still works, EQ just resets
-  }
+  try { localStorage.setItem(key, value); } catch { /* storage disabled (private mode): settings just reset */ }
 }
+function loadJson<T>(key: string, ok: (v: unknown) => v is T, fallback: T): T {
+  try { const v = JSON.parse(load(key) ?? 'null') as unknown; return ok(v) ? v : fallback; } catch { return fallback; }
+}
+const isGains = (v: unknown): v is number[] => Array.isArray(v) && v.length === EQ_BANDS.length && v.every(n => Number.isFinite(n));
 
 export function useMusicPlayer(): MusicContextValue {
   const value = useContext(MusicContext);
@@ -101,16 +104,57 @@ export function useMusicPlayer(): MusicContextValue {
   return value;
 }
 
-interface EqGraph {
-  ctx: AudioContext;
-  source: MediaElementAudioSourceNode;
-  filters: BiquadFilterNode[];
+/**
+ * Shuffles with no artist twice in a row where possible (a plain shuffle of a big library clumps one prolific
+ * artist together). Pure so it can be tested.
+ */
+export function spreadShuffle<T extends { artistTitle?: string }>(items: T[], random = Math.random): T[] {
+  const groups = new Map<string, T[]>();
+  for (const it of items) {
+    const key = (it.artistTitle ?? '').toLowerCase();
+    groups.set(key, [...(groups.get(key) ?? []), it]);
+  }
+  for (const list of groups.values()) {
+    for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [list[i], list[j]] = [list[j]!, list[i]!]; }
+  }
+  const out: T[] = [];
+  let last = '\u0000';
+  while (out.length < items.length) {
+    // Weighted by how many each artist has left, so big ones are spread out instead of all landing at the end.
+    const options = [...groups.entries()].filter(([k, l]) => l.length && k !== last);
+    const pool = options.length ? options : [...groups.entries()].filter(([, l]) => l.length);
+    const total = pool.reduce((n, [, l]) => n + l.length, 0);
+    const left = items.length - out.length;
+    // An artist holding at least half of what is left must go now, or the end becomes that artist back to back.
+    const crowded = pool.find(([, l]) => l.length * 2 >= left);
+    let chosen = crowded ?? pool[0]!;
+    if (!crowded) {
+      let r = random() * total;
+      for (const g of pool) { r -= g[1].length; if (r <= 0) { chosen = g; break; } }
+    }
+    out.push(chosen[1].shift()!);
+    last = chosen[0];
+  }
+  return out;
 }
 
+const SESSION_KEY = 'vv-music-session';
+const SESSION_MS = 24 * 3600 * 1000;
+type SavedSession = { queue: QueueEntry[]; index: number; time: number; at: number; shuffle: boolean };
+const isSession = (v: unknown): v is SavedSession => !!v && typeof v === 'object' && Array.isArray((v as SavedSession).queue) && Number.isInteger((v as SavedSession).index);
+
 export function MusicProvider({ children }: { children: ReactNode }) {
+  // Two decks: the one playing, and the one the next track fades in on. `audioRef` always points at the live one.
+  const deckA = useRef<HTMLAudioElement | null>(null);
+  const deckB = useRef<HTMLAudioElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [queue, setQueue] = useState<QueueEntry[]>([]);
-  const [index, setIndex] = useState(0);
+  const restored = useRef<SavedSession | null>(null);
+  if (restored.current === null) {
+    const saved = loadJson<SavedSession | null>(SESSION_KEY, (v): v is SavedSession | null => v === null || isSession(v), null);
+    restored.current = saved && Date.now() - saved.at < SESSION_MS && saved.queue.length ? saved : { queue: [], index: 0, time: 0, at: 0, shuffle: false };
+  }
+  const [queue, setQueue] = useState<QueueEntry[]>(restored.current.queue);
+  const [index, setIndex] = useState(Math.min(restored.current.index, Math.max(0, restored.current.queue.length - 1)));
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -120,153 +164,114 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     return Number.isFinite(raw) && raw >= 0 && raw <= 1 ? raw : 1;
   });
   const [muted, setMuted] = useState(() => load('vv-music-muted') === '1');
-  const [shuffle, setShuffle] = useState(false);
+  const [shuffle, setShuffle] = useState(restored.current.shuffle);
   const [repeat, setRepeat] = useState<RepeatMode>('off');
   const [buffered, setBuffered] = useState(0);
   const [buffering, setBuffering] = useState(false);
   const [expanded, setExpandedState] = useState(false);
   const [eqEnabled, setEqEnabledState] = useState(() => load('vv-eq-enabled') === '1');
-  const [eqPreset, setEqPresetState] = useState(() => {
-    const raw = load('vv-eq-preset');
-    return raw && raw in EQ_PRESETS ? raw : 'flat';
-  });
-  const [eqBands, setEqBands] = useState<number[]>(() => {
-    const raw = load('vv-eq-bands');
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as number[];
-        if (Array.isArray(parsed) && parsed.length === EQ_BANDS.length && parsed.every(n => Number.isFinite(n))) {
-          return parsed;
-        }
-      } catch { /* fall through to default */ }
-    }
-    return [...(EQ_PRESETS.flat?.gains ?? [0, 0, 0, 0, 0])];
-  });
+  const [eqPreset, setEqPresetState] = useState(() => load('vv-eq10-preset') ?? 'flat');
+  const [eqBands, setEqBands] = useState<number[]>(() => loadJson('vv-eq10-bands', isGains, [...EQ_PRESETS.flat!.gains]));
+  const [preamp, setPreampState] = useState(() => Number(load('vv-eq-preamp') ?? 0) || 0);
+  const [balance, setBalanceState] = useState(() => Number(load('vv-eq-balance') ?? 0) || 0);
+  const [leveller, setLevellerState] = useState(() => load('vv-eq-leveller') === '1');
+  const [customPresets, setCustomPresets] = useState<CustomPreset[]>(() => loadJson('vv-eq-custom', (v): v is CustomPreset[] => Array.isArray(v), []));
+  const [crossfade, setCrossfadeState] = useState(() => Math.max(0, Math.min(12, Number(load('vv-crossfade') ?? 0) || 0)));
+  const [djMode, setDjModeState] = useState(() => load('vv-dj') === '1');
+  const [djVoice, setDjVoiceState] = useState(() => load('vv-dj-voice') ?? '');
+  const [djTalking, setDjTalking] = useState(false);
 
-  // Live refs for callbacks that must never close over stale state. This is
-  // the documented "latest ref" pattern, so updating during render is fine.
-  const indexRef = useRef(index);
-  indexRef.current = index;
-  const queueRef = useRef(queue);
-  queueRef.current = queue;
-  const shuffleRef = useRef(shuffle);
-  shuffleRef.current = shuffle;
-  const repeatRef = useRef(repeat);
-  repeatRef.current = repeat;
-  const eqEnabledRef = useRef(eqEnabled);
-  eqEnabledRef.current = eqEnabled;
-  const eqBandsRef = useRef(eqBands);
-  eqBandsRef.current = eqBands;
-  const eqGraph = useRef<EqGraph | null>(null);
+  // Live refs for callbacks that must never close over stale state (the documented "latest ref" pattern).
+  const indexRef = useRef(index); indexRef.current = index;
+  const queueRef = useRef(queue); queueRef.current = queue;
+  const shuffleRef = useRef(shuffle); shuffleRef.current = shuffle;
+  const repeatRef = useRef(repeat); repeatRef.current = repeat;
+  const crossfadeRef = useRef(crossfade); crossfadeRef.current = crossfade;
+  const djRef = useRef({ on: djMode, voice: djVoice }); djRef.current = { on: djMode, voice: djVoice };
   const shuffleOrder = useRef<number[]>([]);
   // True once a shuffled pass has been dealt: when it runs out, repeat decides between a new pass and stopping.
   const shuffleBuilt = useRef(false);
-  // The plain (non-transcoded) URL for whatever is loaded now, so onError and seek know what to fall
-  // back to or restart - the element's own .src is always the URL actually in play, which may already
-  // be the /transcode one.
+  // The plain (non-transcoded) URL for whatever is loaded now, so onError and seek know what to fall back to.
   const rawSrc = useRef('');
   // True while the person wants sound: a new track then starts by itself instead of waiting for another press.
   const wantPlay = useRef(false);
+  // A fade into the next track is under way: no second one, and the outgoing deck's events are ignored.
+  const mixing = useRef(false);
+  const resumeAt = useRef(restored.current.time);
 
-  /**
-   * Wire the existing graph for the current mode. Enabled routes the media
-   * element through the band filters; disabled routes straight to the
-   * destination so "off" always means the original sound.
-   */
-  const wireGraph = useCallback(() => {
-    const graph = eqGraph.current;
-    if (!graph) return;
-    const { ctx, source, filters } = graph;
-    try { source.disconnect(); } catch { /* nothing connected */ }
-    try { filters[filters.length - 1].disconnect(); } catch { /* nothing connected */ }
-    if (eqEnabledRef.current) {
-      filters.forEach((filter, i) => { filter.gain.value = eqBandsRef.current[i] ?? 0; });
-      source.connect(filters[0]);
-      for (let i = 1; i < filters.length; i++) filters[i - 1].connect(filters[i]);
-      filters[filters.length - 1].connect(ctx.destination);
-      void ctx.resume();
-    } else {
-      source.connect(ctx.destination);
-    }
+  const live = () => audioRef.current;
+  const isLive = (el: EventTarget) => el === audioRef.current;
+  const other = () => (audioRef.current === deckA.current ? deckB.current : deckA.current);
+
+  /** Connects both decks to the shared sound path. Only from a user's play (see audio-engine). */
+  const ensureGraph = useCallback(() => {
+    if (deckA.current && deckB.current && audioEngine.attach([deckA.current, deckB.current])) void audioEngine.resume();
   }, []);
 
-  /**
-   * Build the media-element graph exactly once. Must be called from a user
-   * gesture (play click or EQ toggle): an AudioContext created without one
-   * starts suspended and would silently swallow the audio until interaction.
-   */
-  const ensureGraph = useCallback(() => {
-    if (eqGraph.current) {
-      wireGraph();
-      return;
-    }
-    if (!eqEnabledRef.current) return;
-    const audio = audioRef.current;
-    if (!audio) return;
-    try {
-      const ctx = new AudioContext();
-      const source = ctx.createMediaElementSource(audio);
-      const filters = EQ_BANDS.map(def => {
-        const filter = ctx.createBiquadFilter();
-        filter.type = def.type as BiquadFilterType;
-        filter.frequency.value = def.freq;
-        filter.Q.value = def.q;
-        filter.gain.value = 0;
-        return filter;
-      });
-      eqGraph.current = { ctx, source, filters };
-      wireGraph();
-    } catch {
-      // Web Audio unavailable: playback simply continues without EQ.
-    }
-  }, [wireGraph]);
+  const urlFor = (e: QueueEntry) => `/api/music/stream/${e.track.id}`;
 
-  const kickGraph = useCallback(() => {
-    const graph = eqGraph.current;
-    if (graph && graph.ctx.state === 'suspended') void graph.ctx.resume();
+  const startOn = useCallback((el: HTMLAudioElement, e: QueueEntry, at = 0) => {
+    rawSrc.current = urlFor(e);
+    el.src = rawSrc.current;
+    if (at > 0) el.currentTime = at;
+    setCurrentTime(at);
+    setDuration(0);
+    if (wantPlay.current) void el.play().catch(() => setError('Could not start playback of this track.'));
   }, []);
 
   const playQueue = useCallback((nextQueue: QueueEntry[], startIndex = 0) => {
-    const audio = audioRef.current;
+    const audio = live();
     if (!audio) return;
     const target = nextQueue.length ? Math.max(0, Math.min(startIndex, nextQueue.length - 1)) : 0;
+    ensureGraph();
+    mixing.current = false;
+    other()?.pause();
+    audioEngine.level(audio, 1);
     setQueue(nextQueue);
     setIndex(target);
     shuffleOrder.current = []; shuffleBuilt.current = false;
     setError(null);
     if (nextQueue.length) {
       wantPlay.current = true;
-      rawSrc.current = `/api/music/stream/${nextQueue[target].track.id}`;
-      audio.src = rawSrc.current;
-      audio.currentTime = 0;
-      setCurrentTime(0);
-      setDuration(0);
-      void audio.play().catch(() => setError('Could not start playback of this track.'));
+      startOn(audio, nextQueue[target]!);
     }
-    kickGraph();
-  }, [kickGraph]);
+  }, [ensureGraph, startOn]);
+
+  const shufflePlay = useCallback((tracks: QueueEntry[]) => {
+    if (!tracks.length) return;
+    setShuffle(false);
+    shuffleRef.current = false;
+    playQueue(spreadShuffle(tracks), 0);
+  }, [playQueue]);
 
   const toggle = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio || !audio.src) return;
-    kickGraph();
-    wantPlay.current = audio.paused;
-    if (audio.paused) {
-      void audio.play().catch(() => setError('Could not play this track. Check that the file exists on the server.'));
-    } else {
-      audio.pause();
+    const audio = live();
+    if (!audio) return;
+    ensureGraph();
+    if (!audio.src && queueRef.current.length) {
+      // A restored session: load where it left off.
+      wantPlay.current = true;
+      startOn(audio, queueRef.current[indexRef.current]!, resumeAt.current);
+      resumeAt.current = 0;
+      return;
     }
-  }, [kickGraph]);
+    if (!audio.src) return;
+    wantPlay.current = audio.paused;
+    if (audio.paused) void audio.play().catch(() => setError('Could not play this track. Check that the file exists on the server.'));
+    else { audio.pause(); other()?.pause(); window.speechSynthesis?.cancel(); }
+  }, [ensureGraph, startOn]);
 
   // Close the player: stop audio, drop the queue, hide the bar.
   const stopPlayback = useCallback(() => {
-    const audio = audioRef.current;
-    if (audio) {
-      audio.pause();
-      audio.removeAttribute('src');
-      audio.load();
+    for (const el of [deckA.current, deckB.current]) {
+      if (!el) continue;
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
     }
+    try { window.speechSynthesis?.cancel(); } catch { /* none */ }
     rawSrc.current = '';
+    mixing.current = false;
     shuffleOrder.current = []; shuffleBuilt.current = false;
     wantPlay.current = false;
     setQueue([]);
@@ -277,59 +282,96 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setError(null);
     setBuffered(0);
     setExpandedState(false);
+    try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
   }, []);
 
-  const goNext = useCallback((auto: boolean) => {
+  /** Which row plays next, without using it up. Null when the queue would stop here. */
+  const peekNext = useCallback((auto: boolean): number | null => {
     const q = queueRef.current;
-    if (!q.length) return;
-    if (auto && repeatRef.current === 'one') {
-      const audio = audioRef.current;
-      if (audio) { audio.currentTime = 0; void audio.play().catch(() => undefined); }
-      return;
-    }
+    if (!q.length) return null;
+    if (auto && repeatRef.current === 'one') return indexRef.current;
     if (shuffleRef.current) {
       if (!shuffleOrder.current.length) {
-        if (auto && shuffleBuilt.current && repeatRef.current === 'off') {
-          // Every track of the shuffled pass has played: stop, as the unshuffled queue does.
-          shuffleBuilt.current = false;
-          wantPlay.current = false;
-          setPlaying(false);
-          return;
-        }
+        if (auto && shuffleBuilt.current && repeatRef.current === 'off') return null;
         const rest = q.map((_, i) => i).filter(i => i !== indexRef.current);
-        for (let i = rest.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [rest[i], rest[j]] = [rest[j], rest[i]];
-        }
+        for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j]!, rest[i]!]; }
         shuffleOrder.current = rest;
         shuffleBuilt.current = true;
       }
-      const nextIdx = shuffleOrder.current.shift();
-      if (nextIdx === undefined) {
-        setPlaying(false);
-        return;
-      }
-      setIndex(nextIdx);
-      return;
+      return shuffleOrder.current[0] ?? null;
     }
-    if (auto && indexRef.current >= q.length - 1 && repeatRef.current === 'off') {
-      // Queue finished and repeat is off: stop instead of looping forever.
+    if (auto && indexRef.current >= q.length - 1 && repeatRef.current === 'off') return null;
+    return (indexRef.current + 1) % q.length;
+  }, []);
+
+  const consume = (next: number) => { if (shuffleRef.current && shuffleOrder.current[0] === next) shuffleOrder.current.shift(); };
+
+  const goNext = useCallback((auto: boolean) => {
+    const next = peekNext(auto);
+    if (next === null) {
+      shuffleBuilt.current = false;
       wantPlay.current = false;
       setPlaying(false);
       return;
     }
-    setIndex((indexRef.current + 1) % q.length);
-  }, []);
+    if (auto && repeatRef.current === 'one') {
+      const audio = live();
+      if (audio) { audio.currentTime = 0; void audio.play().catch(() => undefined); }
+      return;
+    }
+    consume(next);
+    setIndex(next);
+  }, [peekNext]);
+
+  /**
+   * DJ mode and crossfade: start the next track on the other deck before this one ends, fade one out and the other
+   * in, and (in DJ mode) say what is coming up over a dipped mix. Without Web Audio it is an ordinary cut.
+   */
+  const mixIntoNext = useCallback(async () => {
+    const out = live();
+    const inc = other();
+    const fade = crossfadeRef.current || (djRef.current.on ? 6 : 0);
+    if (!out || !inc || mixing.current || !fade || !audioEngine.ready) return;
+    const next = peekNext(true);
+    if (next === null || next === indexRef.current) return;
+    const q = queueRef.current;
+    const from = q[indexRef.current];
+    const to = q[next];
+    if (!to) return;
+    mixing.current = true;
+    consume(next);
+    audioEngine.level(inc, 0);
+    rawSrc.current = urlFor(to);
+    inc.src = rawSrc.current;
+    audioRef.current = inc;
+    setIndex(next);
+    setCurrentTime(0);
+    if (djRef.current.on) {
+      // Dip the outgoing track under the voice, start the new one quietly, then bring it up after the line.
+      audioEngine.fade(out, 0.25, 1.2);
+      setDjTalking(true);
+      const line = djLine(from ? { title: from.track.title, artist: from.artistTitle } : null, { title: to.track.title, artist: to.artistTitle });
+      await speak(line, djRef.current.voice);
+      setDjTalking(false);
+      void inc.play().catch(() => undefined);
+      audioEngine.fade(inc, 1, fade / 2);
+      audioEngine.fade(out, 0, fade / 2);
+    } else {
+      void inc.play().catch(() => undefined);
+      audioEngine.fade(inc, 1, fade);
+      audioEngine.fade(out, 0, fade);
+    }
+    window.setTimeout(() => {
+      if (audioRef.current !== out) { out.pause(); out.removeAttribute('src'); out.load(); }
+      mixing.current = false;
+    }, (fade + 0.5) * 1000);
+  }, [peekNext]);
 
   const nextTrack = useCallback(() => goNext(false), [goNext]);
 
   const prevTrack = useCallback(() => {
-    const audio = audioRef.current;
-    if (audio && audio.currentTime > 4) {
-      audio.currentTime = 0;
-      setCurrentTime(0);
-      return;
-    }
+    const audio = live();
+    if (audio && audio.currentTime > 4) { audio.currentTime = 0; setCurrentTime(0); return; }
     const q = queueRef.current;
     if (!q.length) return;
     setIndex((indexRef.current - 1 + q.length) % q.length);
@@ -341,10 +383,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const seek = useCallback((seconds: number) => {
-    const audio = audioRef.current;
+    const audio = live();
     if (!audio || !Number.isFinite(seconds)) return;
-    // A transcode is a live, growing stream (same reason the video player restarts on seek): there is
-    // nothing buffered to jump to, so ask ffmpeg to start over from the new position instead.
+    // A transcode is a live, growing stream: there is nothing buffered to jump to, so ffmpeg starts over there.
     if (rawSrc.current && audio.src.includes('/transcode')) {
       const wasPlaying = !audio.paused;
       audio.src = `${rawSrc.current}/transcode?start=${Math.max(0, Math.floor(seconds))}`;
@@ -359,29 +400,19 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const setVolume = useCallback((v: number) => {
     const clamped = Math.max(0, Math.min(1, v));
     setVolumeState(clamped);
-    const audio = audioRef.current;
-    if (audio) audio.volume = clamped;
     if (clamped > 0 && muted) setMuted(false);
   }, [muted]);
 
-  const toggleMute = useCallback(() => {
-    setMuted(prev => {
-      const next = !prev;
-      const audio = audioRef.current;
-      if (audio) audio.muted = next;
-      return next;
-    });
-  }, []);
+  const toggleMute = useCallback(() => setMuted(prev => !prev), []);
 
   const toggleShuffle = useCallback(() => {
     setShuffle(prev => {
-      if (!prev) shuffleOrder.current = []; shuffleBuilt.current = false;
+      shuffleOrder.current = []; shuffleBuilt.current = false;
       return !prev;
     });
   }, []);
 
   const toggleRepeat = useCallback(() => setRepeat(prev => (prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off')), []);
-
   const setExpanded = useCallback((open: boolean) => setExpandedState(open), []);
   const getTime = useCallback(() => audioRef.current?.currentTime ?? 0, []);
 
@@ -405,42 +436,42 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setQueue(q.slice(0, current + 1));
   }, []);
 
-  const setEqEnabled = useCallback((enabled: boolean) => {
-    eqEnabledRef.current = enabled;
-    setEqEnabledState(enabled);
-    if (enabled) ensureGraph();
-    else wireGraph();
-  }, [ensureGraph, wireGraph]);
-
+  const setEqEnabled = useCallback((enabled: boolean) => { setEqEnabledState(enabled); if (enabled) ensureGraph(); }, [ensureGraph]);
   const setEqPreset = useCallback((preset: string) => {
-    const target = preset in EQ_PRESETS ? preset : 'flat';
-    setEqPresetState(target);
-    setEqBands([...(EQ_PRESETS[target]?.gains ?? [0, 0, 0, 0, 0])]);
-  }, []);
-
+    const builtIn = EQ_PRESETS[preset];
+    const custom = customPresets.find(p => `custom:${p.name}` === preset);
+    if (!builtIn && !custom) return;
+    setEqPresetState(preset);
+    setEqBands([...(builtIn?.gains ?? custom!.gains)]);
+    if (custom) setPreampState(custom.preamp);
+  }, [customPresets]);
   const setEqBand = useCallback((i: number, gain: number) => {
     setEqBands(prev => prev.map((g, idx) => (idx === i ? Math.max(-12, Math.min(12, gain)) : g)));
     setEqPresetState('custom');
   }, []);
+  const setPreamp = useCallback((db: number) => setPreampState(Math.max(-12, Math.min(12, db))), []);
+  const setBalance = useCallback((pan: number) => setBalanceState(Math.max(-1, Math.min(1, pan))), []);
+  const setLeveller = useCallback((on: boolean) => setLevellerState(on), []);
+  const saveCustomPreset = useCallback((name: string) => {
+    const clean = name.trim().slice(0, 30);
+    if (!clean) return;
+    setCustomPresets(prev => [...prev.filter(p => p.name !== clean), { name: clean, gains: [...eqBands], preamp }]);
+    setEqPresetState(`custom:${clean}`);
+  }, [eqBands, preamp]);
+  const deleteCustomPreset = useCallback((name: string) => setCustomPresets(prev => prev.filter(p => p.name !== name)), []);
+  const setCrossfade = useCallback((s: number) => setCrossfadeState(Math.max(0, Math.min(12, Math.round(s)))), []);
+  const setDjMode = useCallback((on: boolean) => { setDjModeState(on); if (on) ensureGraph(); }, [ensureGraph]);
+  const setDjVoice = useCallback((name: string) => setDjVoiceState(name), []);
 
-  // Keep the audio element's volume/mute in sync with state changes.
+  // Volume and mute apply to both decks (the fades live in the audio graph, not on the element).
   useEffect(() => {
-    const audio = audioRef.current;
-    if (audio) {
-      audio.volume = volume;
-      audio.muted = muted;
-    }
+    for (const el of [deckA.current, deckB.current]) { if (el) { el.volume = volume; el.muted = muted; } }
   }, [volume, muted]);
 
-  // Re-wire an existing graph when the mode or band gains change. The graph
-  // itself is only built from a user gesture (see ensureGraph), so a persisted
-  // "EQ on" cannot mute playback before the user interacts.
-  useEffect(() => {
-    wireGraph();
-  }, [wireGraph, eqEnabled, eqBands]);
+  useEffect(() => { audioEngine.setEq({ enabled: eqEnabled, gains: eqBands, preamp, balance, leveller }); }, [eqEnabled, eqBands, preamp, balance, leveller]);
 
-  // First play of any kind is a gesture: build the graph now if EQ is on.
-  const handlePlay = useCallback(() => {
+  const handlePlay = useCallback((e: React.SyntheticEvent<HTMLAudioElement>) => {
+    if (!isLive(e.currentTarget)) return;
     wantPlay.current = true;
     ensureGraph();
     setPlaying(true);
@@ -449,35 +480,46 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   useEffect(() => store('vv-music-volume', String(volume)), [volume]);
   useEffect(() => store('vv-music-muted', muted ? '1' : '0'), [muted]);
   useEffect(() => store('vv-eq-enabled', eqEnabled ? '1' : '0'), [eqEnabled]);
-  useEffect(() => store('vv-eq-preset', eqPreset), [eqPreset]);
-  useEffect(() => store('vv-eq-bands', JSON.stringify(eqBands)), [eqBands]);
+  useEffect(() => store('vv-eq10-preset', eqPreset), [eqPreset]);
+  useEffect(() => store('vv-eq10-bands', JSON.stringify(eqBands)), [eqBands]);
+  useEffect(() => store('vv-eq-preamp', String(preamp)), [preamp]);
+  useEffect(() => store('vv-eq-balance', String(balance)), [balance]);
+  useEffect(() => store('vv-eq-leveller', leveller ? '1' : '0'), [leveller]);
+  useEffect(() => store('vv-eq-custom', JSON.stringify(customPresets)), [customPresets]);
+  useEffect(() => store('vv-crossfade', String(crossfade)), [crossfade]);
+  useEffect(() => store('vv-dj', djMode ? '1' : '0'), [djMode]);
+  useEffect(() => store('vv-dj-voice', djVoice), [djVoice]);
 
-  // Reserve room for the floating music bar when a queue is active, so the
-  // fixed bar never covers page footer content.
+  // The queue and position survive a reload for a day (like a streaming app), then are forgotten.
   useEffect(() => {
-    const hasBar = queue.length > 0;
-    document.body.classList.toggle('has-music-bar', hasBar);
+    if (!queue.length) return;
+    const save = () => store(SESSION_KEY, JSON.stringify({ queue: queue.slice(0, 2000), index, time: Math.floor(audioRef.current?.currentTime ?? 0), at: Date.now(), shuffle } satisfies SavedSession));
+    save();
+    const id = window.setInterval(save, 10000);
+    window.addEventListener('pagehide', save);
+    return () => { window.clearInterval(id); window.removeEventListener('pagehide', save); };
+  }, [queue, index, shuffle]);
+
+  // Reserve room for the floating music bar when a queue is active.
+  useEffect(() => {
+    document.body.classList.toggle('has-music-bar', queue.length > 0);
     return () => document.body.classList.remove('has-music-bar');
   }, [queue.length]);
 
-  // Move the element onto the current track whenever the queue row changes.
+  // Move the live deck onto the current track whenever the queue row changes (a fade already did it).
   useEffect(() => {
-    const audio = audioRef.current;
+    const audio = live();
     if (!audio || !queue.length) return;
-    const current = queue[Math.min(index, queue.length - 1)] ?? queue[0];
-    const expected = `/api/music/stream/${current.track.id}`;
-    // Compare against the last URL we actually chose, not audio.src itself: once a track has fallen
-    // back to /transcode (or a seek added ?start=), audio.src no longer equals the plain URL even
-    // though it is still the right track, and a substring check here matched the wrong track whenever
-    // one id was a prefix of another's (e.g. "5" inside "57").
-    if (rawSrc.current !== expected) {
-      rawSrc.current = expected;
-      audio.src = expected;
-      if (wantPlay.current) void audio.play().catch(() => undefined);
-    }
-  }, [index, queue]);
+    const current = queue[Math.min(index, queue.length - 1)] ?? queue[0]!;
+    const expected = urlFor(current);
+    if (rawSrc.current === expected) return;
+    if (!wantPlay.current && !audio.src) return; // a restored session waits for play
+    other()?.pause();
+    audioEngine.level(audio, 1);
+    startOn(audio, current);
+  }, [index, queue, startOn]);
 
-  const entry = queue.length ? queue[Math.min(index, queue.length - 1)] ?? queue[0] : null;
+  const entry = queue.length ? queue[Math.min(index, queue.length - 1)] ?? queue[0]! : null;
 
   // Keyboard media keys, headphone buttons and the lock screen show and control what is playing.
   useEffect(() => {
@@ -495,14 +537,13 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     const session = navigator.mediaSession;
-    const audio = () => audioRef.current;
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
-      ['play', () => { wantPlay.current = true; void audio()?.play().catch(() => undefined); }],
-      ['pause', () => { wantPlay.current = false; audio()?.pause(); }],
+      ['play', () => { wantPlay.current = true; void live()?.play().catch(() => undefined); }],
+      ['pause', () => { wantPlay.current = false; live()?.pause(); }],
       ['previoustrack', () => prevTrack()],
       ['nexttrack', () => nextTrack()],
-      ['seekbackward', d => seek(Math.max(0, (audio()?.currentTime ?? 0) - (d.seekOffset ?? 10)))],
-      ['seekforward', d => seek((audio()?.currentTime ?? 0) + (d.seekOffset ?? 10))],
+      ['seekbackward', d => seek(Math.max(0, (live()?.currentTime ?? 0) - (d.seekOffset ?? 10)))],
+      ['seekforward', d => seek((live()?.currentTime ?? 0) + (d.seekOffset ?? 10))],
       ['seekto', d => { if (typeof d.seekTime === 'number') seek(d.seekTime); }],
       ['stop', () => stopPlayback()]
     ];
@@ -516,74 +557,54 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [playing, queue.length]);
 
   const value: MusicContextValue = {
-    queue,
-    index,
-    entry,
-    playing,
-    currentTime,
-    duration,
-    error,
-    volume,
-    muted,
-    shuffle,
-    repeat,
-    buffered,
-    buffering,
-    expanded,
-    setExpanded,
-    getTime,
-    removeFromQueue,
-    clearUpcoming,
-    eqEnabled,
-    eqPreset,
-    eqBands,
-    playQueue,
-    toggle,
-    stopPlayback,
-    nextTrack,
-    prevTrack,
-    skipTo,
-    seek,
-    setVolume,
-    toggleMute,
-    toggleShuffle,
-    toggleRepeat,
-    setEqEnabled,
-    setEqPreset,
-    setEqBand
+    queue, index, entry, playing, currentTime, duration, error, volume, muted, shuffle, repeat, buffered, buffering,
+    expanded, setExpanded, getTime, removeFromQueue, clearUpcoming, eqEnabled, eqPreset, eqBands, preamp, balance,
+    leveller, customPresets, crossfade, djMode, djVoice, djTalking, playQueue, shufflePlay, toggle, stopPlayback,
+    nextTrack, prevTrack, skipTo, seek, setVolume, toggleMute, toggleShuffle, toggleRepeat, setEqEnabled, setEqPreset,
+    setEqBand, setPreamp, setBalance, setLeveller, saveCustomPreset, deleteCustomPreset, setCrossfade, setDjMode, setDjVoice
+  };
+
+  const deckProps = {
+    preload: 'metadata' as const,
+    onPlay: handlePlay,
+    onPlaying: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget)) setBuffering(false); },
+    onWaiting: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget)) setBuffering(true); },
+    onProgress: (e: React.SyntheticEvent<HTMLAudioElement>) => {
+      const a = e.currentTarget;
+      if (!isLive(a)) return;
+      setBuffered(a.buffered.length ? a.buffered.end(a.buffered.length - 1) : 0);
+    },
+    onPause: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget) && !mixing.current) setPlaying(false); },
+    onTimeUpdate: (e: React.SyntheticEvent<HTMLAudioElement>) => {
+      const a = e.currentTarget;
+      if (!isLive(a)) return;
+      setCurrentTime(a.currentTime);
+      const fade = crossfadeRef.current || (djRef.current.on ? 6 : 0);
+      if (fade && !mixing.current && Number.isFinite(a.duration) && a.duration > fade * 2 && a.duration - a.currentTime <= fade + (djRef.current.on ? 3 : 0)) {
+        void mixIntoNext();
+      }
+    },
+    onDurationChange: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget)) setDuration(e.currentTarget.duration); },
+    onEnded: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget) && !mixing.current) goNext(true); },
+    onError: (e: React.SyntheticEvent<HTMLAudioElement>) => {
+      const audio = e.currentTarget;
+      if (!isLive(audio)) return;
+      // A plain <audio> element plays a narrower set of formats than a library holds (WMA, ALAC, APE): the
+      // first time, fall back to the server's ffmpeg conversion instead of giving up.
+      if (rawSrc.current && audio.src && !audio.src.includes('/transcode')) {
+        audio.src = `${rawSrc.current}/transcode`;
+        void audio.play().catch(() => setError('This track could not be loaded. The file may be missing or unsupported.'));
+        return;
+      }
+      if (audio.src) setError('This track could not be loaded. The file may be missing or unsupported.');
+    }
   };
 
   return (
     <MusicContext.Provider value={value}>
       {children}
-      <audio
-        ref={audioRef}
-        preload="metadata"
-        onPlay={handlePlay}
-        onPlaying={() => setBuffering(false)}
-        onWaiting={() => setBuffering(true)}
-        onProgress={e => {
-          const a = e.target as HTMLAudioElement;
-          const last = a.buffered.length ? a.buffered.end(a.buffered.length - 1) : 0;
-          setBuffered(last);
-        }}
-        onPause={() => setPlaying(false)}
-        onTimeUpdate={e => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
-        onDurationChange={e => setDuration((e.target as HTMLAudioElement).duration)}
-        onEnded={() => goNext(true)}
-        onError={() => {
-          const audio = audioRef.current;
-          // The format a plain <audio> element can play is narrower than what the library actually
-          // holds (WMA, ALAC, APE rips all fail here); the first time that happens, fall back to the
-          // same server-side ffmpeg conversion the video player uses instead of just giving up.
-          if (audio && rawSrc.current && !audio.src.includes('/transcode')) {
-            audio.src = `${rawSrc.current}/transcode`;
-            void audio.play().catch(() => setError('This track could not be loaded. The file may be missing or unsupported.'));
-            return;
-          }
-          setError('This track could not be loaded. The file may be missing or unsupported.');
-        }}
-      />
+      <audio ref={el => { deckA.current = el; if (!audioRef.current) audioRef.current = el; }} {...deckProps} />
+      <audio ref={el => { deckB.current = el; }} {...deckProps} />
       {queue.length > 0 && <MusicPlayerUI />}
     </MusicContext.Provider>
   );

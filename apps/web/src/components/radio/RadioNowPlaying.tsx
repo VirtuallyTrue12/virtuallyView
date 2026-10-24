@@ -58,7 +58,8 @@ function useStationTint(hasLogo: boolean, src: string | undefined, fallbackHue: 
 /** The radio's own full-screen Now Playing, the same idea as the music player's: big art, a live pill instead of
  * a seek bar (there is nothing to seek), and what the station itself says is playing. */
 export function RadioNowPlaying() {
-  const { station, state, error, nowTitle, expanded, setExpanded, volume, setVolume, toggle, stop } = useRadio();
+  const { station, state, error, nowTitle, expanded, setExpanded, volume, setVolume, toggle, stop, announce, setAnnounce, sleepAt, setSleep } = useRadio();
+  const sleepLeft = sleepAt ? Math.max(1, Math.round((sleepAt - Date.now()) / 60000)) : 0;
   const tint = useStationTint(!!station?.logo, station ? `/api/radio/logo/${station.id}` : undefined, station ? hue(station.name) : 0);
   const sheetRef = useRef<HTMLDivElement>(null);
   const returnTo = useRef<Element | null>(null);
@@ -117,6 +118,14 @@ export function RadioNowPlaying() {
               <button type="button" className="mp-icon" onClick={() => setVolume(volume === 0 ? 1 : 0)} aria-label={volume === 0 ? 'Unmute radio' : 'Mute radio'}><SvgIcon name={volume === 0 ? 'volume-mute' : volume < 0.5 ? 'volume-low' : 'volume-high'} size={18} /></button>
               <input className="mp-range" type="range" min={0} max={1} step={0.02} value={volume} style={{ ['--v' as string]: volume }} onChange={e => setVolume(Number(e.target.value))} aria-label="Radio volume" />
             </label>
+            <div className="np-viz-bar rnp-extras">
+              <button type="button" className={`np-chip${announce ? ' is-on' : ''}`} onClick={() => setAnnounce(!announce)} aria-pressed={announce}>{announce ? 'Voice announcements on' : 'Voice announcements off'}</button>
+              <select className="np-chip" value={sleepAt ? 'on' : ''} onChange={e => setSleep(e.target.value ? Number(e.target.value) : null)} aria-label="Sleep timer">
+                <option value="">{sleepAt ? `Sleep in ${sleepLeft} min (cancel)` : 'Sleep timer'}</option>
+                {sleepAt && <option value="on" disabled>{`Stops in ${sleepLeft} min`}</option>}
+                {[15, 30, 45, 60, 90].map(m => <option key={m} value={m}>{m} minutes</option>)}
+              </select>
+            </div>
             {station.homepage && <a className="mp-link rnp-home" href={station.homepage} target="_blank" rel="noreferrer">Visit the station's site</a>}
           </div>
         </div>
