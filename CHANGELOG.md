@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Changed.** The command palette (Ctrl+K, ⌘K or /) now reaches every page without a reload, controls what is playing (pause, next, DJ mode, stop radio), searches the library for whatever you type, and opens the AI assistant (that entry did nothing before).
 - **Added.** Music visualizer in Now Playing, in the spirit of the classic desktop media players: Bars and peaks, Ocean mist, Alchemy, Tunnel and Scope, or Cycle all. All original drawings, driven by what is actually playing. It has a full-view mode, and synced lyrics can sit on top as karaoke (the line fills as it is sung) or rolling lines.
 - **Added.** DJ mode and crossfade (Now Playing > Mix & DJ). The end of one track fades into the next with no gap. In DJ mode a voice introduces the next track over a dipped mix ("That was … Up next …"), using the browser's own voices, with a voice picker and a test button.
 - **Changed.** The equalizer was rebuilt. It now has ten bands (32 Hz to 16 kHz) plus a preamp, 17 presets, saving your own presets, a live response curve over the playing spectrum, balance, and "even out volume" (a gentle leveller). Double-click a band to reset it. Before, it had five bands and six presets.

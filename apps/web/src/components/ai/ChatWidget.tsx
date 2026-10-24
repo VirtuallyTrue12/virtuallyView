@@ -44,6 +44,8 @@ export default function ChatWidget() {
   const tucked = useScrollingDown();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  // The command palette's "Ask the AI assistant".
+  useEffect(() => { const show = () => setOpen(true); window.addEventListener('open-chat', show); return () => window.removeEventListener('open-chat', show); }, []);
   const [health, setHealth] = useState<AiHealth | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');

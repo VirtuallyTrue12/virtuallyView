@@ -179,7 +179,6 @@ export default function App() {
         <Route path="/wiki" element={<Wiki />} />
         <Route path="/apps" element={<HomeLabApps />} />
         <Route path="/party/:code" element={<PartyJoin />} />
-        <Route path="/music" element={<Music />} />
         <Route path="/music/:id" element={<ArtistDetails />} />
         <Route path="/music/:id/watch/:videoId" element={<ConcertPlayer />} />
         <Route path="/albums/:id" element={<AlbumDetails />} />

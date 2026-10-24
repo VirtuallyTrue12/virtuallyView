@@ -5981,3 +5981,7 @@ select.np-chip { padding-right: 0.5rem; }
 .mix-help { margin: 0; font-size: 0.8rem; color: var(--color-text-muted); }
 .mix-voice { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 @media (max-width: 560px) { .eq2-bands { grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 1px; } .eq2-band input[type=range] { height: 110px; } .eq2-gain { font-size: 0.6rem; } }
+.command-palette-list { max-height: min(60vh, 440px); overflow-y: auto; }
+.command-palette-row .command-palette-icon { min-width: 64px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.55; }
+.command-palette-foot { margin: 8px 4px 0; font-size: 0.75rem; opacity: 0.6; }
+.command-palette-foot kbd { padding: 1px 5px; margin: 0 2px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.18); font-family: inherit; }
