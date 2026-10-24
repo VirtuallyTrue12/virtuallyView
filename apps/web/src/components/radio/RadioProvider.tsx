@@ -30,6 +30,12 @@ interface RadioContextValue {
 }
 
 const RadioContext = createContext<RadioContextValue | null>(null);
+/** Station lists use official names; say what a person would. */
+function spokenCountry(name: string): string {
+  const short: Record<string, string> = { 'the united kingdom of great britain and northern ireland': 'the UK', 'the united states of america': 'the US', 'united states': 'the US', 'the russian federation': 'Russia', 'the netherlands': 'the Netherlands', 'republic of korea': 'South Korea', 'the islamic republic of iran': 'Iran' };
+  return short[name.toLowerCase()] ?? name;
+}
+
 export function useRadio(): RadioContextValue {
   const value = useContext(RadioContext);
   if (!value) throw new Error('useRadio must be used inside RadioProvider.');
@@ -83,7 +89,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     if (announceRef.current && el) {
       // Like a real dial: the new station comes in low under a short announcement, then up to full volume.
       el.volume = volumeRef.current * 0.2;
-      const extra = [s.tags[0], s.country ? `from ${s.country}` : ''].filter(Boolean).join(' ');
+      const extra = [s.tags[0], s.country ? `from ${spokenCountry(s.country)}` : ''].filter(Boolean).join(' ');
       void speak(radioLine(s.name, extra)).then(() => {
         const target = volumeRef.current;
         let v = el.volume;
