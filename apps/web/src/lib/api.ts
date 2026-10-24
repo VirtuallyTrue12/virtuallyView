@@ -118,6 +118,8 @@ export interface FixJob { id: string; startedAt: string; finishedAt?: string; st
 export interface RadioStation {
   id: string; name: string; country: string; countryCode: string; state?: string; language?: string; tags: string[];
   codec?: string; bitrate?: number; homepage?: string; votes: number; logo: boolean; hls?: boolean;
+  /** "live": a broadcaster's on-air stream; "playlist": a fan-made automatic playlist. */
+  kind?: 'live' | 'playlist';
 }
 export interface RadioPlace { name: string; code: string; stations: number }
 

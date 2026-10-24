@@ -13,6 +13,7 @@ import { SvgIcon } from '../components/ui/SvgIcon';
 import { LibraryControls, useLibraryView } from '../components/media/LibraryControls';
 import { useMusicPlayer } from '../components/media/MusicProvider';
 import { libraryMix } from '../lib/instant-mix';
+import MusicHero from '../components/music/MusicHero';
 
 export default function Music() {
   const navigate = useNavigate();
@@ -93,6 +94,8 @@ export default function Music() {
           <OpenMediaFolder kind="music" />
         </div>
       </header>
+
+      <MusicHero />
 
       <Dialog open={adding} onClose={() => setAdding(false)} title="Add an artist">
         <AddArtist bare onAdded={() => { setAdding(false); api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />

@@ -557,7 +557,7 @@ describe('music player', () => {
     await page.getByRole('tab', { name: 'Equalizer' }).click();
     await page.waitForSelector('.eq2');
     expect(await page.locator('.eq2-band').count()).toBe(11); // preamp + ten bands
-    await page.selectOption('select[aria-label="Preset"]', 'rock');
+    await page.getByRole('radio', { name: 'Rock' }).click();
     expect(await page.locator('.eq2-band').nth(1).locator('.eq2-gain').textContent()).toBe('+5 dB');
     await page.getByRole('tab', { name: 'Mix & DJ' }).click();
     await page.getByLabel('Crossfade seconds').waitFor();

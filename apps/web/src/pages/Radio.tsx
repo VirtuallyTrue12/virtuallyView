@@ -24,7 +24,7 @@ function StationCard({ station, playing, favorite, onPlay, onFavorite }: { stati
       <button type="button" className="rs-main" onClick={onPlay} aria-label={`${playing ? 'Playing' : 'Play'} ${station.name}`} aria-current={playing || undefined}>
         <StationLogo station={station} />
         <span className="rs-text">
-          <strong>{station.name}</strong>
+          <strong>{station.name}{station.kind === 'live' && <span className="rs-kind rs-kind--live" title="The broadcaster's own on-air stream">Live</span>}{station.kind === 'playlist' && <span className="rs-kind" title="A fan-made automatic playlist, not a live broadcast">Playlist</span>}</strong>
           <span>{detail}{meta ? ` · ${meta}` : ''}</span>
           {station.tags.length > 0 && <span className="rs-tags">{station.tags.join(' · ')}</span>}
         </span>
@@ -46,6 +46,9 @@ export default function Radio() {
   const [regions, setRegions] = useState<RadioPlace[]>([]);
   const [tags, setTags] = useState<Array<{ name: string; stations: number }>>([]);
   const [tag, setTag] = useState('');
+  // Fan-made playlists sound pre-recorded (no hosts, no news): hidden unless asked for.
+  const [liveOnly, setLiveOnly] = useState(() => { try { return localStorage.getItem('vv-radio-live-only') !== '0'; } catch { return true; } });
+  useEffect(() => { try { localStorage.setItem('vv-radio-live-only', liveOnly ? '1' : '0'); } catch { /* fine */ } }, [liveOnly]);
   const [query, setQuery] = useState('');
   const [typed, setTyped] = useState('');
   const [stations, setStations] = useState<RadioStation[]>([]);
@@ -96,7 +99,9 @@ export default function Radio() {
     try { await api.radioFavorite(s.id, next); } catch { loadMine(); }
   };
 
-  const shown = view === 'browse' ? stations : view === 'favorites' ? mine.favorites : mine.recent;
+  const listed = view === 'browse' ? stations : view === 'favorites' ? mine.favorites : mine.recent;
+  const hiddenPlaylists = view === 'browse' && liveOnly ? listed.filter(s => s.kind === 'playlist').length : 0;
+  const shown = hiddenPlaylists ? listed.filter(s => s.kind !== 'playlist') : listed;
   const countryName = countries.find(c => c.code === place.country)?.name ?? '';
   const where = place.country ? `${place.region ? `${place.region}, ` : ''}${countryName || place.country}` : 'the whole world';
 
@@ -134,6 +139,10 @@ export default function Radio() {
                 </select>
               </label>
             )}
+            <button type="button" role="switch" aria-checked={liveOnly} className={`toggle rd-live${liveOnly ? ' is-on' : ''}`} onClick={() => setLiveOnly(v => !v)} title="Hide fan-made automatic playlists that sound pre-recorded">
+              <span className="toggle-knob" aria-hidden="true" />
+              <span>Real broadcasts only{hiddenPlaylists > 0 && <small>{hiddenPlaylists} fan playlists hidden</small>}</span>
+            </button>
             <label className="rd-field rd-search">
               <span>Search</span>
               <input type="search" value={typed} onChange={e => setTyped(e.target.value)} placeholder="Station name" aria-label="Search stations by name" />

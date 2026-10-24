@@ -36,6 +36,7 @@ import settingsOverviewRoutes from './routes/settings-overview.js';
 import importExistingRoutes from './routes/import-existing.js';
 import { recordChange } from './services/settings-history.js';
 import lyricsRoutes from './routes/lyrics.js';
+import ttsRoutes from './routes/tts.js';
 import subtitleRoutes from './routes/subtitles.js';
 import watchPartyRoutes from './routes/watch-party.js';
 import peopleRoutes from './routes/people.js';
@@ -474,6 +475,7 @@ const start = async () => {
   await server.register(serverSettingsRoutes);
   await server.register(musicRoutes);
   await server.register(lyricsRoutes);
+  await server.register(ttsRoutes);
   await server.register(subtitleRoutes);
   await server.register(watchPartyRoutes);
   await server.register(peopleRoutes);

@@ -1,0 +1,101 @@
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { api, type Lyrics } from './api';
+
+/**
+ * Visualizer settings shared by every place that shows one (the bottom bar, the Music page, Now Playing and the
+ * full-screen stage), so a choice made in one shows in all of them.
+ */
+export type SceneId = 'bars' | 'mist' | 'alchemy' | 'tunnel' | 'scope' | 'cycle';
+export type LyricStyle = 'off' | 'karaoke' | 'roll';
+export type VizState = {
+  scene: SceneId;
+  lyricStyle: LyricStyle;
+  /** Full-screen visualizer after a minute without input while music plays. */
+  screensaver: boolean;
+  /** Show the visualizer in place of the cover in Now Playing. */
+  inPlayer: boolean;
+  /** The full-screen stage: closed, opened by the person, or opened by the screensaver. */
+  stage: 'closed' | 'open' | 'auto';
+};
+
+const KEY = 'vv-viz';
+const SCENE_IDS: SceneId[] = ['bars', 'mist', 'alchemy', 'tunnel', 'scope', 'cycle'];
+const read = (): VizState => {
+  const base: VizState = { scene: 'bars', lyricStyle: 'karaoke', screensaver: true, inPlayer: true, stage: 'closed' };
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<VizState>;
+    return {
+      ...base,
+      scene: SCENE_IDS.includes(saved.scene as SceneId) ? saved.scene! : base.scene,
+      lyricStyle: (['off', 'karaoke', 'roll'] as const).includes(saved.lyricStyle as LyricStyle) ? saved.lyricStyle! : base.lyricStyle,
+      screensaver: saved.screensaver ?? base.screensaver,
+      inPlayer: saved.inPlayer ?? base.inPlayer
+    };
+  } catch { return base; }
+};
+
+let state = read();
+const listeners = new Set<() => void>();
+
+export function setViz(next: Partial<VizState>): void {
+  state = { ...state, ...next };
+  try {
+    const { stage: _stage, ...keep } = state;
+    localStorage.setItem(KEY, JSON.stringify(keep));
+  } catch { /* private window: works for this visit */ }
+  listeners.forEach(l => l());
+}
+
+export function useViz(): VizState {
+  return useSyncExternalStore(cb => { listeners.add(cb); return () => listeners.delete(cb); }, () => state, () => state);
+}
+
+// One lookup per song for everything on screen.
+const lyricCache = new Map<string, Promise<Lyrics | null>>();
+const lyricKey = (artist: string, title: string) => `${artist}|${title}`.toLowerCase();
+
+/** Lyrics for the playing song: undefined while loading, null when there are none. */
+export function useLyrics(artist: string | undefined, title: string | undefined, album?: string, duration?: number, on = true): Lyrics | null | undefined {
+  const [value, setValue] = useState<Lyrics | null | undefined>(undefined);
+  useEffect(() => {
+    setValue(undefined);
+    if (!on || !artist || !title) { setValue(null); return; }
+    const key = lyricKey(artist, title);
+    let hit = lyricCache.get(key);
+    if (!hit) {
+      hit = api.lyrics(artist, title, album, duration).then(l => l ?? null).catch(() => null);
+      lyricCache.set(key, hit);
+    }
+    let alive = true;
+    void hit.then(l => { if (alive) setValue(l); });
+    return () => { alive = false; };
+  }, [artist, title, album, duration, on]);
+  return value;
+}
+
+export type LyricLine = { prev: string; now: string; next: string; progress: number };
+const EMPTY: LyricLine = { prev: '', now: '', next: '', progress: 0 };
+
+/** The line being sung right now, polled from the player's clock (cheap: a few times a second). */
+export function useLyricLine(lyrics: Lyrics | null | undefined, getTime: () => number, on = true): LyricLine {
+  const [line, setLine] = useState<LyricLine>(EMPTY);
+  useEffect(() => {
+    const synced = lyrics?.synced;
+    if (!on || !synced?.length) { setLine(EMPTY); return; }
+    const tick = () => {
+      const now = getTime() + 0.2;
+      let i = -1;
+      for (let k = 0; k < synced.length; k++) if (synced[k]!.time <= now) i = k; else break;
+      const cur = synced[i], nxt = synced[i + 1];
+      const span = cur && nxt ? Math.max(0.5, nxt.time - cur.time) : 4;
+      setLine(prev => {
+        const next = { prev: synced[i - 1]?.text ?? '', now: cur?.text ?? '', next: nxt?.text ?? '', progress: cur ? Math.min(1, (now - cur.time) / span) : 0 };
+        return prev.now === next.now && Math.abs(prev.progress - next.progress) < 0.02 ? prev : next;
+      });
+    };
+    tick();
+    const id = window.setInterval(tick, 100);
+    return () => window.clearInterval(id);
+  }, [lyrics, getTime, on]);
+  return line;
+}

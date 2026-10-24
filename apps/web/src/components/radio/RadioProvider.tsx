@@ -2,7 +2,7 @@ import Hls from 'hls.js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, type RadioStation } from '../../lib/api';
 import { useMusicPlayer } from '../media/MusicProvider';
-import { radioLine, speak } from '../../lib/audio-engine';
+import { radioLine, say } from '../../lib/audio-engine';
 import { RadioBar } from './RadioBar';
 import { RadioNowPlaying } from './RadioNowPlaying';
 
@@ -41,6 +41,9 @@ export function useRadio(): RadioContextValue {
   if (!value) throw new Error('useRadio must be used inside RadioProvider.');
   return value;
 }
+
+/** The voice picked for DJ mode also announces stations. */
+const readVoice = (): string | undefined => { try { return localStorage.getItem('vv-dj-voice') || undefined; } catch { return undefined; } };
 
 const readVolume = (): number => { try { const v = Number(localStorage.getItem('vv-radio-volume') ?? '1'); return v >= 0 && v <= 1 ? v : 1; } catch { return 1; } };
 
@@ -90,7 +93,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
       // Like a real dial: the new station comes in low under a short announcement, then up to full volume.
       el.volume = volumeRef.current * 0.2;
       const extra = [s.tags[0], s.country ? `from ${spokenCountry(s.country)}` : ''].filter(Boolean).join(' ');
-      void speak(radioLine(s.name, extra)).then(() => {
+      void say(radioLine(s.name, extra), readVoice()).then(() => {
         const target = volumeRef.current;
         let v = el.volume;
         const id = window.setInterval(() => { v = Math.min(target, v + target / 12); el.volume = v; if (v >= target) window.clearInterval(id); }, 80);

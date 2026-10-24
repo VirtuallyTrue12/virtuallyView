@@ -17,6 +17,53 @@ function parseSynced(raw: string): Array<{ time: number; text: string }> {
   return lines;
 }
 
+type LrcLib = { trackName?: string; artistName?: string; duration?: number; plainLyrics?: string | null; syncedLyrics?: string | null };
+
+const lrclib = async (path: string, params: Record<string, string>): Promise<unknown> => {
+  const res = await outboundFetch(`https://lrclib.net/api/${path}?${new URLSearchParams(params)}`, {
+    headers: { 'User-Agent': 'virtuallyView/1.0 (self-hosted media dashboard)' },
+    timeoutMs: 8000
+  });
+  return res.ok ? res.json() : null;
+};
+
+/** "Wasted (feat. Lil Uzi Vert) - Remastered 2020" to "Wasted": how the lyrics database names most songs. */
+export function cleanTitle(title: string): string {
+  return title
+    .replace(/\s*[([](feat|ft|with|prod|remaster|explicit|clean|bonus|album version|radio edit)[^)\]]*[)\]]/gi, '')
+    .replace(/\s+-\s+(remaster|live|mono|stereo|explicit|single version|radio edit).*$/i, '')
+    .replace(/\s+(feat|ft)\.?\s.*$/i, '')
+    .trim() || title;
+}
+
+const toLyrics = (body: LrcLib | null): Lyrics | null => {
+  if (!body) return null;
+  const synced = body.syncedLyrics ? parseSynced(body.syncedLyrics) : [];
+  return synced.length || body.plainLyrics ? { plain: body.plainLyrics ?? null, synced: synced.length ? synced : null } : null;
+};
+
+/**
+ * Exact match first (artist, title, album, length), then without the album, then a search that takes the closest
+ * length and prefers timed lyrics. Library tags rarely match the database word for word, so the exact call alone
+ * missed most songs.
+ */
+async function findLyrics(artist: string, title: string, album: string, duration: number): Promise<Lyrics | null> {
+  const name = cleanTitle(title);
+  const base = { artist_name: artist, track_name: name, ...(duration > 0 ? { duration: String(duration) } : {}) };
+  let best: Lyrics | null = null;
+  for (const params of album ? [{ ...base, album_name: album }, base] : [base]) {
+    const found = toLyrics(await lrclib('get', params) as LrcLib | null);
+    if (found?.synced) return found;
+    best ??= found;
+  }
+  const hits = (await lrclib('search', { artist_name: artist, track_name: name }) as LrcLib[] | null) ?? [];
+  const near = hits
+    .filter(h => !duration || !h.duration || Math.abs(h.duration - duration) <= 4)
+    .sort((a, b) => Number(!!b.syncedLyrics) - Number(!!a.syncedLyrics) || Math.abs((a.duration ?? 0) - duration) - Math.abs((b.duration ?? 0) - duration));
+  const found = toLyrics(near[0] ?? null);
+  return found?.synced ? found : best ?? found;
+}
+
 /**
  * Lyrics for the track that is playing, looked up on LRCLIB (a free public
  * lyrics database, no key). The request carries the artist, title and album,
@@ -34,22 +81,9 @@ export default async function lyricsRoutes(server: FastifyInstance) {
     if (hit && Date.now() - hit.at < (hit.value ? TTL_HIT : TTL_MISS)) {
       return hit.value ?? reply.code(404).send({ message: 'No lyrics found for this track.' });
     }
-    let value: Lyrics | null = null;
+    let value: Lyrics | null;
     try {
-      const params = new URLSearchParams({ artist_name: artist, track_name: title });
-      if (album) params.set('album_name', album);
-      if (duration > 0) params.set('duration', String(duration));
-      const res = await outboundFetch(`https://lrclib.net/api/get?${params}`, {
-        headers: { 'User-Agent': 'virtuallyView/1.0 (self-hosted media dashboard)' },
-        timeoutMs: 8000
-      });
-      if (res.ok) {
-        const body = (await res.json()) as { plainLyrics?: string | null; syncedLyrics?: string | null; instrumental?: boolean };
-        const synced = body.syncedLyrics ? parseSynced(body.syncedLyrics) : [];
-        if (synced.length || body.plainLyrics) {
-          value = { plain: body.plainLyrics ?? null, synced: synced.length ? synced : null };
-        }
-      }
+      value = await findLyrics(artist, title, album, duration);
     } catch {
       return reply.code(502).send({ message: 'The lyrics service could not be reached.' });
     }

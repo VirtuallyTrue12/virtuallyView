@@ -2,6 +2,14 @@
 
 ## 0.4.0
 
+- **Added.** The visualizer now lives everywhere music plays: full screen over any page (a button on the bottom bar; the controls fade away while you watch, and Esc closes it), a live hero at the top of the Music page with the sung line, a thin spectrum along the bottom bar with the current lyric under the title, and a screensaver that starts after a minute without input and closes at the first touch.
+- **Changed.** Visualizer scenes are picked from live preview tiles, lyric style from a toggle, and equalizer presets from chips (your own presets are starred and removable), instead of dropdowns. A new Visuals tab in Now Playing holds them. The bars were redrawn: log-spaced, rounded and reflected, and no longer stuck at the top.
+- **Added.** Natural voices for DJ mode and radio announcements, from a local Piper voice service (`piper`, in the AI profile; five voices, previewable in Mix & DJ). Nothing leaves your machine and lines are cached. Without it the browser's own voice is used.
+- **Fixed.** DJ mode left dead air when the browser had no voice, and the line started too late. The next song's intro now comes in under the host, the line is prepared half a minute ahead, and a missing voice never holds the music.
+- **Fixed.** Equalizer changes did nothing until the on switch was found (picking a preset or moving a slider now turns it on), and boosts could crackle (the level now drops by most of the biggest boost).
+- **Fixed.** Lyrics were missing for most songs because the lookup demanded an exact album and length. It now falls back to the title alone and a nearest-length search and strips "(feat. …)" and "- Remastered": all 30 tested songs found timed lyrics.
+- **Fixed.** Previous in shuffle went to the wrong song; it now returns to the one you just heard.
+- **Changed.** Radio: stations are labelled Live (the broadcaster's own on-air stream) or Playlist (fan-made automatic playlists on free hosts, which sound pre-recorded; in India 28 of the 40 most played were these). "Real broadcasts only" is on by default and lists live stations first.
 - **Changed.** The command palette (Ctrl+K, ⌘K or /) now reaches every page without a reload, controls what is playing (pause, next, DJ mode, stop radio), searches the library for whatever you type, and opens the AI assistant (that entry did nothing before).
 - **Added.** Music visualizer in Now Playing, in the spirit of the classic desktop media players: Bars and peaks, Ocean mist, Alchemy, Tunnel and Scope, or Cycle all. All original drawings, driven by what is actually playing. It has a full-view mode, and synced lyrics can sit on top as karaoke (the line fills as it is sung) or rolling lines.
 - **Added.** DJ mode and crossfade (Now Playing > Mix & DJ). The end of one track fades into the next with no gap. In DJ mode a voice introduces the next track over a dipped mix ("That was … Up next …"), using the browser's own voices, with a voice picker and a test button.

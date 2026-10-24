@@ -58,6 +58,35 @@ class AudioEngine {
   private leveller: DynamicsCompressorNode | null = null;
   private state: EqState = { enabled: false, gains: EQ_PRESETS.flat!.gains, preamp: 0, balance: 0, leveller: false };
   private failed = false;
+  private voiceBus: GainNode | null = null;
+
+  /** A context for the voice even when no music has played yet (radio announcements). */
+  private context(): AudioContext | null {
+    if (this.ctx) return this.ctx;
+    if (this.failed) return null;
+    try { this.attach([]); } catch { /* no Web Audio */ }
+    return this.ctx;
+  }
+
+  /**
+   * Plays a spoken line over the music, on its own path so the equalizer never colours it. Resolves when the line
+   * ends. Returns false when the line could not be played this way.
+   */
+  async playVoice(data: ArrayBuffer, onStart?: (seconds: number) => void): Promise<boolean> {
+    const ctx = this.context();
+    if (!ctx) return false;
+    try {
+      await this.resume();
+      const buffer = await ctx.decodeAudioData(data);
+      if (!this.voiceBus) { this.voiceBus = ctx.createGain(); this.voiceBus.gain.value = 1.15; this.voiceBus.connect(ctx.destination); }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(this.voiceBus);
+      onStart?.(buffer.duration);
+      await new Promise<void>(resolve => { src.onended = () => resolve(); src.start(); });
+      return true;
+    } catch { return false; }
+  }
 
   /** Builds the graph (once) and connects these elements. Returns false when Web Audio is not available. */
   attach(elements: HTMLAudioElement[]): boolean {
@@ -77,7 +106,10 @@ class AudioEngine {
         const leveller = ctx.createDynamicsCompressor();
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 2048;
-        analyser.smoothingTimeConstant = 0.78;
+        analyser.smoothingTimeConstant = 0.8;
+        // Music sits between about -90 and -15 dBFS: the default -30 ceiling pinned every bar at the top.
+        analyser.minDecibels = -90;
+        analyser.maxDecibels = -12;
         preamp.connect(filters[0]!);
         for (let i = 1; i < filters.length; i++) filters[i - 1]!.connect(filters[i]!);
         filters[filters.length - 1]!.connect(panner);
@@ -120,7 +152,10 @@ class AudioEngine {
     const now = ctx.currentTime;
     const on = this.state.enabled;
     this.filters.forEach((f, i) => f.gain.setTargetAtTime(on ? (this.state.gains[i] ?? 0) : 0, now, 0.03));
-    this.preamp!.gain.setTargetAtTime(on ? Math.pow(10, this.state.preamp / 20) : 1, now, 0.03);
+    // Headroom: boosting bands would push loud passages past full scale and crackle, so the level comes down by
+    // most of the biggest boost (what desktop players call auto pre-amp).
+    const headroom = on ? Math.max(0, ...this.state.gains) * 0.8 : 0;
+    this.preamp!.gain.setTargetAtTime(on ? Math.pow(10, (this.state.preamp - headroom) / 20) : 1, now, 0.03);
     this.panner!.pan.setTargetAtTime(on ? this.state.balance : 0, now, 0.03);
     // The leveller evens out loud and quiet tracks. Off = a compressor at ratio 1, which changes nothing.
     const lev = on && this.state.leveller;
@@ -162,6 +197,38 @@ class AudioEngine {
 }
 
 export const audioEngine = new AudioEngine();
+
+/** The voice chosen in Mix & DJ: a server voice id (Piper) or a browser voice name. */
+const voiceCache = new Map<string, Promise<ArrayBuffer | null>>();
+
+/** Fetches (and keeps) the spoken line, so it can be ready before the moment it is needed. */
+export function prepareLine(text: string, voice?: string): Promise<ArrayBuffer | null> {
+  const key = `${voice ?? ''}|${text}`;
+  let hit = voiceCache.get(key);
+  if (!hit) {
+    const params = new URLSearchParams({ text, ...(voice && !voice.startsWith('browser:') ? { voice } : {}) });
+    hit = fetch(`/api/tts?${params}`, { credentials: 'same-origin' }).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+    voiceCache.set(key, hit);
+    if (voiceCache.size > 30) voiceCache.delete(voiceCache.keys().next().value!);
+  }
+  return hit;
+}
+
+/**
+ * Says a line: the natural server voice when it is installed, otherwise the browser's own voice, otherwise
+ * nothing (and quickly, so the music never waits on a voice that will not come).
+ */
+export async function say(text: string, voice?: string, onStart?: (seconds: number) => void): Promise<void> {
+  if (!voice?.startsWith('browser:')) {
+    const data = await prepareLine(text, voice);
+    // decodeAudioData detaches the buffer it is given: hand it a copy so a cached line can be said again.
+    if (data && await audioEngine.playVoice(data.slice(0), onStart)) return;
+  }
+  const hasVoices = typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0;
+  if (!hasVoices) return;
+  onStart?.(Math.max(2, text.split(' ').length / 2.6));
+  await speak(text, voice?.replace(/^browser:/, ''));
+}
 
 /** Speaks a line with the browser's own voices. Resolves when done (or at once when speech is not available). */
 export function speak(text: string, voiceName?: string, rate = 1.02): Promise<void> {

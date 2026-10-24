@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { ReactNode } from 'react';
 import type { TrackItem } from '../../lib/api';
 import MusicPlayerUI from '../music/MusicPlayerUI';
-import { audioEngine, djLine, EQ_BANDS, EQ_PRESETS, speak } from '../../lib/audio-engine';
+import { audioEngine, djLine, EQ_BANDS, EQ_PRESETS, prepareLine, say } from '../../lib/audio-engine';
 
 export { EQ_BANDS, EQ_PRESETS };
 
@@ -198,6 +198,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   // A fade into the next track is under way: no second one, and the outgoing deck's events are ignored.
   const mixing = useRef(false);
   const resumeAt = useRef(restored.current.time);
+  // What was played before, so Previous in shuffle goes back to the song you actually heard.
+  const history = useRef<number[]>([]);
+  // The DJ's next line, written and fetched ahead so it is ready the moment the mix starts.
+  const djNext = useRef<{ index: number; text: string } | null>(null);
 
   const live = () => audioRef.current;
   const isLive = (el: EventTarget) => el === audioRef.current;
@@ -230,6 +234,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setQueue(nextQueue);
     setIndex(target);
     shuffleOrder.current = []; shuffleBuilt.current = false;
+    history.current = []; djNext.current = null;
     setError(null);
     if (nextQueue.length) {
       wantPlay.current = true;
@@ -270,8 +275,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       el.load();
     }
     try { window.speechSynthesis?.cancel(); } catch { /* none */ }
+    setDjTalking(false);
     rawSrc.current = '';
     mixing.current = false;
+    history.current = []; djNext.current = null;
     shuffleOrder.current = []; shuffleBuilt.current = false;
     wantPlay.current = false;
     setQueue([]);
@@ -320,6 +327,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       return;
     }
     consume(next);
+    history.current = [...history.current.slice(-200), indexRef.current];
     setIndex(next);
   }, [peekNext]);
 
@@ -330,7 +338,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const mixIntoNext = useCallback(async () => {
     const out = live();
     const inc = other();
-    const fade = crossfadeRef.current || (djRef.current.on ? 6 : 0);
+    const dj = djRef.current;
+    const fade = crossfadeRef.current || (dj.on ? 6 : 0);
     if (!out || !inc || mixing.current || !fade || !audioEngine.ready) return;
     const next = peekNext(true);
     if (next === null || next === indexRef.current) return;
@@ -340,31 +349,52 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (!to) return;
     mixing.current = true;
     consume(next);
+    history.current = [...history.current.slice(-200), indexRef.current];
     audioEngine.level(inc, 0);
     rawSrc.current = urlFor(to);
     inc.src = rawSrc.current;
     audioRef.current = inc;
     setIndex(next);
     setCurrentTime(0);
-    if (djRef.current.on) {
-      // Dip the outgoing track under the voice, start the new one quietly, then bring it up after the line.
-      audioEngine.fade(out, 0.25, 1.2);
+    setDuration(0);
+    void inc.play().catch(() => undefined);
+    if (dj.on) {
+      // Like a radio host: the last song dips, the next one's intro comes in quietly under the voice, then the
+      // new song comes up to full as the old one fades away.
+      const text = djNext.current?.index === next ? djNext.current.text : djLine(from ? { title: from.track.title, artist: from.artistTitle } : null, { title: to.track.title, artist: to.artistTitle });
+      djNext.current = null;
+      audioEngine.fade(out, 0.3, 1.5);
+      audioEngine.fade(inc, 0.16, 1.5);
       setDjTalking(true);
-      const line = djLine(from ? { title: from.track.title, artist: from.artistTitle } : null, { title: to.track.title, artist: to.artistTitle });
-      await speak(line, djRef.current.voice);
+      // Never let a slow or missing voice hold the music up.
+      await Promise.race([say(text, dj.voice || undefined), new Promise(r => window.setTimeout(r, 14000))]);
       setDjTalking(false);
-      void inc.play().catch(() => undefined);
-      audioEngine.fade(inc, 1, fade / 2);
-      audioEngine.fade(out, 0, fade / 2);
-    } else {
-      void inc.play().catch(() => undefined);
-      audioEngine.fade(inc, 1, fade);
-      audioEngine.fade(out, 0, fade);
+      audioEngine.fade(inc, 1, 2.5);
+      audioEngine.fade(out, 0, 2.5);
+      window.setTimeout(() => {
+        if (audioRef.current !== out) { out.pause(); out.removeAttribute('src'); out.load(); }
+        mixing.current = false;
+      }, 3000);
+      return;
     }
+    audioEngine.fade(inc, 1, fade);
+    audioEngine.fade(out, 0, fade);
     window.setTimeout(() => {
       if (audioRef.current !== out) { out.pause(); out.removeAttribute('src'); out.load(); }
       mixing.current = false;
     }, (fade + 0.5) * 1000);
+  }, [peekNext]);
+
+  /** In DJ mode, half a minute before the mix: write the next line and fetch its voice so it starts on time. */
+  const prepareDj = useCallback(() => {
+    const next = peekNext(true);
+    if (next === null || djNext.current?.index === next) return;
+    const q = queueRef.current;
+    const from = q[indexRef.current], to = q[next];
+    if (!to) return;
+    const text = djLine(from ? { title: from.track.title, artist: from.artistTitle } : null, { title: to.track.title, artist: to.artistTitle });
+    djNext.current = { index: next, text };
+    if (!djRef.current.voice.startsWith('browser:')) void prepareLine(text, djRef.current.voice || undefined);
   }, [peekNext]);
 
   const nextTrack = useCallback(() => goNext(false), [goNext]);
@@ -374,12 +404,19 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (audio && audio.currentTime > 4) { audio.currentTime = 0; setCurrentTime(0); return; }
     const q = queueRef.current;
     if (!q.length) return;
+    const back = history.current.pop();
+    if (back !== undefined && back < q.length) {
+      // Put the song we leave back at the front of the shuffle, so Next returns to it.
+      if (shuffleRef.current) shuffleOrder.current.unshift(indexRef.current);
+      setIndex(back);
+      return;
+    }
     setIndex((indexRef.current - 1 + q.length) % q.length);
   }, []);
 
   const skipTo = useCallback((i: number) => {
     const q = queueRef.current;
-    if (i >= 0 && i < q.length) setIndex(i);
+    if (i >= 0 && i < q.length && i !== indexRef.current) { history.current = [...history.current.slice(-200), indexRef.current]; setIndex(i); }
   }, []);
 
   const seek = useCallback((seconds: number) => {
@@ -580,8 +617,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       if (!isLive(a)) return;
       setCurrentTime(a.currentTime);
       const fade = crossfadeRef.current || (djRef.current.on ? 6 : 0);
-      if (fade && !mixing.current && Number.isFinite(a.duration) && a.duration > fade * 2 && a.duration - a.currentTime <= fade + (djRef.current.on ? 3 : 0)) {
-        void mixIntoNext();
+      const left = a.duration - a.currentTime;
+      if (fade && !mixing.current && Number.isFinite(a.duration) && a.duration > 30) {
+        if (djRef.current.on && left <= 30) prepareDj();
+        // DJ mode starts earlier: the host talks over the last seconds, then the new song comes up.
+        if (left <= (djRef.current.on ? 11 : fade)) void mixIntoNext();
       }
     },
     onDurationChange: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget)) setDuration(e.currentTarget.duration); },

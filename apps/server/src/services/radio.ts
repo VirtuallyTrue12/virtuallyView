@@ -27,6 +27,8 @@ export interface Station {
   logo: boolean;
   /** Streams as HLS (segments), which the page plays with hls.js. */
   hls?: boolean;
+  /** "live": a real broadcaster's on-air stream. "playlist": a fan-made automatic playlist (no live show). */
+  kind?: 'live' | 'playlist';
 }
 export interface RadioCountry { name: string; code: string; stations: number }
 export interface RadioTag { name: string; stations: number }
@@ -76,6 +78,27 @@ async function directory<T>(path: string, ttlMs = 10 * 60_000): Promise<T> {
 
 const clean = (value: string | undefined, max = 120) => (value ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, max);
 
+// Free hosting for do-it-yourself stations: almost always someone's automatic playlist, often named after a real
+// FM station it is not ("BIG 92.7 FM" on zeno.fm is a fan upload).
+const PLAYLIST_HOSTS = /(^|\.)(zeno\.fm|fastcast4u\.com|rcast\.net|caster\.fm|radiojar\.com|myradiostream\.com|listen2myradio\.com|radionomy\.com|live365\.com|radioca\.st|epichosts\.co\.uk|streamakaci\.com|onlineradiobox\.com|shoutcast\.com|radio12345\.com|streeemer\.com|mixlr\.com|radioking\.com|uber\.radio)$|azuracast|autodj/i;
+// Content delivery used by broadcasters themselves for their on-air signal.
+const BROADCASTER_HOSTS = /(^|\.)(bitgravity\.com|akamaized\.net|akamaihd\.net|streamtheworld\.com|musicradio\.com|ihrhls\.com|radiofrance\.fr|rtl\.fr|sharp-stream\.com|streamguys1\.com|dradio\.de|deutschlandradio\.de|swr\.de|wdr\.de|ndr\.de|br\.de|mdr\.de|hr\.de|rbb-online\.de|orf\.at|srf\.ch|rai\.it|rtve\.es|abc\.net\.au|cbc\.ca|radio-canada\.ca|npr\.org|rte\.ie|yle\.fi|nrk\.no|sr\.se|dr\.dk|vrt\.be|rtbf\.be|nporadio\.nl|nhk\.or\.jp|kbs\.co\.kr|bbc\.co\.uk|bbci\.co\.uk|infomaniak\.ch|lagardere\.cloud|europe1\.fr|ice\.radio|tdf-cdn\.com|newsonair\.gov\.in|prasarbharati\.gov\.in)$/i;
+const LIVE_TAGS = /^(news|talk|public radio|public|sport|sports|community|government|information|news talk|talk radio|current affairs|fm)$/i;
+const PLAYLIST_NAMES = /non-?stop|24\s*[/x*]\s*7|\bhits of\b|\bsongs\b|\bauto ?dj\b/i;
+
+/** Live broadcast or automatic playlist, from where the stream is hosted, its name and its tags. Unsure: no label. */
+export function stationKind(raw: { url?: string; url_resolved?: string; name?: string; tags?: string }): 'live' | 'playlist' | undefined {
+  let host = '';
+  try { host = new URL(raw.url_resolved || raw.url || '').hostname; } catch { return undefined; }
+  if (PLAYLIST_HOSTS.test(host)) return 'playlist';
+  // A broadcaster's own delivery network wins over the name: "Raagam AIR 24*7" is All India Radio itself.
+  if (BROADCASTER_HOSTS.test(host)) return 'live';
+  if (PLAYLIST_NAMES.test(raw.name ?? '')) return 'playlist';
+  const tags = (raw.tags ?? '').split(',').map(t => t.trim());
+  if (tags.some(t => LIVE_TAGS.test(t))) return 'live';
+  return undefined;
+}
+
 function toStation(raw: RawStation): Station | null {
   const id = raw.stationuuid;
   const url = raw.url_resolved || raw.url;
@@ -88,7 +111,8 @@ function toStation(raw: RawStation): Station | null {
     ...(clean(raw.state, 60) ? { state: clean(raw.state, 60) } : {}), ...(clean(raw.language, 60) ? { language: clean(raw.language, 60) } : {}),
     tags: clean(raw.tags, 200).split(',').map(t => t.trim()).filter(Boolean).slice(0, 4),
     ...(raw.codec ? { codec: clean(raw.codec, 12) } : {}), ...(raw.bitrate ? { bitrate: raw.bitrate } : {}), ...(homepage ? { homepage } : {}),
-    votes: raw.votes ?? 0, logo: !!streams.get(id)?.favicon, ...(raw.hls === 1 ? { hls: true } : {})
+    votes: raw.votes ?? 0, logo: !!streams.get(id)?.favicon, ...(raw.hls === 1 ? { hls: true } : {}),
+    ...(stationKind(raw) ? { kind: stationKind(raw) } : {})
   };
 }
 
@@ -134,7 +158,10 @@ export async function searchStations(query: StationQuery): Promise<{ stations: S
   if (query.language) params.set('language', clean(query.language, 40));
   const rows = await directory<RawStation[]>(`/json/stations/search?${params}`, 5 * 60_000);
   const stations = rows.map(toStation).filter((s): s is Station => !!s);
-  return { stations: stations.slice(0, limit), more: rows.length > limit };
+  // Real broadcasts first, fan playlists last, otherwise in order of popularity.
+  const rank = (s: Station) => (s.kind === 'live' ? 0 : s.kind === 'playlist' ? 2 : 1);
+  const page = stations.slice(0, limit).map((s, i) => ({ s, i })).sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i).map(x => x.s);
+  return { stations: page, more: rows.length > limit };
 }
 
 export async function stationById(id: string): Promise<{ url: string; favicon?: string; name: string; hls: boolean } | undefined> {
