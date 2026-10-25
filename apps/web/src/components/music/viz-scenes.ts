@@ -1005,13 +1005,172 @@ export const MOOD_SCENES: Record<string, string[]> = {
   sad: ['rain', 'snow'], romantic: ['petals'], uplifting: ['sunrise'], energetic: ['fireworks'], calm: ['fireflies', 'snow']
 };
 
-/** In picker order, grouped: feelings, spectrum, waves, space, geometry, fields. */
+// ---------- Fractals ----------
+
+type PixelState = { buf: HTMLCanvasElement; bctx: CanvasRenderingContext2D; img: ImageData; W: number; H: number; zoom: number };
+function pixelBuffer(f: Frame, wFull: number): PixelState {
+  const W = small(f) ? 72 : wFull, H = Math.round(W * 0.625);
+  const buf = document.createElement('canvas'); buf.width = W; buf.height = H;
+  const bctx = buf.getContext('2d')!;
+  return { buf, bctx, img: bctx.createImageData(W, H), W, H, zoom: 1 };
+}
+function blitPixels(f: Frame, s: PixelState) {
+  s.bctx.putImageData(s.img, 0, 0);
+  f.ctx.imageSmoothingEnabled = true;
+  f.ctx.drawImage(s.buf, 0, 0, f.w, f.h);
+}
+/**
+ * Smooth escape-time colour: bands of colour that slide with the hue and brighten with the bass. Points that fly
+ * off at once stay dark, so the eye goes to the glowing edge of the set.
+ */
+function escapeColour(d: Uint8ClampedArray, o: number, mu: number, maxIter: number, f: Frame) {
+  const k = mu * 0.22 + f.hue / 57;
+  const glow = (0.55 + f.bass * 0.6) * Math.min(1, Math.pow(Math.max(0, mu) / maxIter, 0.7) * 1.9);
+  d[o] = Math.min(255, (128 + 127 * Math.sin(k)) * glow);
+  d[o + 1] = Math.min(255, (128 + 127 * Math.sin(k + 2.1)) * glow);
+  d[o + 2] = Math.min(255, (128 + 127 * Math.sin(k + 4.2)) * glow);
+  d[o + 3] = 255;
+}
+
+const mandelbrot: Scene = {
+  id: 'mandelbrot', name: 'Mandelbrot',
+  setup: f => ({ ...pixelBuffer(f, 250), zoom: 6 }),
+  draw: (f, s: PixelState) => {
+    // An endless dive into "seahorse valley"; the bass pushes the zoom on.
+    s.zoom *= 1.004 + f.bass * 0.012;
+    if (s.zoom > 6e4) s.zoom = 6;
+    const cx = -0.743643887037151, cy = 0.13182590420533;
+    const span = 3 / s.zoom, { W, H } = s, d = s.img.data;
+    const maxIter = Math.min(150, 48 + Math.log2(s.zoom) * 7);
+    for (let py = 0; py < H; py++) {
+      const y0 = cy + (py / H - 0.5) * span * (H / W);
+      for (let px = 0; px < W; px++) {
+        const x0 = cx + (px / W - 0.5) * span;
+        let x = 0, y = 0, i = 0;
+        while (x * x + y * y < 16 && i < maxIter) { const xt = x * x - y * y + x0; y = 2 * x * y + y0; x = xt; i++; }
+        const o = (py * W + px) * 4;
+        if (i >= maxIter) { d[o] = f.tint[0] * f.bass * 0.4; d[o + 1] = f.tint[1] * f.bass * 0.4; d[o + 2] = f.tint[2] * f.bass * 0.4; d[o + 3] = 255; }
+        else escapeColour(d, o, i + 1 - Math.log2(Math.log(Math.sqrt(x * x + y * y))), maxIter, f);
+      }
+    }
+    blitPixels(f, s);
+  }
+};
+
+const julia: Scene = {
+  id: 'julia', name: 'Julia',
+  setup: f => pixelBuffer(f, 280),
+  draw: (f, s: PixelState) => {
+    // The shape morphs as its constant circles round; the music steers how fast and how far.
+    s.zoom += 0.004 + f.mids * 0.02;
+    const r = 0.7885 + f.bass * 0.03, a = s.zoom;
+    const cr = r * Math.cos(a), ci = r * Math.sin(a);
+    const { W, H } = s, d = s.img.data, span = 3.2, maxIter = 56;
+    for (let py = 0; py < H; py++) {
+      const y0 = (py / H - 0.5) * span * (H / W);
+      for (let px = 0; px < W; px++) {
+        let x = (px / W - 0.5) * span, y = y0, i = 0;
+        while (x * x + y * y < 16 && i < maxIter) { const xt = x * x - y * y + cr; y = 2 * x * y + ci; x = xt; i++; }
+        const o = (py * W + px) * 4;
+        if (i >= maxIter) { d[o] = 4; d[o + 1] = 2; d[o + 2] = 10; d[o + 3] = 255; }
+        else escapeColour(d, o, i + 1 - Math.log2(Math.log(Math.sqrt(x * x + y * y))), maxIter, f);
+      }
+    }
+    blitPixels(f, s);
+  }
+};
+
+const fractalTree: Scene = {
+  id: 'tree', name: 'Fractal tree',
+  draw: f => {
+    const { ctx, w, h, hue, bass, treble, t } = f;
+    fade(f, 'rgba(3,4,10,0.35)');
+    const depthMax = small(f) ? 7 : 10;
+    // Each level of branches spreads with its own band of the music and sways in a breeze.
+    const branch = (x: number, y: number, len: number, angle: number, depth: number) => {
+      const x2 = x + Math.cos(angle) * len, y2 = y + Math.sin(angle) * len;
+      const level = depthMax - depth;
+      ctx.strokeStyle = depth > depthMax - 3 ? `hsla(${(hue + 20) % 360},35%,${30 + level * 6}%,0.95)` : `hsla(${(hue + level * 18) % 360},80%,${45 + level * 4}%,0.9)`;
+      ctx.lineWidth = Math.max(0.6, depth * (small(f) ? 0.5 : 1.1));
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke();
+      if (depth <= 0) {
+        ctx.fillStyle = `hsla(${(hue + 120) % 360},95%,70%,${0.3 + treble * 0.7})`;
+        ctx.beginPath(); ctx.arc(x2, y2, (small(f) ? 1 : 2) + treble * 3, 0, TAU); ctx.fill();
+        return;
+      }
+      const spread = 0.3 + f.band(level * 3, depthMax * 3) * 0.55;
+      const sway = Math.sin(t * 0.012 + level * 0.7) * 0.06 * (1 + bass * 2);
+      branch(x2, y2, len * 0.74, angle - spread + sway, depth - 1);
+      branch(x2, y2, len * 0.74, angle + spread + sway, depth - 1);
+    };
+    branch(w / 2, h, h * (0.24 + bass * 0.04), -Math.PI / 2, depthMax);
+  }
+};
+
+type FernState = { x: number; y: number };
+const fern: Scene = {
+  id: 'fern', name: 'Fern',
+  setup: () => ({ x: 0, y: 0 }),
+  draw: (f, s: FernState) => {
+    const { ctx, w, h, hue, bass, mids } = f;
+    fade(f, 'rgba(2,6,4,0.07)');
+    // Barnsley's fern, drawn a few thousand points at a time; the bass makes it lean, as if in wind.
+    const lean = 0.04 + (bass - 0.3) * 0.12;
+    const scale = h / 10.5, ox = w / 2;
+    const n = small(f) ? 600 : 5000;
+    for (let i = 0; i < n; i++) {
+      const r = Math.random();
+      let nx: number, ny: number;
+      if (r < 0.01) { nx = 0; ny = 0.16 * s.y; }
+      else if (r < 0.86) { nx = 0.85 * s.x + lean * s.y; ny = -lean * s.x + 0.85 * s.y + 1.6; }
+      else if (r < 0.93) { nx = 0.2 * s.x - 0.26 * s.y; ny = 0.23 * s.x + 0.22 * s.y + 1.6; }
+      else { nx = -0.15 * s.x + 0.28 * s.y; ny = 0.26 * s.x + 0.24 * s.y + 0.44; }
+      s.x = nx; s.y = ny;
+      const v = f.band(Math.floor(Math.min(0.999, ny / 10) * 24), 24);
+      ctx.fillStyle = `hsla(${(hue * 0.3 + 90 + ny * 8) % 360},80%,${35 + v * 40 + mids * 15}%,0.8)`;
+      ctx.fillRect(ox + nx * scale, h - ny * scale, small(f) ? 1 : 1.3, small(f) ? 1 : 1.3);
+    }
+  }
+};
+
+type SierpState = { s: number };
+const sierpinski: Scene = {
+  id: 'sierpinski', name: 'Sierpinski',
+  setup: () => ({ s: 1 }),
+  draw: (f, st: SierpState) => {
+    const { ctx, w, h, hue, beat } = f;
+    fade(f, beat ? 'rgba(30,20,50,0.5)' : 'rgba(3,3,10,0.45)');
+    // An endless zoom into the corner of the triangle: at twice the size it looks the same, so it never ends.
+    st.s *= 1.004 + f.bass * 0.01;
+    if (st.s >= 2) st.s /= 2;
+    const side = Math.max(w, h * 1.16) * 1.15 * st.s;
+    const ax = w * 0.04, ay = h * 0.98;
+    const minSide = small(f) ? 6 : 4;
+    const tri = (x: number, y: number, len: number, depth: number) => {
+      if (x > w || y - len * 0.866 > h || x + len < 0 || y < 0) return;
+      if (len < minSide * 2 || depth > 9) {
+        const v = f.band(depth * 3 % 30, 30);
+        ctx.fillStyle = `hsla(${(hue + depth * 28) % 360},85%,${40 + v * 35}%,${0.6 + v * 0.4})`;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y); ctx.lineTo(x + len / 2, y - len * 0.866); ctx.closePath(); ctx.fill();
+        return;
+      }
+      const half = len / 2;
+      tri(x, y, half, depth + 1);
+      tri(x + half, y, half, depth + 1);
+      tri(x + half / 2, y - half * 0.866, half, depth + 1);
+    };
+    tri(ax, ay, side, 0);
+  }
+};
+
+/** In picker order, grouped: feelings, spectrum, waves, space, geometry, fractals, fields. */
 export const SCENE_LIST: Scene[] = [
   rain, petals, sunrise, fireworks, fireflies, snow,
   bars, led, radial, pulse, spikes, vu, waterfall,
   mist, waves, aurora, scope, lissajous, terrain,
   alchemy, plenoptic, starfield, galaxy, fountain, bubbles,
   tunnel, ripples, kaleidoscope, battery, lightning, colors, matrix,
+  mandelbrot, julia, fractalTree, fern, sierpinski,
   plasma, fire
 ];
 export const SCENE_BY_ID = new Map(SCENE_LIST.map(s => [s.id, s]));
