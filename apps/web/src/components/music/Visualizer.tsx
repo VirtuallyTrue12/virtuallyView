@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { audioEngine } from '../../lib/audio-engine';
 import { setViz, useLyrics, useViz, type LyricLine, type LyricStyle, type SceneId } from '../../lib/viz-store';
+import { blitGl, glRenderer } from './viz-gl';
 import { MOOD_SCENES, SCENE_BY_ID, SCENE_LIST, type Frame, type Scene, type Variant } from './viz-scenes';
 import { moodFromEnergy, songMood, type Mood } from '../../lib/mood';
 import { useMusicPlayer } from '../media/MusicProvider';
@@ -42,7 +43,10 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
     const ctx = cv?.getContext('2d');
     if (!cv || !ctx) return;
     let raf = 0;
-    const dpr = Math.min(variant === 'full' ? 2 : 1.5, window.devicePixelRatio || 1);
+    const dpr = Math.min(variant === 'full' ? 3 : 1.5, window.devicePixelRatio || 1);
+    // Quality: 1 = the display's full pixel density (up to 4K); lowered a step when frames start to drop.
+    let q = 1, scale = dpr;
+    const budget = variant === 'full' ? 3840 * 2160 : 320 * 200;
     const freq = new Uint8Array(1024);
     const wave = new Uint8Array(2048);
     // A small pixel buffer for the pixel scenes (plasma, fire), drawn scaled up.
@@ -66,10 +70,21 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       ring: (i, count) => { const half = count / 2, k = Math.floor(i) % count; return f.band(k < half ? k : count - 1 - k, half); },
       lo: { ctx: loCtx, img: loCtx.createImageData(loCanvas.width, loCanvas.height), w: loCanvas.width, h: loCanvas.height, blit: () => { loCtx.putImageData(f.lo.img, 0, 0); ctx.imageSmoothingEnabled = true; ctx.drawImage(loCanvas, 0, 0, f.w, f.h); } }
     };
-    const resize = () => { const r = cv.getBoundingClientRect(); f.w = r.width; f.h = r.height; cv.width = Math.max(1, f.w * dpr); cv.height = Math.max(1, f.h * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+    const resize = () => {
+      const r = cv.getBoundingClientRect(); f.w = r.width; f.h = r.height;
+      scale = Math.min(dpr * q, Math.sqrt(budget / Math.max(1, f.w * f.h)));
+      f.dpr = scale;
+      cv.width = Math.max(1, Math.round(f.w * scale)); cv.height = Math.max(1, Math.round(f.h * scale));
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    };
     resize();
     const ro = new ResizeObserver(resize); ro.observe(cv);
-    let bassAvg = 0, beatCool = 0, cycleAt = 0;
+    let bassAvg = 0, beatCool = 0, cycleAt = 0, beatPulse = 0;
+    const started = performance.now();
+    let lastFrame = started, frameMs = 16, sinceTune = 0;
+    let glState: unknown = null;
+    const gl = glRenderer();
+    const spectrum = new Uint8Array(128);
     let current: Scene | null = null;
     let state: unknown = null;
     // By mood: the words decide when they say something; otherwise how hard the first seconds hit.
@@ -104,7 +119,18 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
     const draw = () => {
       raf = requestAnimationFrame(draw);
       f.t += 1;
-      if (hidden || (variant === 'tile' && f.t % 2)) return;
+      if (hidden || (variant === 'tile' && f.t % 3)) return;
+      // Keep it smooth: measure how long frames take and trade resolution for speed only when needed.
+      const now = performance.now();
+      frameMs = frameMs * 0.92 + Math.min(100, now - lastFrame) * 0.08;
+      lastFrame = now;
+      if (variant === 'full' && now - sinceTune > 500) {
+        sinceTune = now;
+        // Cost grows with the pixel count (q squared): jump straight to the size that fits about 60 frames a second.
+        const fit = q * Math.sqrt(16.7 / Math.max(1, frameMs)) * 0.95;
+        const next = frameMs > 19 ? Math.max(0.3, fit) : frameMs < 13 && q < 1 ? Math.min(1, q * 1.1) : q;
+        if (Math.abs(next - q) > 0.02) { q = next; resize(); frameMs = 16; }
+      }
       const an = audioEngine.analyser;
       if (an) { an.getByteFrequencyData(freq); an.getByteTimeDomainData(wave); } else { freq.fill(0); wave.fill(128); }
       let bass = 0; for (let b = 1; b < 8; b++) bass += freq[b]!; f.bass = bass / (7 * 255);
@@ -116,13 +142,25 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       bassAvg = bassAvg * 0.95 + f.bass * 0.05;
       f.beat = beatCool <= 0 && f.bass > 0.28 && f.bass > bassAvg * 1.3;
       if (f.beat) beatCool = 14; else beatCool--;
+      beatPulse = f.beat ? 1 : beatPulse * 0.9;
       const next = pickScene();
       if (next !== current) {
         current = next;
         state = next.setup?.(f) ?? null;
+        glState = next.gl?.setup?.() ?? null;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.shadowBlur = 0;
         ctx.fillStyle = '#000'; ctx.fillRect(0, 0, f.w, f.h);
+      }
+      if (next.gl && gl) {
+        for (let i = 0; i < 128; i++) spectrum[i] = Math.round(f.band(i, 128) * 255);
+        const res = next.gl.resolution ?? 1;
+        const bw = Math.max(1, Math.round(cv.width * res)), bh = Math.max(1, Math.round(cv.height * res));
+        const ok = gl.render(next.gl, glState, {
+          width: bw, height: bh, time: (now - started) / 1000, bass: f.bass, mids: f.mids, treble: f.treble, level: f.level, beat: beatPulse,
+          hue: f.hue, tint: f.tint, spectrum, aa: res === 1 && bw * bh < 500_000 && frameMs < 13 ? 2 : 1
+        });
+        if (ok) { blitGl(ctx, bw, bh, f.w, f.h); return; }
       }
       next.draw(f, state as never);
     };
