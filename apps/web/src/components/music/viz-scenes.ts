@@ -1,0 +1,802 @@
+/**
+ * The visualizer scenes. Each draws one frame from what the player's analyser hears (see Visualizer.tsx for the
+ * loop). All original drawings in the spirit of the classic desktop media players. A scene may keep state between
+ * frames (`setup` makes it, once per canvas and scene).
+ */
+
+export type Variant = 'full' | 'strip' | 'tile';
+
+export interface Frame {
+  ctx: CanvasRenderingContext2D;
+  w: number; h: number; dpr: number; t: number; variant: Variant;
+  freq: Uint8Array; wave: Uint8Array;
+  /** 0..1 energy in the low, middle and high range, and overall. */
+  bass: number; mids: number; treble: number; level: number;
+  /** A slowly turning colour, nudged by the bass. */
+  hue: number;
+  /** True on the frame a beat lands. */
+  beat: boolean;
+  tint: [number, number, number];
+  /** One of `count` log-spaced bands from 35 Hz to 16 kHz, 0..1. */
+  band(i: number, count: number): number;
+  /** Like band, but folded so a ring of `count` points meets itself without a seam. */
+  ring(i: number, count: number): number;
+  /** A small pixel buffer drawn scaled up over the whole canvas: cheap, soft effects. */
+  lo: { ctx: CanvasRenderingContext2D; img: ImageData; w: number; h: number; blit(): void };
+}
+
+export interface Scene {
+  id: string;
+  name: string;
+  setup?: (f: Frame) => unknown;
+  draw: (f: Frame, state: never) => void;
+}
+
+const TAU = Math.PI * 2;
+const fade = (f: Frame, rgba: string) => { f.ctx.fillStyle = rgba; f.ctx.fillRect(0, 0, f.w, f.h); };
+const small = (f: Frame) => f.variant === 'tile';
+
+function roundTop(ctx: CanvasRenderingContext2D, x: number, y: number, bw: number, bh: number) {
+  const r = Math.min(bw / 2, 4, bh);
+  ctx.beginPath();
+  ctx.moveTo(x, y + bh); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.lineTo(x + bw - r, y); ctx.quadraticCurveTo(x + bw, y, x + bw, y + r); ctx.lineTo(x + bw, y + bh); ctx.closePath();
+  ctx.fill();
+}
+
+// ---------- Bars and spectrum ----------
+
+type BarsState = { n: number; level: Float32Array; peaks: Float32Array; vel: Float32Array };
+const bars: Scene = {
+  id: 'bars', name: 'Bars',
+  setup: f => { const n = f.variant === 'strip' ? 120 : small(f) ? 18 : 72; return { n, level: new Float32Array(n), peaks: new Float32Array(n), vel: new Float32Array(n) }; },
+  draw: (f, s: BarsState) => {
+    const { ctx, w, h, variant, tint: [tr, tg, tb], hue } = f;
+    const strip = variant === 'strip';
+    ctx.clearRect(0, 0, w, h);
+    if (!strip) { const bg = ctx.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, 'rgba(8,10,18,1)'); bg.addColorStop(1, `rgba(${tr},${tg},${tb},0.16)`); ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h); }
+    const floor = strip ? h : h * (small(f) ? 0.92 : 0.8);
+    const room = strip ? h : floor * 0.9;
+    const gap = strip ? 1 : small(f) ? 2 : 3;
+    const bw = Math.max(1, w / s.n - gap);
+    const g = ctx.createLinearGradient(0, floor, 0, floor - room);
+    g.addColorStop(0, `rgba(${tr},${tg},${tb},0.95)`);
+    g.addColorStop(0.55, `hsla(${hue % 360},85%,62%,0.95)`);
+    g.addColorStop(1, `hsla(${(hue + 60) % 360},95%,75%,1)`);
+    for (let i = 0; i < s.n; i++) {
+      const target = f.band(i, s.n);
+      // Fast attack, slower fall: the motion reads as music rather than flicker.
+      s.level[i] = target > s.level[i]! ? s.level[i]! + (target - s.level[i]!) * 0.6 : s.level[i]! * 0.9;
+      const bh = Math.max(strip ? 0 : 2, s.level[i]! * room);
+      if (bh >= s.peaks[i]!) { s.peaks[i] = bh; s.vel[i] = 0; } else { s.vel[i]! += 0.25; s.peaks[i] = Math.max(0, s.peaks[i]! - s.vel[i]! * 0.35); }
+      const x = i * (bw + gap) + gap / 2;
+      ctx.fillStyle = g;
+      if (strip) { ctx.globalAlpha = 0.85; ctx.fillRect(x, floor - bh, bw, bh); ctx.globalAlpha = 1; continue; }
+      roundTop(ctx, x, floor - bh, bw, bh);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillRect(x, floor - s.peaks[i]! - 4, bw, 2);
+      if (variant === 'full') { ctx.globalAlpha = 0.18; ctx.fillStyle = g; ctx.fillRect(x, floor + 2, bw, Math.min(h - floor - 2, bh * 0.35)); ctx.globalAlpha = 1; }
+    }
+  }
+};
+
+type LedState = { peaks: Float32Array; hold: Float32Array };
+const led: Scene = {
+  id: 'led', name: 'LED meter',
+  setup: () => ({ peaks: new Float32Array(32), hold: new Float32Array(32) }),
+  draw: (f, s: LedState) => {
+    const { ctx, w, h } = f;
+    ctx.fillStyle = '#07080c'; ctx.fillRect(0, 0, w, h);
+    const cols = small(f) ? 12 : 28, rows = small(f) ? 10 : 20;
+    const padX = w * 0.06, padY = h * 0.1, cw = (w - padX * 2) / cols, rh = (h - padY * 2) / rows;
+    for (let c = 0; c < cols; c++) {
+      const v = f.band(c, cols);
+      const lit = Math.round(v * rows);
+      if (lit >= s.peaks[c]!) { s.peaks[c] = lit; s.hold[c] = 30; } else if (s.hold[c]! > 0) s.hold[c]!--; else s.peaks[c] = Math.max(0, s.peaks[c]! - 0.4);
+      for (let r = 0; r < rows; r++) {
+        const on = r < lit || r === Math.floor(s.peaks[c]!);
+        const frac = r / rows;
+        const color = frac > 0.8 ? [255, 70, 60] : frac > 0.6 ? [255, 200, 40] : [60, 230, 120];
+        ctx.fillStyle = on ? `rgb(${color.join(',')})` : `rgba(${color.join(',')},0.08)`;
+        if (on) { ctx.shadowColor = `rgb(${color.join(',')})`; ctx.shadowBlur = small(f) ? 0 : 8; }
+        ctx.fillRect(padX + c * cw + 1.5, h - padY - (r + 1) * rh + 1.5, cw - 3, rh - 3);
+        ctx.shadowBlur = 0;
+      }
+    }
+  }
+};
+
+const radial: Scene = {
+  id: 'radial', name: 'Radial',
+  draw: f => {
+    const { ctx, w, h, hue, bass, tint: [tr, tg, tb] } = f;
+    fade(f, 'rgba(4,5,12,0.3)');
+    const cx = w / 2, cy = h / 2, R = Math.min(w, h) * (0.2 + bass * 0.05), count = small(f) ? 48 : 144;
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(f.t * 0.002);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < count; i++) {
+      const v = f.ring(i, count);
+      const len = 4 + v * Math.min(w, h) * 0.3;
+      const a = (i / count) * TAU;
+      ctx.strokeStyle = `hsla(${(hue + (i / count) * 360) % 360},90%,${55 + v * 20}%,0.95)`;
+      ctx.lineWidth = Math.max(1.5, (TAU * R) / count - 2);
+      ctx.beginPath(); ctx.moveTo(Math.cos(a) * R, Math.sin(a) * R); ctx.lineTo(Math.cos(a) * (R + len), Math.sin(a) * (R + len)); ctx.stroke();
+    }
+    ctx.restore();
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.95);
+    g.addColorStop(0, `rgba(${tr},${tg},${tb},${0.5 + bass * 0.5})`); g.addColorStop(1, 'rgba(0,0,0,0.85)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 0.95, 0, TAU); ctx.fill();
+  }
+};
+
+const pulse: Scene = {
+  id: 'pulse', name: 'Pulse',
+  draw: f => {
+    const { ctx, w, h, hue, bass } = f;
+    fade(f, 'rgba(3,4,10,0.35)');
+    const count = small(f) ? 24 : 64, bw = w / (count * 2);
+    for (let i = 0; i < count; i++) {
+      const v = f.band(i, count);
+      const bh = Math.max(2, v * h * 0.46);
+      ctx.fillStyle = `hsla(${(hue + i * 4) % 360},90%,${50 + v * 25}%,0.95)`;
+      for (const x of [w / 2 + i * bw, w / 2 - (i + 1) * bw]) ctx.fillRect(x + 1, h / 2 - bh, bw - 2, bh * 2);
+    }
+    ctx.fillStyle = `rgba(255,255,255,${0.15 + bass * 0.5})`; ctx.fillRect(0, h / 2 - 1, w, 2);
+  }
+};
+
+const spikes: Scene = {
+  id: 'spikes', name: 'Spikes',
+  draw: f => {
+    const { ctx, w, h, hue, bass } = f;
+    fade(f, 'rgba(2,2,8,0.25)');
+    const cx = w / 2, cy = h / 2, base = Math.min(w, h) * 0.12, n = small(f) ? 24 : 64;
+    ctx.save(); ctx.translate(cx, cy); ctx.globalCompositeOperation = 'lighter';
+    for (const [dir, scale, shift] of [[1, 1, 0], [-1, 0.6, 120]] as const) {
+      ctx.save(); ctx.rotate(dir * f.t * 0.006); ctx.scale(scale, scale);
+      ctx.beginPath();
+      for (let i = 0; i <= n * 2; i++) {
+        const a = (i / (n * 2)) * TAU;
+        const r = i % 2 ? base * (1 + bass) : base + f.ring(i / 2, n) * Math.min(w, h) * 0.42;
+        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath();
+      const g = ctx.createRadialGradient(0, 0, base * 0.5, 0, 0, Math.min(w, h) * 0.5);
+      g.addColorStop(0, `hsla(${(hue + shift) % 360},95%,55%,0.18)`); g.addColorStop(0.5, `hsla(${(hue + shift + 40) % 360},95%,60%,0.3)`); g.addColorStop(1, `hsla(${(hue + shift + 80) % 360},95%,50%,0.08)`);
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = `hsla(${(hue + shift) % 360},100%,75%,0.7)`; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore(); ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+type VuState = { l: number; r: number };
+const vu: Scene = {
+  id: 'vu', name: 'VU meters',
+  setup: () => ({ l: 0, r: 0 }),
+  draw: (f, s: VuState) => {
+    const { ctx, w, h } = f;
+    ctx.fillStyle = '#121010'; ctx.fillRect(0, 0, w, h);
+    // No separate channels from the analyser: one meter shows the lows, the other the highs.
+    let lo = 0, hi = 0;
+    for (let i = 0; i < 8; i++) lo += f.band(i, 24);
+    for (let i = 12; i < 24; i++) hi += f.band(i, 24);
+    s.l += ((lo / 8) - s.l) * 0.18; s.r += ((hi / 12) * 1.25 - s.r) * 0.18;
+    const mw = Math.min(w / 2.3, h * 1.3), mh = mw * 0.62;
+    [[s.l, 'LOW'], [s.r, 'HIGH']].forEach(([v, label], k) => {
+      const x = w / 2 + (k ? 0.08 : -1.08) * mw, y = h / 2 - mh / 2;
+      const face = ctx.createLinearGradient(0, y, 0, y + mh);
+      face.addColorStop(0, '#f3e6c4'); face.addColorStop(1, '#d9c597');
+      ctx.fillStyle = '#2a2420'; ctx.fillRect(x - 6, y - 6, mw + 12, mh + 12);
+      ctx.fillStyle = face; ctx.fillRect(x, y, mw, mh);
+      const px = x + mw / 2, py = y + mh * 0.92, R = mh * 0.78;
+      ctx.lineWidth = 2; ctx.strokeStyle = '#3b3128';
+      ctx.beginPath(); ctx.arc(px, py, R, Math.PI * 1.22, Math.PI * 1.78); ctx.stroke();
+      ctx.strokeStyle = '#c4302b'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(px, py, R, Math.PI * 1.64, Math.PI * 1.78); ctx.stroke();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#3b3128';
+      for (let i = 0; i <= 10; i++) {
+        const a = Math.PI * (1.22 + 0.56 * (i / 10));
+        ctx.beginPath(); ctx.moveTo(px + Math.cos(a) * R, py + Math.sin(a) * R); ctx.lineTo(px + Math.cos(a) * (R - (i % 5 ? 6 : 12)), py + Math.sin(a) * (R - (i % 5 ? 6 : 12))); ctx.stroke();
+      }
+      ctx.fillStyle = '#3b3128'; ctx.font = `700 ${Math.max(8, mh * 0.1)}px system-ui`; ctx.textAlign = 'center';
+      ctx.fillText('VU', px, y + mh * 0.6); ctx.font = `600 ${Math.max(7, mh * 0.07)}px system-ui`; ctx.fillText(label as string, px, y + mh * 0.75);
+      const a = Math.PI * (1.22 + 0.56 * Math.min(1, (v as number) * 1.15));
+      ctx.strokeStyle = '#111'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(a) * R * 1.02, py + Math.sin(a) * R * 1.02); ctx.stroke();
+      ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(px, py, 5, 0, TAU); ctx.fill();
+    });
+  }
+};
+
+const HEAT: [number, number, number][] = [[0, 0, 4], [20, 10, 80], [110, 20, 140], [220, 60, 70], [255, 160, 20], [255, 240, 140], [255, 255, 255]];
+function heat(v: number): [number, number, number] {
+  const x = Math.max(0, Math.min(0.999, v)) * (HEAT.length - 1), i = Math.floor(x), k = x - i;
+  const a = HEAT[i]!, b = HEAT[i + 1]!;
+  return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+}
+
+type FallState = { buf: HTMLCanvasElement; bctx: CanvasRenderingContext2D | null; img: ImageData | null; W: number; H: number };
+const waterfall: Scene = {
+  id: 'waterfall', name: 'Spectrogram',
+  setup: f => {
+    const W = small(f) ? 96 : 320, H = small(f) ? 48 : 128;
+    const buf = document.createElement('canvas'); buf.width = W; buf.height = H;
+    const bctx = buf.getContext('2d');
+    const img = bctx?.createImageData(W, H) ?? null;
+    if (img) for (let i = 3; i < img.data.length; i += 4) img.data[i] = 255; // start black, not transparent
+    return { buf, bctx, img, W, H };
+  },
+  draw: (f, s: FallState) => {
+    if (!s.bctx || !s.img) return;
+    const d = s.img.data, { W, H } = s;
+    // Scroll left one column, then paint the newest moment on the right (low notes at the bottom).
+    d.copyWithin(0, 4);
+    for (let y = 0; y < H; y++) {
+      const v = f.band(H - 1 - y, H);
+      const o = (y * W + W - 1) * 4;
+      // A heat map: black, deep blue, purple, orange, yellow, white.
+      const [r, g, b] = heat(v);
+      d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = 255;
+    }
+    s.bctx.putImageData(s.img, 0, 0);
+    f.ctx.imageSmoothingEnabled = true;
+    f.ctx.drawImage(s.buf, 0, 0, f.w, f.h);
+  }
+};
+
+// ---------- Waves and lines ----------
+
+const mist: Scene = {
+  id: 'mist', name: 'Ocean mist',
+  draw: f => {
+    const { ctx, w, h, hue, bass, mids, t } = f;
+    fade(f, 'rgba(4,10,24,0.16)');
+    for (let layer = 0; layer < 5; layer++) {
+      ctx.beginPath();
+      const amp = h * (0.05 + bass * 0.28) * (1 - layer * 0.12);
+      for (let x = 0; x <= w + 6; x += Math.max(3, w / 160)) {
+        const k = f.band(Math.floor((x / w) * 40), 40);
+        const y = h * (0.34 + layer * 0.09) + Math.sin(x * (6 / w) + t * 0.012 * (layer + 1)) * amp + Math.sin(x * (17 / w) - t * 0.02) * amp * 0.5 * k;
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+      ctx.fillStyle = `hsla(${(hue + 180 + layer * 18) % 360},70%,${45 + layer * 5}%,${0.07 + mids * 0.16})`;
+      ctx.fill();
+    }
+  }
+};
+
+const waves: Scene = {
+  id: 'waves', name: 'Waves',
+  draw: f => {
+    const { ctx, w, h, hue, t } = f;
+    fade(f, 'rgba(3,5,12,0.28)');
+    const lines = small(f) ? 4 : 7;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let l = 0; l < lines; l++) {
+      const v = f.band(3 + l * 5, 40);
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += Math.max(2, w / 300)) {
+        const p = x / w;
+        const env = Math.sin(p * Math.PI); // fixed ends, like a string
+        const y = h / 2 + Math.sin(p * (4 + l) * Math.PI + t * 0.03 * (l % 2 ? 1 : -1) + l) * env * h * (0.04 + v * 0.36);
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = `hsla(${(hue + l * 40) % 360},90%,62%,0.75)`;
+      ctx.lineWidth = small(f) ? 1 : 2 + v * 3; ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = small(f) ? 0 : 12; ctx.stroke();
+    }
+    ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+const aurora: Scene = {
+  id: 'aurora', name: 'Aurora',
+  draw: f => {
+    const { ctx, w, h, hue, t, dpr } = f;
+    fade(f, 'rgba(2,6,14,0.35)');
+    ctx.globalCompositeOperation = 'lighter';
+    const curtains = small(f) ? 3 : 5;
+    for (let c = 0; c < curtains; c++) {
+      const v = f.band(4 + c * 9, 50);
+      const len = h * (0.25 + v * 0.45), col = Math.max(2, w / 220), shade = (140 + c * 40 + hue * 0.3) % 360;
+      // One gradient per curtain, moved to each column's top.
+      const g = ctx.createLinearGradient(0, 0, 0, len);
+      g.addColorStop(0, `hsla(${shade},90%,60%,0)`);
+      g.addColorStop(0.3, `hsla(${shade},85%,55%,${0.03 + v * 0.07})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      for (let x = 0; x < w; x += col) {
+        const top = h * (0.15 + 0.12 * Math.sin(x * (3 / w) + t * 0.01 + c * 1.7) + 0.05 * Math.sin(x * (11 / w) - t * 0.02));
+        ctx.setTransform(dpr, 0, 0, dpr, x * dpr, top * dpr);
+        ctx.fillRect(0, 0, col, len);
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+const scope: Scene = {
+  id: 'scope', name: 'Scope',
+  draw: f => {
+    const { ctx, w, h, hue, wave } = f;
+    fade(f, 'rgba(0,6,4,0.3)');
+    // A faint graticule, like a bench oscilloscope.
+    ctx.strokeStyle = 'rgba(80,255,180,0.06)'; ctx.lineWidth = 1;
+    for (let i = 1; i < 10; i++) { ctx.beginPath(); ctx.moveTo((w / 10) * i, 0); ctx.lineTo((w / 10) * i, h); ctx.stroke(); }
+    for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.moveTo(0, (h / 6) * i); ctx.lineTo(w, (h / 6) * i); ctx.stroke(); }
+    ctx.beginPath();
+    for (let i = 0; i < wave.length; i += 4) {
+      const x = (i / wave.length) * w, y = h / 2 + ((wave[i]! - 128) / 128) * h * 0.45;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = `hsl(${(hue + 120) % 360},95%,60%)`; ctx.lineWidth = small(f) ? 1.5 : 2.5; ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = small(f) ? 0 : 14; ctx.stroke(); ctx.shadowBlur = 0;
+  }
+};
+
+const lissajous: Scene = {
+  id: 'lissajous', name: 'Lissajous',
+  draw: f => {
+    const { ctx, w, h, hue, wave, t } = f;
+    fade(f, 'rgba(2,3,8,0.1)');
+    const R = Math.min(w, h) * 0.42, lag = 96;
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.rotate(t * 0.003);
+    ctx.beginPath();
+    // One moment of the waveform against itself a little later: the figures of an X-Y oscilloscope.
+    // Averaged over a few samples, so the line draws curves instead of jitter.
+    const at = (i: number) => (wave[i - 2]! + wave[i - 1]! + wave[i]! + wave[i + 1]! + wave[i + 2]! - 640) / 640;
+    for (let i = 2; i + lag + 2 < wave.length; i += 3) {
+      const x = at(i) * R * 1.8, y = at(i + lag) * R * 1.8;
+      if (i === 2) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = `hsla(${hue % 360},95%,65%,0.45)`; ctx.lineWidth = small(f) ? 1 : 1.3;
+    ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = small(f) ? 0 : 16; ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+};
+
+type TerrainState = { rows: Float32Array[]; tick: number };
+const terrain: Scene = {
+  id: 'terrain', name: 'Synthwave',
+  setup: () => ({ rows: Array.from({ length: 26 }, () => new Float32Array(33)), tick: 0 }),
+  draw: (f, s: TerrainState) => {
+    const { ctx, w, h, bass } = f;
+    const horizon = h * 0.46;
+    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+    sky.addColorStop(0, '#0b0420'); sky.addColorStop(1, '#3a0a4a');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, w, horizon);
+    ctx.fillStyle = '#05010c'; ctx.fillRect(0, horizon, w, h - horizon);
+    // The sun, striped, swelling with the bass.
+    const sr = Math.min(w, h) * (0.17 + bass * 0.04), sx = w / 2, sy = horizon - sr * 0.35;
+    ctx.save(); ctx.beginPath(); ctx.arc(sx, sy, sr, 0, TAU); ctx.clip();
+    const sun = ctx.createLinearGradient(0, sy - sr, 0, sy + sr); sun.addColorStop(0, '#ffd34d'); sun.addColorStop(1, '#ff2d95');
+    ctx.fillStyle = sun; ctx.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
+    ctx.fillStyle = '#3a0a4a';
+    for (let i = 0; i < 7; i++) { const y = sy + sr * (0.1 + i * 0.13); ctx.fillRect(sx - sr, y, sr * 2, 1.5 + i * 1.3); }
+    ctx.restore();
+    // New spectrum row at the far end every few frames; the land rolls toward you.
+    if (++s.tick % 3 === 0) {
+      const row = s.rows.pop()!;
+      for (let c = 0; c < row.length; c++) { const mid = Math.abs(c - 16) / 16; row[c] = f.band(Math.floor(mid * 30), 32) * (0.35 + mid); }
+      s.rows.unshift(row);
+    }
+    const project = (r: number, c: number) => {
+      const z = (r + 1 - (s.tick % 3) / 3) / s.rows.length; // 0 far .. 1 near
+      const p = Math.pow(z, 1.7);
+      const x = w / 2 + (c - 16) / 16 * w * (0.12 + p * 1.1);
+      const y = horizon + p * (h - horizon) - s.rows[r]![c]! * h * 0.18 * (0.3 + p);
+      return [x, y] as const;
+    };
+    ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(0,240,255,0.75)'; ctx.shadowColor = '#00f0ff'; ctx.shadowBlur = small(f) ? 0 : 6;
+    for (let r = 0; r < s.rows.length; r++) {
+      ctx.beginPath();
+      for (let c = 0; c < 33; c++) { const [x, y] = project(r, c); if (c === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(255,45,149,0.55)'; ctx.shadowColor = '#ff2d95';
+    for (let c = 0; c < 33; c += 2) {
+      ctx.beginPath();
+      for (let r = 0; r < s.rows.length; r++) { const [x, y] = project(r, c); if (r === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  }
+};
+
+// ---------- Particles and space ----------
+
+type Particle = { a: number; r: number; v: number; s: number };
+const alchemy: Scene = {
+  id: 'alchemy', name: 'Alchemy',
+  setup: f => Array.from({ length: small(f) ? 40 : 150 }, () => ({ a: Math.random() * TAU, r: Math.random(), v: 0.002 + Math.random() * 0.006, s: 1 + Math.random() * 2.5 })),
+  draw: (f, particles: Particle[]) => {
+    const { ctx, w, h, hue, bass } = f;
+    fade(f, 'rgba(0,0,0,0.12)');
+    const R = Math.min(w, h) * 0.5;
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.globalCompositeOperation = 'lighter';
+    const arms = 8;
+    for (const p of particles) {
+      p.a += p.v * (1 + bass * 4); p.r += 0.0015 + bass * 0.012; if (p.r > 1) p.r = Math.random() * 0.15;
+      for (let k = 0; k < arms; k++) {
+        const a = p.a + (k * TAU) / arms, rr = p.r * R;
+        ctx.fillStyle = `hsla(${(hue + p.r * 160) % 360},95%,60%,${0.35 * (1 - p.r)})`;
+        ctx.beginPath(); ctx.arc(Math.cos(a) * rr, Math.sin(a) * rr * (k % 2 ? 1 : -1), p.s * (1 + bass * 2) * (small(f) ? 0.5 : 1), 0, TAU); ctx.fill();
+      }
+    }
+    ctx.restore(); ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+const plenoptic: Scene = {
+  id: 'plenoptic', name: 'Plenoptic',
+  draw: f => {
+    const { ctx, w, h, hue, bass, t } = f;
+    fade(f, 'rgba(2,2,6,0.3)');
+    const n = small(f) ? 220 : 900, golden = Math.PI * (3 - Math.sqrt(5));
+    const scale = Math.min(w, h) * 0.5 / Math.sqrt(n) * (1 + bass * 0.25);
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.globalCompositeOperation = 'lighter';
+    // Seeds in a sunflower pattern; each ring of seeds follows one band of the music.
+    for (let k = 0; k < n; k++) {
+      const a = k * golden + t * 0.004, r = Math.sqrt(k) * scale;
+      const v = f.band(Math.floor((k / n) * 48), 48);
+      ctx.fillStyle = `hsla(${(hue + k * 0.4) % 360},90%,${45 + v * 35}%,${0.35 + v * 0.6})`;
+      ctx.beginPath(); ctx.arc(Math.cos(a) * r, Math.sin(a) * r, (small(f) ? 0.8 : 1.4) + v * (small(f) ? 1.5 : 4), 0, TAU); ctx.fill();
+    }
+    ctx.restore(); ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+type Star = { x: number; y: number; z: number };
+const starfield: Scene = {
+  id: 'starfield', name: 'Starfield',
+  setup: f => Array.from({ length: small(f) ? 60 : 360 }, () => ({ x: (Math.random() - 0.5) * 2, y: (Math.random() - 0.5) * 2, z: Math.random() })),
+  draw: (f, stars: Star[]) => {
+    const { ctx, w, h, hue, bass, mids, tint: [tr, tg, tb] } = f;
+    fade(f, `rgba(0,0,6,${0.35 - bass * 0.2})`);
+    const glow = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.min(w, h) * (0.25 + bass * 0.2));
+    glow.addColorStop(0, `rgba(${tr},${tg},${tb},${0.12 + bass * 0.25})`); glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
+    const speed = 0.004 + bass * 0.04 + mids * 0.01;
+    for (const st of stars) {
+      const pz = st.z; st.z -= speed;
+      if (st.z <= 0.02) { st.x = (Math.random() - 0.5) * 2; st.y = (Math.random() - 0.5) * 2; st.z = 1; continue; }
+      const sx = w / 2 + (st.x / st.z) * w * 0.5, sy = h / 2 + (st.y / st.z) * h * 0.5;
+      const px = w / 2 + (st.x / pz) * w * 0.5, py = h / 2 + (st.y / pz) * h * 0.5;
+      if (sx < 0 || sx > w || sy < 0 || sy > h) { st.z = 1; continue; }
+      ctx.strokeStyle = `hsla(${(hue + st.z * 120) % 360},80%,${70 + (1 - st.z) * 30}%,${1 - st.z})`;
+      ctx.lineWidth = (1 - st.z) * (small(f) ? 1.5 : 3);
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(sx, sy); ctx.stroke();
+    }
+  }
+};
+
+type GalaxyStar = { arm: number; r: number; off: number; s: number };
+const galaxy: Scene = {
+  id: 'galaxy', name: 'Galaxy',
+  setup: f => Array.from({ length: small(f) ? 160 : 900 }, () => ({ arm: Math.floor(Math.random() * 3), r: Math.pow(Math.random(), 0.7), off: (Math.random() - 0.5) * 0.5, s: Math.random() })),
+  draw: (f, stars: GalaxyStar[]) => {
+    const { ctx, w, h, hue, bass, mids, t, tint: [tr, tg, tb] } = f;
+    fade(f, 'rgba(1,1,5,0.35)');
+    const R = Math.max(w, h) * 0.5, cx = w / 2, cy = h / 2;
+    const spin = t * (0.002 + mids * 0.004);
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(1, 0.62); ctx.globalCompositeOperation = 'lighter';
+    for (const st of stars) {
+      const a = st.arm * (TAU / 3) + st.r * 5.2 + st.off - spin * (1.2 - st.r * 0.6);
+      const v = f.band(Math.floor(st.r * 40), 40);
+      const rr = st.r * R;
+      ctx.fillStyle = `hsla(${(hue + 200 + st.r * 120) % 360},80%,${55 + v * 35}%,${0.25 + v * 0.7})`;
+      ctx.fillRect(Math.cos(a) * rr, Math.sin(a) * rr, 1 + st.s * (small(f) ? 1 : 2) + v * 2, 1 + st.s * (small(f) ? 1 : 2) + v * 2);
+    }
+    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, R * (0.2 + bass * 0.15));
+    core.addColorStop(0, `rgba(255,240,220,${0.6 + bass * 0.4})`); core.addColorStop(0.4, `rgba(${tr},${tg},${tb},0.35)`); core.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = core; ctx.beginPath(); ctx.arc(0, 0, R * 0.4, 0, TAU); ctx.fill();
+    ctx.restore(); ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+type Drop = { x: number; y: number; vx: number; vy: number; life: number; hue: number };
+const fountain: Scene = {
+  id: 'fountain', name: 'Fountain',
+  setup: () => [] as Drop[],
+  draw: (f, drops: Drop[]) => {
+    const { ctx, w, h, hue, bass, beat, level } = f;
+    fade(f, 'rgba(2,3,10,0.22)');
+    const spawn = (small(f) ? 2 : 8) + Math.floor(level * (small(f) ? 6 : 26)) + (beat ? (small(f) ? 20 : 120) : 0);
+    for (let i = 0; i < spawn && drops.length < (small(f) ? 300 : 1800); i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * (0.5 + bass * 0.8);
+      const sp = h * (0.012 + Math.random() * 0.012 + bass * 0.018);
+      drops.push({ x: w / 2 + (Math.random() - 0.5) * w * 0.04, y: h, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, hue: (hue + Math.random() * 60) % 360 });
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const d = drops[i]!;
+      d.x += d.vx; d.y += d.vy; d.vy += h * 0.00045; d.life -= 0.008;
+      if (d.life <= 0 || d.y > h + 4) { drops.splice(i, 1); continue; }
+      ctx.fillStyle = `hsla(${d.hue},90%,65%,${d.life})`;
+      ctx.fillRect(d.x, d.y, small(f) ? 1.5 : 3.5, small(f) ? 1.5 : 3.5);
+    }
+    const base = ctx.createRadialGradient(w / 2, h, 0, w / 2, h, h * (0.25 + bass * 0.3));
+    base.addColorStop(0, `hsla(${hue},90%,65%,${0.25 + bass * 0.4})`); base.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = base; ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+type Bubble = { x: number; y: number; r: number; v: number; hue: number };
+const bubbles: Scene = {
+  id: 'bubbles', name: 'Bubbles',
+  setup: () => [] as Bubble[],
+  draw: (f, list: Bubble[]) => {
+    const { ctx, w, h, hue, beat, level, t } = f;
+    const bg = ctx.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#02121c'); bg.addColorStop(1, '#03263a');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    if ((beat || Math.random() < level * 0.5) && list.length < (small(f) ? 25 : 120)) {
+      const v = f.band(Math.floor(Math.random() * 24), 24);
+      list.push({ x: Math.random() * w, y: h + 20, r: (small(f) ? 3 : 8) + v * (small(f) ? 10 : 40), v: 0.6 + Math.random() * 1.6, hue: (hue + Math.random() * 80) % 360 });
+    }
+    for (let i = list.length - 1; i >= 0; i--) {
+      const b = list[i]!;
+      b.y -= b.v * (1 + level * 2); b.x += Math.sin(t * 0.03 + b.r) * 0.6;
+      if (b.y < -b.r * 2) { list.splice(i, 1); continue; }
+      const g = ctx.createRadialGradient(b.x - b.r * 0.35, b.y - b.r * 0.35, b.r * 0.1, b.x, b.y, b.r);
+      g.addColorStop(0, 'rgba(255,255,255,0.55)'); g.addColorStop(0.5, `hsla(${b.hue},80%,60%,0.12)`); g.addColorStop(1, `hsla(${b.hue},90%,70%,0.45)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill();
+    }
+  }
+};
+
+// ---------- Geometry and light ----------
+
+const tunnel: Scene = {
+  id: 'tunnel', name: 'Tunnel',
+  draw: f => {
+    const { ctx, w, h, hue, bass, t } = f;
+    fade(f, 'rgba(2,2,8,0.22)');
+    const R = Math.min(w, h) * 0.45, pts = 180;
+    for (let ring = 0; ring < 4; ring++) {
+      ctx.beginPath();
+      const turn = t * 0.004 * (ring + 1) * (ring % 2 ? -1 : 1);
+      for (let i = 0; i < pts; i++) {
+        const a = (i / pts) * TAU + turn;
+        const r = R * (0.25 + ring * 0.2) + f.ring(i, pts) * R * 0.3;
+        const x = w / 2 + Math.cos(a) * r, y = h / 2 + Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = `hsla(${(hue + ring * 50) % 360},90%,62%,0.85)`; ctx.lineWidth = (small(f) ? 1 : 2) + bass * 4;
+      ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = small(f) ? 0 : 10; ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  }
+};
+
+type RippleState = { rings: { r: number; hue: number }[] };
+const ripples: Scene = {
+  id: 'ripples', name: 'Ripples',
+  setup: () => ({ rings: [] }),
+  draw: (f, s: RippleState) => {
+    const { ctx, w, h, hue, bass, beat, t, tint: [tr, tg, tb] } = f;
+    fade(f, 'rgba(2,4,10,0.2)');
+    const bg = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.6);
+    bg.addColorStop(0, `rgba(${tr},${tg},${tb},${0.06 + bass * 0.12})`); bg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    if (beat || t % 36 === 0) s.rings.push({ r: Math.min(w, h) * 0.05, hue });
+    const max = Math.hypot(w, h) / 2;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = s.rings.length - 1; i >= 0; i--) {
+      const rp = s.rings[i]!;
+      rp.r += max * 0.008 * (1 + bass * 1.5);
+      const life = 1 - rp.r / max;
+      if (life <= 0) { s.rings.splice(i, 1); continue; }
+      // Each ring is shaped by the music as it travels out.
+      ctx.beginPath();
+      const pts = small(f) ? 48 : 120;
+      for (let k = 0; k < pts; k++) {
+        const a = (k / pts) * TAU, r = rp.r + f.ring(k, pts) * Math.min(w, h) * 0.05 * life;
+        const x = w / 2 + Math.cos(a) * r, y = h / 2 + Math.sin(a) * r;
+        if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = `hsla(${rp.hue},90%,65%,${life * 0.9})`; ctx.lineWidth = 1 + life * (small(f) ? 2 : 5); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    const core = Math.min(w, h) * (0.04 + bass * 0.07);
+    const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, core);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)'); g.addColorStop(1, `hsla(${hue},90%,60%,0.2)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(w / 2, h / 2, core, 0, TAU); ctx.fill();
+  }
+};
+
+const kaleidoscope: Scene = {
+  id: 'kaleidoscope', name: 'Kaleidoscope',
+  draw: f => {
+    const { ctx, w, h, hue, wave, bass, t } = f;
+    fade(f, 'rgba(3,2,8,0.16)');
+    const R = Math.hypot(w, h) / 2, seg = 12;
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.globalCompositeOperation = 'lighter';
+    for (let s = 0; s < seg; s++) {
+      ctx.save(); ctx.rotate((s * TAU) / seg + t * 0.003); if (s % 2) ctx.scale(1, -1);
+      ctx.beginPath();
+      // The waveform laid along one wedge, mirrored into every other.
+      for (let i = 0; i < 128; i++) {
+        const p = i / 128, a = p * (TAU / seg);
+        const r = R * (0.1 + p * 0.85) + ((wave[i * 8]! - 128) / 128) * R * 0.25;
+        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.strokeStyle = `hsla(${(hue + s * 8) % 360},90%,60%,0.55)`; ctx.lineWidth = small(f) ? 1 : 2 + bass * 3; ctx.stroke();
+      const v = f.band(s * 3, seg * 3);
+      ctx.fillStyle = `hsla(${(hue + 180) % 360},90%,65%,${0.2 + v * 0.5})`;
+      ctx.beginPath(); ctx.arc(R * (0.2 + v * 0.3), R * 0.04, 2 + v * (small(f) ? 3 : 10), 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore(); ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+type BatteryState = { buf: HTMLCanvasElement; bctx: CanvasRenderingContext2D | null; sides: number };
+const battery: Scene = {
+  id: 'battery', name: 'Battery',
+  setup: () => { const buf = document.createElement('canvas'); return { buf, bctx: buf.getContext('2d'), sides: 5 }; },
+  draw: (f, s: BatteryState) => {
+    const { ctx, w, h, hue, bass, beat, t, dpr } = f;
+    if (!s.bctx) return;
+    const cw = ctx.canvas.width, ch = ctx.canvas.height;
+    if (s.buf.width !== cw || s.buf.height !== ch) { s.buf.width = cw; s.buf.height = ch; }
+    // Feedback: the last frame, slightly bigger and turned, under the new one. That is the endless-zoom look.
+    s.bctx.clearRect(0, 0, cw, ch); s.bctx.drawImage(ctx.canvas, 0, 0);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(0, 0, cw, ch);
+    ctx.translate(cw / 2, ch / 2); ctx.rotate(0.012 + bass * 0.02); ctx.scale(1.035 + bass * 0.03, 1.035 + bass * 0.03); ctx.translate(-cw / 2, -ch / 2);
+    ctx.globalAlpha = 0.9; ctx.drawImage(s.buf, 0, 0); ctx.globalAlpha = 1;
+    ctx.restore(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (beat) s.sides = 3 + Math.floor(Math.random() * 5);
+    const R = Math.min(w, h) * (0.08 + bass * 0.12);
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.rotate(-t * 0.02);
+    ctx.beginPath();
+    for (let i = 0; i <= s.sides; i++) { const a = (i / s.sides) * TAU; if (i === 0) ctx.moveTo(Math.cos(a) * R, Math.sin(a) * R); else ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R); }
+    ctx.strokeStyle = `hsl(${hue % 360},100%,65%)`; ctx.lineWidth = small(f) ? 1.5 : 3; ctx.stroke();
+    ctx.restore();
+  }
+};
+
+type Bolt = { pts: [number, number][]; life: number; hue: number };
+type Storm = { bolts: Bolt[]; flash: number; clouds: { x: number; y: number; r: number; v: number }[] };
+const lightning: Scene = {
+  id: 'lightning', name: 'Lightning',
+  setup: f => ({ bolts: [], flash: 0, clouds: Array.from({ length: small(f) ? 6 : 14 }, () => ({ x: Math.random(), y: Math.random() * 0.45, r: 0.15 + Math.random() * 0.25, v: 0.0003 + Math.random() * 0.0006 })) }),
+  draw: (f, storm: Storm) => {
+    const { ctx, w, h, hue, bass, beat, t, level } = f;
+    const bolts = storm.bolts;
+    fade(f, 'rgba(4,4,14,0.35)');
+    // Clouds drift across, lit from inside when lightning strikes.
+    storm.flash *= 0.85;
+    for (const c of storm.clouds) {
+      c.x += c.v; if (c.x - c.r > 1.2) c.x = -c.r;
+      const g = ctx.createRadialGradient(c.x * w, c.y * h, 0, c.x * w, c.y * h, c.r * w);
+      g.addColorStop(0, `hsla(${(hue + 230) % 360},45%,${30 + storm.flash * 50}%,${0.5 + storm.flash * 0.4})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(c.x * w - c.r * w, c.y * h - c.r * w, c.r * w * 2, c.r * w * 2);
+    }
+    if (beat || t % 45 === 0 || Math.random() < level * 0.05) {
+      storm.flash = Math.min(1, storm.flash + (beat ? 0.9 : 0.5));
+      // A jagged path from the top to somewhere below, by repeatedly nudging midpoints.
+      let pts: [number, number][] = [[w * (0.2 + Math.random() * 0.6), 0], [w * (0.15 + Math.random() * 0.7), h * (0.6 + Math.random() * 0.4)]];
+      for (let k = 0; k < 6; k++) {
+        const next: [number, number][] = [];
+        for (let i = 0; i < pts.length - 1; i++) {
+          const [x0, y0] = pts[i]!, [x1, y1] = pts[i + 1]!;
+          next.push([x0, y0], [(x0 + x1) / 2 + (Math.random() - 0.5) * w * 0.12 / (k + 1), (y0 + y1) / 2]);
+        }
+        next.push(pts[pts.length - 1]!); pts = next;
+      }
+      bolts.push({ pts, life: 1, hue: (hue + 200) % 360 });
+    }
+    if (storm.flash > 0.05) { ctx.fillStyle = `rgba(200,210,255,${storm.flash * 0.12})`; ctx.fillRect(0, 0, w, h); }
+    const horizon = ctx.createLinearGradient(0, h * 0.7, 0, h);
+    horizon.addColorStop(0, 'rgba(0,0,0,0)'); horizon.addColorStop(1, `hsla(${(hue + 220) % 360},80%,40%,${0.1 + bass * 0.3})`);
+    ctx.fillStyle = horizon; ctx.fillRect(0, h * 0.7, w, h * 0.3);
+    for (let i = bolts.length - 1; i >= 0; i--) {
+      const b = bolts[i]!;
+      b.life -= 0.035;
+      if (b.life <= 0) { bolts.splice(i, 1); continue; }
+      ctx.beginPath(); b.pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.strokeStyle = `hsla(${b.hue},100%,85%,${b.life})`; ctx.lineWidth = (small(f) ? 1 : 2.5) * b.life + 0.5;
+      ctx.shadowColor = `hsl(${b.hue},100%,70%)`; ctx.shadowBlur = small(f) ? 0 : 24; ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  }
+};
+
+const colors: Scene = {
+  id: 'colors', name: 'Musical colors',
+  draw: f => {
+    const { ctx, w, h, hue, t } = f;
+    fade(f, 'rgba(0,0,0,0.2)');
+    ctx.globalCompositeOperation = 'lighter';
+    const cols = 4, rows = 3;
+    // Soft pools of colour, one per range of the music, breathing with it.
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const k = r * cols + c, v = f.band(k * 3, cols * rows * 3);
+      const x = ((c + 0.5) / cols) * w + Math.sin(t * 0.01 + k) * w * 0.05, y = ((r + 0.5) / rows) * h + Math.cos(t * 0.013 + k) * h * 0.06;
+      const rad = Math.min(w / cols, h / rows) * (0.4 + v * 0.9);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+      g.addColorStop(0, `hsla(${(hue + k * 30) % 360},90%,60%,${0.15 + v * 0.55})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+type MatrixState = { drops: number[]; size: number };
+const GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉ0123456789';
+const matrix: Scene = {
+  id: 'matrix', name: 'Code rain',
+  setup: f => { const size = small(f) ? 8 : 16; return { size, drops: Array.from({ length: Math.ceil(f.w / size) + 1 }, () => Math.random() * -50) }; },
+  draw: (f, s: MatrixState) => {
+    const { ctx, w, h, level, tint: [tr, , tb] } = f;
+    fade(f, 'rgba(0,0,0,0.12)');
+    ctx.font = `${s.size}px monospace`;
+    const cols = Math.ceil(w / s.size);
+    while (s.drops.length < cols) s.drops.push(Math.random() * -50);
+    for (let i = 0; i < cols; i++) {
+      const v = f.band(Math.floor((i / cols) * 32), 32);
+      const y = s.drops[i]! * s.size;
+      ctx.fillStyle = `rgba(${Math.min(255, tr * 0.4 + 200 * v)},255,${Math.min(255, tb * 0.4 + 120 * v)},${0.5 + v * 0.5})`;
+      ctx.fillText(GLYPHS[Math.floor(Math.random() * GLYPHS.length)]!, i * s.size, y);
+      s.drops[i]! += 0.35 + level * 1.4 + v * 0.8;
+      if (y > h && Math.random() > 0.96) s.drops[i] = 0;
+    }
+  }
+};
+
+// ---------- Pixel fields ----------
+
+const plasma: Scene = {
+  id: 'plasma', name: 'Plasma',
+  draw: f => {
+    const { lo, t, mids, bass, hue, tint: [tr, tg, tb] } = f;
+    const W = lo.w, H = lo.h, d = lo.img.data, k = t * (0.02 + mids * 0.05), amp = 1 + bass * 3;
+    const glow = 0.35 + bass * 0.45;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = Math.sin(x * 0.09 * amp + k) + Math.sin(y * 0.11 + k * 1.3) + Math.sin((x + y) * 0.06 + k * 0.7) + Math.sin(Math.hypot(x - W / 2, y - H / 2) * 0.12 - k * 2);
+      const o = (y * W + x) * 4, c = (v + 4) / 8;
+      // Deep, not neon: the colours swing around the cover's tint and sit low, brightening with the beat.
+      d[o] = (tr * 0.5 + 60 * (1 + Math.sin(Math.PI * (c * 2 + hue / 180)))) * glow;
+      d[o + 1] = (tg * 0.5 + 60 * (1 + Math.sin(Math.PI * (c * 2 + hue / 180 + 0.66)))) * glow;
+      d[o + 2] = (tb * 0.5 + 60 * (1 + Math.sin(Math.PI * (c * 2 + hue / 180 + 1.33)))) * glow;
+      d[o + 3] = 255;
+    }
+    lo.blit();
+  }
+};
+
+const fire: Scene = {
+  id: 'fire', name: 'Fire',
+  setup: f => new Float32Array(f.lo.w * f.lo.h),
+  draw: (f, heat: Float32Array) => {
+    const { lo } = f;
+    const W = lo.w, H = lo.h, d = lo.img.data;
+    // Seed the bottom row from the spectrum, then let the heat rise and cool.
+    for (let x = 0; x < W; x++) heat[(H - 1) * W + x] = Math.min(1, f.band(Math.floor((x / W) * 40), 40) * 1.3 + Math.random() * 0.15);
+    for (let y = 0; y < H - 1; y++) for (let x = 0; x < W; x++) {
+      const below = (y + 1) * W;
+      heat[y * W + x] = Math.max(0, (heat[below + x]! + heat[below + Math.max(0, x - 1)]! + heat[below + Math.min(W - 1, x + 1)]! + heat[Math.min(H - 1, y + 2) * W + x]!) / 4.12 - 0.002);
+    }
+    for (let i = 0; i < W * H; i++) {
+      const v = heat[i]!, o = i * 4;
+      d[o] = Math.min(255, v * 3 * 255); d[o + 1] = Math.min(255, Math.max(0, v * 3 - 1) * 255); d[o + 2] = Math.min(255, Math.max(0, v * 3 - 2) * 255); d[o + 3] = 255;
+    }
+    lo.blit();
+  }
+};
+
+/** In picker order, grouped: spectrum, waves, space, geometry, fields. */
+export const SCENE_LIST: Scene[] = [
+  bars, led, radial, pulse, spikes, vu, waterfall,
+  mist, waves, aurora, scope, lissajous, terrain,
+  alchemy, plenoptic, starfield, galaxy, fountain, bubbles,
+  tunnel, ripples, kaleidoscope, battery, lightning, colors, matrix,
+  plasma, fire
+];
+export const SCENE_BY_ID = new Map(SCENE_LIST.map(s => [s.id, s]));

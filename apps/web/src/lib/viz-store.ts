@@ -5,7 +5,8 @@ import { api, type Lyrics } from './api';
  * Visualizer settings shared by every place that shows one (the bottom bar, the Music page, Now Playing and the
  * full-screen stage), so a choice made in one shows in all of them.
  */
-export type SceneId = 'bars' | 'radial' | 'pulse' | 'mist' | 'aurora' | 'alchemy' | 'starfield' | 'tunnel' | 'ripples' | 'plasma' | 'fire' | 'scope' | 'cycle';
+/** A scene id from components/music/viz-scenes, or 'cycle'. */
+export type SceneId = string;
 export type LyricStyle = 'off' | 'karaoke' | 'roll';
 export type VizState = {
   scene: SceneId;
@@ -19,14 +20,13 @@ export type VizState = {
 };
 
 const KEY = 'vv-viz';
-const SCENE_IDS: SceneId[] = ['bars', 'radial', 'pulse', 'mist', 'aurora', 'alchemy', 'starfield', 'tunnel', 'ripples', 'plasma', 'fire', 'scope', 'cycle'];
 const read = (): VizState => {
   const base: VizState = { scene: 'bars', lyricStyle: 'karaoke', screensaver: true, inPlayer: true, stage: 'closed' };
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<VizState>;
     return {
       ...base,
-      scene: SCENE_IDS.includes(saved.scene as SceneId) ? saved.scene! : base.scene,
+      scene: typeof saved.scene === 'string' && /^[a-z]+$/.test(saved.scene) ? saved.scene : base.scene,
       lyricStyle: (['off', 'karaoke', 'roll'] as const).includes(saved.lyricStyle as LyricStyle) ? saved.lyricStyle! : base.lyricStyle,
       screensaver: saved.screensaver ?? base.screensaver,
       inPlayer: saved.inPlayer ?? base.inPlayer

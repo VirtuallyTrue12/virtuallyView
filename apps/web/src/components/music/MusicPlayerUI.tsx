@@ -226,7 +226,7 @@ function useVoices(): { voices: VoiceOption[]; natural: boolean | null } {
 }
 
 function MixPanel() {
-  const { crossfade, djMode, djVoice, djFrequency, entry, setCrossfade, setDjMode, setDjVoice, setDjFrequency } = useMusicPlayer();
+  const { crossfade, djMode, djVoice, djFrequency, entry, duration, setCrossfade, setDjMode, setDjVoice, setDjFrequency, djTryNow } = useMusicPlayer();
   const { voices, natural } = useVoices();
   const [testing, setTesting] = useState<string | null>(null);
   const current = djVoice || voices[0]?.id || '';
@@ -250,6 +250,7 @@ function MixPanel() {
           <span className="toggle-knob" aria-hidden="true" />
           <span><strong>DJ mode</strong> <small>a host who waits a few songs, then talks over intros and outros, never over the singing</small></span>
         </button>
+        <button type="button" className="btn btn-secondary btn-sm mix-try" onClick={djTryNow} disabled={!(duration >= 60)} title="Jumps near the end of this song so you hear the host at the change">Hear the DJ now</button>
         {djMode && (
           <div className="seg" role="radiogroup" aria-label="How often the DJ talks">
             <span className="seg-label">Talks</span>

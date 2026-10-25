@@ -89,6 +89,8 @@ interface MusicContextValue {
   setDjMode: (on: boolean) => void;
   setDjVoice: (name: string) => void;
   setDjFrequency: (f: DjFrequency) => void;
+  /** Try DJ mode without waiting: jump near the end of this song and have the host talk at the change. */
+  djTryNow: () => void;
 }
 
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -468,7 +470,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     else if (outroRoom >= secs + fade + 1) mode = 'outro';
     // No lyrics for either: no way to see the singing, so talk over a dipped mix. A kind word or the hour is
     // worth saying even when both songs are wall-to-wall vocals; anything else waits for a better moment.
-    else if ((firstVocal === undefined && lastVocal === undefined) || brk.reason === 'mood' || brk.reason === 'hour') mode = 'over';
+    else if ((firstVocal === undefined && lastVocal === undefined) || brk.reason === 'mood' || brk.reason === 'hour' || brain.current!.force) mode = 'over';
     djPlan.current = mode === 'none' ? empty : { index: next, brk, mode, talkAt: fade + secs + 1.2, speed, started: false };
   }, [peekNext]);
 
@@ -576,6 +578,15 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const setDjVoice = useCallback((name: string) => setDjVoiceState(name), []);
   const setDjFrequency = useCallback((f: DjFrequency) => { setDjFrequencyState(f); brain.current!.frequency = f; djPlan.current = null; djPreparing.current = null; }, []);
   useEffect(() => store('vv-dj-freq', djFrequency), [djFrequency]);
+  const djTryNow = useCallback(() => {
+    const a = live();
+    if (!a || !Number.isFinite(a.duration) || a.duration < 60) return;
+    setDjModeState(true);
+    brain.current!.force = true;
+    djPlan.current = null; djPreparing.current = null;
+    a.currentTime = Math.max(0, a.duration - 45);
+    if (a.paused) { wantPlay.current = true; void a.play().catch(() => undefined); }
+  }, []);
 
   // Volume and mute apply to both decks (the fades live in the audio graph, not on the element).
   useEffect(() => {
@@ -675,7 +686,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     expanded, setExpanded, getTime, removeFromQueue, clearUpcoming, eqEnabled, eqPreset, eqBands, preamp, balance,
     leveller, customPresets, crossfade, djMode, djVoice, djFrequency, djTalking, playQueue, shufflePlay, toggle, stopPlayback,
     nextTrack, prevTrack, skipTo, seek, setVolume, toggleMute, toggleShuffle, toggleRepeat, setEqEnabled, setEqPreset,
-    setEqBand, setPreamp, setBalance, setLeveller, saveCustomPreset, deleteCustomPreset, setCrossfade, setDjMode, setDjVoice, setDjFrequency
+    setEqBand, setPreamp, setBalance, setLeveller, saveCustomPreset, deleteCustomPreset, setCrossfade, setDjMode, setDjVoice, setDjFrequency, djTryNow
   };
 
   const deckProps = {

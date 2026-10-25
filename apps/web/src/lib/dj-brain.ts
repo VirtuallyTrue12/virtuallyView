@@ -50,6 +50,8 @@ export class DjBrain {
   private lastMoodAt = -99;
   private lastGenreAt = -99;
   private recent: string[] = [];
+  /** Set by "Hear the DJ now": the next change gets a break whatever the pace. */
+  force = false;
 
   constructor(public frequency: DjFrequency = 'balanced', private random: () => number = Math.random, now = Date.now()) {
     this.lastTalkAt = now;
@@ -71,6 +73,7 @@ export class DjBrain {
   /** A break was actually spoken. */
   commit(b: DjBreak, now = Date.now()): void {
     this.sinceTalk = 0;
+    this.force = false;
     this.lastTalkAt = now;
     this.target = this.draw();
     if (b.reason === 'mood') this.lastMoodAt = this.played.length;
@@ -97,11 +100,11 @@ export class DjBrain {
 
   private decide(next: DjSong, upcoming: DjSong[], now: Date): DjBreak | null {
     const n = this.played.length;
-    if (n < QUIET_START) return null;
+    if (n < QUIET_START && !this.force) return null;
     const pace = PACE[this.frequency];
     const minutes = (now.getTime() - this.lastTalkAt) / 60000;
     const minGap = this.frequency === 'chatty' ? 1 : 2;
-    if (this.sinceTalk < minGap) return null;
+    if (this.sinceTalk < minGap && !this.force) return null;
     const last = this.played.slice(-4);
     // Lines carry {intro}, filled in only for the line that is used.
     const fill = (line: string) => line.replace('{intro}', () => this.intro(next));
@@ -144,10 +147,10 @@ export class DjBrain {
       ])) };
     }
 
-    if (this.sinceTalk < this.target && minutes < pace.minutes) return null;
+    if (this.sinceTalk < this.target && minutes < pace.minutes && !this.force) return null;
 
     // The usual break: look back over the last few, then lead into the next, with an extra now and then.
-    const back = this.played.slice(-Math.min(2, this.sinceTalk)).reverse();
+    const back = this.played.slice(-Math.max(1, Math.min(2, this.sinceTalk))).reverse();
     const titles = back.map(s => s.title);
     const sameArtist = back.length > 1 && back.every(s => s.artist && s.artist === back[0]!.artist);
     const recap = back.length === 1

@@ -6111,3 +6111,24 @@ body.has-viz-stage { overflow: hidden; }
 
 .vstage-picker .viz-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 640px) { .vstage-picker .viz-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Now Playing tabs never wrap: they scroll sideways on narrow screens */
+.np-tabs { overflow-x: auto; scrollbar-width: none; }
+.np-tabs::-webkit-scrollbar { display: none; }
+.np-tab { white-space: nowrap; flex: none; }
+@media (max-width: 640px) {
+  .np-tab { padding: 0.55rem 0.7rem; font-size: 0.82rem; }
+  .np-viz-bar { gap: 6px; margin-top: 10px; }
+  .np-viz-bar .seg-btn { padding: 0.28rem 0.65rem; font-size: 0.76rem; }
+  .np-viz-bar .chip { padding: 0.3rem 0.65rem; font-size: 0.74rem; }
+}
+/* Lyrics sit low on the full-screen stage, clear of the picture's centre */
+.vstage-lyrics .viz-lyrics { inset: auto 0 15% 0; }
+.vstage-lyrics .viz-note { bottom: 15%; }
+@media (min-width: 900px) { .vstage-picker .viz-tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .vstage-lyrics .viz-lyrics { inset: auto 0 calc(30% + 20px) 0; }
+  .vstage-lyrics .viz-lyrics--lg .viz-line--now { font-size: 1.6rem; }
+  .np-tabs { mask-image: linear-gradient(90deg, #000 85%, transparent); -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); }
+}
+.mix-try { justify-self: start; }
