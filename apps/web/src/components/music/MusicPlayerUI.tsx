@@ -285,6 +285,12 @@ function VisualsPanel({ tint }: { tint: string }) {
     <div className="visuals">
       <SceneTiles tint={tint} />
       <LyricStyleToggle />
+      <div className="seg" role="radiogroup" aria-label="Frame rate">
+        <span className="seg-label">Frame rate</span>
+        {([[24, '24 film'], [30, '30 video'], [60, '60 smooth']] as const).map(([n, label]) => (
+          <button key={n} type="button" role="radio" aria-checked={viz.fps === n} className={`seg-btn${viz.fps === n ? ' is-on' : ''}`} onClick={() => setViz({ fps: n })}>{label}</button>
+        ))}
+      </div>
       <button type="button" role="switch" aria-checked={viz.screensaver} className={`toggle${viz.screensaver ? ' is-on' : ''}`} onClick={() => setViz({ screensaver: !viz.screensaver })}>
         <span className="toggle-knob" aria-hidden="true" />
         <span>Start full screen after a minute idle <small>like a screensaver; any key brings you back</small></span>

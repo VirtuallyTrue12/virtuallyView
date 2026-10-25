@@ -15,13 +15,15 @@ export type VizState = {
   screensaver: boolean;
   /** Show the visualizer in place of the cover in Now Playing. */
   inPlayer: boolean;
+  /** Frames a second: 24 like film, 30 like video, 60 smooth. Capped so motion stays even. */
+  fps: 24 | 30 | 60;
   /** The full-screen stage: closed, opened by the person, or opened by the screensaver. */
   stage: 'closed' | 'open' | 'auto';
 };
 
 const KEY = 'vv-viz';
 const read = (): VizState => {
-  const base: VizState = { scene: 'mood', lyricStyle: 'karaoke', screensaver: true, inPlayer: true, stage: 'closed' };
+  const base: VizState = { fps: 60, scene: 'mood', lyricStyle: 'karaoke', screensaver: true, inPlayer: true, stage: 'closed' };
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<VizState>;
     return {
@@ -29,7 +31,8 @@ const read = (): VizState => {
       scene: typeof saved.scene === 'string' && /^[a-z]+$/.test(saved.scene) ? saved.scene : base.scene,
       lyricStyle: (['off', 'karaoke', 'roll'] as const).includes(saved.lyricStyle as LyricStyle) ? saved.lyricStyle! : base.lyricStyle,
       screensaver: saved.screensaver ?? base.screensaver,
-      inPlayer: saved.inPlayer ?? base.inPlayer
+      inPlayer: saved.inPlayer ?? base.inPlayer,
+      fps: saved.fps === 24 || saved.fps === 30 ? saved.fps : base.fps
     };
   } catch { return base; }
 };

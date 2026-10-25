@@ -51,7 +51,7 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
     const freq = new Uint8Array(1024);
     const wave = new Uint8Array(2048);
     const f: Frame = {
-      ctx, w: 0, h: 0, dpr, t: 0, variant, freq, wave, bass: 0, mids: 0, treble: 0, level: 0, hue: 0, beat: false,
+      ctx, w: 0, h: 0, dpr, t: 0, step: 1, variant, freq, wave, bass: 0, mids: 0, treble: 0, level: 0, hue: 0, beat: false,
       tint: tint.split(',').map(x => Number(x.trim()) || 128).slice(0, 3) as [number, number, number],
       // Log-spaced from 35 Hz to 16 kHz, each the loudest bin in its slice, so every band moves.
       band: (i, count) => {
@@ -122,12 +122,20 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
     const io = new IntersectionObserver(entries => { onScreen = entries.some(e => e.isIntersecting); });
     io.observe(cv);
 
-    const draw = () => {
+    // Frames are paced to the chosen rate (previews at 15), and motion follows real time, not the frame count.
+    let lastDraw = 0, due = 0;
+    const draw = (ts: number) => {
       raf = requestAnimationFrame(draw);
-      f.t += 1;
-      if (hidden || !onScreen || (variant === 'tile' && f.t % 4)) return;
-      // One visualizer at a time: the full-screen view pauses the others underneath it.
-      if (!stage && vizNow().stage !== 'closed') return;
+      if (hidden || !onScreen) return;
+      // One visualizer at a time: the full-screen view pauses the others underneath it (not its scene previews).
+      if (!stage && variant !== 'tile' && vizNow().stage !== 'closed') return;
+      const interval = 1000 / (variant === 'tile' ? 15 : vizNow().fps);
+      // Keep to a schedule (not "at least this long since the last frame"), so 24 on a 60 Hz screen averages 24.
+      if (due && ts < due - 4) return;
+      due = Math.max((due || ts) + interval, ts - interval);
+      f.step = lastDraw ? Math.min(4, (ts - lastDraw) / (1000 / 60)) : 1;
+      f.t += f.step;
+      lastDraw = ts;
       const an = audioEngine.analyser;
       if (an) { an.getByteFrequencyData(freq); an.getByteTimeDomainData(wave); } else { freq.fill(0); wave.fill(128); }
       let bass = 0; for (let b = 1; b < 8; b++) bass += freq[b]!; f.bass = bass / (7 * 255);
@@ -163,7 +171,7 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       }
       next.draw?.(f, state as never);
     };
-    draw();
+    raf = requestAnimationFrame(draw);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', onVis); onMoodRef.current?.(null); };
   }, [scene, tint, variant, stage]);
 

@@ -11,7 +11,9 @@ export type Variant = 'full' | 'strip' | 'tile';
 
 export interface Frame {
   ctx: CanvasRenderingContext2D;
-  w: number; h: number; dpr: number; t: number; variant: Variant;
+  w: number; h: number; dpr: number; variant: Variant;
+  /** Time in 60ths of a second (frames at 60), and how many of those this frame covers (2 at 30 fps). */
+  t: number; step: number;
   freq: Uint8Array; wave: Uint8Array;
   /** 0..1 energy in the low, middle and high range, and overall. */
   bass: number; mids: number; treble: number; level: number;
@@ -39,6 +41,8 @@ export interface Scene {
 const TAU = Math.PI * 2;
 const fade = (f: Frame, rgba: string) => { f.ctx.fillStyle = rgba; f.ctx.fillRect(0, 0, f.w, f.h); };
 const small = (f: Frame) => f.variant === 'tile';
+/** True on the frame that crosses a multiple of `n` sixtieths of a second (frames may be 1, 2 or 2.5 apart). */
+const every = (f: { t: number; step: number }, n: number) => Math.floor(f.t / n) !== Math.floor((f.t - f.step) / n);
 /** Canvas glow is costly per pixel: sized for the pixel density, and left off on very large canvases (2K, 4K). */
 const glow = (f: Frame, px: number) => (small(f) || f.w * f.h * f.dpr * f.dpr > 2_400_000 ? 0 : px * f.dpr);
 
@@ -340,7 +344,8 @@ const terrain: Scene = {
     for (let i = 0; i < 7; i++) { const y = sy + sr * (0.1 + i * 0.13); ctx.fillRect(sx - sr, y, sr * 2, 1.5 + i * 1.3); }
     ctx.restore();
     // New spectrum row at the far end every few frames; the land rolls toward you.
-    if (++s.tick % 3 === 0) {
+    s.tick += f.step;
+    if (every({ t: s.tick, step: f.step }, 3)) {
       const row = s.rows.pop()!;
       for (let c = 0; c < row.length; c++) { const mid = Math.abs(c - 16) / 16; row[c] = f.band(Math.floor(mid * 30), 32) * (0.35 + mid); }
       s.rows.unshift(row);
@@ -393,7 +398,7 @@ const alchemy: Scene = {
     // One colour pass per band of the swirl (8 fills), each spark a crisp dot plus a stamped halo.
     const groups: Path2D[] = Array.from({ length: 8 }, () => new Path2D());
     for (const p of st.sparks) {
-      p.a += p.v * (1 + bass * 4); p.r += 0.0015 + bass * 0.012; if (p.r > 1) p.r = Math.random() * 0.15;
+      p.a += (p.v * (1 + bass * 4)) * f.step; p.r += (0.0015 + bass * 0.012) * f.step; if (p.r > 1) p.r = Math.random() * 0.15;
       const size = unit * (2 + p.s * 3) * (1 + bass * 1.5) * (1 - p.r * 0.5);
       const g = groups[Math.min(7, Math.floor(p.r * 8))]!;
       for (let k = 0; k < arms; k++) {
@@ -440,7 +445,7 @@ const starfield: Scene = {
     ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
     const speed = 0.004 + bass * 0.04 + mids * 0.01;
     for (const st of stars) {
-      const pz = st.z; st.z -= speed;
+      const pz = st.z; st.z -= (speed) * f.step;
       if (st.z <= 0.02) { st.x = (Math.random() - 0.5) * 2; st.y = (Math.random() - 0.5) * 2; st.z = 1; continue; }
       const sx = w / 2 + (st.x / st.z) * w * 0.5, sy = h / 2 + (st.y / st.z) * h * 0.5;
       const px = w / 2 + (st.x / pz) * w * 0.5, py = h / 2 + (st.y / pz) * h * 0.5;
@@ -492,7 +497,7 @@ const fountain: Scene = {
     ctx.globalCompositeOperation = 'lighter';
     for (let i = drops.length - 1; i >= 0; i--) {
       const d = drops[i]!;
-      d.x += d.vx; d.y += d.vy; d.vy += h * 0.00045; d.life -= 0.008;
+      d.x += (d.vx) * f.step; d.y += (d.vy) * f.step; d.vy += (h * 0.00045) * f.step; d.life -= (0.008) * f.step;
       if (d.life <= 0 || d.y > h + 4) { drops.splice(i, 1); continue; }
       ctx.fillStyle = `hsla(${d.hue},90%,65%,${d.life})`;
       ctx.fillRect(d.x, d.y, small(f) ? 1.5 : 3.5, small(f) ? 1.5 : 3.5);
@@ -518,7 +523,7 @@ const bubbles: Scene = {
     }
     for (let i = list.length - 1; i >= 0; i--) {
       const b = list[i]!;
-      b.y -= b.v * (1 + level * 2); b.x += Math.sin(t * 0.03 + b.r) * 0.6;
+      b.y -= (b.v * (1 + level * 2)) * f.step; b.x += (Math.sin(t * 0.03 + b.r) * 0.6) * f.step;
       if (b.y < -b.r * 2) { list.splice(i, 1); continue; }
       const g = ctx.createRadialGradient(b.x - b.r * 0.35, b.y - b.r * 0.35, b.r * 0.1, b.x, b.y, b.r);
       g.addColorStop(0, 'rgba(255,255,255,0.55)'); g.addColorStop(0.5, `hsla(${b.hue},80%,60%,0.12)`); g.addColorStop(1, `hsla(${b.hue},90%,70%,0.45)`);
@@ -536,17 +541,17 @@ const ripples: Scene = {
   id: 'ripples', name: 'Ripples',
   setup: () => ({ rings: [] }),
   draw: (f, s: RippleState) => {
-    const { ctx, w, h, hue, bass, beat, t, tint: [tr, tg, tb] } = f;
+    const { ctx, w, h, hue, bass, beat, tint: [tr, tg, tb] } = f;
     fade(f, 'rgba(2,4,10,0.2)');
     const bg = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.6);
     bg.addColorStop(0, `rgba(${tr},${tg},${tb},${0.06 + bass * 0.12})`); bg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
-    if (beat || t % 36 === 0) s.rings.push({ r: Math.min(w, h) * 0.05, hue });
+    if (beat || every(f, 36)) s.rings.push({ r: Math.min(w, h) * 0.05, hue });
     const max = Math.hypot(w, h) / 2;
     ctx.globalCompositeOperation = 'lighter';
     for (let i = s.rings.length - 1; i >= 0; i--) {
       const rp = s.rings[i]!;
-      rp.r += max * 0.008 * (1 + bass * 1.5);
+      rp.r += (max * 0.008 * (1 + bass * 1.5)) * f.step;
       const life = 1 - rp.r / max;
       if (life <= 0) { s.rings.splice(i, 1); continue; }
       // Each ring is shaped by the music as it travels out.
@@ -602,18 +607,18 @@ const lightning: Scene = {
   id: 'lightning', name: 'Lightning',
   setup: f => ({ bolts: [], flash: 0, clouds: Array.from({ length: small(f) ? 6 : 14 }, () => ({ x: Math.random(), y: Math.random() * 0.45, r: 0.15 + Math.random() * 0.25, v: 0.0003 + Math.random() * 0.0006 })) }),
   draw: (f, storm: Storm) => {
-    const { ctx, w, h, hue, bass, beat, t, level } = f;
+    const { ctx, w, h, hue, bass, beat, level } = f;
     const bolts = storm.bolts;
     fade(f, 'rgba(4,4,14,0.35)');
     // Clouds drift across, lit from inside when lightning strikes.
-    storm.flash *= 0.85;
+    storm.flash *= Math.pow(0.85, f.step);
     for (const c of storm.clouds) {
-      c.x += c.v; if (c.x - c.r > 1.2) c.x = -c.r;
+      c.x += (c.v) * f.step; if (c.x - c.r > 1.2) c.x = -c.r;
       const g = ctx.createRadialGradient(c.x * w, c.y * h, 0, c.x * w, c.y * h, c.r * w);
       g.addColorStop(0, `hsla(${(hue + 230) % 360},45%,${30 + storm.flash * 50}%,${0.5 + storm.flash * 0.4})`); g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g; ctx.fillRect(c.x * w - c.r * w, c.y * h - c.r * w, c.r * w * 2, c.r * w * 2);
     }
-    if (beat || t % 45 === 0 || Math.random() < level * 0.05) {
+    if (beat || every(f, 45) || Math.random() < level * 0.05 * f.step) {
       storm.flash = Math.min(1, storm.flash + (beat ? 0.9 : 0.5));
       // A jagged path from the top to somewhere below, by repeatedly nudging midpoints.
       let pts: [number, number][] = [[w * (0.2 + Math.random() * 0.6), 0], [w * (0.15 + Math.random() * 0.7), h * (0.6 + Math.random() * 0.4)]];
@@ -633,7 +638,7 @@ const lightning: Scene = {
     ctx.fillStyle = horizon; ctx.fillRect(0, h * 0.7, w, h * 0.3);
     for (let i = bolts.length - 1; i >= 0; i--) {
       const b = bolts[i]!;
-      b.life -= 0.035;
+      b.life -= (0.035) * f.step;
       if (b.life <= 0) { bolts.splice(i, 1); continue; }
       ctx.beginPath(); b.pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
       ctx.strokeStyle = `hsla(${b.hue},100%,85%,${b.life})`; ctx.lineWidth = (small(f) ? 1 : 2.5) * b.life + 0.5;
@@ -661,7 +666,7 @@ const matrix: Scene = {
       const y = s.drops[i]! * s.size;
       ctx.fillStyle = `rgba(${Math.min(255, tr * 0.4 + 200 * v)},255,${Math.min(255, tb * 0.4 + 120 * v)},${0.5 + v * 0.5})`;
       ctx.fillText(GLYPHS[Math.floor(Math.random() * GLYPHS.length)]!, i * s.size, y);
-      s.drops[i]! += 0.35 + level * 1.4 + v * 0.8;
+      s.drops[i]! += (0.35 + level * 1.4 + v * 0.8) * f.step;
       if (y > h && Math.random() > 0.96) s.drops[i] = 0;
     }
   }
@@ -704,7 +709,7 @@ const rain: Scene = {
     ctx.strokeStyle = 'rgba(180,205,255,0.5)'; ctx.lineWidth = small(f) ? 0.7 : 1.3;
     ctx.beginPath();
     for (const st of s.streaks) {
-      st.y += st.v * (0.8 + level * 1.5); st.x -= st.v * 0.12;
+      st.y += (st.v * (0.8 + level * 1.5)) * f.step; st.x -= (st.v * 0.12) * f.step;
       if (st.y > 1.1) { st.y = -0.1; st.x = Math.random() * 1.1; }
       ctx.moveTo(st.x * w, st.y * h); ctx.lineTo((st.x - st.len * 0.12) * w, (st.y + st.len) * h);
     }
@@ -712,7 +717,7 @@ const rain: Scene = {
     for (const d of s.drops) {
       // Drops cling, then slide when they grow heavy, leaving a short trail.
       if (d.v === 0 && Math.random() < 0.004 + level * 0.01) d.v = 0.002 + Math.random() * 0.004;
-      d.y += d.v; if (d.v) d.v *= 1.01;
+      d.y += (d.v) * f.step; if (d.v) d.v *= 1.01;
       if (d.y > 1.05) { d.y = Math.random() * 0.5; d.x = Math.random(); d.v = 0; d.r = 1 + Math.random() * 4; }
       const x = d.x * w, y = d.y * h, r = d.r * (small(f) ? 0.5 : 1);
       if (d.v) { ctx.strokeStyle = 'rgba(200,220,255,0.12)'; ctx.lineWidth = r * 0.8; ctx.beginPath(); ctx.moveTo(x, y - r * 8); ctx.lineTo(x, y); ctx.stroke(); }
@@ -735,7 +740,7 @@ const snow: Scene = {
     moon.addColorStop(0, 'rgba(230,240,255,0.35)'); moon.addColorStop(0.15, 'rgba(230,240,255,0.18)'); moon.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = moon; ctx.fillRect(0, 0, w, h);
     for (const fl of s.flakes) {
-      fl.y += 0.0008 * fl.z * (1 + level * 2); fl.x += Math.sin(t * 0.01 + fl.p) * 0.0004 * fl.z;
+      fl.y += (0.0008 * fl.z * (1 + level * 2)) * f.step; fl.x += (Math.sin(t * 0.01 + fl.p) * 0.0004 * fl.z) * f.step;
       if (fl.y > 1.02) { fl.y = -0.02; fl.x = Math.random(); }
       const v = f.band(Math.floor(fl.r * 30), 30);
       ctx.fillStyle = `rgba(255,255,255,${0.35 + fl.z * 0.45 + v * 0.2})`;
@@ -759,7 +764,7 @@ const petals: Scene = {
     drawBokeh(f, s.glow, bass * 0.6);
     const size = Math.min(w, h) * (small(f) ? 0.035 : 0.022);
     for (const p of s.petals) {
-      p.y += p.v * (1 + level); p.x += Math.sin(t * 0.012 + p.sway) * 0.0009; p.a += p.spin;
+      p.y += (p.v * (1 + level)) * f.step; p.x += (Math.sin(t * 0.012 + p.sway) * 0.0009) * f.step; p.a += (p.spin) * f.step;
       if (p.y > 1.05) { p.y = -0.05; p.x = Math.random(); }
       ctx.save(); ctx.translate(p.x * w, p.y * h); ctx.rotate(p.a); ctx.scale(1, 0.55 + Math.sin(t * 0.03 + p.sway) * 0.35);
       const g = ctx.createRadialGradient(0, 0, 0, 0, 0, size * p.s);
@@ -771,7 +776,7 @@ const petals: Scene = {
     if (beat && s.hearts.length < 6) s.hearts.push({ x: 0.2 + Math.random() * 0.6, y: 1, life: 1, s: 0.6 + Math.random() * 0.8 });
     for (let i = s.hearts.length - 1; i >= 0; i--) {
       const hh = s.hearts[i]!;
-      hh.y -= 0.004; hh.life -= 0.006;
+      hh.y -= (0.004) * f.step; hh.life -= (0.006) * f.step;
       if (hh.life <= 0) { s.hearts.splice(i, 1); continue; }
       const r = Math.min(w, h) * 0.03 * hh.s;
       ctx.save(); ctx.translate(hh.x * w, hh.y * h); ctx.fillStyle = `rgba(255,90,130,${hh.life * 0.6})`;
@@ -812,7 +817,7 @@ const sunrise: Scene = {
     for (let x = 0; x <= w; x += w / 40) ctx.lineTo(x, h * 0.86 - Math.sin(x / w * 5 + 1) * h * 0.04 - Math.sin(x / w * 13) * h * 0.012);
     ctx.lineTo(w, h); ctx.fill();
     for (const m of s.motes) {
-      m.y -= m.v * (1 + level * 2); if (m.y < -0.02) { m.y = 1; m.x = Math.random(); }
+      m.y -= (m.v * (1 + level * 2)) * f.step; if (m.y < -0.02) { m.y = 1; m.x = Math.random(); }
       ctx.fillStyle = `rgba(255,240,200,${0.25 + m.s * 0.5})`;
       ctx.beginPath(); ctx.arc(m.x * w + Math.sin(t * 0.01 + m.s * 9) * 8, m.y * h, (small(f) ? 0.6 : 1.2) + m.s * 1.8, 0, TAU); ctx.fill();
     }
@@ -825,13 +830,13 @@ const fireworks: Scene = {
   id: 'fireworks', name: 'Fireworks',
   setup: () => ({ rockets: [], sparks: [] }),
   draw: (f, s: Show) => {
-    const { ctx, w, h, beat, t, level } = f;
+    const { ctx, w, h, beat, level } = f;
     fade(f, 'rgba(3,3,12,0.22)');
     // A rocket goes up on each beat (and now and then anyway) and bursts at the top of its climb.
-    if ((beat || t % 50 === 0) && s.rockets.length < 6) s.rockets.push({ x: w * (0.15 + Math.random() * 0.7), y: h, vy: -h * (0.016 + Math.random() * 0.006), hue: Math.random() * 360, at: h * (0.15 + Math.random() * 0.35) });
+    if ((beat || every(f, 50)) && s.rockets.length < 6) s.rockets.push({ x: w * (0.15 + Math.random() * 0.7), y: h, vy: -h * (0.016 + Math.random() * 0.006), hue: Math.random() * 360, at: h * (0.15 + Math.random() * 0.35) });
     for (let i = s.rockets.length - 1; i >= 0; i--) {
       const r = s.rockets[i]!;
-      r.y += r.vy; r.vy *= 0.985;
+      r.y += (r.vy) * f.step; r.vy *= Math.pow(0.985, f.step);
       ctx.fillStyle = `hsla(${r.hue},100%,80%,0.9)`; ctx.fillRect(r.x, r.y, 2, 6);
       if (r.y <= r.at || r.vy > -1) {
         const n = (small(f) ? 30 : 110) + Math.floor(level * 80);
@@ -845,7 +850,7 @@ const fireworks: Scene = {
     ctx.globalCompositeOperation = 'lighter';
     for (let i = s.sparks.length - 1; i >= 0; i--) {
       const p = s.sparks[i]!;
-      p.x += p.vx; p.y += p.vy; p.vy += 0.045; p.vx *= 0.985; p.vy *= 0.985; p.life -= 0.008;
+      p.x += (p.vx) * f.step; p.y += (p.vy) * f.step; p.vy += (0.045) * f.step; p.vx *= Math.pow(0.985, f.step); p.vy *= Math.pow(0.985, f.step); p.life -= (0.008) * f.step;
       if (p.life <= 0) { s.sparks.splice(i, 1); continue; }
       ctx.fillStyle = `hsla(${p.hue},100%,${55 + p.life * 30}%,${Math.min(1, p.life * 1.4)})`;
       ctx.fillRect(p.x, p.y, small(f) ? 1.4 : 3, small(f) ? 1.4 : 3);
@@ -865,7 +870,7 @@ const fireflies: Scene = {
     ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'lighter';
     flies.forEach((fl, i) => {
-      fl.x += Math.sin(t * 0.007 * fl.s + fl.p) * 0.0009; fl.y += Math.cos(t * 0.006 * fl.s + fl.p * 2) * 0.0007;
+      fl.x += (Math.sin(t * 0.007 * fl.s + fl.p) * 0.0009) * f.step; fl.y += (Math.cos(t * 0.006 * fl.s + fl.p * 2) * 0.0007) * f.step;
       const v = f.band(i % 32, 32), pulse = 0.25 + 0.75 * Math.max(v, (Math.sin(t * 0.05 * fl.s + fl.p) + 1) / 4);
       const r = Math.min(w, h) * (small(f) ? 0.03 : 0.022) * (0.6 + pulse);
       const g = ctx.createRadialGradient(fl.x * w, fl.y * h, 0, fl.x * w, fl.y * h, r);
@@ -956,7 +961,7 @@ const fractalTree: Scene = {
     if (beat) for (let i = 0; i < (small(f) ? 3 : 14); i++) { const [x, y] = s.tips[Math.floor(Math.random() * s.tips.length)] ?? [w / 2, h / 2]; s.petals.push({ x, y, vx: (Math.random() - 0.5) * 0.6, vy: 0.3 + Math.random() * 0.5, life: 1, hue: (hue + 150 + Math.random() * 60) % 360 }); }
     for (let i = s.petals.length - 1; i >= 0; i--) {
       const p = s.petals[i]!;
-      p.x += p.vx + Math.sin(t * 0.03 + i) * 0.4; p.y += p.vy; p.life -= 0.006;
+      p.x += (p.vx + Math.sin(t * 0.03 + i) * 0.4) * f.step; p.y += (p.vy) * f.step; p.life -= (0.006) * f.step;
       if (p.life <= 0 || p.y > h) { s.petals.splice(i, 1); continue; }
       ctx.fillStyle = `hsla(${p.hue},90%,70%,${p.life * 0.8})`;
       ctx.beginPath(); ctx.ellipse(p.x, p.y, 4, 1.6, t * 0.05 + i, 0, TAU); ctx.fill();
