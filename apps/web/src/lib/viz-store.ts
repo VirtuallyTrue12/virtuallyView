@@ -54,20 +54,25 @@ export function useViz(): VizState {
 const lyricCache = new Map<string, Promise<Lyrics | null>>();
 const lyricKey = (artist: string, title: string) => `${artist}|${title}`.toLowerCase();
 
+/** Lyrics for a song, shared with everything else on screen (one lookup per song). */
+export function fetchLyrics(artist: string, title: string, album?: string, duration?: number): Promise<Lyrics | null> {
+  const key = lyricKey(artist, title);
+  let hit = lyricCache.get(key);
+  if (!hit) {
+    hit = api.lyrics(artist, title, album, duration).then(l => l ?? null).catch(() => null);
+    lyricCache.set(key, hit);
+  }
+  return hit;
+}
+
 /** Lyrics for the playing song: undefined while loading, null when there are none. */
 export function useLyrics(artist: string | undefined, title: string | undefined, album?: string, duration?: number, on = true): Lyrics | null | undefined {
   const [value, setValue] = useState<Lyrics | null | undefined>(undefined);
   useEffect(() => {
     setValue(undefined);
     if (!on || !artist || !title) { setValue(null); return; }
-    const key = lyricKey(artist, title);
-    let hit = lyricCache.get(key);
-    if (!hit) {
-      hit = api.lyrics(artist, title, album, duration).then(l => l ?? null).catch(() => null);
-      lyricCache.set(key, hit);
-    }
     let alive = true;
-    void hit.then(l => { if (alive) setValue(l); });
+    void fetchLyrics(artist, title, album, duration).then(l => { if (alive) setValue(l); });
     return () => { alive = false; };
   }, [artist, title, album, duration, on]);
   return value;

@@ -202,11 +202,11 @@ export const audioEngine = new AudioEngine();
 const voiceCache = new Map<string, Promise<ArrayBuffer | null>>();
 
 /** Fetches (and keeps) the spoken line, so it can be ready before the moment it is needed. */
-export function prepareLine(text: string, voice?: string): Promise<ArrayBuffer | null> {
-  const key = `${voice ?? ''}|${text}`;
+export function prepareLine(text: string, voice?: string, speed = 1): Promise<ArrayBuffer | null> {
+  const key = `${voice ?? ''}|${speed}|${text}`;
   let hit = voiceCache.get(key);
   if (!hit) {
-    const params = new URLSearchParams({ text, ...(voice && !voice.startsWith('browser:') ? { voice } : {}) });
+    const params = new URLSearchParams({ text, ...(voice && !voice.startsWith('browser:') ? { voice } : {}), ...(speed !== 1 ? { speed: String(speed) } : {}) });
     hit = fetch(`/api/tts?${params}`, { credentials: 'same-origin' }).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
     voiceCache.set(key, hit);
     if (voiceCache.size > 30) voiceCache.delete(voiceCache.keys().next().value!);
@@ -218,16 +218,26 @@ export function prepareLine(text: string, voice?: string): Promise<ArrayBuffer |
  * Says a line: the natural server voice when it is installed, otherwise the browser's own voice, otherwise
  * nothing (and quickly, so the music never waits on a voice that will not come).
  */
-export async function say(text: string, voice?: string, onStart?: (seconds: number) => void): Promise<void> {
+export async function say(text: string, voice?: string, onStart?: (seconds: number) => void, speed = 1): Promise<void> {
   if (!voice?.startsWith('browser:')) {
-    const data = await prepareLine(text, voice);
+    const data = await prepareLine(text, voice, speed);
     // decodeAudioData detaches the buffer it is given: hand it a copy so a cached line can be said again.
     if (data && await audioEngine.playVoice(data.slice(0), onStart)) return;
   }
   const hasVoices = typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0;
   if (!hasVoices) return;
   onStart?.(Math.max(2, text.split(' ').length / 2.6));
-  await speak(text, voice?.replace(/^browser:/, ''));
+  await speak(text, voice?.replace(/^browser:/, ''), speed < 1 ? 0.9 : 1.02);
+}
+
+/** How long a prepared line lasts, from its WAV header; an estimate from the words when there is no file. */
+export function lineSeconds(data: ArrayBuffer | null, text: string): number {
+  if (data && data.byteLength > 44) {
+    const v = new DataView(data);
+    const rate = v.getUint32(24, true), bytesPerSec = v.getUint32(28, true);
+    if (rate > 0 && bytesPerSec > 0) return (data.byteLength - 44) / bytesPerSec;
+  }
+  return Math.max(2, text.split(/\s+/).length / 2.6);
 }
 
 /** Speaks a line with the browser's own voices. Resolves when done (or at once when speech is not available). */

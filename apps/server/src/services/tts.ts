@@ -27,13 +27,14 @@ const CACHE_DIR = path.join(DATA_DIR, 'tts-cache');
 let downUntil = 0;
 
 /** A WAV of the line, or null when no voice service is running (the page then uses the browser's own voice). */
-export async function speech(text: string, voice: string): Promise<Buffer | null> {
+export async function speech(text: string, voice: string, speed = 1): Promise<Buffer | null> {
+  const pace = Math.min(1.3, Math.max(0.75, Number.isFinite(speed) ? speed : 1)).toFixed(2);
   const name = TTS_VOICES.some(v => v.id === voice) ? voice : DEFAULT_VOICE;
-  const file = path.join(CACHE_DIR, `${createHash('sha1').update(`kitten|${name}|${text}`).digest('hex')}.wav`);
+  const file = path.join(CACHE_DIR, `${createHash('sha1').update(`kitten|${name}|${pace}|${text}`).digest('hex')}.wav`);
   if (existsSync(file)) return readFileSync(file);
   if (Date.now() < downUntil) return null;
   try {
-    const res = await fetch(`${BASE}/tts?${new URLSearchParams({ text, voice: name })}`, { signal: AbortSignal.timeout(30000) });
+    const res = await fetch(`${BASE}/tts?${new URLSearchParams({ text, voice: name, speed: pace })}`, { signal: AbortSignal.timeout(30000) });
     if (!res.ok) return null;
     const audio = Buffer.from(await res.arrayBuffer());
     mkdirSync(CACHE_DIR, { recursive: true });

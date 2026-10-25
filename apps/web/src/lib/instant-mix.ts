@@ -11,12 +11,13 @@ function shuffled<T>(list: T[]): T[] {
 }
 
 /** Every playable track of one artist, in random order, ready for the player queue. */
-export async function artistMix(artist: Pick<MediaItem, 'id' | 'title' | 'artwork'>, limit = 40): Promise<QueueEntry[]> {
+export async function artistMix(artist: Pick<MediaItem, 'id' | 'title' | 'artwork' | 'genres'>, limit = 40): Promise<QueueEntry[]> {
   const { tracks } = await api.artistTracks(artist.id);
   return shuffled(tracks.filter(t => t.hasFile)).slice(0, limit).map(track => ({
     track: { id: track.id, title: track.title, quality: track.quality, durationMs: track.durationMs },
     artistTitle: artist.title,
-    cover: artist.artwork?.poster
+    cover: artist.artwork?.poster,
+    ...(artist.genres?.length ? { genres: artist.genres } : {})
   }));
 }
 

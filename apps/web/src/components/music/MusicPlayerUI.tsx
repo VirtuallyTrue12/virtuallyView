@@ -226,7 +226,7 @@ function useVoices(): { voices: VoiceOption[]; natural: boolean | null } {
 }
 
 function MixPanel() {
-  const { crossfade, djMode, djVoice, entry, setCrossfade, setDjMode, setDjVoice } = useMusicPlayer();
+  const { crossfade, djMode, djVoice, djFrequency, entry, setCrossfade, setDjMode, setDjVoice, setDjFrequency } = useMusicPlayer();
   const { voices, natural } = useVoices();
   const [testing, setTesting] = useState<string | null>(null);
   const current = djVoice || voices[0]?.id || '';
@@ -248,8 +248,16 @@ function MixPanel() {
       <div className="mix-card">
         <button type="button" role="switch" aria-checked={djMode} className={`toggle${djMode ? ' is-on' : ''}`} onClick={() => setDjMode(!djMode)}>
           <span className="toggle-knob" aria-hidden="true" />
-          <span><strong>DJ mode</strong> <small>a host introduces each song while the last one fades out</small></span>
+          <span><strong>DJ mode</strong> <small>a host who waits a few songs, then talks over intros and outros, never over the singing</small></span>
         </button>
+        {djMode && (
+          <div className="seg" role="radiogroup" aria-label="How often the DJ talks">
+            <span className="seg-label">Talks</span>
+            {([['minimal', 'Rarely'], ['balanced', 'Every few songs'], ['chatty', 'Every song']] as const).map(([id, label]) => (
+              <button key={id} type="button" role="radio" aria-checked={djFrequency === id} className={`seg-btn${djFrequency === id ? ' is-on' : ''}`} onClick={() => setDjFrequency(id)}>{label}</button>
+            ))}
+          </div>
+        )}
         {djMode && (
           <div className="mix-voices" role="radiogroup" aria-label="DJ voice">
             {voices.length === 0 && <p className="mix-help">{natural === null ? 'Looking for voices…' : 'No voice is installed. Turn on the AI profile to get natural voices (see docs). The fades still work.'}</p>}
