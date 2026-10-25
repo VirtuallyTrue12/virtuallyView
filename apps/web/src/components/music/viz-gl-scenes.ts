@@ -7,94 +7,57 @@ import type { GlFrameInput, GlScene } from './viz-gl';
 
 const CMUL = 'vec2 cmul(vec2 a, vec2 b) { return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }\n';
 
-// ---------- Mandelbrot: an endless deep zoom ----------
+// ---------- Mandelbrot: an endless, seamless zoom ----------
 
 /**
- * Deep zoom by perturbation: one reference orbit is worked out here in double precision, and each pixel only
- * follows its small difference from it, which single-precision GPU maths can do accurately. That keeps the
- * picture sharp a billion times deeper than plain GPU maths. The view glides into a point on the edge of the set
- * and back out (no cut), then picks another point while it shows the whole set.
+ * Near c = i the set repeats itself: zoomed 4·√2 times and turned 45 degrees it is the same picture again
+ * (c = i lands on a cycle whose multiplier is 4(1 + i)). So the view zooms through one such step and starts over,
+ * blending the last fifth into the first: an endless dive with no cut and no loss of sharpness. Colour follows
+ * the distance to the set measured against the size of the view, which repeats exactly with the picture.
  */
-const TARGETS: [number, number, number][] = [
-  [-0.743643887037158704752191506114774, 0.131825904205311970493132056385139, 1e6], // seahorse valley
-  [-1.401155189092050, 0, 1e6], // the Feigenbaum point: minibrots within minibrots
-  [-0.10109636384562, 0.95628651080914, 1e6], // a spiral arm's tip
-  [0, 1, 1e6], // c = i: dendrites forever
-  [-0.7746806106269039, -0.1374168856037867, 1e6] // double spirals
-];
-const FULL: [number, number] = [-0.6, 0];
-const REF_LEN = 2600;
-
-type MandelState = { cycle: number; phase: number; last: number; target: [number, number, number]; ref: Float32Array; version: number };
-
-function referenceOrbit(cx: number, cy: number): Float32Array {
-  const out = new Float32Array(REF_LEN * 2);
-  let x = 0, y = 0;
-  for (let i = 0; i < REF_LEN; i++) {
-    out[i * 2] = x; out[i * 2 + 1] = y;
-    const nx = x * x - y * y + cx; y = 2 * x * y + cy; x = nx;
-    // Escaped: the rest stays put; pixels rebase to the start when they reach it.
-    if (x * x + y * y > 1e8) { for (let k = i + 1; k < REF_LEN; k++) { out[k * 2] = x; out[k * 2 + 1] = y; } break; }
-  }
-  return out;
-}
-
+type MandelState = { s: number; last: number };
 export const mandelbrotGl: GlScene & { setup: () => MandelState } = {
-  setup: () => ({ cycle: -1, phase: 0, last: 0, target: TARGETS[0]!, ref: referenceOrbit(TARGETS[0]![0], TARGETS[0]![1]), version: 0 }),
-  data: (s: MandelState) => ({ values: s.ref, length: REF_LEN, version: s.version }),
-  uniforms: (f: GlFrameInput, s: MandelState) => {
-    const dt = Math.min(0.1, Math.max(0, f.time - s.last)); s.last = f.time;
-    // About two minutes in and out; the music hurries it along.
-    s.phase += dt * (1 + f.bass * 0.5) / 90;
-    const cycle = Math.floor(s.phase);
-    if (cycle !== s.cycle) {
-      s.cycle = cycle;
-      s.target = TARGETS[cycle % TARGETS.length]!;
-      s.ref = referenceOrbit(s.target[0], s.target[1]);
-      s.version++;
-    }
-    const p = s.phase - cycle;
-    const ease = 0.5 - 0.5 * Math.cos(Math.PI * 2 * p); // 0 → 1 → 0: smooth at both ends, no cut
-    const zoom = Math.exp(Math.log(s.target[2]) * ease);
-    // Zoom about the target: the whole set at zoom 1, closing in on the target as the zoom grows.
-    const dcx = (FULL[0] - s.target[0]) / zoom, dcy = (FULL[1] - s.target[1]) / zoom;
-    const span = 3.4 / zoom;
-    return {
-      uDc0: [dcx, dcy], uScale: span / Math.min(f.width, f.height * 1.6), uRot: f.time * 0.015,
-      uIMaxIter: Math.min(900, Math.round(200 + 90 * Math.log10(zoom))), uIRefLen: REF_LEN
-    };
+  setup: () => ({ s: 0, last: 0 }),
+  uniforms: (f: GlFrameInput, st: MandelState) => {
+    const dt = Math.min(0.1, Math.max(0, f.time - st.last)); st.last = f.time;
+    st.s = (st.s + dt * (0.055 + f.bass * 0.07)) % 1;
+    return { uS: st.s };
   },
   frag: CMUL + `
-uniform sampler2D uData;
-uniform int uIRefLen, uIMaxIter;
-uniform vec2 uDc0;
-uniform float uScale, uRot;
-vec3 shade(vec2 p) {
-  vec2 dc = uDc0 + rot(uRot) * ((p - 0.5 * uRes) * uScale);
-  vec2 d = vec2(0.0), z = vec2(0.0), dz = vec2(0.0);
-  int n = 0; float it = -1.0;
-  for (int i = 0; i < 2400; i++) {
-    if (i >= uIMaxIter) break;
-    vec2 Z = texelFetch(uData, ivec2(n, 0), 0).xy;
-    z = Z + d;
+uniform float uS;
+const float LAMBDA = 5.656854249; // |4(1 + i)|
+const float Z0 = 150.0;
+vec3 frame(vec2 p, float s) {
+  float zoom = Z0 * pow(LAMBDA, s);
+  float span = 3.4 / zoom;
+  float unit = span / min(uRes.x, uRes.y);
+  // rot(a) turns by -a: the view turns 45 degrees per step, matching the set.
+  // Framed a little to the side of i, where the branches are; the same framing repeats at every step.
+  vec2 c = vec2(0.0, 1.0) + rot(0.785398163 * s) * ((p - 0.5 * uRes) * unit + vec2(-0.32, 0.14) * span);
+  vec2 z = vec2(0.0), dz = vec2(0.0);
+  float it = -1.0;
+  for (int i = 0; i < 600; i++) {
     dz = 2.0 * cmul(z, dz) + vec2(1.0, 0.0);
-    d = cmul(2.0 * Z + d, d) + dc;
-    n++;
-    z = texelFetch(uData, ivec2(n, 0), 0).xy + d;
-    float zz = dot(z, z);
-    if (zz > 1e5) { it = float(i); break; }
-    // Rebase when the pixel's orbit passes closer to zero than its difference, or the reference ran out.
-    if (zz < dot(d, d) || n >= uIRefLen - 1) { d = z; n = 0; }
+    z = cmul(z, z) + c;
+    if (dot(z, z) > 1e8) { it = float(i); break; }
   }
-  if (it < 0.0) return vec3(0.02, 0.02, 0.05) + uTint * (0.05 + uBass * 0.25);
+  if (it < 0.0) return vec3(0.015, 0.012, 0.03);
   float r = length(z);
-  float mu = it + 1.0 - log2(log(r));
-  float px = r * log(r) / max(length(dz), 1e-30) / uScale; // distance to the set, in pixels
-  vec3 c = pal(mu * 0.018 + uTime * 0.015 + uHue, vec3(0.5), vec3(0.5), vec3(1.0, 1.0, 1.0), vec3(0.0, 0.1, 0.2));
-  float glow = exp(-px * 0.5);
-  c *= 0.25 + 0.75 * smoothstep(0.0, 1.0, exp(-px * 0.008));
-  c += glow * (0.55 + uBass * 0.8 + uBeat * 0.4) * vec3(1.0, 0.93, 0.85);
-  return c;
+  float de = 0.5 * r * log(r) / max(length(dz), 1e-30);
+  float px = de / unit;
+  float rel = log2(de / span); // the same at this zoom and one step deeper
+  vec3 col = pal(rel * 0.11 + uHue * 0.6, vec3(0.5), vec3(0.45), vec3(1.0), vec3(0.62, 0.48, 0.32));
+  col *= 0.28 + 0.72 * exp(rel * 0.18);
+  // The filaments: a crisp, anti-aliased line with a soft halo that breathes with the bass.
+  float line = smoothstep(1.4, 0.0, px);
+  float halo = exp(-px * 0.06) * (0.35 + uBass * 0.9 + uBeat * 0.5);
+  return col + vec3(1.0, 0.94, 0.86) * (line * 0.9 + halo * 0.35);
+}
+vec3 shade(vec2 p) {
+  vec3 col = frame(p, uS);
+  float w = smoothstep(0.8, 1.0, uS);
+  if (w > 0.0) col = mix(col, frame(p, uS - 1.0), w);
+  return col;
 }`
 };
 
@@ -119,13 +82,16 @@ vec3 shade(vec2 p) {
   vec2 z = rot(uRot) * ((p - 0.5 * uRes) * unit);
   vec2 dz = vec2(1.0, 0.0);
   float it = -1.0, trap = 1e9;
-  for (int i = 0; i < 260; i++) {
+  vec2 seen = z;
+  for (int i = 0; i < 180; i++) {
     dz = 2.0 * cmul(z, dz);
     z = cmul(z, z) + uC;
-    trap = min(trap, length(z - vec2(0.25 * sin(uTime * 0.3), 0.0)));
-    if (dot(z, z) > 1e5) { it = float(i); break; }
+    trap = min(trap, dot(z, z));
+    if (dot(z, z) > 1024.0) { it = float(i); break; }
+    // Inside points settle into a cycle: once the orbit comes back to where it was, stop early.
+    if ((i & 15) == 15) { if (dot(z - seen, z - seen) < 1e-9) break; seen = z; }
   }
-  if (it < 0.0) return pal(trap * 1.5 + uTime * 0.02 + uHue, vec3(0.25), vec3(0.25), vec3(1.0), vec3(0.6, 0.7, 0.8)) * (0.35 + uBass * 0.4);
+  if (it < 0.0) return pal(sqrt(trap) * 1.5 + uTime * 0.02 + uHue, vec3(0.25), vec3(0.25), vec3(1.0), vec3(0.6, 0.7, 0.8)) * (0.35 + uBass * 0.4);
   float r = length(z);
   float mu = it + 1.0 - log2(log(r));
   float px = r * log(r) / max(length(dz), 1e-30) / unit;
@@ -285,7 +251,8 @@ vec3 shade(vec2 p) {
   vec2 k = vec2(cos(a), sin(a)) * r;
   k *= 2.2 + uBass * 0.8;
   k += vec2(uTime * 0.15, 0.0);
-  float f = fbm(k + fbm(k * 1.5 + uTime * 0.1) * 1.4);
+  // One noise pass, warped by a cheap swirl instead of a second noise pass.
+  float f = fbm(k + vec2(sin(k.y * 1.7 + uTime * 0.3), cos(k.x * 1.3 - uTime * 0.25)) * 0.7);
   float lines = smoothstep(0.03, 0.0, abs(fract(f * 6.0 + uTime * 0.2) - 0.5) - 0.44);
   vec3 c = pal(f * 1.4 + r * 0.6 + uHue, vec3(0.45), vec3(0.38), vec3(1.0), vec3(0.0, 0.33, 0.67));
   return c * (0.08 + f * f * 1.1 + uBeat * 0.15) + lines * c * (0.35 + uTreble);
@@ -313,58 +280,34 @@ vec3 shade(vec2 p) {
 
 // ---------- Musical colors: pools of light that merge ----------
 
-export const colorsGl: GlScene = {
+type ColorsState = { pos: number[]; col: number[] };
+export const colorsGl: GlScene & { setup: () => ColorsState } = {
+  setup: () => ({ pos: new Array(48).fill(0), col: new Array(48).fill(0) }),
+  uniforms: (f: GlFrameInput, s: ColorsState) => {
+    for (let i = 0; i < 12; i++) {
+      s.pos[i * 4] = 0.45 * Math.sin(f.time * (0.21 + i * 0.031) + i * 1.7);
+      s.pos[i * 4 + 1] = 0.45 * Math.cos(f.time * (0.17 + i * 0.027) + i * 2.3);
+      s.pos[i * 4 + 2] = 0.05 + (f.spectrum[Math.floor((i / 12) * 127)]! / 255) * 0.12;
+      const k = i / 12 + f.hue / 360;
+      [0, 0.33, 0.67].forEach((d, ch) => { s.col[i * 4 + ch] = 0.5 + 0.5 * Math.cos(Math.PI * 2 * (k + d)); });
+    }
+    return { uBlob: s.pos, uBlobCol: s.col };
+  },
   frag: `
+uniform vec4 uBlob[12];
+uniform vec4 uBlobCol[12];
 vec3 shade(vec2 p) {
   vec2 uv = (p - 0.5 * uRes) / min(uRes.x, uRes.y);
   vec3 acc = vec3(0.0);
   float field = 0.0;
   for (int i = 0; i < 12; i++) {
-    float fi = float(i);
-    vec2 c = 0.45 * vec2(sin(uTime * (0.21 + fi * 0.031) + fi * 1.7), cos(uTime * (0.17 + fi * 0.027) + fi * 2.3));
-    float s = 0.05 + spec(fi / 12.0) * 0.12;
-    float v = s * s / max(dot(uv - c, uv - c), 1e-4);
+    vec2 d = uv - uBlob[i].xy;
+    float v = uBlob[i].z * uBlob[i].z / max(dot(d, d), 1e-4);
     field += v;
-    acc += pal(fi / 12.0 + uHue, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67)) * v;
+    acc += uBlobCol[i].rgb * v;
   }
   vec3 col = acc / max(field, 1e-4);
-  float edge = smoothstep(0.9, 1.1, field);
-  return col * (0.08 + 0.92 * edge) + col * pow(field, 0.6) * 0.15;
+  return col * (0.08 + 0.92 * smoothstep(0.9, 1.1, field)) + col * pow(field, 0.6) * 0.15;
 }`
 };
 
-// ---------- Alchemy: mirrored swirls of light ----------
-
-type AlchemyState = { swirl: number; last: number };
-export const alchemyGl: GlScene & { setup: () => AlchemyState } = {
-  setup: () => ({ swirl: 0, last: 0 }),
-  uniforms: (f: GlFrameInput, s: AlchemyState) => {
-    const dt = Math.min(0.1, Math.max(0, f.time - s.last)); s.last = f.time;
-    s.swirl += dt * (1 + f.bass * 3);
-    return { uSwirl: s.swirl };
-  },
-  frag: `
-uniform float uSwirl;
-vec3 shade(vec2 p) {
-  vec2 uv = (p - 0.5 * uRes) / min(uRes.x, uRes.y);
-  float r = length(uv), a = atan(uv.y, uv.x);
-  float seg = TAU / 8.0;
-  a = abs(mod(a, seg) - seg * 0.5); // eight mirrored wedges
-  vec2 q = vec2(cos(a), sin(a)) * r;
-  vec3 col = vec3(0.0);
-  // Sparks spiral outward and fade; each is a sharp point with a soft halo, so it stays crisp at any size.
-  for (int i = 0; i < 48; i++) {
-    float fi = float(i);
-    float life = fract(uSwirl * 0.05 * (0.6 + hash(vec2(fi, 1.0))) + hash(vec2(fi, 2.0)));
-    float ang = hash(vec2(fi, 3.0)) * seg + life * 2.5 * (0.5 + hash(vec2(fi, 4.0)));
-    ang = abs(mod(ang, seg) - seg * 0.5);
-    vec2 pos = vec2(cos(ang), sin(ang)) * life * 0.6;
-    float size = 0.003 + 0.009 * (1.0 - life) + uBass * 0.005;
-    float d2 = dot(q - pos, q - pos);
-    float glow = size * size / (d2 + size * size * 0.25);
-    col += pal(life * 0.6 + uHue + fi * 0.013, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67)) * glow * (1.0 - life) * 0.45;
-  }
-  col += uTint * exp(-r * 6.0) * (0.15 + uBass * 0.5);
-  return col;
-}`
-};

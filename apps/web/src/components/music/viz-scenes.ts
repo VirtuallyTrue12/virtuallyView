@@ -1,5 +1,5 @@
 import type { GlScene } from './viz-gl';
-import { alchemyGl, auroraGl, colorsGl, fireGl, juliaGl, kaleidoGl, mandelbrotGl, mistGl, plasmaGl, sierpinskiGl, tunnelGl } from './viz-gl-scenes';
+import { auroraGl, colorsGl, fireGl, juliaGl, kaleidoGl, mandelbrotGl, mistGl, plasmaGl, sierpinskiGl, tunnelGl } from './viz-gl-scenes';
 
 /**
  * The visualizer scenes. Each draws one frame from what the player's analyser hears (see Visualizer.tsx for the
@@ -24,8 +24,6 @@ export interface Frame {
   band(i: number, count: number): number;
   /** Like band, but folded so a ring of `count` points meets itself without a seam. */
   ring(i: number, count: number): number;
-  /** A small pixel buffer drawn scaled up over the whole canvas: cheap, soft effects. */
-  lo: { ctx: CanvasRenderingContext2D; img: ImageData; w: number; h: number; blit(): void };
 }
 
 export interface Scene {
@@ -34,7 +32,8 @@ export interface Scene {
   /** Drawn on the GPU when the browser can (see viz-gl); `draw` is then only the fallback. */
   gl?: GlScene & { setup?: () => unknown };
   setup?: (f: Frame) => unknown;
-  draw: (f: Frame, state: never) => void;
+  /** The 2D drawing; scenes drawn on the GPU (`gl`) have none. */
+  draw?: (f: Frame, state: never) => void;
 }
 
 const TAU = Math.PI * 2;
@@ -255,26 +254,7 @@ const waterfall: Scene = {
 
 // ---------- Waves and lines ----------
 
-const mist: Scene = {
-  gl: mistGl,
-  id: 'mist', name: 'Ocean mist',
-  draw: f => {
-    const { ctx, w, h, hue, bass, mids, t } = f;
-    fade(f, 'rgba(4,10,24,0.16)');
-    for (let layer = 0; layer < 5; layer++) {
-      ctx.beginPath();
-      const amp = h * (0.05 + bass * 0.28) * (1 - layer * 0.12);
-      for (let x = 0; x <= w + 6; x += Math.max(3, w / 160)) {
-        const k = f.band(Math.floor((x / w) * 40), 40);
-        const y = h * (0.34 + layer * 0.09) + Math.sin(x * (6 / w) + t * 0.012 * (layer + 1)) * amp + Math.sin(x * (17 / w) - t * 0.02) * amp * 0.5 * k;
-        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
-      ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
-      ctx.fillStyle = `hsla(${(hue + 180 + layer * 18) % 360},70%,${45 + layer * 5}%,${0.07 + mids * 0.16})`;
-      ctx.fill();
-    }
-  }
-};
+const mist: Scene = { gl: mistGl, id: 'mist', name: 'Ocean mist' };
 
 const waves: Scene = {
   id: 'waves', name: 'Waves',
@@ -299,33 +279,7 @@ const waves: Scene = {
   }
 };
 
-const aurora: Scene = {
-  gl: auroraGl,
-  id: 'aurora', name: 'Aurora',
-  draw: f => {
-    const { ctx, w, h, hue, t, dpr } = f;
-    fade(f, 'rgba(2,6,14,0.35)');
-    ctx.globalCompositeOperation = 'lighter';
-    const curtains = small(f) ? 3 : 5;
-    for (let c = 0; c < curtains; c++) {
-      const v = f.band(4 + c * 9, 50);
-      const len = h * (0.25 + v * 0.45), col = Math.max(2, w / 220), shade = (140 + c * 40 + hue * 0.3) % 360;
-      // One gradient per curtain, moved to each column's top.
-      const g = ctx.createLinearGradient(0, 0, 0, len);
-      g.addColorStop(0, `hsla(${shade},90%,60%,0)`);
-      g.addColorStop(0.3, `hsla(${shade},85%,55%,${0.03 + v * 0.07})`);
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      for (let x = 0; x < w; x += col) {
-        const top = h * (0.15 + 0.12 * Math.sin(x * (3 / w) + t * 0.01 + c * 1.7) + 0.05 * Math.sin(x * (11 / w) - t * 0.02));
-        ctx.setTransform(dpr, 0, 0, dpr, x * dpr, top * dpr);
-        ctx.fillRect(0, 0, col, len);
-      }
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    ctx.globalCompositeOperation = 'source-over';
-  }
-};
+const aurora: Scene = { gl: auroraGl, id: 'aurora', name: 'Aurora' };
 
 const scope: Scene = {
   id: 'scope', name: 'Scope',
@@ -416,25 +370,41 @@ const terrain: Scene = {
 
 // ---------- Particles and space ----------
 
-type Particle = { a: number; r: number; v: number; s: number };
+type AlchemySpark = { a: number; r: number; v: number; s: number };
+type AlchemyState = { sparks: AlchemySpark[]; halo: HTMLCanvasElement };
+/** A soft white light, drawn once and stamped (tinted by 'lighter' over colour) for each spark's halo. */
+function haloSprite(): HTMLCanvasElement {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d')!; const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,0.9)'); grad.addColorStop(0.18, 'rgba(255,255,255,0.35)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  return c;
+}
 const alchemy: Scene = {
-  gl: alchemyGl,
   id: 'alchemy', name: 'Alchemy',
-  setup: f => Array.from({ length: small(f) ? 40 : 150 }, () => ({ a: Math.random() * TAU, r: Math.random(), v: 0.002 + Math.random() * 0.006, s: 1 + Math.random() * 2.5 })),
-  draw: (f, particles: Particle[]) => {
+  setup: f => ({ sparks: Array.from({ length: small(f) ? 40 : 160 }, () => ({ a: Math.random() * TAU, r: Math.random(), v: 0.002 + Math.random() * 0.006, s: 0.5 + Math.random() })), halo: haloSprite() }),
+  draw: (f, st: AlchemyState) => {
     const { ctx, w, h, hue, bass } = f;
-    fade(f, 'rgba(0,0,0,0.12)');
-    const R = Math.min(w, h) * 0.5;
+    // A short afterglow only: sparks stay sharp instead of smearing.
+    fade(f, 'rgba(0,0,0,0.45)');
+    const R = Math.min(w, h) * 0.5, unit = Math.min(w, h) / 1000;
     ctx.save(); ctx.translate(w / 2, h / 2); ctx.globalCompositeOperation = 'lighter';
     const arms = 8;
-    for (const p of particles) {
+    // One colour pass per band of the swirl (8 fills), each spark a crisp dot plus a stamped halo.
+    const groups: Path2D[] = Array.from({ length: 8 }, () => new Path2D());
+    for (const p of st.sparks) {
       p.a += p.v * (1 + bass * 4); p.r += 0.0015 + bass * 0.012; if (p.r > 1) p.r = Math.random() * 0.15;
+      const size = unit * (2 + p.s * 3) * (1 + bass * 1.5) * (1 - p.r * 0.5);
+      const g = groups[Math.min(7, Math.floor(p.r * 8))]!;
       for (let k = 0; k < arms; k++) {
         const a = p.a + (k * TAU) / arms, rr = p.r * R;
-        ctx.fillStyle = `hsla(${(hue + p.r * 160) % 360},95%,60%,${0.35 * (1 - p.r)})`;
-        ctx.beginPath(); ctx.arc(Math.cos(a) * rr, Math.sin(a) * rr * (k % 2 ? 1 : -1), p.s * (1 + bass * 2) * (small(f) ? 0.5 : 1), 0, TAU); ctx.fill();
+        const x = Math.cos(a) * rr, y = Math.sin(a) * rr * (k % 2 ? 1 : -1);
+        g.moveTo(x + size, y); g.arc(x, y, size, 0, TAU);
+        if (!small(f)) { ctx.globalAlpha = 0.9 * p.r * (1 - p.r); ctx.drawImage(st.halo, x - size * 4, y - size * 4, size * 8, size * 8); }
       }
     }
+    ctx.globalAlpha = 1;
+    groups.forEach((g, i) => { ctx.fillStyle = `hsla(${(hue + i * 20) % 360},95%,${58 + i * 2}%,${0.35 + i * 0.07})`; ctx.fill(g); });
     ctx.restore(); ctx.globalCompositeOperation = 'source-over';
   }
 };
@@ -559,29 +529,7 @@ const bubbles: Scene = {
 
 // ---------- Geometry and light ----------
 
-const tunnel: Scene = {
-  gl: tunnelGl,
-  id: 'tunnel', name: 'Tunnel',
-  draw: f => {
-    const { ctx, w, h, hue, bass, t } = f;
-    fade(f, 'rgba(2,2,8,0.22)');
-    const R = Math.min(w, h) * 0.45, pts = 180;
-    for (let ring = 0; ring < 4; ring++) {
-      ctx.beginPath();
-      const turn = t * 0.004 * (ring + 1) * (ring % 2 ? -1 : 1);
-      for (let i = 0; i < pts; i++) {
-        const a = (i / pts) * TAU + turn;
-        const r = R * (0.25 + ring * 0.2) + f.ring(i, pts) * R * 0.3;
-        const x = w / 2 + Math.cos(a) * r, y = h / 2 + Math.sin(a) * r;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-      ctx.strokeStyle = `hsla(${(hue + ring * 50) % 360},90%,62%,0.85)`; ctx.lineWidth = (small(f) ? 1 : 2) + bass * 4;
-      ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = glow(f, 10); ctx.stroke();
-    }
-    ctx.shadowBlur = 0;
-  }
-};
+const tunnel: Scene = { gl: tunnelGl, id: 'tunnel', name: 'Tunnel' };
 
 type RippleState = { rings: { r: number; hue: number }[] };
 const ripples: Scene = {
@@ -620,32 +568,7 @@ const ripples: Scene = {
   }
 };
 
-const kaleidoscope: Scene = {
-  gl: kaleidoGl,
-  id: 'kaleidoscope', name: 'Kaleidoscope',
-  draw: f => {
-    const { ctx, w, h, hue, wave, bass, t } = f;
-    fade(f, 'rgba(3,2,8,0.16)');
-    const R = Math.hypot(w, h) / 2, seg = 12;
-    ctx.save(); ctx.translate(w / 2, h / 2); ctx.globalCompositeOperation = 'lighter';
-    for (let s = 0; s < seg; s++) {
-      ctx.save(); ctx.rotate((s * TAU) / seg + t * 0.003); if (s % 2) ctx.scale(1, -1);
-      ctx.beginPath();
-      // The waveform laid along one wedge, mirrored into every other.
-      for (let i = 0; i < 128; i++) {
-        const p = i / 128, a = p * (TAU / seg);
-        const r = R * (0.1 + p * 0.85) + ((wave[i * 8]! - 128) / 128) * R * 0.25;
-        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-      }
-      ctx.strokeStyle = `hsla(${(hue + s * 8) % 360},90%,60%,0.55)`; ctx.lineWidth = small(f) ? 1 : 2 + bass * 3; ctx.stroke();
-      const v = f.band(s * 3, seg * 3);
-      ctx.fillStyle = `hsla(${(hue + 180) % 360},90%,65%,${0.2 + v * 0.5})`;
-      ctx.beginPath(); ctx.arc(R * (0.2 + v * 0.3), R * 0.04, 2 + v * (small(f) ? 3 : 10), 0, TAU); ctx.fill();
-      ctx.restore();
-    }
-    ctx.restore(); ctx.globalCompositeOperation = 'source-over';
-  }
-};
+const kaleidoscope: Scene = { gl: kaleidoGl, id: 'kaleidoscope', name: 'Kaleidoscope' };
 
 type BatteryState = { buf: HTMLCanvasElement; bctx: CanvasRenderingContext2D | null; sides: number };
 const battery: Scene = {
@@ -720,26 +643,7 @@ const lightning: Scene = {
   }
 };
 
-const colors: Scene = {
-  gl: colorsGl,
-  id: 'colors', name: 'Musical colors',
-  draw: f => {
-    const { ctx, w, h, hue, t } = f;
-    fade(f, 'rgba(0,0,0,0.2)');
-    ctx.globalCompositeOperation = 'lighter';
-    const cols = 4, rows = 3;
-    // Soft pools of colour, one per range of the music, breathing with it.
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-      const k = r * cols + c, v = f.band(k * 3, cols * rows * 3);
-      const x = ((c + 0.5) / cols) * w + Math.sin(t * 0.01 + k) * w * 0.05, y = ((r + 0.5) / rows) * h + Math.cos(t * 0.013 + k) * h * 0.06;
-      const rad = Math.min(w / cols, h / rows) * (0.4 + v * 0.9);
-      const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
-      g.addColorStop(0, `hsla(${(hue + k * 30) % 360},90%,60%,${0.15 + v * 0.55})`); g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g; ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
-    }
-    ctx.globalCompositeOperation = 'source-over';
-  }
-};
+const colors: Scene = { gl: colorsGl, id: 'colors', name: 'Musical colors' };
 
 type MatrixState = { drops: number[]; size: number };
 const GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉ0123456789';
@@ -765,46 +669,9 @@ const matrix: Scene = {
 
 // ---------- Pixel fields ----------
 
-const plasma: Scene = {
-  gl: plasmaGl,
-  id: 'plasma', name: 'Plasma',
-  draw: f => {
-    const { lo, t, mids, bass, hue, tint: [tr, tg, tb] } = f;
-    const W = lo.w, H = lo.h, d = lo.img.data, k = t * (0.02 + mids * 0.05), amp = 1 + bass * 3;
-    const glow = 0.35 + bass * 0.45;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const v = Math.sin(x * 0.09 * amp + k) + Math.sin(y * 0.11 + k * 1.3) + Math.sin((x + y) * 0.06 + k * 0.7) + Math.sin(Math.hypot(x - W / 2, y - H / 2) * 0.12 - k * 2);
-      const o = (y * W + x) * 4, c = (v + 4) / 8;
-      // Deep, not neon: the colours swing around the cover's tint and sit low, brightening with the beat.
-      d[o] = (tr * 0.5 + 60 * (1 + Math.sin(Math.PI * (c * 2 + hue / 180)))) * glow;
-      d[o + 1] = (tg * 0.5 + 60 * (1 + Math.sin(Math.PI * (c * 2 + hue / 180 + 0.66)))) * glow;
-      d[o + 2] = (tb * 0.5 + 60 * (1 + Math.sin(Math.PI * (c * 2 + hue / 180 + 1.33)))) * glow;
-      d[o + 3] = 255;
-    }
-    lo.blit();
-  }
-};
+const plasma: Scene = { gl: plasmaGl, id: 'plasma', name: 'Plasma' };
 
-const fire: Scene = {
-  gl: fireGl,
-  id: 'fire', name: 'Fire',
-  setup: f => new Float32Array(f.lo.w * f.lo.h),
-  draw: (f, heat: Float32Array) => {
-    const { lo } = f;
-    const W = lo.w, H = lo.h, d = lo.img.data;
-    // Seed the bottom row from the spectrum, then let the heat rise and cool.
-    for (let x = 0; x < W; x++) heat[(H - 1) * W + x] = Math.min(1, f.band(Math.floor((x / W) * 40), 40) * 1.3 + Math.random() * 0.15);
-    for (let y = 0; y < H - 1; y++) for (let x = 0; x < W; x++) {
-      const below = (y + 1) * W;
-      heat[y * W + x] = Math.max(0, (heat[below + x]! + heat[below + Math.max(0, x - 1)]! + heat[below + Math.min(W - 1, x + 1)]! + heat[Math.min(H - 1, y + 2) * W + x]!) / 4.12 - 0.002);
-    }
-    for (let i = 0; i < W * H; i++) {
-      const v = heat[i]!, o = i * 4;
-      d[o] = Math.min(255, v * 3 * 255); d[o + 1] = Math.min(255, Math.max(0, v * 3 - 1) * 255); d[o + 2] = Math.min(255, Math.max(0, v * 3 - 2) * 255); d[o + 3] = 255;
-    }
-    lo.blit();
-  }
-};
+const fire: Scene = { gl: fireGl, id: 'fire', name: 'Fire' };
 
 // ---------- Feelings: picked by "By mood" from what a song is about ----------
 
@@ -1022,96 +889,18 @@ export const MOOD_SCENES: Record<string, string[]> = {
 
 // ---------- Fractals ----------
 
-type PixelState = { buf: HTMLCanvasElement; bctx: CanvasRenderingContext2D; img: ImageData; W: number; H: number; zoom: number };
-function pixelBuffer(f: Frame, wFull: number): PixelState {
-  const W = small(f) ? 72 : wFull, H = Math.round(W * 0.625);
-  const buf = document.createElement('canvas'); buf.width = W; buf.height = H;
-  const bctx = buf.getContext('2d')!;
-  return { buf, bctx, img: bctx.createImageData(W, H), W, H, zoom: 1 };
-}
-function blitPixels(f: Frame, s: PixelState) {
-  s.bctx.putImageData(s.img, 0, 0);
-  f.ctx.imageSmoothingEnabled = true;
-  f.ctx.drawImage(s.buf, 0, 0, f.w, f.h);
-}
-/**
- * Smooth escape-time colour: bands of colour that slide with the hue and brighten with the bass. Points that fly
- * off at once stay dark, so the eye goes to the glowing edge of the set.
- */
-function escapeColour(d: Uint8ClampedArray, o: number, mu: number, maxIter: number, f: Frame) {
-  const k = mu * 0.22 + f.hue / 57;
-  const glow = (0.55 + f.bass * 0.6) * Math.min(1, Math.pow(Math.max(0, mu) / maxIter, 0.7) * 1.9);
-  d[o] = Math.min(255, (128 + 127 * Math.sin(k)) * glow);
-  d[o + 1] = Math.min(255, (128 + 127 * Math.sin(k + 2.1)) * glow);
-  d[o + 2] = Math.min(255, (128 + 127 * Math.sin(k + 4.2)) * glow);
-  d[o + 3] = 255;
-}
 
-const mandelbrot: Scene = {
-  gl: mandelbrotGl,
-  id: 'mandelbrot', name: 'Mandelbrot',
-  setup: f => ({ ...pixelBuffer(f, 250), zoom: 6 }),
-  draw: (f, s: PixelState) => {
-    // An endless dive into "seahorse valley"; the bass pushes the zoom on.
-    s.zoom *= 1.004 + f.bass * 0.012;
-    if (s.zoom > 6e4) s.zoom = 6;
-    const cx = -0.743643887037151, cy = 0.13182590420533;
-    const span = 3 / s.zoom, { W, H } = s, d = s.img.data;
-    const maxIter = Math.min(150, 48 + Math.log2(s.zoom) * 7);
-    for (let py = 0; py < H; py++) {
-      const y0 = cy + (py / H - 0.5) * span * (H / W);
-      for (let px = 0; px < W; px++) {
-        const x0 = cx + (px / W - 0.5) * span;
-        let x = 0, y = 0, i = 0;
-        while (x * x + y * y < 16 && i < maxIter) { const xt = x * x - y * y + x0; y = 2 * x * y + y0; x = xt; i++; }
-        const o = (py * W + px) * 4;
-        if (i >= maxIter) { d[o] = f.tint[0] * f.bass * 0.4; d[o + 1] = f.tint[1] * f.bass * 0.4; d[o + 2] = f.tint[2] * f.bass * 0.4; d[o + 3] = 255; }
-        else escapeColour(d, o, i + 1 - Math.log2(Math.log(Math.sqrt(x * x + y * y))), maxIter, f);
-      }
-    }
-    blitPixels(f, s);
-  }
-};
+const mandelbrot: Scene = { gl: mandelbrotGl, id: 'mandelbrot', name: 'Mandelbrot' };
 
-const julia: Scene = {
-  gl: juliaGl,
-  id: 'julia', name: 'Julia',
-  setup: f => pixelBuffer(f, 280),
-  draw: (f, s: PixelState) => {
-    // The shape morphs as its constant circles round; the music steers how fast and how far.
-    s.zoom += 0.004 + f.mids * 0.02;
-    const r = 0.7885 + f.bass * 0.03, a = s.zoom;
-    const cr = r * Math.cos(a), ci = r * Math.sin(a);
-    const { W, H } = s, d = s.img.data, span = 3.2, maxIter = 56;
-    for (let py = 0; py < H; py++) {
-      const y0 = (py / H - 0.5) * span * (H / W);
-      for (let px = 0; px < W; px++) {
-        let x = (px / W - 0.5) * span, y = y0, i = 0;
-        while (x * x + y * y < 16 && i < maxIter) { const xt = x * x - y * y + cr; y = 2 * x * y + ci; x = xt; i++; }
-        const o = (py * W + px) * 4;
-        if (i >= maxIter) { d[o] = 4; d[o + 1] = 2; d[o + 2] = 10; d[o + 3] = 255; }
-        else escapeColour(d, o, i + 1 - Math.log2(Math.log(Math.sqrt(x * x + y * y))), maxIter, f);
-      }
-    }
-    blitPixels(f, s);
-  }
-};
+const julia: Scene = { gl: juliaGl, id: 'julia', name: 'Julia' };
 
-/** A soft round light, drawn once and stamped many times (far cheaper than a gradient per dot). */
-function glowSprite(size: number, rgb: string): HTMLCanvasElement {
-  const c = document.createElement('canvas'); c.width = c.height = size;
-  const g = c.getContext('2d')!; const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  grad.addColorStop(0, `rgba(${rgb},1)`); grad.addColorStop(0.25, `rgba(${rgb},0.55)`); grad.addColorStop(1, `rgba(${rgb},0)`);
-  g.fillStyle = grad; g.fillRect(0, 0, size, size);
-  return c;
-}
 
-type TreeState = { stars: [number, number, number][]; spread: Float32Array; petals: { x: number; y: number; vx: number; vy: number; life: number; hue: number }[]; blossom: HTMLCanvasElement; blossomHue: number; tips: [number, number][] };
+type TreeState = { stars: [number, number, number][]; spread: Float32Array; petals: { x: number; y: number; vx: number; vy: number; life: number; hue: number }[]; tips: [number, number][] };
 const fractalTree: Scene = {
   id: 'tree', name: 'Fractal tree',
   setup: () => ({
     stars: Array.from({ length: 140 }, () => [Math.random(), Math.random() * 0.7, Math.random()] as [number, number, number]),
-    spread: new Float32Array(12).fill(0.45), petals: [], blossom: glowSprite(64, '255,180,220'), blossomHue: -99, tips: []
+    spread: new Float32Array(12).fill(0.45), petals: [], tips: []
   }),
   draw: (f, s: TreeState) => {
     const { ctx, w, h, hue, bass, treble, beat, t } = f;
@@ -1129,39 +918,41 @@ const fractalTree: Scene = {
     // Each level opens with its own band (smoothed so it breathes rather than twitches).
     for (let l = 0; l < depthMax; l++) s.spread[l] = s.spread[l]! * 0.9 + (0.32 + f.band(l * 2 + 2, depthMax * 2 + 4) * 0.42) * 0.1;
     const base = Math.min(w, h);
-    ctx.lineCap = 'round';
-    const branch = (x: number, y: number, len: number, angle: number, width: number, level: number, side: number) => {
+    // Branches are collected per level and drawn in one stroke each (eleven draws, not two thousand).
+    const levels: Path2D[] = Array.from({ length: depthMax }, () => new Path2D());
+    const branch = (x: number, y: number, len: number, angle: number, level: number, side: number) => {
       const sway = Math.sin(t * 0.015 + level * 0.55) * 0.012 * (1 + level * 0.25) * (1 + bass * 1.5);
       const a = angle + sway;
       const x2 = x + Math.cos(a) * len, y2 = y + Math.sin(a) * len;
       // A slight curve, like real wood.
-      const cx = (x + x2) / 2 + Math.cos(a + Math.PI / 2) * len * 0.1 * side, cy = (y + y2) / 2 + Math.sin(a + Math.PI / 2) * len * 0.1 * side;
-      const k = level / depthMax;
-      ctx.strokeStyle = `hsl(${(25 + (hue + 160 - 25) * k * k) % 360},${30 + k * 50}%,${12 + k * 38}%)`;
-      ctx.lineWidth = width;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(cx, cy, x2, y2); ctx.stroke();
+      const path = levels[level]!;
+      path.moveTo(x, y);
+      path.quadraticCurveTo((x + x2) / 2 + Math.cos(a + Math.PI / 2) * len * 0.1 * side, (y + y2) / 2 + Math.sin(a + Math.PI / 2) * len * 0.1 * side, x2, y2);
       if (level >= depthMax - 1) { s.tips.push([x2, y2]); return; }
       const sp = s.spread[level]!;
-      branch(x2, y2, len * 0.74, a - sp, width * 0.68, level + 1, -1);
-      branch(x2, y2, len * 0.74, a + sp, width * 0.68, level + 1, 1);
+      branch(x2, y2, len * 0.74, a - sp, level + 1, -1);
+      branch(x2, y2, len * 0.74, a + sp, level + 1, 1);
     };
-    branch(w / 2, h * 0.97, base * (0.2 + bass * 0.02), -Math.PI / 2, base * 0.028, 0, 0);
+    branch(w / 2, h * 0.97, base * (0.2 + bass * 0.02), -Math.PI / 2, 0, 0);
+    ctx.lineCap = 'round';
+    levels.forEach((path, level) => {
+      const k = level / depthMax;
+      ctx.strokeStyle = `hsl(${(25 + (hue + 160 - 25) * k * k) % 360},${30 + k * 50}%,${12 + k * 38}%)`;
+      ctx.lineWidth = base * 0.028 * Math.pow(0.68, level);
+      ctx.stroke(path);
+    });
 
     // Blossoms at the tips, glowing with the treble; petals let go on the beat.
     ctx.globalCompositeOperation = 'lighter';
-    const bs = base * (small(f) ? 0.05 : 0.022) * (0.7 + treble * 0.9);
-    const bh = Math.round(((hue + 300) % 360) / 15) * 15;
-    if (bh !== s.blossomHue) {
-      s.blossomHue = bh;
-      const [r, g, bl] = [0, 8, 4].map(n => { const k = (n + bh / 30) % 12; return Math.round(255 * (0.6 - 0.4 * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); });
-      s.blossom = glowSprite(64, `${r},${g},${bl}`);
-    }
+    const bs = base * (small(f) ? 0.02 : 0.008) * (0.7 + treble * 0.9);
+    const bloom = new Path2D(), core = new Path2D();
     s.tips.forEach(([x, y], i) => {
-      if (i % (small(f) ? 1 : 2)) return;
-      ctx.globalAlpha = 0.18 + f.band(i % 48, 48) * 0.5;
-      ctx.drawImage(s.blossom, x - bs / 2, y - bs / 2, bs, bs);
+      if (i % 2) return;
+      bloom.moveTo(x + bs * 1.8, y); bloom.arc(x, y, bs * 1.8, 0, TAU);
+      core.moveTo(x + bs * 0.6, y); core.arc(x, y, bs * 0.6, 0, TAU);
     });
-    ctx.globalAlpha = 1;
+    ctx.fillStyle = `hsla(${(hue + 300) % 360},90%,65%,${0.12 + treble * 0.25})`; ctx.fill(bloom);
+    ctx.fillStyle = `hsla(${(hue + 320) % 360},100%,85%,${0.45 + treble * 0.4})`; ctx.fill(core);
     if (beat) for (let i = 0; i < (small(f) ? 3 : 14); i++) { const [x, y] = s.tips[Math.floor(Math.random() * s.tips.length)] ?? [w / 2, h / 2]; s.petals.push({ x, y, vx: (Math.random() - 0.5) * 0.6, vy: 0.3 + Math.random() * 0.5, life: 1, hue: (hue + 150 + Math.random() * 60) % 360 }); }
     for (let i = s.petals.length - 1; i >= 0; i--) {
       const p = s.petals[i]!;
@@ -1233,36 +1024,7 @@ const fern: Scene = {
   }
 };
 
-type SierpState = { s: number };
-const sierpinski: Scene = {
-  gl: sierpinskiGl,
-  id: 'sierpinski', name: 'Sierpinski',
-  setup: () => ({ s: 1 }),
-  draw: (f, st: SierpState) => {
-    const { ctx, w, h, hue, beat } = f;
-    fade(f, beat ? 'rgba(30,20,50,0.5)' : 'rgba(3,3,10,0.45)');
-    // An endless zoom into the corner of the triangle: at twice the size it looks the same, so it never ends.
-    st.s *= 1.004 + f.bass * 0.01;
-    if (st.s >= 2) st.s /= 2;
-    const side = Math.max(w, h * 1.16) * 1.15 * st.s;
-    const ax = w * 0.04, ay = h * 0.98;
-    const minSide = small(f) ? 6 : 4;
-    const tri = (x: number, y: number, len: number, depth: number) => {
-      if (x > w || y - len * 0.866 > h || x + len < 0 || y < 0) return;
-      if (len < minSide * 2 || depth > 9) {
-        const v = f.band(depth * 3 % 30, 30);
-        ctx.fillStyle = `hsla(${(hue + depth * 28) % 360},85%,${40 + v * 35}%,${0.6 + v * 0.4})`;
-        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y); ctx.lineTo(x + len / 2, y - len * 0.866); ctx.closePath(); ctx.fill();
-        return;
-      }
-      const half = len / 2;
-      tri(x, y, half, depth + 1);
-      tri(x + half, y, half, depth + 1);
-      tri(x + half / 2, y - half * 0.866, half, depth + 1);
-    };
-    tri(ax, ay, side, 0);
-  }
-};
+const sierpinski: Scene = { gl: sierpinskiGl, id: 'sierpinski', name: 'Sierpinski' };
 
 /** In picker order, grouped: feelings, spectrum, waves, space, geometry, fractals, fields. */
 export const SCENE_LIST: Scene[] = [

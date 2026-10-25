@@ -4,7 +4,7 @@
  * it for a frame of its size and copies the result. No WebGL2: the scene's 2D drawing is used instead.
  */
 
-export type Uniforms = Record<string, number | [number, number] | [number, number, number]>;
+export type Uniforms = Record<string, number | number[]>;
 
 export interface GlFrameInput {
   width: number; height: number;
@@ -22,8 +22,6 @@ export interface GlScene {
   frag: string;
   /** Extra uniforms each frame (declare them in `frag`). */
   uniforms?: (input: GlFrameInput, state: never) => Uniforms;
-  /** A float texture (two floats per texel, width = length) bound as `uData`, when it changed. */
-  data?: (state: never) => { values: Float32Array; length: number; version: number } | null;
 }
 
 const HEADER = `#version 300 es
@@ -43,7 +41,7 @@ float noise(vec2 p) {
   vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
   return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
 }
-float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return v; }
+float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return v; }
 mat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
 `;
 
@@ -68,15 +66,17 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
 type Program = { prog: WebGLProgram; locs: Map<string, WebGLUniformLocation | null> };
 
 class Renderer {
-  readonly canvas = document.createElement('canvas');
   readonly gl: WebGL2RenderingContext | null;
   private programs = new Map<GlScene, Program | null>();
   private spec: WebGLTexture | null = null;
-  private data = new Map<GlScene, { tex: WebGLTexture; version: number }>();
 
-  constructor() {
-    this.canvas.width = 2; this.canvas.height = 2;
-    this.gl = this.canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+  /**
+   * `own`: draws straight into a canvas on the page (no copy). Otherwise a hidden canvas shared by the small
+   * previews, whose frames are copied out (and so must be kept until then).
+   */
+  constructor(readonly canvas: HTMLCanvasElement = document.createElement('canvas'), private readonly own = false) {
+    if (!own) { this.canvas.width = 2; this.canvas.height = 2; }
+    this.gl = this.canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: !own, powerPreference: 'high-performance' });
     const gl = this.gl;
     if (!gl) return;
     const buf = gl.createBuffer();
@@ -117,14 +117,15 @@ class Renderer {
     const p = this.programs.get(scene);
     if (!p) return false;
     const { width: w, height: h } = input;
-    // Grow only (shrinking would reallocate every time a smaller view draws).
-    if (this.canvas.width < w || this.canvas.height < h) {
+    if (this.own) { if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; } }
+    // Shared: grow only (shrinking would reallocate every time a smaller view draws).
+    else if (this.canvas.width < w || this.canvas.height < h) {
       this.canvas.width = Math.max(this.canvas.width, w);
       this.canvas.height = Math.max(this.canvas.height, h);
     }
     gl.viewport(0, 0, w, h);
     gl.useProgram(p.prog);
-    const loc = (name: string) => { if (!p.locs.has(name)) p.locs.set(name, gl.getUniformLocation(p.prog, name)); return p.locs.get(name)!; };
+    const loc = (name: string) => { if (!p.locs.has(name)) p.locs.set(name, gl.getUniformLocation(p.prog, name) ?? gl.getUniformLocation(p.prog, `${name}[0]`)); return p.locs.get(name)!; };
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
@@ -132,25 +133,6 @@ class Renderer {
     gl.bindTexture(gl.TEXTURE_2D, this.spec);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, input.spectrum.length, 1, 0, gl.RED, gl.UNSIGNED_BYTE, input.spectrum);
     gl.uniform1i(loc('uSpec'), 0);
-
-    const data = scene.data?.(state as never);
-    if (data) {
-      let entry = this.data.get(scene);
-      if (!entry) {
-        const tex = gl.createTexture()!;
-        gl.bindTexture(gl.TEXTURE_2D, tex);
-        for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]] as const) gl.texParameteri(gl.TEXTURE_2D, k, v);
-        entry = { tex, version: -1 };
-        this.data.set(scene, entry);
-      }
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, entry.tex);
-      if (entry.version !== data.version) {
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, data.length, 1, 0, gl.RG, gl.FLOAT, data.values);
-        entry.version = data.version;
-      }
-      gl.uniform1i(loc('uData'), 1);
-    }
 
     gl.uniform2f(loc('uRes'), w, h);
     gl.uniform1f(loc('uTime'), input.time);
@@ -165,16 +147,22 @@ class Renderer {
     for (const [name, value] of Object.entries(scene.uniforms?.(input, state as never) ?? {})) {
       const l = loc(name);
       if (typeof value === 'number') { if (/^uI[A-Z]/.test(name)) gl.uniform1i(l, value); else gl.uniform1f(l, value); }
-      else if (value.length === 2) gl.uniform2f(l, value[0], value[1]);
-      else gl.uniform3f(l, value[0], value[1], value[2]);
+      else if (value.length === 2) gl.uniform2f(l, value[0]!, value[1]!);
+      else if (value.length === 3) gl.uniform3f(l, value[0]!, value[1]!, value[2]!);
+      else gl.uniform4fv(l, value);
     }
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     return true;
   }
 }
 
+/** A renderer that draws into this canvas on the page, or null when this browser has no WebGL2. */
+export function ownRenderer(canvas: HTMLCanvasElement): Renderer | null {
+  try { const r = new Renderer(canvas, true); return r.gl ? r : null; } catch { return null; }
+}
+
 let shared: Renderer | null | undefined;
-/** The shared GPU renderer, or null when this browser has no WebGL2. */
+/** The shared GPU renderer for small previews, or null when this browser has no WebGL2. */
 export function glRenderer(): Renderer | null {
   if (shared === undefined) {
     try { shared = new Renderer(); if (!shared.gl) shared = null; } catch { shared = null; }
