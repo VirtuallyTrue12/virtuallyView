@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { Readable } from 'node:stream';
 import { addPlaylist, channelById, channelsFor, guideSources, knownChannel, listPlaylists, removePlaylist, rewriteHls, verifyRelay } from '../services/live-tv.js';
 import { liveHighlights } from '../services/live-highlights.js';
-import { ensureGuide, programmesFor, type Programme } from '../services/epg.js';
+import { ensureGuide, fallbackGuide, programmesFor, type Programme } from '../services/epg.js';
 import { checkChannels, deadChannels, favoriteChannels, recentChannels, setChannelFavorite, touchRecent } from '../services/live-user.js';
 import { outboundFetch } from '../services/outbound.js';
 import { startTranscode } from '../services/transcode.js';
@@ -32,7 +32,7 @@ export default async function liveRoutes(server: FastifyInstance) {
       try {
         // The address of a stream stays on the server; the page gets an id.
         const hasGuide = guideSources(playlist.id).length > 0 || !!playlist.epgUrl;
-        for (const { url: _hidden, tvgId, ...channel } of await channelsFor(playlist)) channels.push({ ...channel, ...(hasGuide && tvgId ? { guide: true } : {}) });
+        for (const { url: _hidden, tvgId, ...channel } of await channelsFor(playlist)) channels.push({ ...channel, ...((hasGuide && tvgId) || fallbackGuide(tvgId) ? { guide: true } : {}) });
       } catch (error) {
         problems.push(`${playlist.name}: ${error instanceof Error ? error.message : 'could not be loaded'}`);
       }
@@ -46,17 +46,21 @@ export default async function liveRoutes(server: FastifyInstance) {
     const ids = [...new Set((request.query.channels ?? '').split(',').filter(Boolean))].slice(0, 150);
     const hours = Math.min(Math.max(Number(request.query.hours) || 3, 1), 24);
     const now = Date.now();
-    const wanted: Array<{ id: string; tvgId: string; urls: string[] }> = [];
+    const wanted: Array<{ id: string; tvgId: string; name: string; urls: string[] }> = [];
+    const fallbacks = new Set<string>();
     for (const id of ids) {
       const c = knownChannel(id) ?? await channelById(id);
-      const urls = c ? (listPlaylists().find(p => p.id === c.playlist)?.epgUrl ? [listPlaylists().find(p => p.id === c.playlist)!.epgUrl!] : guideSources(c.playlist)) : [];
-      if (c?.tvgId && urls.length) wanted.push({ id, tvgId: c.tvgId, urls });
+      let urls = c ? (listPlaylists().find(p => p.id === c.playlist)?.epgUrl ? [listPlaylists().find(p => p.id === c.playlist)!.epgUrl!] : guideSources(c.playlist)) : [];
+      // No guide with the playlist: the country's community guide, matched by channel name.
+      if (c && !urls.length) { const fb = fallbackGuide(c.tvgId); if (fb) { urls = [fb]; fallbacks.add(fb); } }
+      if (c?.tvgId && urls.length) wanted.push({ id, tvgId: c.tvgId, name: c.name, urls });
     }
     const byUrl = new Map<string, Set<string>>();
     for (const w of wanted) for (const u of w.urls) { const set = byUrl.get(u) ?? new Set<string>(); set.add(w.tvgId); byUrl.set(u, set); }
     // The guide covers every channel of its playlist, so ask for all of that playlist's ids the first time.
-    const all = new Map<string, Set<string>>();
+    const all = new Map<string, Set<string> | null>();
     for (const [u, set] of byUrl) {
+      if (fallbacks.has(u)) { all.set(u, null); continue; }
       const full = new Set(set);
       for (const p of listPlaylists()) if (p.epgUrl === u || guideSources(p.id).includes(u)) { try { for (const c of await channelsFor(p)) if (c.tvgId) full.add(c.tvgId); } catch { /* the playlist is unreachable */ } }
       all.set(u, full);
@@ -64,7 +68,7 @@ export default async function liveRoutes(server: FastifyInstance) {
     const ready = (await Promise.all([...all].map(([u, set]) => ensureGuide(u, set)))).every(Boolean);
     const programmes: Record<string, Programme[]> = {};
     for (const w of wanted) {
-      const list = w.urls.flatMap(u => programmesFor(u, w.tvgId, now - 30 * 60_000, now + hours * 3_600_000));
+      const list = w.urls.flatMap(u => programmesFor(u, w.tvgId, now - 30 * 60_000, now + hours * 3_600_000, fallbacks.has(u) ? w.name : undefined));
       if (list.length) programmes[w.id] = list.sort((a, b) => a.start - b.start).slice(0, 40);
     }
     return { ready, now, programmes };

@@ -1,5 +1,5 @@
 import type { GlScene } from './viz-gl';
-import { auroraGl, colorsGl, fireGl, juliaGl, kaleidoGl, mandelbrotGl, mistGl, plasmaGl, sierpinskiGl, tunnelGl } from './viz-gl-scenes';
+import { alchemyGl, auroraGl, colorsGl, fireGl, juliaGl, kaleidoGl, mandelbrotGl, mistGl, plasmaGl, sierpinskiGl, tunnelGl } from './viz-gl-scenes';
 
 /**
  * The visualizer scenes. Each draws one frame from what the player's analyser hears (see Visualizer.tsx for the
@@ -418,6 +418,7 @@ const terrain: Scene = {
 
 type Particle = { a: number; r: number; v: number; s: number };
 const alchemy: Scene = {
+  gl: alchemyGl,
   id: 'alchemy', name: 'Alchemy',
   setup: f => Array.from({ length: small(f) ? 40 : 150 }, () => ({ a: Math.random() * TAU, r: Math.random(), v: 0.002 + Math.random() * 0.006, s: 1 + Math.random() * 2.5 })),
   draw: (f, particles: Particle[]) => {

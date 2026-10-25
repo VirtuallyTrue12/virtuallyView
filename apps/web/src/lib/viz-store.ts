@@ -15,13 +15,15 @@ export type VizState = {
   screensaver: boolean;
   /** Show the visualizer in place of the cover in Now Playing. */
   inPlayer: boolean;
+  /** How hard the visualizers work: Battery saver (720p, 30 fps), Balanced (up to 1440p), Ultra (native up to 4K). */
+  quality: 'saver' | 'balanced' | 'ultra';
   /** The full-screen stage: closed, opened by the person, or opened by the screensaver. */
   stage: 'closed' | 'open' | 'auto';
 };
 
 const KEY = 'vv-viz';
 const read = (): VizState => {
-  const base: VizState = { scene: 'mood', lyricStyle: 'karaoke', screensaver: true, inPlayer: true, stage: 'closed' };
+  const base: VizState = { quality: 'balanced', scene: 'mood', lyricStyle: 'karaoke', screensaver: true, inPlayer: true, stage: 'closed' };
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<VizState>;
     return {
@@ -29,7 +31,8 @@ const read = (): VizState => {
       scene: typeof saved.scene === 'string' && /^[a-z]+$/.test(saved.scene) ? saved.scene : base.scene,
       lyricStyle: (['off', 'karaoke', 'roll'] as const).includes(saved.lyricStyle as LyricStyle) ? saved.lyricStyle! : base.lyricStyle,
       screensaver: saved.screensaver ?? base.screensaver,
-      inPlayer: saved.inPlayer ?? base.inPlayer
+      inPlayer: saved.inPlayer ?? base.inPlayer,
+      quality: saved.quality === 'saver' || saved.quality === 'ultra' ? saved.quality : base.quality
     };
   } catch { return base; }
 };
@@ -45,6 +48,9 @@ export function setViz(next: Partial<VizState>): void {
   } catch { /* private window: works for this visit */ }
   listeners.forEach(l => l());
 }
+
+/** The current settings outside React (the drawing loops read it every frame). */
+export const vizNow = (): VizState => state;
 
 export function useViz(): VizState {
   return useSyncExternalStore(cb => { listeners.add(cb); return () => listeners.delete(cb); }, () => state, () => state);

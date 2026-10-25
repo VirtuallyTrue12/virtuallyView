@@ -285,6 +285,12 @@ function VisualsPanel({ tint }: { tint: string }) {
     <div className="visuals">
       <SceneTiles tint={tint} />
       <LyricStyleToggle />
+      <div className="seg" role="radiogroup" aria-label="Visualizer quality">
+        <span className="seg-label">Quality</span>
+        {([['saver', 'Battery saver'], ['balanced', 'Balanced'], ['ultra', 'Ultra (4K)']] as const).map(([id, label]) => (
+          <button key={id} type="button" role="radio" aria-checked={viz.quality === id} className={`seg-btn${viz.quality === id ? ' is-on' : ''}`} onClick={() => setViz({ quality: id })}>{label}</button>
+        ))}
+      </div>
       <button type="button" role="switch" aria-checked={viz.screensaver} className={`toggle${viz.screensaver ? ' is-on' : ''}`} onClick={() => setViz({ screensaver: !viz.screensaver })}>
         <span className="toggle-knob" aria-hidden="true" />
         <span>Start full screen after a minute idle <small>like a screensaver; any key brings you back</small></span>

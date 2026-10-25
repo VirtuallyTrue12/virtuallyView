@@ -16,11 +16,11 @@ const CMUL = 'vec2 cmul(vec2 a, vec2 b) { return vec2(a.x * b.x - a.y * b.y, a.x
  * and back out (no cut), then picks another point while it shows the whole set.
  */
 const TARGETS: [number, number, number][] = [
-  [-0.743643887037158704752191506114774, 0.131825904205311970493132056385139, 1e11], // seahorse valley
-  [-1.401155189092050, 0, 1e11], // the Feigenbaum point: minibrots within minibrots
-  [-0.10109636384562, 0.95628651080914, 5e10], // a spiral arm's tip
-  [0, 1, 1e11], // c = i: dendrites forever
-  [-0.7746806106269039, -0.1374168856037867, 1e9] // double spirals
+  [-0.743643887037158704752191506114774, 0.131825904205311970493132056385139, 1e6], // seahorse valley
+  [-1.401155189092050, 0, 1e6], // the Feigenbaum point: minibrots within minibrots
+  [-0.10109636384562, 0.95628651080914, 1e6], // a spiral arm's tip
+  [0, 1, 1e6], // c = i: dendrites forever
+  [-0.7746806106269039, -0.1374168856037867, 1e6] // double spirals
 ];
 const FULL: [number, number] = [-0.6, 0];
 const REF_LEN = 2600;
@@ -45,7 +45,7 @@ export const mandelbrotGl: GlScene & { setup: () => MandelState } = {
   uniforms: (f: GlFrameInput, s: MandelState) => {
     const dt = Math.min(0.1, Math.max(0, f.time - s.last)); s.last = f.time;
     // About two minutes in and out; the music hurries it along.
-    s.phase += dt * (1 + f.bass * 0.9 + f.beat * 0.6) / 120;
+    s.phase += dt * (1 + f.bass * 0.5) / 90;
     const cycle = Math.floor(s.phase);
     if (cycle !== s.cycle) {
       s.cycle = cycle;
@@ -61,7 +61,7 @@ export const mandelbrotGl: GlScene & { setup: () => MandelState } = {
     const span = 3.4 / zoom;
     return {
       uDc0: [dcx, dcy], uScale: span / Math.min(f.width, f.height * 1.6), uRot: f.time * 0.015,
-      uIMaxIter: Math.min(2400, Math.round(220 + 95 * Math.log10(zoom))), uIRefLen: REF_LEN
+      uIMaxIter: Math.min(900, Math.round(200 + 90 * Math.log10(zoom))), uIRefLen: REF_LEN
     };
   },
   frag: CMUL + `
@@ -215,20 +215,31 @@ vec3 shade(vec2 p) {
 
 // ---------- Tunnel: flying down a tube of light ----------
 
-export const tunnelGl: GlScene = {
+type TunnelState = { dist: number; last: number };
+export const tunnelGl: GlScene & { setup: () => TunnelState } = {
+  setup: () => ({ dist: 0, last: 0 }),
+  uniforms: (f: GlFrameInput, s: TunnelState) => {
+    const dt = Math.min(0.1, Math.max(0, f.time - s.last)); s.last = f.time;
+    // Distance only ever grows: the bass speeds the flight up a little, it never stops or runs backwards.
+    s.dist += dt * (0.9 + f.bass * 0.6);
+    return { uDist: s.dist };
+  },
   frag: `
+uniform float uDist;
 vec3 shade(vec2 p) {
   vec2 uv = (p - 0.5 * uRes) / min(uRes.x, uRes.y);
   uv *= rot(uTime * 0.1);
   float r = length(uv), a = atan(uv.y, uv.x);
-  float z = 0.35 / max(r, 0.02) + uTime * (0.8 + uBass * 1.5);
+  float z = 0.35 / max(r, 0.02) + uDist;
   // Rings rush toward you; ridges round the wall follow the spectrum.
   float ridges = spec(abs(fract(a / TAU * 2.0) - 0.5) * 2.0);
   float rings = smoothstep(0.06 + ridges * 0.12, 0.0, 0.5 - abs(fract(z * 2.0) - 0.5));
   float grid = smoothstep(0.035, 0.0, 0.5 - abs(fract(a / TAU * 16.0 + z * 0.1) - 0.5));
   vec3 c = pal(z * 0.05 + uHue, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.2, 0.4));
   float fog = smoothstep(0.0, 0.35, r);
-  return c * (rings * (0.6 + uBeat) + grid * 0.35 + 0.05) * fog + vec3(1.0, 0.9, 0.8) * exp(-r * 12.0) * (0.3 + uBass);
+  // A kick: the rings flare and a shockwave runs out from the centre.
+  float wave = uBeat * smoothstep(0.08, 0.0, abs(r - (1.0 - uBeat) * 0.9));
+  return c * (rings * (0.6 + uBeat * 0.8) + grid * 0.35 + 0.05) * fog + c * wave * 1.5 + vec3(1.0, 0.9, 0.8) * exp(-r * 12.0) * (0.3 + uBass);
 }`
 };
 
@@ -319,5 +330,41 @@ vec3 shade(vec2 p) {
   vec3 col = acc / max(field, 1e-4);
   float edge = smoothstep(0.9, 1.1, field);
   return col * (0.08 + 0.92 * edge) + col * pow(field, 0.6) * 0.15;
+}`
+};
+
+// ---------- Alchemy: mirrored swirls of light ----------
+
+type AlchemyState = { swirl: number; last: number };
+export const alchemyGl: GlScene & { setup: () => AlchemyState } = {
+  setup: () => ({ swirl: 0, last: 0 }),
+  uniforms: (f: GlFrameInput, s: AlchemyState) => {
+    const dt = Math.min(0.1, Math.max(0, f.time - s.last)); s.last = f.time;
+    s.swirl += dt * (1 + f.bass * 3);
+    return { uSwirl: s.swirl };
+  },
+  frag: `
+uniform float uSwirl;
+vec3 shade(vec2 p) {
+  vec2 uv = (p - 0.5 * uRes) / min(uRes.x, uRes.y);
+  float r = length(uv), a = atan(uv.y, uv.x);
+  float seg = TAU / 8.0;
+  a = abs(mod(a, seg) - seg * 0.5); // eight mirrored wedges
+  vec2 q = vec2(cos(a), sin(a)) * r;
+  vec3 col = vec3(0.0);
+  // Sparks spiral outward and fade; each is a sharp point with a soft halo, so it stays crisp at any size.
+  for (int i = 0; i < 48; i++) {
+    float fi = float(i);
+    float life = fract(uSwirl * 0.05 * (0.6 + hash(vec2(fi, 1.0))) + hash(vec2(fi, 2.0)));
+    float ang = hash(vec2(fi, 3.0)) * seg + life * 2.5 * (0.5 + hash(vec2(fi, 4.0)));
+    ang = abs(mod(ang, seg) - seg * 0.5);
+    vec2 pos = vec2(cos(ang), sin(ang)) * life * 0.6;
+    float size = 0.003 + 0.009 * (1.0 - life) + uBass * 0.005;
+    float d2 = dot(q - pos, q - pos);
+    float glow = size * size / (d2 + size * size * 0.25);
+    col += pal(life * 0.6 + uHue + fi * 0.013, vec3(0.5), vec3(0.5), vec3(1.0), vec3(0.0, 0.33, 0.67)) * glow * (1.0 - life) * 0.45;
+  }
+  col += uTint * exp(-r * 6.0) * (0.15 + uBass * 0.5);
+  return col;
 }`
 };

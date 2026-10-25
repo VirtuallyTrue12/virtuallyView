@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { audioEngine } from '../../lib/audio-engine';
-import { setViz, useLyrics, useViz, type LyricLine, type LyricStyle, type SceneId } from '../../lib/viz-store';
+import { setViz, useLyrics, useViz, vizNow, type LyricLine, type LyricStyle, type SceneId } from '../../lib/viz-store';
 import { blitGl, glRenderer } from './viz-gl';
 import { MOOD_SCENES, SCENE_BY_ID, SCENE_LIST, type Frame, type Scene, type Variant } from './viz-scenes';
 import { moodFromEnergy, songMood, type Mood } from '../../lib/mood';
@@ -32,7 +32,8 @@ export type MoodPick = { mood: Mood; scene: string; byEnergy: boolean };
  * One canvas drawing one scene (see viz-scenes). `full` fills a stage, `strip` is the thin spectrum on the bottom
  * bar and `tile` is a small live preview in the scene picker.
  */
-export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', className, onMood }: { scene: SceneId; tint?: string; variant?: Variant; className?: string; onMood?: (pick: MoodPick | null) => void }) {
+export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', className, onMood, stage = false }: { scene: SceneId; tint?: string; variant?: Variant; className?: string; onMood?: (pick: MoodPick | null) => void; stage?: boolean }) {
+  const { quality } = useViz();
   const canvas = useRef<HTMLCanvasElement>(null);
   const song = useSongMood(scene === 'mood' && variant !== 'tile');
   const songRef = useRef(song); songRef.current = song;
@@ -46,7 +47,7 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
     const dpr = Math.min(variant === 'full' ? 3 : 1.5, window.devicePixelRatio || 1);
     // Quality: 1 = the display's full pixel density (up to 4K); lowered a step when frames start to drop.
     let q = 1, scale = dpr;
-    const budget = variant === 'full' ? 3840 * 2160 : 320 * 200;
+    const budget = variant !== 'full' ? 320 * 200 : quality === 'saver' ? 1280 * 720 : quality === 'balanced' ? 2560 * 1440 : 3840 * 2160;
     const freq = new Uint8Array(1024);
     const wave = new Uint8Array(2048);
     // A small pixel buffer for the pixel scenes (plasma, fire), drawn scaled up.
@@ -112,14 +113,21 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       if (!current || f.t - cycleAt > 1500) { cycleAt = f.t; const others = SCENE_LIST.filter(sc => sc !== current); return others[Math.floor(Math.random() * others.length)]!; }
       return current;
     };
-    let hidden = document.hidden;
+    let hidden = document.hidden, onScreen = true;
     const onVis = () => { hidden = document.hidden; };
     document.addEventListener('visibilitychange', onVis);
+    // Not drawn while scrolled out of view.
+    const io = new IntersectionObserver(entries => { onScreen = entries.some(e => e.isIntersecting); });
+    io.observe(cv);
 
     const draw = () => {
       raf = requestAnimationFrame(draw);
       f.t += 1;
-      if (hidden || (variant === 'tile' && f.t % 3)) return;
+      if (hidden || !onScreen || (variant === 'tile' && f.t % 3)) return;
+      // One visualizer at a time: the full-screen view pauses the others underneath it.
+      if (!stage && vizNow().stage !== 'closed') return;
+      // Battery saver: every other frame (30 a second).
+      if (quality === 'saver' && f.t % 2) return;
       // Keep it smooth: measure how long frames take and trade resolution for speed only when needed.
       const now = performance.now();
       frameMs = frameMs * 0.92 + Math.min(100, now - lastFrame) * 0.08;
@@ -165,8 +173,8 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       next.draw(f, state as never);
     };
     draw();
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); document.removeEventListener('visibilitychange', onVis); onMoodRef.current?.(null); };
-  }, [scene, tint, variant]);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', onVis); onMoodRef.current?.(null); };
+  }, [scene, tint, variant, quality, stage]);
 
   return <canvas ref={canvas} className={`viz-canvas${className ? ` ${className}` : ''}`} aria-hidden="true" />;
 }
