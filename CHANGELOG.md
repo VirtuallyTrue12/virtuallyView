@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Added.** Visuals that match the feeling of the song. "By mood" (now the default scene) reads each song's lyrics, title and genre, and when they say nothing, how hard the music hits: rain on a window for a sad song (or falling snow), rose petals and rising hearts for a love song, a sunrise for an uplifting one, fireworks on the beat for a party, fireflies in tall grass for a calm one. The full-screen view and the Music page show the feeling it picked. The six scenes can also be picked on their own, 34 in all.
 - **Added.** Sixteen more visualizations, twenty-eight in all: LED meter, VU meters, Spikes, Spectrogram, Waves, Lissajous, Synthwave, Plenoptic, Galaxy, Fountain, Bubbles, Kaleidoscope, Battery (an endless feedback zoom), Lightning, Musical colors and Code rain. Each scene now lives in its own module (components/music/viz-scenes.ts).
 - **Fixed.** Visualizer breaks: Tunnel and Radial had a visible seam where the low and high notes met, Ripples was nearly empty, and full-screen lyrics sat over the middle of the picture (and over the controls on phones). On phones the Now Playing tabs wrapped onto two or three lines; they now scroll in one row.
 - **Added.** "Hear the DJ now" in Mix & DJ: jumps near the end of the song so you can hear the host at the change without waiting several songs.

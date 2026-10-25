@@ -791,8 +791,223 @@ const fire: Scene = {
   }
 };
 
-/** In picker order, grouped: spectrum, waves, space, geometry, fields. */
+// ---------- Feelings: picked by "By mood" from what a song is about ----------
+
+type Bokeh = { x: number; y: number; r: number; hue: number; a: number };
+const bokeh = (n: number, hues: [number, number]): Bokeh[] => Array.from({ length: n }, () => ({ x: Math.random(), y: Math.random() * 0.8, r: 0.02 + Math.random() * 0.06, hue: hues[0] + Math.random() * (hues[1] - hues[0]), a: 0.08 + Math.random() * 0.2 }));
+function drawBokeh(f: Frame, list: Bokeh[], boost: number) {
+  const { ctx, w, h } = f;
+  for (const b of list) {
+    const r = b.r * Math.min(w, h) * 2;
+    const g = ctx.createRadialGradient(b.x * w, b.y * h, 0, b.x * w, b.y * h, r);
+    g.addColorStop(0, `hsla(${b.hue},80%,60%,${b.a * (1 + boost)})`); g.addColorStop(0.7, `hsla(${b.hue},80%,55%,${b.a * 0.5})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(b.x * w - r, b.y * h - r, r * 2, r * 2);
+  }
+}
+
+type RainState = { lights: Bokeh[]; streaks: { x: number; y: number; len: number; v: number }[]; drops: { x: number; y: number; r: number; v: number }[] };
+const rain: Scene = {
+  id: 'rain', name: 'Rain',
+  setup: f => ({
+    lights: bokeh(small(f) ? 6 : 22, [190, 260]),
+    streaks: Array.from({ length: small(f) ? 40 : 260 }, () => ({ x: Math.random(), y: Math.random(), len: 0.03 + Math.random() * 0.07, v: 0.012 + Math.random() * 0.02 })),
+    drops: Array.from({ length: small(f) ? 8 : 40 }, () => ({ x: Math.random(), y: Math.random(), r: 1 + Math.random() * 4, v: 0 }))
+  }),
+  draw: (f, s: RainState) => {
+    const { ctx, w, h, level, bass } = f;
+    // A rainy night seen through a window: blurred city lights, falling rain, drops running down the glass.
+    const bg = ctx.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#060b16'); bg.addColorStop(1, '#0d1726');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    drawBokeh(f, s.lights, bass * 0.8);
+    ctx.strokeStyle = 'rgba(180,205,255,0.5)'; ctx.lineWidth = small(f) ? 0.7 : 1.3;
+    ctx.beginPath();
+    for (const st of s.streaks) {
+      st.y += st.v * (0.8 + level * 1.5); st.x -= st.v * 0.12;
+      if (st.y > 1.1) { st.y = -0.1; st.x = Math.random() * 1.1; }
+      ctx.moveTo(st.x * w, st.y * h); ctx.lineTo((st.x - st.len * 0.12) * w, (st.y + st.len) * h);
+    }
+    ctx.stroke();
+    for (const d of s.drops) {
+      // Drops cling, then slide when they grow heavy, leaving a short trail.
+      if (d.v === 0 && Math.random() < 0.004 + level * 0.01) d.v = 0.002 + Math.random() * 0.004;
+      d.y += d.v; if (d.v) d.v *= 1.01;
+      if (d.y > 1.05) { d.y = Math.random() * 0.5; d.x = Math.random(); d.v = 0; d.r = 1 + Math.random() * 4; }
+      const x = d.x * w, y = d.y * h, r = d.r * (small(f) ? 0.5 : 1);
+      if (d.v) { ctx.strokeStyle = 'rgba(200,220,255,0.12)'; ctx.lineWidth = r * 0.8; ctx.beginPath(); ctx.moveTo(x, y - r * 8); ctx.lineTo(x, y); ctx.stroke(); }
+      const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r);
+      g.addColorStop(0, 'rgba(255,255,255,0.55)'); g.addColorStop(1, 'rgba(150,180,230,0.15)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    }
+  }
+};
+
+type SnowState = { flakes: { x: number; y: number; r: number; z: number; p: number }[] };
+const snow: Scene = {
+  id: 'snow', name: 'Snow',
+  setup: f => ({ flakes: Array.from({ length: small(f) ? 60 : 380 }, () => ({ x: Math.random(), y: Math.random(), r: Math.random(), z: 0.3 + Math.random() * 0.7, p: Math.random() * TAU })) }),
+  draw: (f, s: SnowState) => {
+    const { ctx, w, h, level, t, tint: [tr, tg, tb] } = f;
+    const bg = ctx.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#0a1020'); bg.addColorStop(1, `rgb(${18 + tr * 0.08},${24 + tg * 0.08},${40 + tb * 0.1})`);
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    const moon = ctx.createRadialGradient(w * 0.78, h * 0.2, 0, w * 0.78, h * 0.2, Math.min(w, h) * 0.3);
+    moon.addColorStop(0, 'rgba(230,240,255,0.35)'); moon.addColorStop(0.15, 'rgba(230,240,255,0.18)'); moon.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = moon; ctx.fillRect(0, 0, w, h);
+    for (const fl of s.flakes) {
+      fl.y += 0.0008 * fl.z * (1 + level * 2); fl.x += Math.sin(t * 0.01 + fl.p) * 0.0004 * fl.z;
+      if (fl.y > 1.02) { fl.y = -0.02; fl.x = Math.random(); }
+      const v = f.band(Math.floor(fl.r * 30), 30);
+      ctx.fillStyle = `rgba(255,255,255,${0.35 + fl.z * 0.45 + v * 0.2})`;
+      ctx.beginPath(); ctx.arc(fl.x * w, fl.y * h, (small(f) ? 0.6 : 1.2) + fl.z * (small(f) ? 1 : 2.4) + v * 1.5, 0, TAU); ctx.fill();
+    }
+  }
+};
+
+type PetalState = { petals: { x: number; y: number; a: number; spin: number; s: number; v: number; sway: number }[]; hearts: { x: number; y: number; life: number; s: number }[]; glow: Bokeh[] };
+const petals: Scene = {
+  id: 'petals', name: 'Rose petals',
+  setup: f => ({
+    petals: Array.from({ length: small(f) ? 18 : 90 }, () => ({ x: Math.random(), y: Math.random(), a: Math.random() * TAU, spin: (Math.random() - 0.5) * 0.04, s: 0.6 + Math.random() * 0.8, v: 0.0012 + Math.random() * 0.0018, sway: Math.random() * TAU })),
+    hearts: [], glow: bokeh(small(f) ? 5 : 16, [330, 380])
+  }),
+  draw: (f, s: PetalState) => {
+    const { ctx, w, h, bass, beat, t, level } = f;
+    // Warm candlelight, rose petals drifting down, a heart rising now and then on the beat.
+    const bg = ctx.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#1a0610'); bg.addColorStop(1, '#3a0d1e');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    drawBokeh(f, s.glow, bass * 0.6);
+    const size = Math.min(w, h) * (small(f) ? 0.035 : 0.022);
+    for (const p of s.petals) {
+      p.y += p.v * (1 + level); p.x += Math.sin(t * 0.012 + p.sway) * 0.0009; p.a += p.spin;
+      if (p.y > 1.05) { p.y = -0.05; p.x = Math.random(); }
+      ctx.save(); ctx.translate(p.x * w, p.y * h); ctx.rotate(p.a); ctx.scale(1, 0.55 + Math.sin(t * 0.03 + p.sway) * 0.35);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, size * p.s);
+      g.addColorStop(0, 'rgba(255,120,150,0.95)'); g.addColorStop(1, 'rgba(170,20,60,0.85)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(0, -size * p.s); ctx.quadraticCurveTo(size * p.s, 0, 0, size * p.s); ctx.quadraticCurveTo(-size * p.s, 0, 0, -size * p.s); ctx.fill();
+      ctx.restore();
+    }
+    if (beat && s.hearts.length < 6) s.hearts.push({ x: 0.2 + Math.random() * 0.6, y: 1, life: 1, s: 0.6 + Math.random() * 0.8 });
+    for (let i = s.hearts.length - 1; i >= 0; i--) {
+      const hh = s.hearts[i]!;
+      hh.y -= 0.004; hh.life -= 0.006;
+      if (hh.life <= 0) { s.hearts.splice(i, 1); continue; }
+      const r = Math.min(w, h) * 0.03 * hh.s;
+      ctx.save(); ctx.translate(hh.x * w, hh.y * h); ctx.fillStyle = `rgba(255,90,130,${hh.life * 0.6})`;
+      ctx.shadowColor = 'rgba(255,90,130,0.8)'; ctx.shadowBlur = small(f) ? 0 : 20;
+      ctx.beginPath(); ctx.moveTo(0, r * 0.9);
+      ctx.bezierCurveTo(-r * 1.6, -r * 0.2, -r * 0.6, -r * 1.4, 0, -r * 0.5);
+      ctx.bezierCurveTo(r * 0.6, -r * 1.4, r * 1.6, -r * 0.2, 0, r * 0.9); ctx.fill();
+      ctx.restore();
+    }
+    ctx.shadowBlur = 0;
+  }
+};
+
+type SunState = { motes: { x: number; y: number; v: number; s: number }[] };
+const sunrise: Scene = {
+  id: 'sunrise', name: 'Sunrise',
+  setup: f => ({ motes: Array.from({ length: small(f) ? 30 : 160 }, () => ({ x: Math.random(), y: Math.random(), v: 0.0006 + Math.random() * 0.0016, s: Math.random() })) }),
+  draw: (f, s: SunState) => {
+    const { ctx, w, h, bass, level, t } = f;
+    // Dawn: the sky warms from the horizon, rays turn slowly and reach further with the music, light floats up.
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, '#1b2a5a'); sky.addColorStop(0.5, '#d9677a'); sky.addColorStop(0.8, '#ffb15c'); sky.addColorStop(1, '#ffe2a0');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+    const sx = w / 2, sy = h * (0.78 - level * 0.06), sr = Math.min(w, h) * (0.12 + bass * 0.04);
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(t * 0.0015); ctx.globalCompositeOperation = 'lighter';
+    const rays = small(f) ? 12 : 24;
+    for (let i = 0; i < rays; i++) {
+      const v = f.ring(i, rays), a = (i / rays) * TAU, len = Math.max(w, h) * (0.5 + v * 0.6);
+      ctx.fillStyle = `rgba(255,230,170,${0.04 + v * 0.1})`;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a - 0.05) * len, Math.sin(a - 0.05) * len); ctx.lineTo(Math.cos(a + 0.05) * len, Math.sin(a + 0.05) * len); ctx.fill();
+    }
+    ctx.restore(); ctx.globalCompositeOperation = 'source-over';
+    const sun = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr * 2.2);
+    sun.addColorStop(0, 'rgba(255,255,235,1)'); sun.addColorStop(0.35, 'rgba(255,220,140,0.95)'); sun.addColorStop(1, 'rgba(255,170,90,0)');
+    ctx.fillStyle = sun; ctx.beginPath(); ctx.arc(sx, sy, sr * 2.2, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(40,20,45,0.85)'; // hills
+    ctx.beginPath(); ctx.moveTo(0, h);
+    for (let x = 0; x <= w; x += w / 40) ctx.lineTo(x, h * 0.86 - Math.sin(x / w * 5 + 1) * h * 0.04 - Math.sin(x / w * 13) * h * 0.012);
+    ctx.lineTo(w, h); ctx.fill();
+    for (const m of s.motes) {
+      m.y -= m.v * (1 + level * 2); if (m.y < -0.02) { m.y = 1; m.x = Math.random(); }
+      ctx.fillStyle = `rgba(255,240,200,${0.25 + m.s * 0.5})`;
+      ctx.beginPath(); ctx.arc(m.x * w + Math.sin(t * 0.01 + m.s * 9) * 8, m.y * h, (small(f) ? 0.6 : 1.2) + m.s * 1.8, 0, TAU); ctx.fill();
+    }
+  }
+};
+
+type Spark = { x: number; y: number; vx: number; vy: number; life: number; hue: number };
+type Show = { rockets: { x: number; y: number; vy: number; hue: number; at: number }[]; sparks: Spark[] };
+const fireworks: Scene = {
+  id: 'fireworks', name: 'Fireworks',
+  setup: () => ({ rockets: [], sparks: [] }),
+  draw: (f, s: Show) => {
+    const { ctx, w, h, beat, t, level } = f;
+    fade(f, 'rgba(3,3,12,0.22)');
+    // A rocket goes up on each beat (and now and then anyway) and bursts at the top of its climb.
+    if ((beat || t % 50 === 0) && s.rockets.length < 6) s.rockets.push({ x: w * (0.15 + Math.random() * 0.7), y: h, vy: -h * (0.016 + Math.random() * 0.006), hue: Math.random() * 360, at: h * (0.15 + Math.random() * 0.35) });
+    for (let i = s.rockets.length - 1; i >= 0; i--) {
+      const r = s.rockets[i]!;
+      r.y += r.vy; r.vy *= 0.985;
+      ctx.fillStyle = `hsla(${r.hue},100%,80%,0.9)`; ctx.fillRect(r.x, r.y, 2, 6);
+      if (r.y <= r.at || r.vy > -1) {
+        const n = (small(f) ? 30 : 110) + Math.floor(level * 80);
+        for (let k = 0; k < n; k++) {
+          const a = (k / n) * TAU, sp = (small(f) ? 1.2 : 2.4) + Math.random() * (small(f) ? 1.5 : 3.5);
+          s.sparks.push({ x: r.x, y: r.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, hue: (r.hue + Math.random() * 40) % 360 });
+        }
+        s.rockets.splice(i, 1);
+      }
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = s.sparks.length - 1; i >= 0; i--) {
+      const p = s.sparks[i]!;
+      p.x += p.vx; p.y += p.vy; p.vy += 0.045; p.vx *= 0.985; p.vy *= 0.985; p.life -= 0.008;
+      if (p.life <= 0) { s.sparks.splice(i, 1); continue; }
+      ctx.fillStyle = `hsla(${p.hue},100%,${55 + p.life * 30}%,${Math.min(1, p.life * 1.4)})`;
+      ctx.fillRect(p.x, p.y, small(f) ? 1.4 : 3, small(f) ? 1.4 : 3);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+type Fly = { x: number; y: number; p: number; s: number };
+const fireflies: Scene = {
+  id: 'fireflies', name: 'Fireflies',
+  setup: f => Array.from({ length: small(f) ? 18 : 70 }, () => ({ x: Math.random(), y: 0.25 + Math.random() * 0.65, p: Math.random() * TAU, s: 0.3 + Math.random() }) as Fly),
+  draw: (f, flies: Fly[]) => {
+    const { ctx, w, h, t } = f;
+    // A summer night: fireflies wander and glow with the music, tall grass in front.
+    const bg = ctx.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#02060e'); bg.addColorStop(1, '#06180f');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter';
+    flies.forEach((fl, i) => {
+      fl.x += Math.sin(t * 0.007 * fl.s + fl.p) * 0.0009; fl.y += Math.cos(t * 0.006 * fl.s + fl.p * 2) * 0.0007;
+      const v = f.band(i % 32, 32), pulse = 0.25 + 0.75 * Math.max(v, (Math.sin(t * 0.05 * fl.s + fl.p) + 1) / 4);
+      const r = Math.min(w, h) * (small(f) ? 0.03 : 0.022) * (0.6 + pulse);
+      const g = ctx.createRadialGradient(fl.x * w, fl.y * h, 0, fl.x * w, fl.y * h, r);
+      g.addColorStop(0, `rgba(230,255,140,${pulse})`); g.addColorStop(0.25, `rgba(180,255,90,${pulse * 0.5})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(fl.x * w - r, fl.y * h - r, r * 2, r * 2);
+    });
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = 'rgba(16,44,26,0.95)'; ctx.lineWidth = small(f) ? 1 : 2.2;
+    for (let i = 0; i < (small(f) ? 40 : 160); i++) {
+      const x = (i / (small(f) ? 40 : 160)) * w, tall = h * (0.12 + ((i * 37) % 13) / 60);
+      const lean = Math.sin(t * 0.01 + i) * 6 + f.bass * 10;
+      ctx.beginPath(); ctx.moveTo(x, h); ctx.quadraticCurveTo(x + lean * 0.5, h - tall * 0.6, x + lean, h - tall); ctx.stroke();
+    }
+  }
+};
+
+/** Which scene shows each feeling (a second one for variety, picked per song). */
+export const MOOD_SCENES: Record<string, string[]> = {
+  sad: ['rain', 'snow'], romantic: ['petals'], uplifting: ['sunrise'], energetic: ['fireworks'], calm: ['fireflies', 'snow']
+};
+
+/** In picker order, grouped: feelings, spectrum, waves, space, geometry, fields. */
 export const SCENE_LIST: Scene[] = [
+  rain, petals, sunrise, fireworks, fireflies, snow,
   bars, led, radial, pulse, spikes, vu, waterfall,
   mist, waves, aurora, scope, lissajous, terrain,
   alchemy, plenoptic, starfield, galaxy, fountain, bubbles,

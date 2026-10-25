@@ -3,7 +3,9 @@ import { useMusicPlayer } from '../media/MusicProvider';
 import { useArtworkTint } from '../../lib/artwork-tint';
 import { setViz, useLyricLine, useLyrics, useViz } from '../../lib/viz-store';
 import { SvgIcon } from '../ui/SvgIcon';
-import { LyricStyleToggle, LyricsOverlay, SceneTiles, VizCanvas } from './Visualizer';
+import { LyricStyleToggle, LyricsOverlay, SceneTiles, VizCanvas, type MoodPick } from './Visualizer';
+import { SCENE_BY_ID } from './viz-scenes';
+import { MOOD_LABEL } from '../../lib/mood';
 
 const IDLE_MS = 60_000;
 
@@ -21,6 +23,7 @@ export default function VizStage() {
   const line = useLyricLine(lyrics, getTime, open);
   const [chrome, setChrome] = useState(true);
   const [picker, setPicker] = useState(false);
+  const [moodPick, setMoodPick] = useState<MoodPick | null>(null);
   const hideTimer = useRef(0);
   const root = useRef<HTMLDivElement>(null);
 
@@ -91,7 +94,7 @@ export default function VizStage() {
 
   return (
     <div ref={root} tabIndex={-1} onPointerDown={e => { if (picker && !(e.target as HTMLElement).closest('.vstage-picker, .vstage-pill')) setPicker(false); }} className={`vstage${showChrome ? '' : ' is-quiet'}${auto ? ' is-auto' : ''}`} role="dialog" aria-modal="true" aria-label="Visualizer" style={{ ['--np-tint' as string]: tint }}>
-      <VizCanvas scene={viz.scene} tint={tint} className="vstage-canvas" />
+      <VizCanvas scene={viz.scene} tint={tint} className="vstage-canvas" onMood={setMoodPick} />
       <div className="vstage-lyrics"><LyricsOverlay line={line} style={viz.lyricStyle} size="lg" state={lyricState} /></div>
       {djTalking && <span className="np-dj vstage-dj" role="status"><SvgIcon name="music-note" size={14} /> DJ on the mic</span>}
 
@@ -100,6 +103,7 @@ export default function VizStage() {
         <div>
           <p className="vstage-title">{entry.track.title}</p>
           <p className="vstage-artist">{[entry.artistTitle, entry.albumTitle].filter(Boolean).join(' · ')}</p>
+          {viz.scene === 'mood' && moodPick && <p className="vstage-mood">{MOOD_LABEL[moodPick.mood]}{moodPick.byEnergy ? ' (by the beat)' : ''} · {SCENE_BY_ID.get(moodPick.scene)?.name}</p>}
         </div>
       </div>
 

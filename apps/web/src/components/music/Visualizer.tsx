@@ -1,21 +1,41 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { audioEngine } from '../../lib/audio-engine';
-import { setViz, useViz, type LyricLine, type LyricStyle, type SceneId } from '../../lib/viz-store';
-import { SCENE_BY_ID, SCENE_LIST, type Frame, type Scene, type Variant } from './viz-scenes';
+import { setViz, useLyrics, useViz, type LyricLine, type LyricStyle, type SceneId } from '../../lib/viz-store';
+import { MOOD_SCENES, SCENE_BY_ID, SCENE_LIST, type Frame, type Scene, type Variant } from './viz-scenes';
+import { moodFromEnergy, songMood, type Mood } from '../../lib/mood';
+import { useMusicPlayer } from '../media/MusicProvider';
+
+const MOOD_ORDER: Mood[] = ['sad', 'romantic', 'uplifting', 'energetic', 'calm'];
 
 /**
  * Music visualizations in the spirit of the classic desktop media players: bars, a drifting mist, a mirrored
  * "alchemy" kaleidoscope, a radial tunnel and an oscilloscope. All original drawings, fed by the player's analyser,
  * so they move with what is actually playing (equalizer included).
  */
-export const SCENES: { id: SceneId; name: string }[] = [...SCENE_LIST.map(sc => ({ id: sc.id, name: sc.name })), { id: 'cycle', name: 'Cycle all' }];
+export const SCENES: { id: SceneId; name: string }[] = [{ id: 'mood', name: 'By mood' }, ...SCENE_LIST.map(sc => ({ id: sc.id, name: sc.name })), { id: 'cycle', name: 'Cycle all' }];
+
+/** The playing song's feeling from its words, for the "By mood" scene (null while unknown or unclear). */
+function useSongMood(on: boolean): { key: string; mood: Mood | null } {
+  const { entry } = useMusicPlayer();
+  const lyrics = useLyrics(entry?.artistTitle, entry?.track.title, entry?.albumTitle, entry?.track.durationMs ? entry.track.durationMs / 1000 : undefined, on);
+  const key = entry ? String(entry.track.id) : '';
+  const mood = useMemo(() => (entry && lyrics !== undefined ? songMood({
+    title: entry.track.title, genres: entry.genres, lyrics: lyrics?.synced?.map(l => l.text) ?? lyrics?.plain?.split('\n')
+  }) : null), [entry, lyrics]);
+  return { key, mood };
+}
+
+export type MoodPick = { mood: Mood; scene: string; byEnergy: boolean };
 
 /**
  * One canvas drawing one scene (see viz-scenes). `full` fills a stage, `strip` is the thin spectrum on the bottom
  * bar and `tile` is a small live preview in the scene picker.
  */
-export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', className }: { scene: SceneId; tint?: string; variant?: Variant; className?: string }) {
+export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', className, onMood }: { scene: SceneId; tint?: string; variant?: Variant; className?: string; onMood?: (pick: MoodPick | null) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const song = useSongMood(scene === 'mood' && variant !== 'tile');
+  const songRef = useRef(song); songRef.current = song;
+  const onMoodRef = useRef(onMood); onMoodRef.current = onMood;
 
   useEffect(() => {
     const cv = canvas.current;
@@ -52,8 +72,26 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
     let bassAvg = 0, beatCool = 0, cycleAt = 0;
     let current: Scene | null = null;
     let state: unknown = null;
+    // By mood: the words decide when they say something; otherwise how hard the first seconds hit.
+    let moodSong = '', moodStart = 0, energy = 0, moodPicked: MoodPick | null = null;
+    const pickMood = (): Scene => {
+      const { key, mood } = songRef.current;
+      if (key !== moodSong) { moodSong = key; moodStart = f.t; energy = 0; moodPicked = null; }
+      energy += (f.level - energy) * 0.01;
+      const settled = f.t - moodStart > 240;
+      const want = mood ?? (settled ? moodFromEnergy(energy) : null);
+      if (want && (!moodPicked || moodPicked.mood !== want)) {
+        const options = MOOD_SCENES[want]!;
+        // The same song always gets the same scene; different songs of one mood vary.
+        const hash = [...key].reduce((n, c) => n + c.charCodeAt(0), 0);
+        moodPicked = { mood: want, scene: options[hash % options.length]!, byEnergy: !mood };
+        onMoodRef.current?.(moodPicked);
+      }
+      return SCENE_BY_ID.get(moodPicked?.scene ?? current?.id ?? 'fireflies') ?? SCENE_BY_ID.get('fireflies')!;
+    };
     const pickScene = (): Scene => {
       if (variant === 'strip') return SCENE_BY_ID.get('bars')!;
+      if (scene === 'mood') return variant === 'tile' ? SCENE_BY_ID.get(MOOD_SCENES[MOOD_ORDER[Math.floor(f.t / 300) % MOOD_ORDER.length]!]![0]!)! : pickMood();
       if (scene !== 'cycle') return SCENE_BY_ID.get(scene) ?? SCENE_BY_ID.get('bars')!;
       // Cycle: a new scene every 25 seconds.
       if (!current || f.t - cycleAt > 1500) { cycleAt = f.t; const others = SCENE_LIST.filter(sc => sc !== current); return others[Math.floor(Math.random() * others.length)]!; }
@@ -89,7 +127,7 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       next.draw(f, state as never);
     };
     draw();
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); document.removeEventListener('visibilitychange', onVis); };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); document.removeEventListener('visibilitychange', onVis); onMoodRef.current?.(null); };
   }, [scene, tint, variant]);
 
   return <canvas ref={canvas} className={`viz-canvas${className ? ` ${className}` : ''}`} aria-hidden="true" />;

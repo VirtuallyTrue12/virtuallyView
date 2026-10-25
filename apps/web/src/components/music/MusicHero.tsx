@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useMusicPlayer } from '../media/MusicProvider';
 import { useArtworkTint } from '../../lib/artwork-tint';
 import { setViz, useLyricLine, useLyrics, useViz } from '../../lib/viz-store';
 import { SvgIcon } from '../ui/SvgIcon';
-import { LyricsOverlay, VizCanvas } from './Visualizer';
+import { LyricsOverlay, VizCanvas, type MoodPick } from './Visualizer';
+import { MOOD_LABEL } from '../../lib/mood';
 
 /** The top of the Music page while something plays: the live visualizer behind the song and its lyrics. */
 export default function MusicHero() {
@@ -12,17 +14,18 @@ export default function MusicHero() {
   const length = entry?.track.durationMs ? entry.track.durationMs / 1000 : undefined;
   const lyrics = useLyrics(entry?.artistTitle, entry?.track.title, entry?.albumTitle, length, viz.lyricStyle !== 'off');
   const line = useLyricLine(lyrics, getTime, !!entry);
+  const [moodPick, setMoodPick] = useState<MoodPick | null>(null);
   if (!entry) return null;
   return (
     <section className="mhero" style={{ ['--np-tint' as string]: tint }} aria-label="Now playing">
-      <VizCanvas scene={viz.scene} tint={tint} className="mhero-canvas" />
+      <VizCanvas scene={viz.scene} tint={tint} className="mhero-canvas" onMood={setMoodPick} />
       <div className="mhero-shade" aria-hidden="true" />
       <div className="mhero-body">
         {entry.cover
           ? <img className="mhero-cover" src={entry.cover} alt="" />
           : <span className="mhero-cover mhero-cover--empty" aria-hidden="true"><SvgIcon name="music-note" size={34} /></span>}
         <div className="mhero-text">
-          <p className="mhero-kicker">{djTalking ? 'DJ on the mic' : playing ? (djMode ? 'Now playing · DJ mode' : 'Now playing') : 'Paused'}</p>
+          <p className="mhero-kicker">{djTalking ? 'DJ on the mic' : playing ? (djMode ? 'Now playing · DJ mode' : 'Now playing') : 'Paused'}{viz.scene === 'mood' && moodPick ? ` · feels ${MOOD_LABEL[moodPick.mood].toLowerCase()}` : ''}</p>
           <h2 className="mhero-title">{entry.track.title}</h2>
           <p className="mhero-artist">{[entry.artistTitle, entry.albumTitle].filter(Boolean).join(' · ')}</p>
           <div className="mhero-lyric"><LyricsOverlay line={line} style={viz.lyricStyle === 'off' ? 'off' : 'karaoke'} state={lyrics === undefined ? 'loading' : lyrics?.synced?.length ? 'ok' : 'none'} /></div>

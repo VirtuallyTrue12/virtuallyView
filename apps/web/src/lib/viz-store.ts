@@ -21,7 +21,7 @@ export type VizState = {
 
 const KEY = 'vv-viz';
 const read = (): VizState => {
-  const base: VizState = { scene: 'bars', lyricStyle: 'karaoke', screensaver: true, inPlayer: true, stage: 'closed' };
+  const base: VizState = { scene: 'mood', lyricStyle: 'karaoke', screensaver: true, inPlayer: true, stage: 'closed' };
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<VizState>;
     return {
