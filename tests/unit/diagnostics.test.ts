@@ -160,13 +160,25 @@ describe('safe, measured diagnostics', () => {
   test('surfaces service-reported indexer/path warnings with recovery, never raw messages or paths', async () => {
     mocks.fetch.mockResolvedValue(healthResponse([
       { source: 'DownloadClientRootFolderCheck', type: 'error', message: `/private/${secret}` },
-      { source: 'IndexerStatusCheck', type: 'warning', message: secret }
+      { source: 'IndexerSearchCheck', type: 'warning', message: secret }
     ]));
     const report = await collectDiagnostics();
     const checks = report.services[0].observations;
     expect(checks.find(check => check.id === 'download-paths')).toMatchObject({ status: 'warning', recovery: expect.arrayContaining([expect.stringContaining('remote path mappings')]) });
     expect(checks.find(check => check.id === 'indexer-health')?.status).toBe('warning');
     expect(report.status).toBe('attention');
+    expect(JSON.stringify(report)).not.toContain(secret);
+  });
+
+  test('treats some public search sites being down as normal, not a warning', async () => {
+    mocks.fetch.mockResolvedValue(healthResponse([
+      { source: 'IndexerStatusCheck', type: 'warning', message: secret },
+      { source: 'IndexerLongTermStatusCheck', type: 'warning', message: secret }
+    ]));
+    const report = await collectDiagnostics();
+    const checks = report.services[0].observations;
+    expect(checks.find(check => check.id === 'indexer-health')?.status).toBe('passed');
+    expect(checks.find(check => check.id === 'service-health')?.status).toBe('passed');
     expect(JSON.stringify(report)).not.toContain(secret);
   });
 

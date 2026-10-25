@@ -53,6 +53,37 @@ async function retestSources(): Promise<{ ok: number; total: number } | null> {
   } catch { return null; }
 }
 
+// Radarr, Sonarr and Lidarr keep their own rest period for each source they get from Prowlarr. After an outage (a
+// reboot, Prowlarr wedged) every source can be resting at once: their own automatic searches and RSS then stop,
+// for up to a day, although Prowlarr is fine again. A test of all their sources ends that.
+const ARRS: [string, string][] = [['radarr', 'v3'], ['sonarr', 'v3'], ['lidarr', 'v1']];
+
+async function arrCall(key: string, version: string, path: string, init?: RequestInit): Promise<Response | null> {
+  const entry = loadServiceConfig()[key];
+  if (!entry?.url || entry.enabled === false) return null;
+  try {
+    return await fetch(`${entry.url.replace(/\/$/, '')}/api/${version}/${path}`, { ...init, headers: { 'X-Api-Key': entry.apiKey }, signal: AbortSignal.timeout(120_000) });
+  } catch { return null; }
+}
+
+/** True when the service says every one of its search sources is resting. */
+async function allSourcesResting(key: string, version: string): Promise<boolean> {
+  const res = await arrCall(key, version, 'health');
+  const rows = res?.ok ? await res.json().catch(() => null) as Array<{ source?: string }> | null : null;
+  return Array.isArray(rows) && rows.some(r => r.source === 'IndexerSearchCheck' || r.source === 'IndexerRssCheck');
+}
+
+/** Tests the sources inside Radarr, Sonarr and Lidarr (only those that report all of them resting, unless forced). */
+export async function retestArrSources(force = false): Promise<string[]> {
+  const revived: string[] = [];
+  for (const [key, version] of ARRS) {
+    if (!force && !(await allSourcesResting(key, version))) continue;
+    const res = await arrCall(key, version, 'indexer/testall', { method: 'POST' });
+    if (res && !(await allSourcesResting(key, version))) revived.push(key);
+  }
+  return revived;
+}
+
 let current: FixJob | undefined;
 export const currentFix = (): FixJob | undefined => current;
 
@@ -143,8 +174,10 @@ async function run(job: FixJob): Promise<void> {
 
   set(sources, 'running');
   const tested = await retestSources();
-  if (!tested) set(sources, 'ok', 'Could not test them (search is not set up, or is still starting).');
-  else set(sources, tested.ok < tested.total ? 'failed' : 'ok', `${tested.ok} of ${tested.total} search source${tested.total === 1 ? '' : 's'} answer${tested.ok === 1 ? 's' : ''}.${tested.ok < tested.total ? ' The others are retried automatically; add more in Settings > Search sources.' : ''}`);
+  const revived = await retestArrSources(true);
+  const woke = revived.length ? ` Movies, TV and music search${revived.length === 1 ? 'es' : ''} were resting every source after an outage and use them again (${revived.join(', ')}).` : '';
+  if (!tested) set(sources, revived.length ? 'fixed' : 'ok', `Could not test them (search is not set up, or is still starting).${woke}`);
+  else set(sources, revived.length ? 'fixed' : tested.ok < tested.total ? 'failed' : 'ok', `${tested.ok} of ${tested.total} search source${tested.total === 1 ? '' : 's'} answer${tested.ok === 1 ? 's' : ''}.${tested.ok < tested.total ? ' The others are retried automatically; add more in Settings > Search sources.' : ''}${woke}`);
 
   set(downloads, 'running');
   try {
@@ -175,15 +208,18 @@ export function startFix(): FixJob {
 
 let lastHeal = 0;
 /**
- * The quiet version, on a timer: start what stopped (after a reboot or a sleep) and nothing more. It never
- * restarts a service that is running, so it cannot interrupt a download or a stream.
+ * The quiet version, on a timer: start what stopped (after a reboot or a sleep), and wake search sources that
+ * Radarr, Sonarr or Lidarr rest all at once after an outage. It never restarts a service that is running, so it
+ * cannot interrupt a download or a stream.
  */
 export async function healQuietly(): Promise<string[]> {
   if (getServerSettings().autoRepair === false) return [];
   if (Date.now() - lastHeal < 4 * 60_000) return [];
   lastHeal = Date.now();
   const r = await helperStartAll();
-  return r.ok ? r.data?.started ?? [] : [];
+  const started = r.ok ? r.data?.started ?? [] : [];
+  const revived = await retestArrSources().catch(() => [] as string[]);
+  return [...started, ...revived.map(name => `${name} search sources`)];
 }
 
 export function startAutoHeal(): void {

@@ -89,13 +89,21 @@ async function healthObservations(key: string, config: ServiceConfig): Promise<O
     if (!Array.isArray(records) || !records.every(item => isRecord(item) && typeof item.source === 'string' && typeof item.type === 'string')) {
       throw new Error('invalid health response');
     }
-    const problems = records.filter(item => /^(warning|error)$/i.test(item.type));
+    const all = records.filter(item => /^(warning|error)$/i.test(item.type));
+    // Some free public search sites being down is the normal state of things: the service skips them and searches
+    // the rest. Only "no search source works at all" (the search and RSS checks) is a real problem.
+    const someSitesDown = all.filter(item => /^Indexer(LongTerm)?StatusCheck$/i.test(item.source));
+    const problems = all.filter(item => !someSitesDown.includes(item));
     const pathProblems = problems.filter(item => /download.*(path|import|root)|remotepathmapping|rootfolder|diskspace/i.test(item.source));
     const indexerProblems = problems.filter(item => /indexer/i.test(item.source));
+    // The check names are fixed labels from the service (never messages, names or URLs).
+    const checks = [...new Set(problems.map(item => item.source).filter(name => /^[A-Za-z]{3,60}$/.test(name)))];
     return [
       {
         id: 'service-health', label: 'Service-reported health', status: problems.length ? 'warning' : 'passed',
-        summary: `${problems.length} warning/error health records reported by the service.`,
+        summary: problems.length
+          ? `${problems.length} warning/error health records reported by the service${checks.length ? ` (${checks.join(', ')})` : ''}.`
+          : `No problems reported${someSitesDown.length ? '; some public search sites are down, which is normal, and the others are used' : ''}.`,
         recovery: problems.length ? ['Open the service\'s System > Status page to review its health messages.'] : []
       },
       {
@@ -107,7 +115,9 @@ async function healthObservations(key: string, config: ServiceConfig): Promise<O
       },
       {
         id: 'indexer-health', label: 'Indexer health warnings', status: indexerProblems.length ? 'warning' : 'passed',
-        summary: `${indexerProblems.length} indexer health warnings reported. No indexer searches or tests were run.`,
+        summary: indexerProblems.length
+          ? `${indexerProblems.length} indexer health warnings reported. No indexer searches or tests were run.`
+          : `Searching works${someSitesDown.length ? ` (${someSitesDown.length} notice${someSitesDown.length === 1 ? '' : 's'} about sites that are down for now)` : ''}. No indexer searches or tests were run.`,
         recovery: indexerProblems.length ? indexerRecovery : []
       }
     ];
