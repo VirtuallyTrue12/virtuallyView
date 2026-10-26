@@ -308,6 +308,32 @@ describe('plays what the browser actually can, not just what the file name predi
     expect(transcodeRequested).toBe(true);
     expect(errors).toEqual([]);
   });
+
+  it('stays paused here while it plays on a TV, until "Watch here instead" takes it back', async () => {
+    await page.route('**/api/movies/radarr-503', r => r.fulfill(json({ id: 'radarr-503', title: 'On The TV', status: 'available' })));
+    await page.route('**/api/stream/radarr-503/info', r => r.fulfill(json({ playable: true, transcodingAvailable: true, durationSeconds: 100, container: 'mp4', videoCodec: 'h264', audioCodec: 'aac', reason: null })));
+    await page.route('**/api/progress/movie/radarr-503', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await page.route('**/api/stream/radarr-503/subtitles', r => r.fulfill(json({ subtitles: [] })));
+    await page.route('**/api/stream/radarr-503**', r => r.fulfill({ status: 200, contentType: 'video/mp4', body: '' }));
+    await page.route('**/api/cast/devices**', r => r.fulfill(json({ devices: [{ id: 'tv1', name: 'Living Room TV' }] })));
+    await page.route('**/api/cast/play', r => r.fulfill(json({ ok: true, message: 'Playing on Living Room TV.' })));
+    let stopped = false;
+    await page.route('**/api/cast/stop', r => { stopped = true; return r.fulfill(json({ ok: true })); });
+
+    await page.goto(base + '/movies/radarr-503/play');
+    await page.waitForSelector('.vp-heading');
+    await page.click('[aria-label="Cast to a TV"]', { force: true });
+    await page.click('text=Living Room TV');
+    await page.waitForSelector('.vp-ontv');
+    expect(await page.textContent('.vp-ontv')).toContain('Playing on Living Room TV');
+    // Anything that tries to start it here again (auto-resume, a reload of the stream) is held back.
+    await page.evaluate(() => { void document.querySelector('video')!.play().catch(() => undefined); });
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => document.querySelector('video')!.paused)).toBe(true);
+    await page.click('text=Watch here instead');
+    await page.waitForFunction(() => !document.querySelector('.vp-ontv'));
+    expect(stopped).toBe(true);
+  });
 });
 
 describe('refresh button', () => {

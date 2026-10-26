@@ -144,6 +144,10 @@ export default function VideoPlayer({
   const [upNext, setUpNext] = useState<number | null>(null);
 
   const [cast, setCast] = useState<{ token: string; origin: string } | null>(null);
+  // Sent to a TV: this page stays paused (nothing here may start it again) until the person takes it back.
+  const [onTv, setOnTv] = useState<{ id: string; name: string } | null>(null);
+  const onTvRef = useRef(onTv);
+  onTvRef.current = onTv;
   // Safari (and the many TV and embedded browsers built on the same engine) refuse to play a live
   // fragmented-MP4 stream from a plain <video src> at all, even though the bytes are fine: HLS is what
   // they actually expect for a stream whose length is not known up front, and they play it natively, no
@@ -218,7 +222,7 @@ export default function VideoPlayer({
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
-    if (!v) return;
+    if (!v || onTvRef.current) return;
     if (v.paused || v.ended) { wantPlay.current = true; void v.play().catch(() => setPlaying(false)); }
     else { wantPlay.current = false; v.pause(); }
   }, []);
@@ -316,8 +320,20 @@ export default function VideoPlayer({
     const res = await fetch('/api/cast/play', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device: device.id, path, title }) });
     const data = (await res.json()) as { message?: string };
     if (!res.ok) throw new Error(data.message ?? 'The TV did not accept it.');
+    wantPlay.current = false;
     videoRef.current?.pause();
+    setOnTv(device);
+    setMenu(null);
     return data.message ?? `Playing on ${device.name}.`;
+  };
+
+  /** Stop the TV; `here` carries on watching on this screen. */
+  const leaveTv = (here: boolean) => {
+    const device = onTvRef.current;
+    if (!device) return;
+    setOnTv(null);
+    void fetch('/api/cast/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device: device.id }) }).catch(() => undefined);
+    if (here) { wantPlay.current = true; void videoRef.current?.play().catch(() => setPlaying(false)); }
   };
 
   const skip = useCallback((delta: number) => seekTo(position + delta), [seekTo, position]);
@@ -540,7 +556,7 @@ export default function VideoPlayer({
         crossOrigin="anonymous"
         onClick={() => { if (menu) setMenu(null); else togglePlay(); }}
         onDoubleClick={toggleFullscreen}
-        onPlay={() => { setPlaying(true); wake(); emit(true); }}
+        onPlay={e => { if (onTvRef.current) { e.currentTarget.pause(); return; } setPlaying(true); wake(); emit(true); }}
         onPause={() => { setPlaying(false); setVisible(true); emit(false); }}
         onWaiting={() => { setWaiting(true); noteStall(); }}
         onPlaying={() => { setWaiting(false); setPlaying(true); }}
@@ -601,8 +617,17 @@ export default function VideoPlayer({
         ))}
       </video>
 
-      {waiting && !failed && <div className="vp-spinner" aria-label="Loading" />}
-      {!waiting && !failed && upNext === null && (
+      {waiting && !failed && !onTv && <div className="vp-spinner" aria-label="Loading" />}
+      {onTv && (
+        <div className="vp-fail vp-ontv" role="status" onClick={e => e.stopPropagation()}>
+          <p>Playing on {onTv.name}</p>
+          <div className="vp-ontv-actions">
+            <button className="btn btn-primary btn-sm" type="button" onClick={() => leaveTv(true)}>Watch here instead</button>
+            <button className="btn btn-secondary btn-sm" type="button" onClick={() => leaveTv(false)}>Stop on TV</button>
+          </div>
+        </div>
+      )}
+      {!onTv && !waiting && !failed && upNext === null && (
         <div className={`vp-center${playing ? '' : ' is-paused'}`} onClick={e => e.stopPropagation()}>
           <button className="vp-center-btn" type="button" onClick={() => skip(-10)} aria-label="Back 10 seconds"><Icon d={ICONS.back10} size={30} /></button>
           <button className="vp-center-btn vp-center-btn--main" type="button" onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}><Icon d={playing ? ICONS.pause : ICONS.play} size={42} /></button>
