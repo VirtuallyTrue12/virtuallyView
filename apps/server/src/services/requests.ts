@@ -239,6 +239,28 @@ export function getRequests(): RequestItem[] {
   return requests.map(r => ({ ...r }));
 }
 
+/**
+ * A search started from a title's page ("Search for this episode"): it shows up in Requests like any other, on
+ * the title's existing request when there is one, so it can be followed until the download lands.
+ */
+export function noteSearch(providerId: string, title: string, what: string, mediaType: MediaKind = 'series', requester?: string): RequestItem {
+  let request = requests.find(r => r.providerId === providerId && r.status !== 'cancelled');
+  if (!request) {
+    request = {
+      id: `request-${seq++}`, title, status: 'searching', service: SERVICE_BY_TYPE[mediaType].key, mediaType, providerId,
+      ...(requester ? { requester } : {}), events: [], createdAt: now(), updatedAt: now()
+    };
+    requests.unshift(request);
+  }
+  request.status = 'searching';
+  request.message = `Looking for ${what}.`;
+  request.searchedAt = now();
+  request.searches = (request.searches ?? 0) + 1;
+  logEvent(request.id, `Searching for ${what}`);
+  persist();
+  return { ...request };
+}
+
 export function getRequest(id: string): RequestItem | undefined {
   return requests.find(r => r.id === id);
 }

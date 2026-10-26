@@ -104,3 +104,8 @@ export async function downloadFromYoutube(
   const job = await call<YoutubeJob>('POST', '/download', { id: input.id, dir, title: input.title }, 15_000);
   return { job, artist: resolved.artist, created: resolved.created, kind };
 }
+
+/** Fetch a TV special from a video site into the show's specials folder (see services/specials). */
+export async function fetchSpecial(source: string, dir: string, name: string): Promise<YoutubeJob> {
+  return call<YoutubeJob>('POST', '/special', { source, dir, name }, 15_000);
+}

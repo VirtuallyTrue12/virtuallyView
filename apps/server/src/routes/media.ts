@@ -1,3 +1,5 @@
+import { currentActor } from '../services/user-context.js';
+import { fetchMissingSpecials } from '../services/specials.js';
 import type { FastifyInstance } from 'fastify';
 import type { Media } from '@virtuallyview/types';
 import type { RadarrAdapter, SonarrAdapter } from '@virtuallyview/integrations';
@@ -220,8 +222,13 @@ export default async function mediaRoutes(server: FastifyInstance) {
     }
   };
   server.post<{ Params: { id: string } }>('/api/movies/:id/search', (request, reply) => answer(reply, () => retryMovie(request.params.id)));
-  server.post<{ Params: { id: string }; Body: { episodeId?: string } }>('/api/series/:id/search', (request, reply) =>
-    answer(reply, () => retrySeries(request.params.id, request.body?.episodeId)));
+  server.post<{ Params: { id: string }; Body: { episodeId?: string; label?: string } }>('/api/series/:id/search', (request, reply) =>
+    answer(reply, () => retrySeries(request.params.id, request.body?.episodeId, request.body?.label, currentActor().username)));
+  // Specials are often on video sites rather than torrent indexers: look there for the missing ones.
+  server.post<{ Params: { id: string } }>('/api/series/:id/specials', (request, reply) => answer(reply, async () => {
+    if (!/^sonarr-\d+$/.test(request.params.id)) return { success: false, message: 'Unknown show id.' };
+    return fetchMissingSpecials(request.params.id);
+  }));
   server.post<{ Params: { id: string } }>('/api/artists/:id/search', (request, reply) => answer(reply, () => retryArtist(request.params.id)));
 
   // Wrong or mislabeled file: blocklist that release, delete the file, search again.

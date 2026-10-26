@@ -707,7 +707,8 @@ services:
   # Optional: search YouTube and save concerts and music videos under the
   # artist (docs/concerts-and-videos.md). Off unless you turn it on:
   #   docker compose --profile youtube up -d
-  # It writes only inside the music library and answers only to the dashboard.
+  # It writes only inside the music library (and TV specials into a show's
+  # Season 00 folder) and answers only to the dashboard.
   # Set YTDLP_PROXY (for example socks5://tor:9050) to send its traffic elsewhere.
   ytdlp:
     build:
@@ -727,6 +728,8 @@ services:
     volumes:
       - secrets:/secrets:ro
       - ${MUSIC_DIR:-media-music}:/media/music
+      # TV specials found on video sites are saved into the show's Season 00 folder.
+      - ${TV_DIR:-media-tv}:/media/tv
     restart: unless-stopped
 
   # Optional automatic updates for the containers above (only the ones

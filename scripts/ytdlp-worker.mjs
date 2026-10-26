@@ -4,9 +4,10 @@
  *
  * A small service that only the dashboard talks to. It searches YouTube and
  * downloads one video at a time into an artist's Concerts or Videos folder,
- * using yt-dlp. It is deliberately narrow: it takes a YouTube video id (never a
- * web address), writes only inside the music library, and answers only to the
- * token the dashboard shares with it. Nothing here runs on its own.
+ * using yt-dlp. It is deliberately narrow: music videos come by YouTube video
+ * id (never a web address) into the music library; TV specials come from a
+ * short list of video sites into a show's "Season 00" folder. It answers only
+ * to the token the dashboard shares with it. Nothing here runs on its own.
  */
 import http from 'node:http';
 import path from 'node:path';
@@ -17,6 +18,9 @@ import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.env.YTDLP_PORT ?? 8098);
 const LIBRARY = path.resolve(process.env.YTDLP_LIBRARY ?? '/media/music');
+const TV_LIBRARY = path.resolve(process.env.YTDLP_TV_LIBRARY ?? '/media/tv');
+// Where TV specials may come from (they are often on these sites rather than on torrent indexers).
+const SPECIAL_HOSTS = /^(www\.)?(youtube\.com|youtu\.be|dailymotion\.com|dai\.ly|vimeo\.com|player\.vimeo\.com|archive\.org)$/i;
 const TOKEN_FILE = process.env.YTDLP_TOKEN_FILE ?? '/secrets/ytdlp';
 const BINARY = process.env.YTDLP_BIN ?? 'yt-dlp';
 const PROXY = process.env.YTDLP_PROXY ?? '';
@@ -35,17 +39,34 @@ export function safeDestination(dir) {
   return resolved;
 }
 
-export function downloadArgs(id, dir) {
+/** A show's specials folder: "<Show>/Season 00" (or "Specials") inside the TV library, nowhere else. */
+export function safeSpecialsDestination(dir) {
+  if (typeof dir !== 'string' || !dir) return null;
+  const resolved = path.resolve(dir);
+  if (!resolved.startsWith(`${TV_LIBRARY}${path.sep}`)) return null;
+  const relative = path.relative(TV_LIBRARY, resolved).split(path.sep);
+  return relative.length === 2 && /^(Season 0+|Specials)$/i.test(relative[1]) ? resolved : null;
+}
+
+/** A video page on one of the allowed sites, or null. */
+export function specialSource(url) {
+  try {
+    const u = new URL(String(url));
+    return u.protocol === 'https:' && SPECIAL_HOSTS.test(u.hostname) ? u.toString() : null;
+  } catch { return null; }
+}
+
+export function downloadArgs(id, dir, source, name) {
   return [
     '--no-playlist', '--no-warnings', '--newline', '--js-runtimes', 'node',
     // Up to 1080p, preferring H.264 + AAC so the file plays in any browser without conversion.
     '-S', 'res:1080,vcodec:h264,acodec:aac,ext:mp4:m4a', '--merge-output-format', 'mp4',
     '--embed-metadata', '--windows-filenames', '--concurrent-fragments', '4', '--retries', '5', '--socket-timeout', '30',
-    '-P', dir, '-o', '%(title).150B [%(id)s].%(ext)s',
+    '-P', dir, '-o', name ? `${name}.%(ext)s` : '%(title).150B [%(id)s].%(ext)s',
     '--progress-template', 'download:PROGRESS|%(progress._percent_str)s|%(progress._eta_str)s|%(progress._speed_str)s',
     '--print', 'after_move:FILE|%(filepath)s',
     ...(PROXY ? ['--proxy', PROXY] : []),
-    `https://www.youtube.com/watch?v=${id}`
+    source ?? `https://www.youtube.com/watch?v=${id}`
   ];
 }
 
@@ -98,7 +119,7 @@ function run(job) {
     mkdirSync(job.dir, { recursive: true });
     job.status = 'downloading';
     job.startedAt = new Date().toISOString();
-    const child = spawn(BINARY, downloadArgs(job.videoId, job.dir), { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(BINARY, downloadArgs(job.videoId, job.dir, job.source, job.name), { stdio: ['ignore', 'pipe', 'pipe'] });
     job.kill = () => child.kill('SIGTERM');
     let stderr = '';
     const onLine = line => {
@@ -194,6 +215,24 @@ function start() {
         const existing = [...jobs.values()].find(j => j.videoId === id && j.dir === destination && ['queued', 'downloading', 'merging'].includes(j.status));
         if (existing) return send(res, 200, publicJob(existing));
         const job = { id: randomUUID(), videoId: id, title: String(title ?? '').slice(0, 200), dir: destination, status: 'queued', percent: 0, createdAt: new Date().toISOString() };
+        jobs.set(job.id, job);
+        while (jobs.size > 60) jobs.delete(jobs.keys().next().value);
+        queue.push(job);
+        pump();
+        return send(res, 202, publicJob(job));
+      }
+      // A TV special from a video site, saved as "<Show> - S00E05 - <Title>" so the TV manager imports it.
+      if (req.method === 'POST' && url.pathname === '/special') {
+        const { source, dir, name } = await readBody(req);
+        const from = specialSource(source);
+        const destination = safeSpecialsDestination(dir);
+        const file = String(name ?? '').replace(/[\\/:*?"<>|\x00-\x1f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
+        if (!from) return send(res, 400, { error: 'That video site is not allowed.' });
+        if (!destination || !file) return send(res, 400, { error: 'That folder is not a show\'s specials folder.' });
+        mkdirSync(destination, { recursive: true });
+        const existing = [...jobs.values()].find(j => j.source === from && ['queued', 'downloading', 'merging'].includes(j.status));
+        if (existing) return send(res, 200, publicJob(existing));
+        const job = { id: randomUUID(), videoId: '', source: from, name: file, title: file, dir: destination, status: 'queued', percent: 0, createdAt: new Date().toISOString() };
         jobs.set(job.id, job);
         while (jobs.size > 60) jobs.delete(jobs.keys().next().value);
         queue.push(job);

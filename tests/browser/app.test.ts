@@ -234,7 +234,7 @@ describe('pull subtitles', () => {
     await page.route('**/api/movies/radarr-501/subtitles/search', r => r.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Not signed in.' }) }));
 
     await page.goto(base + '/movies/radarr-501/play');
-    await page.waitForSelector('.player-title');
+    await page.waitForSelector('.vp-heading');
     await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
     await page.getByText('No subtitle files found for this title').waitFor();
     await page.getByRole('menuitem', { name: 'Pull subtitles' }).click();
@@ -268,13 +268,13 @@ describe('pull subtitles', () => {
     });
 
     await page.goto(base + '/series/sonarr-501/watch/ep-501a');
-    await page.waitForSelector('.player-title');
+    await page.waitForSelector('.vp-heading');
     await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Pull subtitles' }).click();
     await page.getByText('Pulling subtitles...').waitFor();
 
     await page.getByRole('button', { name: 'Next episode' }).click();
-    await page.waitForFunction(() => document.querySelector('.player-title')?.textContent?.includes('Ep 2'));
+    await page.waitForFunction(() => document.querySelector('.vp-heading-sub')?.textContent?.includes('Ep 2'));
     // Now let episode 1's long-overdue answer land, after the viewer is already on episode 2.
     releaseEp1?.();
     await page.waitForTimeout(300);
@@ -301,7 +301,7 @@ describe('plays what the browser actually can, not just what the file name predi
     await page.route('**/api/stream/radarr-502/transcode**', r => { transcodeRequested = true; return r.fulfill({ status: 200, contentType: 'video/mp4', body: 'still not real video - this test only checks that the retry happened' }); });
 
     await page.goto(base + '/movies/radarr-502/play');
-    await page.waitForSelector('.player-title');
+    await page.waitForSelector('.vp-heading');
     // The element's own src moving to the transcode URL, by itself, with nothing clicked, is the
     // retry this fix adds - both responses above are deliberately undecodable either way.
     await page.waitForFunction(() => document.querySelector('video')?.src.includes('/transcode'), { timeout: 15_000 });

@@ -4,6 +4,7 @@ import WatchTogether from '../components/media/WatchTogether';
 import { useWatchParty } from '../lib/useWatchParty';
 import { api, type EpisodeItem, type MediaPlaybackInfo, type SeriesItem } from '../lib/api';
 import { BackButton } from '../components/layout/BackButton';
+import { useWatchingBody } from '../lib/watching';
 import VideoPlayer, { type EpisodeGroup } from '../components/media/VideoPlayer';
 import type { SubtitleTrack } from '../components/media/PlyrPlayer';
 import { useProgressSaver } from '../lib/useProgressSaver';
@@ -19,6 +20,7 @@ function EpisodeInfo({ episodeId }: { episodeId: string }) {
 const code = (e: EpisodeItem) => `S${String(e.seasonNumber).padStart(2, '0')}E${String(e.episodeNumber).padStart(2, '0')}`;
 
 export default function EpisodePlayer() {
+  useWatchingBody();
   const { id, episodeId } = useParams<{ id: string; episodeId: string }>();
   const navigate = useNavigate();
   const [series, setSeries] = useState<SeriesItem | null>(null);
@@ -139,6 +141,9 @@ export default function EpisodePlayer() {
           </div>
         ) : (
           <VideoPlayer
+            heading={series?.title}
+            subheading={current ? `Season ${current.seasonNumber} · Episode ${current.episodeNumber} · ${current.title}` : undefined}
+            onBack={() => navigate(back)}
             src={`/api/stream/episode/${encodeURIComponent(episodeId)}`}
             transcodeSrc={needsTranscode ? `/api/stream/episode/${encodeURIComponent(episodeId)}/transcode` : undefined}
             castTranscode={`/api/stream/episode/${encodeURIComponent(episodeId)}/transcode`}

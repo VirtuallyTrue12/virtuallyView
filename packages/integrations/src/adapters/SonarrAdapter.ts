@@ -202,6 +202,21 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       .sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber);
   }
 
+  /** The show's folder and title in Sonarr (where a special fetched from a video site is saved). */
+  async getSeriesFolder(seriesId: string): Promise<{ path: string; title: string } | null> {
+    const { url, apiKey } = this.requireConfig();
+    const numeric = seriesId.replace(/^sonarr-/, '');
+    const res = await fetch(`${url}/api/v3/series/${encodeURIComponent(numeric)}`, { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const s = (await res.json()) as { path?: string; title?: string };
+    return s.path && s.title ? { path: s.path, title: s.title } : null;
+  }
+
+  /** Look at the show's folder again, so a file placed there by hand (or by the video fetcher) is imported. */
+  async rescanSeries(seriesId: string): Promise<{ success: boolean; message: string }> {
+    return runArrCommand(this.requireConfig(), 'v3', { name: 'RescanSeries', seriesId: Number(seriesId.replace(/^sonarr-/, '')) }, 'a rescan of the show folder');
+  }
+
   /** Resolve the on-disk path for one episode via its episode file. */
   async getEpisodeFile(episodeId: string): Promise<{ path: string; size?: number } | null> {
     return this.episodeFileCache.get(episodeId, async () => {
@@ -372,15 +387,42 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     const now = Date.now();
     const missing = (await this.getEpisodes(seriesId)).filter(e => e.monitored !== false && !e.hasFile && e.seasonNumber > 0 && (!e.airDate || Date.parse(e.airDate) <= now));
     if (!missing.length) return { success: true, message: 'Nothing is missing.', count: 0 };
+    // Seasons that are still mostly missing get a whole-season search first: Sonarr only tries season packs on
+    // its own when every episode of a season is missing, so a season that started one episode at a time
+    // would otherwise never be offered a pack again.
+    const packs = await this.searchPatchySeasons(seriesId);
+    const rest = missing.filter(e => !packs.includes(e.seasonNumber));
+    if (!rest.length) return { success: true, message: `Searching for ${packs.length === 1 ? 'that season' : `${packs.length} seasons`} as a whole.`, count: missing.length };
     // A few missing episodes: search those. Many: one show-wide search, which
     // tries whole-season packs first instead of hundreds of single searches.
-    if (missing.length <= 10) {
-      const result = await this.searchEpisodes(missing.map(e => e.id));
+    if (rest.length <= 10) {
+      const result = await this.searchEpisodes(rest.map(e => e.id));
       return { ...result, count: missing.length };
     }
     const numeric = Number(seriesId.replace(/^sonarr-/, ''));
     const result = await runArrCommand(this.requireConfig(), 'v3', { name: 'SeriesSearch', seriesId: numeric }, `a search for ${missing.length} missing episodes`);
     return { ...result, count: missing.length };
+  }
+
+  /**
+   * A whole-season search for every season of a show that is at least half missing (and missing four or more
+   * episodes). Returns the seasons searched.
+   */
+  async searchPatchySeasons(seriesId: string): Promise<number[]> {
+    const now = Date.now();
+    const aired = (await this.getEpisodes(seriesId)).filter(e => e.monitored !== false && e.seasonNumber > 0 && (!e.airDate || Date.parse(e.airDate) <= now));
+    const bySeason = new Map<number, { total: number; missing: number }>();
+    for (const e of aired) {
+      const row = bySeason.get(e.seasonNumber) ?? { total: 0, missing: 0 };
+      row.total++; if (!e.hasFile) row.missing++;
+      bySeason.set(e.seasonNumber, row);
+    }
+    const seasons = [...bySeason].filter(([, r]) => r.missing >= 4 && r.missing * 2 >= r.total).map(([n]) => n);
+    const numeric = Number(seriesId.replace(/^sonarr-/, ''));
+    for (const seasonNumber of seasons) {
+      await runArrCommand(this.requireConfig(), 'v3', { name: 'SeasonSearch', seriesId: numeric, seasonNumber }, `a search for season ${seasonNumber}`);
+    }
+    return seasons;
   }
 
   /**

@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
 import SubtitleManager from '../components/media/SubtitleManager';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import WatchTogether from '../components/media/WatchTogether';
 import { useWatchParty } from '../lib/useWatchParty';
 import { api, type MediaItem, type MediaPlaybackInfo } from '../lib/api';
 import { BackButton } from '../components/layout/BackButton';
+import { useWatchingBody } from '../lib/watching';
 import VideoPlayer from '../components/media/VideoPlayer';
 import type { SubtitleTrack } from '../components/media/PlyrPlayer';
 import { useProgressSaver } from '../lib/useProgressSaver';
 import { audioLabels, imageSubtitleLabels } from '../lib/media-info';
 
 export default function Player() {
+  const navigate = useNavigate();
+  useWatchingBody();
   const { id } = useParams<{ id: string }>();
   const [movie, setMovie] = useState<MediaItem | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +109,9 @@ export default function Player() {
           </div>
         ) : (
           <VideoPlayer
+            heading={movie.title}
+            subheading={movie.year ? String(movie.year) : undefined}
+            onBack={() => navigate(`/movies/${movie.id}`)}
             src={`/api/stream/${encodeURIComponent(movie.id)}`}
             transcodeSrc={needsTranscode ? `/api/stream/${encodeURIComponent(movie.id)}/transcode` : undefined}
             castTranscode={`/api/stream/${encodeURIComponent(movie.id)}/transcode`}

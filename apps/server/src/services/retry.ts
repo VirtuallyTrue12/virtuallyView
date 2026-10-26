@@ -1,6 +1,8 @@
 import type { RadarrAdapter, SonarrAdapter, LidarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from './registry.js';
 import { actOnDownload, getDownloads } from './real-downloads.js';
+import { noteSearch } from './requests.js';
+import { fetchMissingSpecials } from './specials.js';
 
 export interface RetryResult { success: boolean; message: string }
 
@@ -13,11 +15,23 @@ export async function retryMovie(id: string): Promise<RetryResult> {
 }
 
 /** Search again for one episode, or every missing aired episode of a show. */
-export async function retrySeries(id: string, episodeId?: string): Promise<RetryResult> {
+export async function retrySeries(id: string, episodeId?: string, label?: string, requester?: string): Promise<RetryResult> {
   const sonarr = getAdapter<SonarrAdapter>('sonarr');
   if (episodeId) {
     if (!/^episode-\d+$/.test(episodeId)) return fail('Unknown episode id.');
-    return sonarr.searchEpisodes([episodeId]);
+    const result = await sonarr.searchEpisodes([episodeId]);
+    // A special is rarely on torrent sites: look on the video sites straight away as well.
+    if (/^sonarr-\d+$/.test(id) && (await sonarr.getEpisodes(id).catch(() => [])).some(e => e.id === episodeId && e.seasonNumber === 0)) {
+      const online = await fetchMissingSpecials(id, episodeId).catch(() => null);
+      if (online?.started) return { success: true, message: `${online.message} It is in Requests, where you can follow it.` };
+    }
+    if (result.success && /^sonarr-\d+$/.test(id)) {
+      const show = await sonarr.getItem(id).catch(() => null);
+      const what = (label ?? '').replace(/[^\p{L}\p{N} .,:'&!?·-]/gu, '').slice(0, 80) || 'one episode';
+      noteSearch(id, show?.title ?? 'TV show', what, 'series', requester);
+      return { success: true, message: `${result.message} It is in Requests, where you can follow it.` };
+    }
+    return result;
   }
   if (!/^sonarr-\d+$/.test(id)) return fail('Unknown show id.');
   const result = await sonarr.searchMissing(id);

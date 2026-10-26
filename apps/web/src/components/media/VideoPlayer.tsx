@@ -17,6 +17,11 @@ interface VideoPlayerProps {
   durationSeconds?: number | null;
   poster?: string;
   title?: string;
+  /** Shown big in the top bar: the film or show, and (for an episode) which one. */
+  heading?: string;
+  subheading?: string;
+  /** The top bar's back button. */
+  onBack?: () => void;
   subtitles?: SubtitleTrack[];
   startAt?: number;
   autoPlay?: boolean;
@@ -77,7 +82,7 @@ const ICONS = {
 };
 
 export default function VideoPlayer({
-  src, transcodeSrc, durationSeconds, poster, title, subtitles = [], startAt = 0, autoPlay = true,
+  src, transcodeSrc, durationSeconds, poster, title, heading, subheading, onBack, subtitles = [], startAt = 0, autoPlay = true,
   onProgress, onEnded, onError, next, previous, episodes, audioTracks = [], imageSubtitles = [], sourceHeight, chapters = [], isEpisode = false, party, castTranscode, onPullSubtitles
 }: VideoPlayerProps) {
   const [pulling, setPulling] = useState(false);
@@ -112,7 +117,7 @@ export default function VideoPlayer({
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1);
   const [subIndex, setSubIndex] = useState(-1);
-  const [menu, setMenu] = useState<null | 'speed' | 'subs' | 'episodes' | 'audio' | 'quality' | 'cast'>(null);
+  const [menu, setMenu] = useState<null | 'settings' | 'subs' | 'episodes' | 'cast'>(null);
   const [audioIndex, setAudioIndex] = useState(0);
   const [quality, setQuality] = useState(0);
   // Stall watch: a few genuine buffering pauses in a minute (not the ones right after a start, seek or
@@ -453,14 +458,17 @@ export default function VideoPlayer({
     onError?.(message);
   };
 
-  const cls = `vp${visible || !playing ? ' vp--show' : ''}${fullscreen ? ' vp--fs' : ''}`;
+  const shown_ = visible || !playing || !!menu;
+  // The pointer hides only while a film plays untouched; any movement brings it back at once.
+  const cls = `vp${shown_ ? ' vp--show' : ' vp--idle'}${fullscreen ? ' vp--fs' : ''}`;
 
   return (
     <div
       ref={wrapRef}
       className={cls}
-      onMouseMove={wake}
-      onMouseLeave={() => { if (playing) setVisible(false); }}
+      onPointerMove={wake}
+      onPointerDown={wake}
+      onMouseLeave={() => { if (playing && !fullscreen) setVisible(false); }}
       onTouchStart={wake}
       tabIndex={-1}
     >
@@ -530,8 +538,22 @@ export default function VideoPlayer({
       </video>
 
       {waiting && !failed && <div className="vp-spinner" aria-label="Loading" />}
-      {!playing && !waiting && !failed && upNext === null && (
-        <button className="vp-bigplay" type="button" onClick={togglePlay} aria-label="Play"><Icon d={ICONS.play} size={40} /></button>
+      {!waiting && !failed && upNext === null && (
+        <div className={`vp-center${playing ? '' : ' is-paused'}`} onClick={e => e.stopPropagation()}>
+          <button className="vp-center-btn" type="button" onClick={() => skip(-10)} aria-label="Back 10 seconds"><Icon d={ICONS.back10} size={30} /></button>
+          <button className="vp-center-btn vp-center-btn--main" type="button" onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}><Icon d={playing ? ICONS.pause : ICONS.play} size={42} /></button>
+          <button className="vp-center-btn" type="button" onClick={() => skip(10)} aria-label="Forward 10 seconds"><Icon d={ICONS.fwd10} size={30} /></button>
+        </div>
+      )}
+
+      {(heading || title || onBack) && (
+        <div className="vp-top" onClick={e => e.stopPropagation()}>
+          {onBack && <button type="button" className="vp-btn vp-back" onClick={onBack} aria-label="Back"><SvgIcon name="arrow-left" size={22} /></button>}
+          <div className="vp-heading">
+            <div className="vp-heading-main">{heading ?? title}</div>
+            {subheading && <div className="vp-heading-sub">{subheading}{currentChapter ? ` · ${currentChapter.title}` : ''}</div>}
+          </div>
+        </div>
       )}
 
       {failed && (
@@ -570,8 +592,8 @@ export default function VideoPlayer({
       )}
 
       <div className="vp-controls" onClick={e => e.stopPropagation()}>
-        {title && <div className="vp-title">{title}</div>}
-
+        <div className="vp-seekrow">
+        <span className="vp-time">{fmt(shown)}</span>
         <div
           ref={barRef}
           className="vp-bar"
@@ -609,6 +631,8 @@ export default function VideoPlayer({
             );
           })()}
         </div>
+        <span className="vp-time vp-time--left">{total > 0 ? `-${fmt(Math.max(0, total - shown))}` : '--:--'}</span>
+        </div>
 
         <div className="vp-row">
           <div className="vp-group">
@@ -628,7 +652,6 @@ export default function VideoPlayer({
                 onChange={e => { setVolume(Number(e.target.value)); setMuted(false); }}
               />
             </div>
-            <span className="vp-time">{fmt(shown)} / {total > 0 ? fmt(total) : '--:--'}{currentChapter ? `  ${currentChapter.title}` : ''}</span>
           </div>
 
           <div className="vp-group">
@@ -708,45 +731,37 @@ export default function VideoPlayer({
                 </div>
               )}
             </div>
-            {audioTracks.length > 1 && !!conversionSrc && (
-              <div className="vp-menu-wrap">
-                <button type="button" className={`vp-btn vp-btn--text${menu === 'audio' ? ' is-on' : ''}`} onClick={() => setMenu(m => (m === 'audio' ? null : 'audio'))} title="Audio track" aria-label="Audio track">Audio</button>
-                {menu === 'audio' && (
-                  <div className="vp-menu" role="menu">
-                    <div className="vp-menu-head">Audio</div>
-                    {audioTracks.map(track => (
-                      <button key={track.index} type="button" role="menuitem" className={`vp-menu-item${audioIndex === track.index ? ' is-active' : ''}`} onClick={() => { setMenu(null); if (track.index !== audioIndex) restartWith(() => { if (track.index !== 0) setConverting(true); setAudioIndex(track.index); }); }}>{track.label}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            {(isTranscode || !!conversionSrc) && !cast && (
-              <div className="vp-menu-wrap">
-                <button type="button" className={`vp-btn vp-btn--text${menu === 'quality' ? ' is-on' : ''}`} onClick={() => setMenu(m => (m === 'quality' ? null : 'quality'))} title="Quality" aria-label="Quality">{quality ? `${quality}p` : 'Auto'}</button>
-                {menu === 'quality' && (
-                  <div className="vp-menu" role="menu">
-                    <div className="vp-menu-head">Quality</div>
-                    {[0, ...QUALITY_STEPS].filter(q => q === 0 || !sourceHeight || q < sourceHeight).map(q => (
-                      <button key={q} type="button" role="menuitem" className={`vp-menu-item${quality === q ? ' is-active' : ''}`} onClick={() => { setMenu(null); if (q !== quality) chooseQuality(q); }}>{q === 0 ? 'Auto (original)' : `${q}p`}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
             <div className="vp-menu-wrap">
-              <button type="button" className={`vp-btn vp-btn--text${menu === 'speed' ? ' is-on' : ''}`} onClick={() => setMenu(m => (m === 'speed' ? null : 'speed'))} title="Playback speed" aria-label="Playback speed">{rate}×</button>
-              {menu === 'speed' && (
-                <div className="vp-menu" role="menu">
+              <button type="button" className={`vp-btn${menu === 'settings' ? ' is-on' : ''}`} onClick={() => setMenu(m => (m === 'settings' ? null : 'settings'))} title="Quality, speed and audio" aria-label="Settings"><SvgIcon name="gear" size={20} /></button>
+              {menu === 'settings' && (
+                <div className="vp-menu vp-menu--settings" role="menu">
+                  {(isTranscode || !!conversionSrc) && !cast && (
+                    <>
+                      <div className="vp-menu-head">Quality</div>
+                      {[0, ...QUALITY_STEPS].filter(q => q === 0 || !sourceHeight || q < sourceHeight).map(q => (
+                        <button key={q} type="button" role="menuitem" className={`vp-menu-item${quality === q ? ' is-active' : ''}`} onClick={() => { setMenu(null); if (q !== quality) chooseQuality(q); }}>{q === 0 ? 'Auto (original)' : `${q}p`}</button>
+                      ))}
+                    </>
+                  )}
                   <div className="vp-menu-head">Speed</div>
-                  {SPEEDS.map(s => (
-                    <button key={s} type="button" role="menuitem" className={`vp-menu-item${rate === s ? ' is-active' : ''}`} onClick={() => { setRate(s); setMenu(null); }}>{s === 1 ? 'Normal' : `${s}×`}</button>
-                  ))}
+                  <div className="vp-speeds">
+                    {SPEEDS.map(sp => (
+                      <button key={sp} type="button" role="menuitem" className={`vp-chip${rate === sp ? ' is-active' : ''}`} onClick={() => setRate(sp)}>{sp === 1 ? '1×' : `${sp}×`}</button>
+                    ))}
+                  </div>
+                  {audioTracks.length > 1 && !!conversionSrc && (
+                    <>
+                      <div className="vp-menu-head">Audio</div>
+                      {audioTracks.map(track => (
+                        <button key={track.index} type="button" role="menuitem" className={`vp-menu-item${audioIndex === track.index ? ' is-active' : ''}`} onClick={() => { setMenu(null); if (track.index !== audioIndex) restartWith(() => { if (track.index !== 0) setConverting(true); setAudioIndex(track.index); }); }}>{track.label}</button>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>
             <div className="vp-menu-wrap">
-              <button type="button" className={`vp-btn vp-btn--text${menu === 'cast' ? ' is-on' : ''}`} onClick={() => setMenu(m => (m === 'cast' ? null : 'cast'))} title="Cast to a TV" aria-label="Cast to a TV">Cast</button>
+              <button type="button" className={`vp-btn${menu === 'cast' ? ' is-on' : ''}`} onClick={() => setMenu(m => (m === 'cast' ? null : 'cast'))} title="Cast to a TV" aria-label="Cast to a TV"><SvgIcon name="cast" size={20} /></button>
               {menu === 'cast' && (
                 <CastMenu browserCast={browserCastSupported} onBrowserCast={() => void castFromBrowser()} onDevice={castToDevice} onClose={() => setMenu(null)} />
               )}

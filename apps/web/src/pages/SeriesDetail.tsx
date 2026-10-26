@@ -233,7 +233,9 @@ export default function SeriesDetail() {
           </div>
           {seasonEpisodes.some(e => !e.hasFile) && (
             <div className="episode-search">
-              <SearchAgain label={`Search for ${seasonEpisodes.filter(e => !e.hasFile).length} missing`} run={() => api.searchSeries(series.id)} />
+              {season === 0
+                ? <SearchAgain label={`Find ${seasonEpisodes.filter(e => !e.hasFile).length} missing specials online`} run={() => api.findSpecials(series.id)} />
+                : <SearchAgain label={`Search for ${seasonEpisodes.filter(e => !e.hasFile).length} missing`} run={() => api.searchSeries(series.id)} />}
             </div>
           )}
           <div className="episode-grid">
@@ -269,7 +271,7 @@ export default function SeriesDetail() {
                 </button>
                 {!episode.hasFile && !isArriving(episode.download) && (
                   <div className="episode-search">
-                    <SearchAgain label="Search for this episode" run={() => api.searchSeries(series.id, episode.id)} />
+                    <SearchAgain label="Search for this episode" run={() => api.searchSeries(series.id, episode.id, `S${String(episode.seasonNumber).padStart(2, '0')}E${String(episode.episodeNumber).padStart(2, '0')}${episode.title ? ` · ${episode.title}` : ''}`)} />
                   </div>
                 )}
                 {episode.hasFile && (

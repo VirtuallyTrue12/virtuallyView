@@ -26,7 +26,13 @@ const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms
 export async function runBacklogSearch(): Promise<void> {
   const services: Array<['radarr' | 'sonarr' | 'lidarr', () => Promise<unknown>]> = [
     ['radarr', () => getAdapter<RadarrAdapter>('radarr').searchAllMissing()],
-    ['sonarr', () => getAdapter<SonarrAdapter>('sonarr').searchAllMissing()],
+    ['sonarr', async () => {
+      const sonarr = getAdapter<SonarrAdapter>('sonarr');
+      await sonarr.searchAllMissing();
+      // The library-wide search goes episode by episode in seasons that are only partly missing: give the
+      // mostly-missing ones a whole-season search too, so packs are found (a few shows per run).
+      for (const show of (await sonarr.getItems().catch(() => [])).slice(0, 60)) await sonarr.searchPatchySeasons(show.id).catch(() => []);
+    }],
     ['lidarr', () => getAdapter<LidarrAdapter>('lidarr').searchAllMissing()]
   ];
   for (let i = 0; i < services.length; i++) {
