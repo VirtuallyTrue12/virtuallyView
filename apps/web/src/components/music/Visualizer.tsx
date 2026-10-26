@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { audioEngine } from '../../lib/audio-engine';
 import { setViz, useLyrics, useViz, vizNow, type LyricLine, type LyricStyle, type SceneId } from '../../lib/viz-store';
 import { blitGl, glRenderer, ownRenderer } from './viz-gl';
+import { isLite } from '../../lib/perf';
 import { MOOD_SCENES, SCENE_BY_ID, SCENE_LIST, type Frame, type Scene, type Variant } from './viz-scenes';
 import { moodFromEnergy, songMood, type Mood } from '../../lib/mood';
 import { useMusicPlayer } from '../media/MusicProvider';
@@ -44,6 +45,8 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
     const cv = canvas.current;
     const ctx = cv?.getContext('2d');
     if (!cv || !ctx) return;
+    // Light mode: only the visualizers someone opened on purpose (full screen, Now Playing, the scene picker) run.
+    if (isLite() && (variant === 'strip' || (variant === 'full' && /mhero/.test(className ?? '')))) return;
     let raf = 0;
     const dpr = Math.min(variant === 'full' ? 3 : 1.5, window.devicePixelRatio || 1);
     const budget = variant === 'full' ? 3840 * 2160 : 320 * 200;
@@ -173,7 +176,7 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
     };
     raf = requestAnimationFrame(draw);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); document.removeEventListener('visibilitychange', onVis); onMoodRef.current?.(null); };
-  }, [scene, tint, variant, stage]);
+  }, [scene, tint, variant, stage, className]);
 
   const cls = `viz-canvas${className ? ` ${className}` : ''}`;
   return (

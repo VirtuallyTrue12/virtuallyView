@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -78,6 +78,28 @@ export function resolveBinary(name: Binary): string | null {
 
 export function ffmpegAvailable(): boolean {
   return resolveBinary('ffmpeg') !== null;
+}
+
+/**
+ * Hardware video conversion through the graphics chip (VA-API: Intel and AMD), when the server has one passed
+ * in (docker-compose.gpu.yml). A software re-encode of a 1080p HEVC file barely keeps up with one viewer; the
+ * GPU does several at once with the CPU nearly idle. Checked once with a tiny test encode; anything that fails
+ * falls back to the CPU. VV_HWACCEL=none turns it off.
+ */
+let vaapi: string | null | undefined;
+export function vaapiDevice(): string | null {
+  if (vaapi !== undefined) return vaapi;
+  vaapi = null;
+  if (process.env.VV_HWACCEL === 'none') return vaapi;
+  const ffmpeg = resolveBinary('ffmpeg');
+  const candidates = [process.env.VAAPI_DEVICE, '/dev/dri/renderD128', '/dev/dri/renderD129'].filter((d): d is string => !!d && existsSync(d));
+  for (const device of candidates) {
+    if (!ffmpeg) break;
+    const test = spawnSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-init_hw_device', `vaapi=va:${device}`, '-filter_hw_device', 'va',
+      '-f', 'lavfi', '-i', 'testsrc=size=320x240:duration=0.2', '-vf', 'format=nv12,hwupload', '-c:v', 'h264_vaapi', '-f', 'null', '-'], { timeout: 15_000 });
+    if (test.status === 0) { vaapi = device; break; }
+  }
+  return vaapi;
 }
 
 const probeCache = new Map<string, { key: string; value: MediaProbe }>();
@@ -238,15 +260,20 @@ export interface TranscodeOptions {
   burn?: number;
   /** Source height in pixels; a re-encode of anything taller than 1080p is capped to 1080p. */
   sourceHeight?: number;
+  /** Source bitrate (bits a second): the re-encode needs no more than about twice it (HEVC to H.264). */
+  sourceBitrate?: number;
 }
 
 /** Peak bitrate for a software re-encode at this height: CRF alone lets complex scenes spike, which
  * arrives at the player as bursts it cannot keep ahead of over Wi-Fi. */
-function rateCap(height: number): [string, string] {
-  if (height <= 480) return ['2M', '4M'];
-  if (height <= 720) return ['4M', '8M'];
-  if (height <= 1080) return ['8M', '16M'];
-  return ['20M', '40M'];
+function rateCap(height: number, sourceBitrate?: number): [string, string] {
+  const ceiling = height <= 480 ? 2_000_000 : height <= 720 ? 4_000_000 : height <= 1080 ? 8_000_000 : 20_000_000;
+  // An efficient 1 Mbit/s HEVC episode re-encoded at the 1080p ceiling sent eight times its own size over the
+  // network (a TV on Wi-Fi stuttered). H.264 needs about twice HEVC's rate for the same picture: no more.
+  const fair = sourceBitrate && sourceBitrate > 0 ? Math.max(1_500_000, Math.round(sourceBitrate * 2.2)) : ceiling;
+  const rate = Math.min(ceiling, fair);
+  const fmt = (n: number) => (n % 1_000_000 === 0 ? `${n / 1_000_000}M` : `${Math.round(n / 1000)}k`);
+  return [fmt(rate), fmt(rate * 2)];
 }
 
 /** The `-map`/`-c:v`/`-c:a` portion shared by every output container (progressive MP4 or HLS). */
@@ -275,10 +302,17 @@ function encodeArgs(options: TranscodeOptions): string[] {
   // perfectly fine on their own. Nothing here uses chapter markers from the transcoded stream itself
   // (the player reads them separately, from ffprobe on the source file), so they are dropped.
   args.push('-map_chapters', '-1');
+  const hw = !copying && burn === undefined ? vaapiDevice() : null;
   if (copying) {
     args.push('-c:v', 'copy');
+  } else if (hw) {
+    const [maxrate, bufsize] = rateCap(target || options.sourceHeight || 1080, options.sourceBitrate);
+    // Decoded on the CPU (any codec works), then scaled and encoded on the GPU (see hwInputArgs).
+    args.push('-vf', `format=nv12,hwupload${scale ? `,scale_vaapi=w=-2:h=${Math.round(options.height as number)}` : ''}`,
+      '-c:v', 'h264_vaapi', '-qp', scale ? '25' : '23', '-maxrate', maxrate, '-bufsize', bufsize, '-profile:v', 'high',
+      '-force_key_frames', 'expr:gte(t,n_forced*2)');
   } else {
-    const [maxrate, bufsize] = rateCap(target || options.sourceHeight || 1080);
+    const [maxrate, bufsize] = rateCap(target || options.sourceHeight || 1080, options.sourceBitrate);
     args.push(
       '-c:v', 'libx264',
       '-preset', 'veryfast',
@@ -299,6 +333,14 @@ function encodeArgs(options: TranscodeOptions): string[] {
   return args;
 }
 
+/** Opens the GPU for the encoder when the video will be re-encoded there. */
+function hwInputArgs(options: TranscodeOptions): string[] {
+  const burn = Number.isInteger(options.burn) && (options.burn ?? -1) >= 0;
+  const copying = !!options.copyVideo && !(options.height && options.height > 0) && !burn;
+  const device = !copying && !burn ? vaapiDevice() : null;
+  return device ? ['-init_hw_device', `vaapi=va:${device}`, '-filter_hw_device', 'va'] : [];
+}
+
 export function ffmpegTranscodeArgs(filePath: string, startSeconds = 0, options: TranscodeOptions = {}): string[] {
   const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
   // -ss before -i seeks fast on the input, but does NOT rebase output timestamps to zero by itself -
@@ -308,7 +350,7 @@ export function ffmpegTranscodeArgs(filePath: string, startSeconds = 0, options:
   // (tens of minutes in), which Chrome's fragmented-MP4 demuxer rejects outright as undecodable - every
   // seek failed with "This browser could not decode the video", reproducibly, confirmed live.
   if (startSeconds > 0) args.push('-ss', String(startSeconds));
-  args.push('-i', filePath, '-avoid_negative_ts', 'make_zero', ...encodeArgs(options));
+  args.push(...hwInputArgs(options), '-i', filePath, '-avoid_negative_ts', 'make_zero', ...encodeArgs(options));
   args.push('-movflags', 'frag_keyframe+empty_moov+default_base_moof');
   args.push('-f', 'mp4', 'pipe:1');
   return args;
@@ -332,7 +374,7 @@ export function ffmpegHlsArgs(filePath: string, startSeconds = 0, options: Trans
   if (startSeconds > 0) args.push('-ss', String(startSeconds));
   // Same timestamp rebase as the progressive path above: a seek must hand the player segments that
   // start near zero, not at the absolute source-file position.
-  args.push('-i', filePath, '-avoid_negative_ts', 'make_zero', ...encodeArgs(options));
+  args.push(...hwInputArgs(options), '-i', filePath, '-avoid_negative_ts', 'make_zero', ...encodeArgs(options));
   args.push(
     '-f', 'hls',
     '-hls_time', '2',

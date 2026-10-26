@@ -1,0 +1,8 @@
+# Optional: hardware video conversion on an Intel or AMD graphics chip (VA-API).
+# Add this file to your compose command when the server has /dev/dri:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# The app checks at start-up that the GPU really encodes and otherwise keeps using the CPU.
+services:
+  app:
+    devices:
+      - /dev/dri:/dev/dri

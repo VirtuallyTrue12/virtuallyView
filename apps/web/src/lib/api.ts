@@ -1,3 +1,4 @@
+import { softwareRendering } from './perf';
 
 export interface MediaItem {
   id: string;
@@ -495,8 +496,10 @@ function codecQuery(): string {
   if (codecCache !== null) return codecCache;
   try {
     const v = document.createElement('video');
-    const hevc = v.canPlayType('video/mp4; codecs="hvc1.1.6.L120.90"') !== '';
-    const hevc10 = v.canPlayType('video/mp4; codecs="hvc1.2.4.L120.90"') !== '';
+    // A browser without graphics acceleration "can" play HEVC but only in software, which stutters: let the
+    // server convert to H.264 instead (cheap with a GPU there).
+    const hevc = !softwareRendering() && v.canPlayType('video/mp4; codecs="hvc1.1.6.L120.90"') !== '';
+    const hevc10 = !softwareRendering() && v.canPlayType('video/mp4; codecs="hvc1.2.4.L120.90"') !== '';
     codecCache = hevc ? `?hevc=1${hevc10 ? '&hevc10=1' : ''}` : '';
   } catch {
     codecCache = '';

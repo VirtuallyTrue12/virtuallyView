@@ -77,8 +77,10 @@ export default function VizStage() {
     };
     wake();
     window.addEventListener('pointermove', wake);
+    // A tap on a touch screen brings the controls back too (not only a drag).
+    window.addEventListener('pointerdown', wake);
     window.addEventListener('keydown', onKey);
-    return () => { window.removeEventListener('pointermove', wake); window.removeEventListener('keydown', onKey); window.clearTimeout(hideTimer.current); };
+    return () => { window.removeEventListener('pointermove', wake); window.removeEventListener('pointerdown', wake); window.removeEventListener('keydown', onKey); window.clearTimeout(hideTimer.current); };
   }, [viz.stage, picker, toggle, nextTrack, prevTrack]);
 
   useEffect(() => { if (!open) setPicker(false); }, [open]);

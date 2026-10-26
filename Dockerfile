@@ -13,6 +13,9 @@ FROM node:24-alpine
 # ffmpeg converts MKV/HEVC/DTS files that browsers cannot decode natively.
 # tar is used for backups; curl carries the optional Tor/SOCKS5 proxy calls.
 RUN apk add --no-cache ffmpeg tar curl
+# Intel/AMD hardware video conversion (used only when docker-compose.gpu.yml passes the GPU in). Not every
+# architecture has these packages, so a missing one is skipped.
+RUN apk add --no-cache intel-media-driver mesa-va-gallium libva 2>/dev/null || apk add --no-cache mesa-va-gallium libva 2>/dev/null || true
 # yt-dlp is used only by the optional YouTube service (docker compose --profile youtube).
 RUN curl -fsSL -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux && chmod 755 /usr/local/bin/yt-dlp
 WORKDIR /app

@@ -261,6 +261,11 @@ describe('HLS conversion for Safari and TV browsers', () => {
 });
 
 describe('conversion that keeps up on a home server', () => {
+  it('keeps a re-encode near the source bitrate, so an efficient HEVC file is not sent at eight times its size', () => {
+    const args = ffmpegTranscodeArgs('/media/movies/a.mkv', 0, { sourceHeight: 1080, sourceBitrate: 1_030_841 });
+    expect(args[args.indexOf('-maxrate') + 1]).toBe('2268k');
+  });
+
   it('caps a re-encode of a 4K source at 1080p and limits its peak bitrate', async () => {
     const { ffmpegTranscodeArgs } = await import('../../apps/server/src/services/transcode');
     const args = ffmpegTranscodeArgs('/m/a.mkv', 0, { sourceHeight: 2160 });

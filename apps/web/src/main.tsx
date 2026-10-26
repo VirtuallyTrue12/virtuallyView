@@ -4,6 +4,9 @@ import { BrowserRouter } from 'react-router-dom';
 import './index.css';
 import App from './App';
 import { paintCachedTheme } from './lib/appearance';
+import { initPerformanceMode } from './lib/perf';
+
+initPerformanceMode();
 
 paintCachedTheme();
 

@@ -96,6 +96,7 @@ export default function VideoPlayer({
   // result on whatever episode is showing by the time the search actually finishes.
   const pullToken = useRef(0);
   const sessionRetried = useRef(false);
+  const pullStarted = useRef(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -401,6 +402,9 @@ export default function VideoPlayer({
     const known = knownSubs.current;
     knownSubs.current = { src, list };
     if (!known || known.src !== src) return; // a new film or episode: its own list, nothing "arrived"
+    // The first load of this item's list is not an arrival; only tracks added after it (a pull, an upload).
+    if (!known.list.size && !pullStarted.current) return;
+    pullStarted.current = false;
     const added = subtitles.findIndex(t => !known.list.has(t.src));
     if (added < 0) return;
     const before = subIndex;
@@ -755,6 +759,7 @@ export default function VideoPlayer({
                           disabled={pulling}
                           onClick={async () => {
                             const token = pullToken.current;
+                            pullStarted.current = true;
                             setPulling(true);
                             setPullNote(null);
                             try {

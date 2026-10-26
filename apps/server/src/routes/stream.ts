@@ -169,7 +169,8 @@ async function transcodeOptionsFor(filePath: string, query: TranscodeQuery): Pro
     audio: Math.max(0, Math.round(Number(query.audio) || 0)),
     ...(height >= 144 && height <= 4320 && (!probe.height || height < probe.height) ? { height } : {}),
     copyVideo: probe.videoCopyOk === true,
-    ...(probe.height ? { sourceHeight: probe.height } : {})
+    ...(probe.height ? { sourceHeight: probe.height } : {}),
+    ...(probe.bitrate ? { sourceBitrate: probe.bitrate } : {})
   };
   const burn = Number(query.burn);
   if (query.burn !== undefined && Number.isInteger(burn) && probe.subtitleStreams?.[burn] && !probe.subtitleStreams[burn]?.text) {
