@@ -206,6 +206,10 @@ services:
     depends_on:
       bazarr-init:
         condition: service_completed_successfully
+    # Public resolvers like the other services: without them no subtitle site can be reached.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     environment:
       - PUID=${PUID:-0}
       - PGID=${PGID:-0}

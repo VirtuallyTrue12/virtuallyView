@@ -285,6 +285,10 @@ async function ensureBazarr() {
       const res = await post([...enabled, provider].map(p => ['settings-general-enabled_providers', p]));
       if (!res.ok) log(`Bazarr: subtitle source ${provider} was not accepted (${res.status})`);
     }
+    // Bazarr's default 90% match score rejects nearly every subtitle for a web release whose group name differs;
+    // 60 keeps right-episode matches and drops the wrong ones.
+    const scores = await post([['settings-general-minimum_score', '60'], ['settings-general-minimum_score_movie', '60']]);
+    log(scores.ok ? 'Bazarr: subtitle match score set to 60' : `Bazarr: could not set the match score (${scores.status})`);
   } catch (err) {
     log(`Bazarr: could not be set up (${err instanceof Error ? err.message : err})`);
   }

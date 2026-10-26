@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Fixed.** Subtitles were never found: the subtitle service had no DNS servers, so it could not reach a single subtitle site, yet answered "done" to every search, and the app said "Subtitles added". It now has public resolvers like the other services, its match score is 60 instead of 90 (90 rejected nearly every subtitle for web releases), and the app checks that a subtitle file really exists before saying so.
 - **Changed.** Pulled or uploaded subtitles switch on in the player straight away (no reload), with a small notice "English subtitles on" and Undo.
 - **Added.** Notices in the corner when something finishes in the background: a request that is ready ("… is ready · Watch") or could not be found ("See why"). Any page can show one.
 - **Changed.** Features that need one more service (YouTube downloads, Videos) show the one command with a Copy button and keep checking, so the page carries on by itself once it is on. A conversion session that ended restarts on its own. Renaming and deleting a photo album use the app's own dialogs instead of the browser's pop-ups. Messages that said "reload the page" now say what happened.

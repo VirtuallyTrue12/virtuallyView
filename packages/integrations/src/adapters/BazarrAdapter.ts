@@ -127,17 +127,34 @@ export class BazarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     return { success: false, message: `Bazarr could not do that (status ${res.status}).` };
   }
 
+  /**
+   * Bazarr answers the same whether or not a source had subtitles, so look at what the title has now: only a
+   * subtitle file on disk in that language counts as found.
+   */
+  private async hasSubtitle(kind: 'movie' | 'episode', id: number, language: string): Promise<boolean> {
+    const res = await this.call(kind === 'movie' ? `/movies?radarrid[]=${id}` : `/episodes?episodeid[]=${id}`).catch(() => null);
+    if (!res?.ok) return false;
+    const body = (await res.json()) as { data?: Array<{ subtitles?: Array<{ code2?: string; path?: string | null }> }> };
+    return (body.data?.[0]?.subtitles ?? []).some(s => s.code2 === language && !!s.path);
+  }
+
+  private async searched(res: Response, kind: 'movie' | 'episode', id: number, language: string): Promise<{ success: boolean; message: string }> {
+    if (!res.ok) return BazarrAdapter.outcome(res, 'Subtitles added.', 'subtitle');
+    if (await this.hasSubtitle(kind, id, language)) return { success: true, message: 'Subtitles added.' };
+    return { success: false, message: 'No subtitle source had this in that language yet. Try another language, or upload a file.' };
+  }
+
   /** Search the subtitle sources for one movie in one language. */
   async searchMovieSubtitles(radarrId: number, language: string): Promise<{ success: boolean; message: string }> {
     await this.ensureProfile('movie', radarrId);
     const res = await this.call(`/movies/subtitles?radarrid=${radarrId}&language=${encodeURIComponent(language)}&forced=False&hi=False`, { method: 'PATCH' });
-    return BazarrAdapter.outcome(res, 'Subtitles added.', 'subtitle');
+    return this.searched(res, 'movie', radarrId, language);
   }
 
   async searchEpisodeSubtitles(seriesId: number, episodeId: number, language: string): Promise<{ success: boolean; message: string }> {
     await this.ensureProfile('series', seriesId);
     const res = await this.call(`/episodes/subtitles?seriesid=${seriesId}&episodeid=${episodeId}&language=${encodeURIComponent(language)}&forced=False&hi=False`, { method: 'PATCH' });
-    return BazarrAdapter.outcome(res, 'Subtitles added.', 'subtitle');
+    return this.searched(res, 'episode', episodeId, language);
   }
 
   /** Upload a subtitle file for a movie. It is saved next to the video by Bazarr. */
