@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import type { SubtitleTrack } from './PlyrPlayer';
 import { SvgIcon } from '../ui/SvgIcon';
 import { toast } from '../ui/Toast';
+import { isLite } from '../../lib/perf';
 
 export interface EpisodeGroup {
   label: string;
@@ -383,6 +384,16 @@ export default function VideoPlayer({
     if (english >= 0 && !audioTracks.some(t => t.english) && !subsTurnedOff()) setSubIndex(english);
   }, [src, audioTracks, subtitles]);
 
+  // A device that struggles (TV browsers, no graphics acceleration): start at 720p, converted on the server,
+  // which is far lighter to decode and draw than the original 1080p or 4K. The person can still pick Auto.
+  const liteQualityFor = useRef('');
+  useEffect(() => {
+    if (liteQualityFor.current === src || !isLite() || !conversionSrc || (sourceHeight ?? 0) <= 720 || quality !== 0) return;
+    liteQualityFor.current = src;
+    chooseQuality(720);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src, sourceHeight, conversionSrc]);
+
   // A film whose own language is not English but which carries an English dub: start with the English audio.
   const audioChosenFor = useRef('');
   useEffect(() => {
@@ -525,6 +536,7 @@ export default function VideoPlayer({
         poster={poster}
         autoPlay={autoPlay}
         playsInline
+        x-webkit-airplay="allow"
         crossOrigin="anonymous"
         onClick={() => { if (menu) setMenu(null); else togglePlay(); }}
         onDoubleClick={toggleFullscreen}

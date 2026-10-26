@@ -9,11 +9,14 @@
  *
  *   node scripts/host-addresses.mjs /host-net/addresses.json
  *
- * Nothing is listened on; it only writes the file.
+ * It also looks for TVs and boxes that can play a video sent to them (DLNA / UPnP renderers) and writes their
+ * description addresses next to it (renderers.json): that search needs the home network's multicast, which the
+ * dashboard's container cannot reach. Nothing is listened on apart from the replies to that search.
  */
+import dgram from 'node:dgram';
 import { networkInterfaces } from 'node:os';
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import path, { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { realpathSync } from 'node:fs';
 
@@ -47,9 +50,35 @@ function write(file) {
   renameSync(`${file}.tmp`, file);
 }
 
+/** Description addresses of the media renderers that answer an SSDP search within a few seconds. */
+export function findRenderers(timeoutMs = 3000) {
+  return new Promise(resolve => {
+    const found = new Set();
+    const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    const done = () => { try { socket.close(); } catch { /* closed */ } resolve([...found]); };
+    socket.on('error', done);
+    socket.on('message', msg => {
+      const location = /^location:\s*(\S+)/im.exec(msg.toString())?.[1];
+      if (location && /^http:\/\//i.test(location)) found.add(location);
+    });
+    socket.bind(0, () => {
+      const request = Buffer.from(['M-SEARCH * HTTP/1.1', 'HOST: 239.255.255.250:1900', 'MAN: "ssdp:discover"', 'MX: 2', 'ST: urn:schemas-upnp-org:service:AVTransport:1', '', ''].join('\r\n'));
+      for (let i = 0; i < 2; i++) socket.send(request, 1900, '239.255.255.250', () => undefined);
+      setTimeout(done, timeoutMs);
+    });
+  });
+}
+
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const file = process.argv[2] ?? '/host-net/addresses.json';
-  const tick = () => { try { write(file); } catch (err) { console.log(`host-addresses: ${err instanceof Error ? err.message : err}`); } };
-  tick();
-  setInterval(tick, 60_000);
+  const renderers = path.join(dirname(file), 'renderers.json');
+  const tick = async () => {
+    try { write(file); } catch (err) { console.log(`host-addresses: ${err instanceof Error ? err.message : err}`); }
+    try {
+      const body = JSON.stringify({ updatedAt: new Date().toISOString(), locations: await findRenderers() });
+      writeFileSync(`${renderers}.tmp`, body); renameSync(`${renderers}.tmp`, renderers);
+    } catch (err) { console.log(`renderers: ${err instanceof Error ? err.message : err}`); }
+  };
+  void tick();
+  setInterval(() => void tick(), 60_000);
 }

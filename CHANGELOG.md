@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- **Changed.** Casting to a TV: the search for TVs and boxes that can play a video sent to them (DLNA) now runs on the host's network (the netinfo service), because the dashboard's container never saw them; iPhone and iPad offer AirPlay from the player. A TV's own player decodes HEVC in hardware, so casting is the smooth way to watch on a TV whose browser has no acceleration.
+- **Changed.** Without graphics acceleration in the browser: video starts at 720p (converted on the server, much lighter to decode and draw; Auto is still one tap away), GPU-only visualizer scenes are hidden and fall back to Bars, and a one-time tip says where to switch acceleration on.
 - **Added.** Hardware video conversion on an Intel or AMD graphics chip (VA-API), with docker-compose.gpu.yml. The app checks at start-up that the GPU really encodes and otherwise uses the CPU.
 - **Fixed.** Video stuttered on a TV and in Chromium browsers. A converted stream now stays near the source's own bitrate (an efficient 1 Mbit/s HEVC episode was being sent at about 10 Mbit/s over Wi-Fi), and a browser that would decode HEVC in software (no graphics acceleration) gets a converted H.264 stream instead.
 - **Added.** Light mode for TVs and browsers without graphics acceleration (detected, or by a short frame-rate check): no frosted-glass blur or large shadows, and the background visualizers (bottom bar, Music page) pause; everything still works. TV browsers also get a larger interface.

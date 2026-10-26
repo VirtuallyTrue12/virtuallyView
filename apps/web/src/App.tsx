@@ -4,7 +4,8 @@ import { MobileTabs } from './components/layout/MobileTabs';
 import { UpdateBanner } from './components/layout/UpdateBanner';
 import { Navigation } from './components/layout/Navigation';
 import CommandPalette from './components/layout/CommandPalette';
-import { Toaster } from './components/ui/Toast';
+import { Toaster, toast } from './components/ui/Toast';
+import { accelerationTip } from './lib/perf';
 import ChatWidget from './components/ai/ChatWidget';
 import LoginScreen from './components/auth/LoginScreen';
 import OnboardingWizard from './components/onboarding/OnboardingWizard';
@@ -65,6 +66,7 @@ export default function App() {
       setAuthLoading(false);
     }
   };
+  useEffect(() => { const tip = accelerationTip(); if (tip) window.setTimeout(() => toast(tip, { tone: 'info', ms: 15000 }), 3000); }, []);
   useEffect(() => {
     void loadAuth();
     const handleAuthRequired = () => {

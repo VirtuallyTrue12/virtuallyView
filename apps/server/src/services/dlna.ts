@@ -1,4 +1,6 @@
 import dgram from 'node:dgram';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { createHash } from 'node:crypto';
 
 // DLNA / UPnP is an open standard that most smart TVs, game consoles and
@@ -48,9 +50,18 @@ async function describe(location: string): Promise<CastDevice | null> {
   }
 }
 
+/** Renderers found by the host-network helper (the container cannot reach the home network's multicast). */
+function hostFound(): string[] {
+  try {
+    const file = path.join(path.dirname(process.env.VV_HOST_NET_FILE ?? '/host-net/addresses.json'), 'renderers.json');
+    const data = JSON.parse(readFileSync(file, 'utf8')) as { locations?: unknown };
+    return Array.isArray(data.locations) ? data.locations.filter((l): l is string => typeof l === 'string' && /^http:\/\//i.test(l)) : [];
+  } catch { return []; }
+}
+
 export async function discoverDevices(force = false): Promise<CastDevice[]> {
   if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache.devices;
-  const locations = await search(2800);
+  const locations = [...new Set([...hostFound(), ...(await search(2800))])];
   const devices = (await Promise.all(locations.map(describe))).filter((d): d is CastDevice => d !== null);
   cache = { at: Date.now(), devices };
   return devices;

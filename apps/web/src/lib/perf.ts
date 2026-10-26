@@ -49,3 +49,12 @@ export function initPerformanceMode(): void {
     requestAnimationFrame(tick);
   }, 2500);
 }
+
+/** Once per browser: hardware acceleration is off, and how to turn it on (the one setting that fixes it all). */
+export function accelerationTip(): string | null {
+  if (!softwareRendering() || tvBrowser()) return null;
+  try { if (localStorage.getItem('vv-accel-tip')) return null; localStorage.setItem('vv-accel-tip', '1'); } catch { return null; }
+  const ua = navigator.userAgent;
+  const where = /Firefox/.test(ua) ? 'Settings > General > Performance' : /Vivaldi/.test(ua) ? 'Settings > Webpages > Use hardware acceleration' : 'Settings > System > Use graphics acceleration';
+  return `Hardware acceleration is off in this browser, so video and visuals run slowly. Turn it on in ${where}, then restart the browser.`;
+}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { audioEngine } from '../../lib/audio-engine';
 import { setViz, useLyrics, useViz, vizNow, type LyricLine, type LyricStyle, type SceneId } from '../../lib/viz-store';
 import { blitGl, glRenderer, ownRenderer } from './viz-gl';
-import { isLite } from '../../lib/perf';
+import { isLite, softwareRendering } from '../../lib/perf';
 import { MOOD_SCENES, SCENE_BY_ID, SCENE_LIST, type Frame, type Scene, type Variant } from './viz-scenes';
 import { moodFromEnergy, songMood, type Mood } from '../../lib/mood';
 import { useMusicPlayer } from '../media/MusicProvider';
@@ -109,7 +109,8 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       }
       return SCENE_BY_ID.get(moodPicked?.scene ?? current?.id ?? 'fireflies') ?? SCENE_BY_ID.get('fireflies')!;
     };
-    const usable = (sc: Scene | undefined): Scene => (sc && (sc.draw || (sc.gl && gpu)) ? sc : SCENE_BY_ID.get('bars')!);
+    // Without graphics acceleration a GPU scene would crawl: those fall back to the bars.
+    const usable = (sc: Scene | undefined): Scene => (sc && (sc.draw || (sc.gl && gpu && !softwareRendering())) ? sc : SCENE_BY_ID.get('bars')!);
     const pickScene = (): Scene => {
       if (variant === 'strip') return SCENE_BY_ID.get('bars')!;
       if (scene === 'mood') return usable(variant === 'tile' ? SCENE_BY_ID.get(MOOD_SCENES[MOOD_ORDER[Math.floor(f.t / 300) % MOOD_ORDER.length]!]![0]!) : pickMood());
@@ -206,7 +207,7 @@ export function SceneTiles({ tint, compact }: { tint?: string; compact?: boolean
   const { scene } = useViz();
   return (
     <div className={`viz-tiles${compact ? ' viz-tiles--compact' : ''}`} role="radiogroup" aria-label="Visualization">
-      {SCENES.map(sc => (
+      {SCENES.filter(sc => !softwareRendering() || !SCENE_BY_ID.get(sc.id)?.gl).map(sc => (
         <button key={sc.id} type="button" role="radio" aria-checked={scene === sc.id} className={`viz-tile${scene === sc.id ? ' is-on' : ''}`} onClick={() => setViz({ scene: sc.id })} title={sc.name}>
           {sc.id === 'cycle'
             ? <span className="viz-tile-cycle" aria-hidden="true">↻</span>
