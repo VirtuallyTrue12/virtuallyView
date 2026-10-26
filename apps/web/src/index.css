@@ -1908,11 +1908,8 @@ select.settings-input option:hover {
   display: flex;
   flex-direction: column;
   background: #000;
-  cursor: none;
   padding-bottom: var(--spacing-xxl);
 }
-
-.player:hover { cursor: default; }
 
 /* The backdrop image and its dark tint are bounded to this box (the title bar and video
    stage), never the whole page: without it, the semi-transparent overlay used to stretch
@@ -4950,6 +4947,7 @@ body.has-music-bar { padding-bottom: 96px; }
   user-select: none;
   outline: none;
 }
+.vp { cursor: default; }
 .vp--idle, .vp--idle * { cursor: none !important; }
 .vp--fs { width: 100vw; max-height: none; aspect-ratio: auto; height: 100vh; border-radius: 0; }
 .vp-video { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }

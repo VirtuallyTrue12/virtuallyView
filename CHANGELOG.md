@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Fixed.** In full screen the mouse pointer vanished over the picture and showed only over the controls: an old rule hid the pointer on the whole watch page and only restored it while the page was hovered, which full screen does not count. The player now sets its own pointer, hidden only after a few still seconds while playing.
 - **Added.** TV specials (Season 0) come from video sites when the torrent sites do not have them: YouTube, Dailymotion and the Internet Archive are searched, the video whose title (and length, when known) fits best is saved into the show's Season 00 folder as "Show - S00E05 - Title" and the TV manager imports it. "Find missing specials online" on a show's Specials tab, and "Search for this episode" on a special, both do this. For How I Met Your Mother 6 of 13 specials were found and imported.
 - **Changed.** Seasons that are still mostly missing get a whole-season search (packs), on "Search for missing" and in the 12-hourly backlog search: the TV manager only tries season packs by itself when every episode of a season is missing, so a season that started one episode at a time stayed that way.
 - **Fixed.** "Search for this episode" now shows up in Requests (on the show's request, or a new one), so the search can be followed.
