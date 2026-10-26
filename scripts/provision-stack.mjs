@@ -278,7 +278,7 @@ async function ensureBazarr() {
     const first = await post(base);
     log(first.ok ? 'Bazarr: connected to Radarr and Sonarr, language profile created' : `Bazarr: could not save its connections (${first.status})`);
     // Sources that need no account. A wrong name is rejected on its own without losing the rest.
-    for (const provider of ['podnapisi', 'yifysubtitles', 'tvsubtitles', 'gestdown', 'subf2m', 'subtitlecat', 'embeddedsubtitles']) {
+    for (const provider of ['podnapisi', 'yifysubtitles', 'gestdown', 'subf2m', 'subtitlecat', 'embeddedsubtitles']) {
       const current = await fetch(`${url}/api/system/settings`, { headers: { 'X-API-KEY': key } }).then(r => r.json()).catch(() => ({}));
       const enabled = current?.general?.enabled_providers ?? [];
       if (enabled.includes(provider)) continue;
@@ -287,7 +287,9 @@ async function ensureBazarr() {
     }
     // Bazarr's default 90% match score rejects nearly every subtitle for a web release whose group name differs;
     // 60 keeps right-episode matches and drops the wrong ones.
-    const scores = await post([['settings-general-minimum_score', '60'], ['settings-general-minimum_score_movie', '60']]);
+    const scores = await post([['settings-general-minimum_score', '60'], ['settings-general-minimum_score_movie', '60'],
+      // subf2m refuses to search until it is given a browser identity.
+      ['settings-subf2m-user_agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36']]);
     log(scores.ok ? 'Bazarr: subtitle match score set to 60' : `Bazarr: could not set the match score (${scores.status})`);
   } catch (err) {
     log(`Bazarr: could not be set up (${err instanceof Error ? err.message : err})`);

@@ -37,7 +37,7 @@ interface VideoPlayerProps {
   /** Watch together: what the others did, and a way to tell them what this viewer did. */
   party?: { remote: { playing: boolean; position: number; seq: number } | null; onLocal: (playing: boolean, position: number) => void };
   /** Audio streams in the file; the menu appears only while converting. */
-  audioTracks?: Array<{ index: number; label: string }>;
+  audioTracks?: Array<{ index: number; label: string; english?: boolean }>;
   /** Picture-based subtitles (PGS, VobSub). They are drawn onto the video, so they need conversion. */
   imageSubtitles?: Array<{ index: number; label: string }>;
   /** Source height in pixels, to offer only lower qualities. */
@@ -49,6 +49,10 @@ interface VideoPlayerProps {
   /** Shown in the subtitle menu only while there are none; searches subtitle sources for this title. */
   onPullSubtitles?: () => Promise<{ success: boolean; message: string }>;
 }
+
+/** The person's last subtitle choice in the menu: turned off stays off for the next film. */
+const subsTurnedOff = () => { try { return localStorage.getItem('vv-subs') === 'off'; } catch { return false; } };
+const rememberSubs = (v: 'on' | 'off') => { try { localStorage.setItem('vv-subs', v); } catch { /* this visit only */ } };
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const QUALITY_STEPS = [1080, 720, 480, 360];
@@ -367,6 +371,27 @@ export default function VideoPlayer({
     const v = videoRef.current;
     if (v) { v.volume = volume; v.muted = muted; v.playbackRate = rate; }
   }, [volume, muted, rate, videoSrc]);
+
+  // A film or episode in another language (a Bollywood film, say) with no English audio: English subtitles on by
+  // default, once both lists are known, unless the person has turned subtitles off. English audio needs none.
+  const subsChosenFor = useRef('');
+  useEffect(() => {
+    if (subsChosenFor.current === src || !audioTracks.length || !subtitles.length) return;
+    subsChosenFor.current = src;
+    const english = subtitles.findIndex(t => t.srclang === 'en' || /^english/i.test(t.label));
+    if (english >= 0 && !audioTracks.some(t => t.english) && !subsTurnedOff()) setSubIndex(english);
+  }, [src, audioTracks, subtitles]);
+
+  // A film whose own language is not English but which carries an English dub: start with the English audio.
+  const audioChosenFor = useRef('');
+  useEffect(() => {
+    if (audioChosenFor.current === src || !audioTracks.length) return;
+    audioChosenFor.current = src;
+    const english = audioTracks.find(t => t.english);
+    if (!english || audioTracks[0]?.english || english.index === audioIndex || !conversionSrc) return;
+    restartWith(() => { if (english.index !== 0) setConverting(true); setAudioIndex(english.index); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src, audioTracks]);
 
   const subKey = useMemo(() => `${subtitles.map(s => s.src).join('|')}@${offset}`, [subtitles, offset]);
   // Subtitles that arrive while watching (pulled or uploaded) switch on at once, with a way back.
@@ -704,9 +729,9 @@ export default function VideoPlayer({
               {menu === 'subs' && (
                 <div className="vp-menu" role="menu">
                   <div className="vp-menu-head">Subtitles</div>
-                  <button type="button" role="menuitem" className={`vp-menu-item${subIndex < 0 ? ' is-active' : ''}`} onClick={() => { setSubIndex(-1); setMenu(null); }}>Off</button>
+                  <button type="button" role="menuitem" className={`vp-menu-item${subIndex < 0 ? ' is-active' : ''}`} onClick={() => { setSubIndex(-1); setMenu(null); rememberSubs('off'); }}>Off</button>
                   {subtitles.map((track, i) => (
-                    <button key={track.src} type="button" role="menuitem" className={`vp-menu-item${subIndex === i ? ' is-active' : ''}`} onClick={() => { setSubIndex(i); setMenu(null); }}>{track.label}</button>
+                    <button key={track.src} type="button" role="menuitem" className={`vp-menu-item${subIndex === i ? ' is-active' : ''}`} onClick={() => { setSubIndex(i); setMenu(null); rememberSubs('on'); }}>{track.label}</button>
                   ))}
                   {isTranscode && imageSubtitles.length > 0 && (
                     <>

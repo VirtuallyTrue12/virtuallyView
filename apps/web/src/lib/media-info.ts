@@ -65,10 +65,12 @@ export const audioLabels = (info: MediaPlaybackInfo | null) => {
   for (const l of labels) total.set(l, (total.get(l) ?? 0) + 1);
   return tracks.map((t, i) => {
     const l = labels[i]!;
-    if ((total.get(l) ?? 0) < 2) return { index: t.index, label: l };
+    // English and not a commentary or audio description: the track to start with.
+    const english = /^English\b/.test(l) && !/commentary|description/i.test(l);
+    if ((total.get(l) ?? 0) < 2) return { index: t.index, label: l, english };
     const n = (seen.get(l) ?? 0) + 1;
     seen.set(l, n);
-    return { index: t.index, label: `${l} (${n})` };
+    return { index: t.index, label: `${l} (${n})`, english };
   });
 };
 

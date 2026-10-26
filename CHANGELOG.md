@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- **Changed.** English by default for films and episodes in another language (a Bollywood film, say): when the file also carries an English dub, playback starts with the English audio; when it does not, English subtitles come on. English-language titles are left alone. Turning subtitles off in the player is remembered for the next film.
+- **Changed.** Subtitle sources: subf2m is now set up (it needs a browser identity), Podnapisi is added, and tvsubtitles is switched off (its search page no longer exists). New installs get the same setup.
 - **Fixed.** Subtitles were never found: the subtitle service had no DNS servers, so it could not reach a single subtitle site, yet answered "done" to every search, and the app said "Subtitles added". It now has public resolvers like the other services, its match score is 60 instead of 90 (90 rejected nearly every subtitle for web releases), and the app checks that a subtitle file really exists before saying so.
 - **Changed.** Pulled or uploaded subtitles switch on in the player straight away (no reload), with a small notice "English subtitles on" and Undo.
 - **Added.** Notices in the corner when something finishes in the background: a request that is ready ("… is ready · Watch") or could not be found ("See why"). Any page can show one.
