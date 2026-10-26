@@ -131,13 +131,13 @@ export class BazarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   async searchMovieSubtitles(radarrId: number, language: string): Promise<{ success: boolean; message: string }> {
     await this.ensureProfile('movie', radarrId);
     const res = await this.call(`/movies/subtitles?radarrid=${radarrId}&language=${encodeURIComponent(language)}&forced=False&hi=False`, { method: 'PATCH' });
-    return BazarrAdapter.outcome(res, 'Subtitle downloaded. Reload the player to use it.', 'subtitle');
+    return BazarrAdapter.outcome(res, 'Subtitles added.', 'subtitle');
   }
 
   async searchEpisodeSubtitles(seriesId: number, episodeId: number, language: string): Promise<{ success: boolean; message: string }> {
     await this.ensureProfile('series', seriesId);
     const res = await this.call(`/episodes/subtitles?seriesid=${seriesId}&episodeid=${episodeId}&language=${encodeURIComponent(language)}&forced=False&hi=False`, { method: 'PATCH' });
-    return BazarrAdapter.outcome(res, 'Subtitle downloaded. Reload the player to use it.', 'subtitle');
+    return BazarrAdapter.outcome(res, 'Subtitles added.', 'subtitle');
   }
 
   /** Upload a subtitle file for a movie. It is saved next to the video by Bazarr. */
@@ -145,14 +145,14 @@ export class BazarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     const form = new FormData();
     form.append('file', new Blob([new Uint8Array(data)]), filename);
     const res = await this.call(`/movies/subtitles?radarrid=${radarrId}&language=${encodeURIComponent(language)}&forced=False&hi=False`, { method: 'POST', body: form });
-    return BazarrAdapter.outcome(res, 'Subtitle uploaded. Reload the player to use it.', 'usable subtitle in that file');
+    return BazarrAdapter.outcome(res, 'Subtitles added.', 'usable subtitle in that file');
   }
 
   async uploadEpisodeSubtitle(seriesId: number, episodeId: number, language: string, filename: string, data: Buffer): Promise<{ success: boolean; message: string }> {
     const form = new FormData();
     form.append('file', new Blob([new Uint8Array(data)]), filename);
     const res = await this.call(`/episodes/subtitles?seriesid=${seriesId}&episodeid=${episodeId}&language=${encodeURIComponent(language)}&forced=False&hi=False`, { method: 'POST', body: form });
-    return BazarrAdapter.outcome(res, 'Subtitle uploaded. Reload the player to use it.', 'usable subtitle in that file');
+    return BazarrAdapter.outcome(res, 'Subtitles added.', 'usable subtitle in that file');
   }
 
   /** Assistant helper: ids look like bazarr-movie-12 or bazarr-episode-345. */

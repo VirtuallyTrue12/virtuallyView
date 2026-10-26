@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, type PullStatus, type RequestItem } from '../../lib/api';
 import { useAllDownloads, downloadLabel } from '../../lib/useDownloadProgress';
+import { toast } from '../ui/Toast';
 
 /**
  * "What's happening right now" indicator in the top bar: downloads in
@@ -33,13 +34,26 @@ export function SystemActivity() {
     return () => { cancelled = true; clearInterval(interval); window.removeEventListener('vv-refresh', now); };
   }, []);
 
+  const lastStatus = useRef<Map<string, string> | null>(null);
   // Requests still being worked on: what used to be a floating badge lives here, out of the way of the page.
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
       try {
         const items = await api.requests();
-        if (!cancelled) setRequests(items.filter(r => ['pending', 'searching', 'downloading', 'importing'].includes(r.status)));
+        if (cancelled) return;
+        // Tell the person when something they asked for is ready (or could not be found), with a way straight to it.
+        const before = lastStatus.current;
+        for (const r of items) {
+          const was = before?.get(r.id);
+          if (was && ['pending', 'searching', 'downloading', 'importing'].includes(was)) {
+            const page = r.providerId?.startsWith('radarr-') ? `/movies/${r.providerId}` : r.providerId?.startsWith('sonarr-') ? `/series/${r.providerId}` : r.providerId?.startsWith('lidarr-') ? `/music/${r.providerId}` : '/requests';
+            if (r.status === 'available') toast(`${r.title} is ready`, { action: { label: r.mediaType === 'artist' ? 'Listen' : 'Watch', run: () => navigate(page) } });
+            else if (r.status === 'failed') toast(`${r.title} could not be found yet`, { tone: 'err', action: { label: 'See why', run: () => navigate('/requests') } });
+          }
+        }
+        lastStatus.current = new Map(items.map(r => [r.id, r.status]));
+        setRequests(items.filter(r => ['pending', 'searching', 'downloading', 'importing'].includes(r.status)));
       } catch { if (!cancelled) setRequests([]); }
     };
     void poll();
@@ -47,7 +61,7 @@ export function SystemActivity() {
     const now = () => void poll();
     window.addEventListener('vv-refresh', now);
     return () => { cancelled = true; clearInterval(interval); window.removeEventListener('vv-refresh', now); };
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (!open) return;

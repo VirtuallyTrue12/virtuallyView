@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, type VideoResult } from '../lib/api';
 import { EmptyState, PageHeader, Seg } from '../components/ui/Page';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import { FeatureOff } from '../components/ui/FeatureOff';
 
 type View = 'search' | 'history';
 
@@ -47,6 +48,8 @@ export default function Videos() {
 
   const loadHistory = useCallback(() => { api.videoHistory().then(r => setHistory(r.history)).catch(() => undefined); }, []);
   useEffect(() => { api.videosStatus().then(r => setAvailable(r.available)).catch(() => setAvailable(false)); loadHistory(); }, [loadHistory]);
+  const videosOn = useCallback(() => api.videosStatus().then(r => r.available), []);
+  const markOn = useCallback(() => setAvailable(true), []);
   useEffect(() => { const t = window.setTimeout(() => setQuery(typed.trim()), 400); return () => window.clearTimeout(t); }, [typed]);
 
   useEffect(() => {
@@ -83,8 +86,8 @@ export default function Videos() {
         <div className="vid-history-bar"><button type="button" className="mp-link" onClick={clearHistory}>Clear history</button></div>
       )}
       {view === 'search' && off && (
-        <EmptyState icon="youtube" title="Not turned on yet"
-          text={<>This needs a video service. Run <code>docker compose --profile invidious up -d</code> on the server, or point <code>INVIDIOUS_URL</code> in <code>.env</code> at a public instance and restart. See <a href="https://docs.invidious.io/instances/" target="_blank" rel="noreferrer">public instances</a>. Your history below still works.</>} />
+        <FeatureOff name="Videos" command="docker compose --profile invidious up -d" check={videosOn} onReady={markOn}
+          note={<>Or point <code>INVIDIOUS_URL</code> in <code>.env</code> at a public instance.</>} />
       )}
       {error && <div className="notice notice--err" role="alert">{error} <button type="button" className="mp-link" onClick={() => setError(null)}>Dismiss</button></div>}
       {loading && shown.length === 0 && <div className="loading-state">Searching…</div>}

@@ -246,7 +246,7 @@ describe('pull subtitles', () => {
     // The real session cookie was never touched (only this test's mocked route returned 401), so a
     // plain reload picks it back up - leaves a clean, signed-in state for whatever runs next.
     await page.reload();
-    await page.waitForSelector('.user-menu-button');
+    await page.waitForSelector('.vp');
   });
 
   it('a slow pull that is still running when the viewer skips to the next episode cannot land on it', async () => {

@@ -104,7 +104,7 @@ export default async function liveRoutes(server: FastifyInstance) {
   // The stream itself: playlists are relayed (HLS), anything else is converted to MP4 by ffmpeg.
   server.get<{ Params: { id: string } }>('/api/live/stream/:id', async (request, reply) => {
     const channel = await channelById(request.params.id);
-    if (!channel) return reply.code(404).send({ message: 'That channel is no longer in your playlists. Reload the page to refresh the channel list.' });
+    if (!channel) return reply.code(404).send({ message: 'That channel was taken out of its playlist. Pick another one.' });
     try {
       const head = await outboundFetch(channel.url, { timeoutMs: 15_000 });
       if (!head.ok) return reply.code(502).send({ message: `The channel answered ${head.status}.` });
@@ -148,7 +148,7 @@ export default async function liveRoutes(server: FastifyInstance) {
 
   server.post<{ Body: { channelId?: string; minutes?: number } }>('/api/live/record', async (request, reply) => {
     const channel = await channelById(request.body?.channelId ?? '');
-    if (!channel) return reply.code(404).send({ message: 'That channel is no longer in your playlists. Reload the page to refresh the channel list.' });
+    if (!channel) return reply.code(404).send({ message: 'That channel was taken out of its playlist. Pick another one.' });
     const result = startRecording(channel.url, channel.name, Number(request.body?.minutes));
     return result.ok ? result.recording : reply.code(400).send({ message: result.message });
   });

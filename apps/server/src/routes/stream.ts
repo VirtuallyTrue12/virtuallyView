@@ -264,7 +264,7 @@ async function hlsPlaylist(request: FastifyRequest<{ Querystring: TranscodeQuery
 function hlsSegment(reply: FastifyReply, sessionKey: string, segment: string) {
   if (!HLS_SEGMENT_RE.test(segment)) return reply.code(400).send({ error: 'bad_request', message: 'Invalid segment name.' });
   const dir = touchHlsSession(sessionKey);
-  if (!dir) return reply.code(404).send({ error: 'not_found', message: 'That session has ended. Reload the page to start a new one.' });
+  if (!dir) return reply.code(404).send({ error: 'not_found', message: 'That playback session ended.' });
   const file = segmentPath(dir, segment);
   if (!existsSync(file)) return reply.code(404).send();
   return reply.header('Content-Type', 'video/mp2t').header('Cache-Control', 'no-store').header('Access-Control-Allow-Origin', '*').send(createReadStream(file));

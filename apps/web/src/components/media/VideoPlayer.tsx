@@ -2,6 +2,7 @@ import CastMenu from './CastMenu';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { SubtitleTrack } from './PlyrPlayer';
 import { SvgIcon } from '../ui/SvgIcon';
+import { toast } from '../ui/Toast';
 
 export interface EpisodeGroup {
   label: string;
@@ -90,6 +91,7 @@ export default function VideoPlayer({
   // Bumped whenever the item itself changes, so a pull started on one episode can't land its
   // result on whatever episode is showing by the time the search actually finishes.
   const pullToken = useRef(0);
+  const sessionRetried = useRef(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -367,6 +369,21 @@ export default function VideoPlayer({
   }, [volume, muted, rate, videoSrc]);
 
   const subKey = useMemo(() => `${subtitles.map(s => s.src).join('|')}@${offset}`, [subtitles, offset]);
+  // Subtitles that arrive while watching (pulled or uploaded) switch on at once, with a way back.
+  const knownSubs = useRef<{ src: string; list: Set<string> } | null>(null);
+  useEffect(() => {
+    const list = new Set(subtitles.map(t => t.src));
+    const known = knownSubs.current;
+    knownSubs.current = { src, list };
+    if (!known || known.src !== src) return; // a new film or episode: its own list, nothing "arrived"
+    const added = subtitles.findIndex(t => !known.list.has(t.src));
+    if (added < 0) return;
+    const before = subIndex;
+    setSubIndex(added);
+    setMenu(null);
+    toast(`${subtitles[added]!.label} subtitles on`, { action: { label: 'Undo', run: () => setSubIndex(before) } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtitles, src]);
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -519,6 +536,12 @@ export default function VideoPlayer({
           // conversionSrc exists whenever ffmpeg is on the server at all, direct-play or not.
           if (code === 4 && !isTranscode && conversionSrc) {
             restartWith(() => setConverting(true));
+            return;
+          }
+          // A conversion session that ended (the server restarted, the tab slept): start a fresh one, once.
+          if (isTranscode && !sessionRetried.current) {
+            sessionRetried.current = true;
+            restartWith(() => undefined);
             return;
           }
           reportError(code === 4
@@ -715,7 +738,8 @@ export default function VideoPlayer({
                               // or the viewer just clicked Next) - a stale result must not land on
                               // whatever is showing now.
                               if (pullToken.current !== token) return;
-                              setPullNote(result.message);
+                              // Success shows itself: the new subtitles switch on (see above). Only say why when none came.
+                              if (!result.success) setPullNote(result.message);
                             } catch (err) {
                               if (pullToken.current !== token) return;
                               setPullNote(err instanceof Error ? err.message : 'Could not reach the server.');

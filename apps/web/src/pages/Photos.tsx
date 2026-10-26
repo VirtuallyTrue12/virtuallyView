@@ -6,6 +6,7 @@ import { OpenMediaFolder } from '../components/media/OpenMediaFolder';
 import { Dialog } from '../components/ui/Dialog';
 import { MenuItem, MoreMenu } from '../components/ui/MoreMenu';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import { toast } from '../components/ui/Toast';
 import { PhotoViewer } from '../components/photos/PhotoViewer';
 
 type View = 'timeline' | 'folders' | 'albums' | 'favorites';
@@ -29,6 +30,7 @@ function Tile({ photo, fav, selecting, selected, onOpen, onSelect, onFavorite }:
 
 /** Photos from the folder mounted at /media/photos: a timeline, folders, your own albums and favorites, with a full-screen viewer. */
 export default function Photos() {
+  const [albumEdit, setAlbumEdit] = useState<{ mode: 'rename' | 'delete'; name: string } | null>(null);
   const [params, setParams] = useSearchParams();
   const view = (['timeline', 'folders', 'albums', 'favorites'].includes(params.get('v') ?? '') ? params.get('v') : 'timeline') as View;
   const dir = params.get('dir') ?? '';
@@ -185,8 +187,8 @@ export default function Photos() {
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => setParams({ v: 'albums' })}><SvgIcon name="arrow-left" size={15} /> Albums</button>
               <h2>{album.name}</h2>
               <MoreMenu label="Album options">
-                <MenuItem icon="edit" label="Rename" onSelect={() => { const name = window.prompt('Album name', album.name); if (name?.trim()) api.changePhotoAlbum(album.id, { name }).then(() => { setAlbum({ ...album, name: name.trim() }); loadAlbums(); }).catch(() => {}); }} />
-                <MenuItem icon="trash" label="Delete album" hint="The photos stay where they are" danger onSelect={() => { if (window.confirm(`Delete the album "${album.name}"? The photos themselves are not touched.`)) api.deletePhotoAlbum(album.id).then(() => { setParams({ v: 'albums' }); loadAlbums(); }).catch(() => {}); }} />
+                <MenuItem icon="edit" label="Rename" onSelect={() => setAlbumEdit({ mode: 'rename', name: album.name })} />
+                <MenuItem icon="trash" label="Delete album" hint="The photos stay where they are" danger onSelect={() => setAlbumEdit({ mode: 'delete', name: album.name })} />
               </MoreMenu>
             </div>
           )}
@@ -225,6 +227,27 @@ export default function Photos() {
         </div>
       )}
 
+      {album && (
+        <Dialog open={albumEdit !== null} onClose={() => setAlbumEdit(null)} title={albumEdit?.mode === 'delete' ? `Delete "${album.name}"?` : 'Rename album'}>
+          {albumEdit?.mode === 'delete' ? (
+            <div className="add-artist">
+              <p className="dlg-help">Only the album goes. The photos stay exactly where they are.</p>
+              <div className="dlg-actions">
+                <button type="button" className="btn btn-danger" onClick={() => { const a = album; setAlbumEdit(null); api.deletePhotoAlbum(a.id).then(() => { setParams({ v: 'albums' }); loadAlbums(); toast(`Album "${a.name}" deleted`); }).catch(() => toast('Could not delete the album', { tone: 'err' })); }}>Delete album</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setAlbumEdit(null)}>Keep it</button>
+              </div>
+            </div>
+          ) : (
+            <form className="add-artist" onSubmit={e => { e.preventDefault(); const name = albumEdit?.name.trim() ?? ''; if (!name) return; const a = album; setAlbumEdit(null); api.changePhotoAlbum(a.id, { name }).then(() => { setAlbum({ ...a, name }); loadAlbums(); }).catch(() => toast('Could not rename the album', { tone: 'err' })); }}>
+              <input className="settings-input" autoFocus value={albumEdit?.name ?? ''} onChange={e => setAlbumEdit(v => (v ? { ...v, name: e.target.value } : v))} maxLength={80} aria-label="Album name" />
+              <div className="dlg-actions">
+                <button type="submit" className="btn btn-primary" disabled={!albumEdit?.name.trim()}>Rename</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setAlbumEdit(null)}>Cancel</button>
+              </div>
+            </form>
+          )}
+        </Dialog>
+      )}
       <Dialog open={picker !== null} onClose={() => { setPicker(null); setNewName(''); }} title={picker && picker.length ? `Add ${picker.length} photo${picker.length === 1 ? '' : 's'} to an album` : 'New album'}>
         {picker && (
           <div className="ph-pick">

@@ -4,6 +4,7 @@ import { MobileTabs } from './components/layout/MobileTabs';
 import { UpdateBanner } from './components/layout/UpdateBanner';
 import { Navigation } from './components/layout/Navigation';
 import CommandPalette from './components/layout/CommandPalette';
+import { Toaster } from './components/ui/Toast';
 import ChatWidget from './components/ai/ChatWidget';
 import LoginScreen from './components/auth/LoginScreen';
 import OnboardingWizard from './components/onboarding/OnboardingWizard';
@@ -199,6 +200,7 @@ export default function App() {
       {auth.authenticated && <MobileTabs />}
       <ChatWidget />
       <CommandPalette />
+      <Toaster />
       </div>
       </RadioProvider>
     </MusicProvider>

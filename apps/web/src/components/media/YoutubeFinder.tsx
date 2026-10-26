@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type YoutubeJob, type YoutubeResult } from '../../lib/api';
 import { SvgIcon } from '../ui/SvgIcon';
 import { youtubeIdFromText } from '../../lib/youtube-link';
+import { FeatureOff } from '../ui/FeatureOff';
 
 const clock = (s: number) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = String(s % 60).padStart(2, '0');
@@ -26,6 +27,8 @@ export function YoutubeFinder({ initialQuery, fixedArtist, onDownloaded }: { ini
   const wasActive = useRef(false);
 
   useEffect(() => { api.youtubeStatus().then(s => setAvailable(s.available)).catch(() => setAvailable(false)); }, []);
+  const youtubeOn = useCallback(() => api.youtubeStatus().then(s => s.available), []);
+  const markOn = useCallback(() => setAvailable(true), []);
 
   const loadJobs = useCallback(() => {
     api.youtubeJobs().then(r => setJobs(r.jobs)).catch(() => setJobs([]));
@@ -88,10 +91,8 @@ export function YoutubeFinder({ initialQuery, fixedArtist, onDownloaded }: { ini
   if (available === null) return <p className="release-picker-help">Checking...</p>;
   if (!available) {
     return (
-      <p className="release-picker-help">
-        YouTube downloads are off. Turn them on with <code>docker compose --profile youtube up -d</code>, then come back here.
-        Only save videos you have the right to keep (see the notes in docs/concerts-and-videos.md).
-      </p>
+      <FeatureOff name="YouTube downloads" command="docker compose --profile youtube up -d"
+        check={youtubeOn} onReady={markOn} note="Only save videos you have the right to keep." />
     );
   }
 
