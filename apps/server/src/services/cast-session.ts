@@ -21,6 +21,10 @@ interface Session {
   pollErrors: number;
   /** Last position read while the TV was actually playing; an idle TV reports 0, which must not overwrite it. */
   lastPosition: number;
+  /** How it was sent: the original file (the TV seeks by itself) or a conversion from `offset` (seeking reloads). */
+  mode: 'direct' | 'transcode';
+  /** What is needed to send it again from another position. */
+  resend?: { transcodePath: string; subtitlePath?: string; subtitleLabel?: string; subtitleLang?: string };
 }
 
 const sessions = new Map<string, Session>();
@@ -94,13 +98,15 @@ export async function pollOnce(): Promise<void> {
 export function startSession(device: CastDevice, opts: {
   mediaType: string; mediaId: string; seriesId?: string;
   offset: number; duration: number; title: string; actor: Actor;
+  mode?: Session['mode']; resend?: Session['resend'];
 }): void {
   sessions.set(device.id, {
     deviceId: device.id, deviceName: device.name,
     mediaType: opts.mediaType, mediaId: opts.mediaId, seriesId: opts.seriesId,
     offset: opts.offset, duration: opts.duration, title: opts.title,
     userId: opts.actor.userId, actor: opts.actor,
-    startedAt: Date.now(), pollErrors: 0, lastPosition: opts.offset
+    startedAt: Date.now(), pollErrors: 0, lastPosition: opts.offset,
+    mode: opts.mode ?? 'transcode', resend: opts.resend
   });
   startPolling();
 }

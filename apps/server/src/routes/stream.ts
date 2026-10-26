@@ -153,6 +153,8 @@ async function sendEmbeddedSubtitle(reply: FastifyReply, filePath: string, index
     .code(200)
     .header('Content-Type', 'text/vtt; charset=utf-8')
     .header('Cache-Control', 'private, max-age=3600')
+    // A Cast TV loads subtitle tracks cross-origin.
+    .header('Access-Control-Allow-Origin', '*')
     .send(shiftVtt(vtt, offset));
 }
 

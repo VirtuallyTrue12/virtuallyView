@@ -1,4 +1,5 @@
 import CastMenu from './CastMenu';
+import CastRemote from './CastRemote';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { SubtitleTrack } from './PlyrPlayer';
 import { SvgIcon } from '../ui/SvgIcon';
@@ -153,6 +154,8 @@ export default function VideoPlayer({
   const [onTv, setOnTv] = useState<{ id: string; name: string } | null>(null);
   const onTvRef = useRef(onTv);
   onTvRef.current = onTv;
+  // Where the TV last was, in case it cannot say any more when the viewer takes the video back.
+  const tvAt = useRef(0);
 
   // On mount, check whether this item is already playing on a TV (session survived a page reload).
   useEffect(() => {
@@ -332,8 +335,12 @@ export default function VideoPlayer({
   // DLNA / Chromecast: the server tells the TV what to play, so this page can be closed.
   const castToDevice = async (device: { id: string; name: string }): Promise<string> => {
     const start = Math.floor(positionRef.current);
+    // The original file when the TV can play it (its remote then seeks), the conversion otherwise: the server decides.
     const path = castTranscode ? `${castTranscode}?start=${start}` : src;
     const body: Record<string, unknown> = { device: device.id, path, title, start };
+    if (castTranscode) body.direct = src.split('?')[0];
+    const sub = subtitles[subIndex];
+    if (sub) body.subtitle = { path: sub.src.split('?')[0], label: sub.label, lang: sub.srclang };
     if (mediaType) body.mediaType = mediaType;
     if (mediaId) body.mediaId = mediaId;
     if (seriesId) body.seriesId = seriesId;
@@ -358,7 +365,8 @@ export default function VideoPlayer({
       try {
         const res = await fetch('/api/cast/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device: device.id }) });
         const data = (await res.json()) as { position?: number };
-        if (res.ok && data.position !== undefined && data.position > 0) seekTo(data.position);
+        const at = res.ok && data.position ? data.position : tvAt.current;
+        if (at > 0) seekTo(at);
       } catch { /* best effort */ }
       if (here) { wantPlay.current = true; void videoRef.current?.play().catch(() => setPlaying(false)); }
     })();
@@ -648,11 +656,14 @@ export default function VideoPlayer({
       {waiting && !failed && !onTv && <div className="vp-spinner" aria-label="Loading" />}
       {onTv && (
         <div className="vp-fail vp-ontv" role="status" onClick={e => e.stopPropagation()}>
-          <p>Playing on {onTv.name}</p>
-          <div className="vp-ontv-actions">
-            <button className="btn btn-primary btn-sm" type="button" onClick={() => leaveTv(true)}>Watch here instead</button>
-            <button className="btn btn-secondary btn-sm" type="button" onClick={() => leaveTv(false)}>Stop on TV</button>
-          </div>
+          <CastRemote
+            device={onTv}
+            duration={durationSeconds}
+            onPosition={t => { tvAt.current = t; }}
+            onEnded={() => { setOnTv(null); toast(`Finished on ${onTv.name}`, next ? { action: { label: 'Next episode', run: next.onSelect } } : {}); }}
+            onWatchHere={() => leaveTv(true)}
+            onStop={() => leaveTv(false)}
+          />
         </div>
       )}
       {!onTv && !waiting && !failed && upNext === null && (

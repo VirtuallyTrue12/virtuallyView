@@ -318,7 +318,11 @@ describe('plays what the browser actually can, not just what the file name predi
     await page.route('**/api/cast/devices**', r => r.fulfill(json({ devices: [{ id: 'tv1', name: 'Living Room TV' }] })));
     await page.route('**/api/cast/play', r => r.fulfill(json({ ok: true, message: 'Playing on Living Room TV.' })));
     let stopped = false;
-    await page.route('**/api/cast/stop', r => { stopped = true; return r.fulfill(json({ ok: true })); });
+    await page.route('**/api/cast/stop', r => { stopped = true; return r.fulfill(json({ ok: true, position: 61 })); });
+    await page.route('**/api/cast/active', r => r.fulfill(json({ sessions: [] })));
+    await page.route('**/api/cast/status**', r => r.fulfill(json({ state: 'PLAYING', position: 60, duration: 100 })));
+    const controls: string[] = [];
+    await page.route('**/api/cast/control', r => { controls.push(r.request().postData() ?? ''); return r.fulfill(json({ ok: true })); });
 
     await page.goto(base + '/movies/radarr-503/play');
     await page.waitForSelector('.vp-heading');
@@ -330,6 +334,11 @@ describe('plays what the browser actually can, not just what the file name predi
     await page.evaluate(() => { void document.querySelector('video')!.play().catch(() => undefined); });
     await page.waitForTimeout(300);
     expect(await page.evaluate(() => document.querySelector('video')!.paused)).toBe(true);
+    // The remote follows the TV's own clock, and its buttons drive the TV.
+    await page.waitForFunction(() => document.querySelector('.cast-remote-bar')?.textContent?.includes('1:00'));
+    await page.click('.cast-remote >> text=Pause');
+    await page.waitForFunction(() => document.querySelector('.cast-remote')?.textContent?.includes('Play'));
+    expect(controls.some(c => c.includes('"pause"'))).toBe(true);
     await page.click('text=Watch here instead');
     await page.waitForFunction(() => !document.querySelector('.vp-ontv'));
     expect(stopped).toBe(true);

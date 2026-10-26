@@ -150,10 +150,13 @@ export interface CastPlayOptions {
   subtitleUrl?: string;
   subtitleLabel?: string;
   subtitleLang?: string;
+  /** Where to begin, in seconds (direct play of the original file). */
+  startAt?: number;
+  contentType?: string;
 }
 
 export async function castPlay(host: string, url: string, title: string, opts: CastPlayOptions = {}): Promise<void> {
-  const contentType = /\.m3u8(\?|$)/.test(url) ? 'application/x-mpegURL' : /\/music\//.test(url) ? 'audio/mpeg' : 'video/mp4';
+  const contentType = opts.contentType ?? (/\.m3u8(\?|$)/.test(url) ? 'application/x-mpegURL' : /\/music\//.test(url) ? 'audio/mpeg' : 'video/mp4');
   await session(host, async (send, wait) => {
     send('receiver-0', NS.receiver, { type: 'LAUNCH', appId: MEDIA_APP, requestId: 1 });
     const status = await wait(r => r.namespace === NS.receiver && appsOf(r).some(a => a.appId === MEDIA_APP && a.transportId));
@@ -170,7 +173,7 @@ export async function castPlay(host: string, url: string, title: string, opts: C
 
     const tracks: Array<Record<string, unknown>> = [];
     const activeTrackIds: number[] = [];
-    if (opts.subtitleUrl && opts.subtitleUrl.includes('.vtt')) {
+    if (opts.subtitleUrl) {
       tracks.push({ trackId: 1, type: 'TEXT', trackContentId: opts.subtitleUrl, trackContentType: 'text/vtt', subtype: 'SUBTITLES', name: opts.subtitleLabel ?? 'Subtitles', language: opts.subtitleLang ?? 'en' });
       activeTrackIds.push(1);
     }
@@ -178,7 +181,8 @@ export async function castPlay(host: string, url: string, title: string, opts: C
     const mediaPayload: Record<string, unknown> = {
       type: 'LOAD', requestId: 2, autoplay: true,
       media: { contentId: url, contentType, streamType: 'BUFFERED', metadata, ...(tracks.length ? { tracks } : {}) },
-      ...(activeTrackIds.length ? { activeTrackIds } : {})
+      ...(activeTrackIds.length ? { activeTrackIds } : {}),
+      ...(opts.startAt && opts.startAt > 0 ? { currentTime: opts.startAt } : {})
     };
 
     send(app.transportId!, NS.media, mediaPayload);

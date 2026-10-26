@@ -4968,7 +4968,7 @@ body.has-music-bar { padding-bottom: 96px; }
   background: rgba(0, 0, 0, 0.75); text-align: center; padding: 24px;
 }
 /* Sent to a TV: leaves the heading and controls above and below it usable. */
-.vp-ontv { inset: 22% 0; background: radial-gradient(closest-side, rgba(0, 0, 0, 0.7), transparent); }
+.vp-ontv { inset: 12% 0; background: radial-gradient(closest-side, rgba(0, 0, 0, 0.7), transparent); }
 .vp-ontv p { font-size: 1.2rem; font-weight: 600; margin: 0; }
 .vp-ontv-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .vp-upnext {
@@ -6224,3 +6224,10 @@ body.is-watching .toaster { bottom: 120px; }
 /* TV browsers (lib/perf): bigger text and targets for viewing from across the room. */
 @media (min-width: 1100px) { html.tv body { zoom: 1.25; } }
 @media (min-width: 1700px) { html.tv body { zoom: 1.5; } }
+/* The remote for a video playing on a TV. */
+.cast-remote { display: flex; flex-direction: column; gap: 12px; align-items: center; width: min(520px, 100%); }
+.cast-remote-title { font-size: 1.25rem; font-weight: 600; margin: 0; }
+.cast-remote-state { margin: 0; opacity: 0.75; font-size: 0.9rem; }
+.cast-remote-bar { display: flex; align-items: center; gap: 10px; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.cast-remote-bar input { flex: 1; accent-color: var(--accent, #fff); }
+.cast-remote-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
