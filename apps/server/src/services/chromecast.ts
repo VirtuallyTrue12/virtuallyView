@@ -49,14 +49,20 @@ export function decodeMessage(body: Buffer): { namespace: string; data: Record<s
 
 type Reply = { namespace: string; data: Record<string, unknown> };
 
-/** A short session with the TV: send, and wait for the reply that matches. */
-function session<T>(host: string, run: (send: (to: string, ns: string, payload: object) => void, wait: (match: (r: Reply) => boolean) => Promise<Reply>) => Promise<T>): Promise<T> {
+/**
+ * A short session with the TV: send, and wait for the reply that matches. `limitMs` caps the whole exchange: a TV
+ * that is still loading a video answers nothing at all until it is done (half a minute is normal).
+ */
+function session<T>(host: string, run: (send: (to: string, ns: string, payload: object) => void, wait: (match: (r: Reply) => boolean) => Promise<Reply>) => Promise<T>, limitMs = 45_000): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const socket = tls.connect({ host, port: 8009, rejectUnauthorized: false, timeout: 20000 });
     let buffer = Buffer.alloc(0);
     const waiters: { match: (r: Reply) => boolean; done: (r: Reply) => void }[] = [];
-    const send = (to: string, ns: string, payload: object) => socket.write(encodeMessage('sender-vv', to, ns, payload));
-    const fail = (err: Error) => { socket.destroy(); reject(err); };
+    // Each connection is its own sender: the TV routes replies by this name, so a reused one can land on a closed link.
+    const me = `sender-vv-${Math.random().toString(36).slice(2, 10)}`;
+    const send = (to: string, ns: string, payload: object) => socket.write(encodeMessage(me, to, ns, payload));
+    const limit = setTimeout(() => fail(new Error('The TV did not answer.')), limitMs);
+    const fail = (err: Error) => { clearTimeout(limit); socket.destroy(); reject(err); };
     socket.on('timeout', () => fail(new Error('The TV stopped answering.')));
     socket.on('error', () => fail(new Error('Could not reach the TV. Is it switched on?')));
     socket.on('data', chunk => {
@@ -72,7 +78,7 @@ function session<T>(host: string, run: (send: (to: string, ns: string, payload: 
     socket.once('secureConnect', () => {
       send('receiver-0', NS.connection, { type: 'CONNECT' });
       const wait = (match: (r: Reply) => boolean) => new Promise<Reply>(done => { waiters.push({ match, done }); });
-      run(send, wait).then(value => { socket.end(); resolve(value); }, fail);
+      run(send, wait).then(value => { clearTimeout(limit); socket.end(); resolve(value); }, fail);
     });
   });
 }
@@ -107,7 +113,7 @@ export async function castStatus(host: string): Promise<CastStatus | null> {
       const duration = typeof s.media === 'object' && s.media !== null ? Number((s.media as Record<string, unknown>).duration ?? 0) || undefined : undefined;
       const idleReason = typeof s.idleReason === 'string' ? s.idleReason : undefined;
       return { state, currentTime, duration, idleReason };
-    });
+    }, 8000);
   } catch {
     return null;
   }
@@ -129,8 +135,8 @@ export async function castControl(host: string, action: 'PLAY' | 'PAUSE' | 'SEEK
     const payload: Record<string, unknown> = { type: action, mediaSessionId, requestId: 3 };
     if (action === 'SEEK' && time !== undefined) payload.currentTime = time;
     send(app.transportId!, NS.media, payload);
-    await wait(r => r.namespace === NS.media && r.data.type === 'MEDIA_STATUS' && (r.data.requestId === 3 || r.data.type === 'MEDIA_STATUS'));
-  });
+    await wait(r => r.namespace === NS.media && r.data.type === 'MEDIA_STATUS' && r.data.requestId === 3);
+  }, 10_000);
 }
 
 export interface CastPlayOptions {
@@ -176,8 +182,14 @@ export async function castPlay(host: string, url: string, title: string, opts: C
     };
 
     send(app.transportId!, NS.media, mediaPayload);
-    const result = await wait(r => r.namespace === NS.media && ['MEDIA_STATUS', 'LOAD_FAILED', 'LOAD_CANCELLED', 'INVALID_REQUEST'].includes(String(r.data.type)) && (r.data.requestId === 2 || r.data.type !== 'MEDIA_STATUS'));
-    if (result.data.type !== 'MEDIA_STATUS') throw new Error('The TV could not play this video.');
+    // The first status after LOAD is often a bare IDLE, with the failure only after it: wait for real playback
+    // (or a failure), not just any status.
+    const started = (r: Reply) => ((r.data.status as Array<{ playerState?: string; idleReason?: string }> | undefined) ?? [])[0];
+    const result = await wait(r => r.namespace === NS.media && (
+      ['LOAD_FAILED', 'LOAD_CANCELLED', 'INVALID_REQUEST'].includes(String(r.data.type)) ||
+      (r.data.type === 'MEDIA_STATUS' && (['PLAYING', 'BUFFERING', 'PAUSED'].includes(String(started(r)?.playerState)) || started(r)?.idleReason === 'ERROR'))
+    ));
+    if (result.data.type !== 'MEDIA_STATUS' || started(result)?.idleReason === 'ERROR') throw new Error('The TV could not play this video.');
   });
 }
 
@@ -203,6 +215,6 @@ export async function castStop(host: string): Promise<number> {
       } catch { /* best effort */ }
     }
     if (app.sessionId) send('receiver-0', NS.receiver, { type: 'STOP', sessionId: app.sessionId, requestId: 3 });
-  });
+  }, 10_000);
   return lastPosition;
 }

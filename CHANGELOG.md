@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Fixed.** Cast sessions, hardened: the TV's own clock is added to where the conversion started, against the full length (it used to compare with the remaining length, which could mark half-watched items as watched); a TV stopped from its own remote keeps the last real position instead of the start point; casting reports success only once the TV actually plays (a failed load used to look fine); a TV busy loading no longer ends the session; only the person who cast can stop it; TV posters only from public image addresses.
 - **Added.** Cast sessions: while the TV plays the server polls its position every 10 s and saves watch progress; "Stop on TV" / "Watch here instead" now resume from the TV's actual position, not where the laptop was; reloading the player page reconnects to the running TV session automatically.
 - **Fixed.** After casting to a TV the video no longer starts again on the computer as well: the player stays paused, shows "Playing on <TV>", and offers Watch here instead (stops the TV and carries on here) or Stop on TV.
 - **Added.** Cast to TVs with Chromecast built-in (Google TV, Android TV such as Sony Bravia, Chromecast sticks) straight from the player menu, in any browser: the server talks to the TV directly and it plays in the TV's own player. TVs are found by asking each address on the home network, because a firewall on the server usually drops the replies to the multicast search; nothing to switch on in the TV.

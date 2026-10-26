@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { discoverDevices, knownDevice, playOnDevice, stopDevice, deviceStatus, controlDevice } from '../services/dlna.js';
 import { isStreamPath, shareOrigin, signStreamPath } from '../services/stream-token.js';
 import { currentActor } from '../services/user-context.js';
-import { startSession, getSession, endSession, updateSessionOffset, activeSessions, setCastDeviceLookup } from '../services/cast-session.js';
+import { startSession, getSession, endSession, updateSessionOffset, activeSessions, setCastDeviceLookup, positionOf } from '../services/cast-session.js';
 
 /** Cast to a TV or box on the local network (DLNA / UPnP / Chromecast). */
 export default async function castRoutes(server: FastifyInstance) {
@@ -43,7 +43,8 @@ export default async function castRoutes(server: FastifyInstance) {
 
     try {
       await playOnDevice(device, url, title, {
-        poster: poster ? `${shareOrigin(request.headers.host, request.protocol)}${poster}` : undefined,
+        // The TV fetches the art itself and has no sign-in: only public (absolute) image addresses work.
+        poster: poster && /^https?:\/\//i.test(poster) ? poster : undefined,
         metadataType,
         subtitleUrl: request.body?.subtitleUrl,
         subtitleLabel: request.body?.subtitleLabel,
@@ -71,10 +72,11 @@ export default async function castRoutes(server: FastifyInstance) {
     if (!device) return reply.code(404).send({ message: 'Device not found.' });
     const status = await deviceStatus(device);
     if (!status) return reply.code(502).send({ message: 'Could not reach the TV.' });
+    const { position, duration } = status.state === 'IDLE' ? { position: session.lastPosition, duration: session.duration } : positionOf(session, status.currentTime, status.duration);
     return {
       state: status.state,
-      position: session.offset + status.currentTime,
-      duration: status.duration ?? session.duration,
+      position,
+      duration,
       title: session.title,
       mediaType: session.mediaType,
       mediaId: session.mediaId,
@@ -117,6 +119,8 @@ export default async function castRoutes(server: FastifyInstance) {
     const deviceId = String(request.body?.device ?? '');
     const device = knownDevice(deviceId);
     if (!device) return reply.code(404).send({ message: 'That device was not found.' });
+    const owner = getSession(deviceId)?.userId;
+    if (owner && owner !== currentActor().userId && currentActor().role !== 'admin') return reply.code(403).send({ message: 'Not your session.' });
     try {
       // endSession reads the TV's position and saves progress, then stopDevice sends the stop command.
       const position = await endSession(device, true);

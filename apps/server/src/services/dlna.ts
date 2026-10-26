@@ -88,7 +88,7 @@ async function soap(device: CastDevice & { controlUrl: string }, action: string,
 }
 
 /** Parse DLNA RelTime (H:MM:SS) to seconds. */
-function relTimeToSeconds(t: string): number {
+export function relTimeToSeconds(t: string): number {
   const parts = t.split(':').map(Number);
   if (parts.length === 3) return (parts[0]! * 3600) + (parts[1]! * 60) + (parts[2]! || 0);
   if (parts.length === 2) return (parts[0]! * 60) + (parts[1]! || 0);
@@ -96,7 +96,7 @@ function relTimeToSeconds(t: string): number {
 }
 
 /** Format seconds as DLNA RelTime (H:MM:SS). */
-function secondsToRelTime(s: number): string {
+export function secondsToRelTime(s: number): string {
   const sec = Math.floor(s);
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);

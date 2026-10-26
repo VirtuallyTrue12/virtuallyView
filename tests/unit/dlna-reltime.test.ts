@@ -1,21 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-// Test the RelTime ↔ seconds conversion without importing the whole service.
-// The functions are not exported, so we duplicate them here.
-function relTimeToSeconds(t: string): number {
-  const parts = t.split(':').map(Number);
-  if (parts.length === 3) return (parts[0]! * 3600) + (parts[1]! * 60) + (parts[2]! || 0);
-  if (parts.length === 2) return (parts[0]! * 60) + (parts[1]! || 0);
-  return Number(parts[0]) || 0;
-}
-
-function secondsToRelTime(s: number): string {
-  const sec = Math.floor(s);
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const rest = sec % 60;
-  return `${h}:${String(m).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
-}
+import { relTimeToSeconds, secondsToRelTime } from '../../apps/server/src/services/dlna.js';
 
 describe('DLNA RelTime', () => {
   it('parses H:MM:SS correctly', () => {
