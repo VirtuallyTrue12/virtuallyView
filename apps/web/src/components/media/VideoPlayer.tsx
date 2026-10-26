@@ -49,6 +49,10 @@ interface VideoPlayerProps {
   isEpisode?: boolean;
   /** Shown in the subtitle menu only while there are none; searches subtitle sources for this title. */
   onPullSubtitles?: () => Promise<{ success: boolean; message: string }>;
+  /** Used to track TV cast sessions and save progress while the TV plays. */
+  mediaType?: string;
+  mediaId?: string;
+  seriesId?: string;
 }
 
 /** The person's last subtitle choice in the menu: turned off stays off for the next film. */
@@ -89,7 +93,8 @@ const ICONS = {
 
 export default function VideoPlayer({
   src, transcodeSrc, durationSeconds, poster, title, heading, subheading, onBack, subtitles = [], startAt = 0, autoPlay = true,
-  onProgress, onEnded, onError, next, previous, episodes, audioTracks = [], imageSubtitles = [], sourceHeight, chapters = [], isEpisode = false, party, castTranscode, onPullSubtitles
+  onProgress, onEnded, onError, next, previous, episodes, audioTracks = [], imageSubtitles = [], sourceHeight, chapters = [], isEpisode = false, party, castTranscode, onPullSubtitles,
+  mediaType, mediaId, seriesId
 }: VideoPlayerProps) {
   const [pulling, setPulling] = useState(false);
   const [pullNote, setPullNote] = useState<string | null>(null);
@@ -148,6 +153,16 @@ export default function VideoPlayer({
   const [onTv, setOnTv] = useState<{ id: string; name: string } | null>(null);
   const onTvRef = useRef(onTv);
   onTvRef.current = onTv;
+
+  // On mount, check whether this item is already playing on a TV (session survived a page reload).
+  useEffect(() => {
+    if (!mediaId) return;
+    fetch('/api/cast/active').then(r => r.ok ? r.json() : null).then((data: { sessions?: Array<{ deviceId: string; deviceName: string; mediaId: string }> } | null) => {
+      if (!data?.sessions) return;
+      const match = data.sessions.find(s => s.mediaId === mediaId);
+      if (match) setOnTv({ id: match.deviceId, name: match.deviceName });
+    }).catch(() => undefined);
+  }, [mediaId]);
   // Safari (and the many TV and embedded browsers built on the same engine) refuse to play a live
   // fragmented-MP4 stream from a plain <video src> at all, even though the bytes are fine: HLS is what
   // they actually expect for a stream whose length is not known up front, and they play it natively, no
@@ -314,10 +329,17 @@ export default function VideoPlayer({
     }
   };
 
-  // DLNA: the server tells the TV what to play, so this page can be closed.
+  // DLNA / Chromecast: the server tells the TV what to play, so this page can be closed.
   const castToDevice = async (device: { id: string; name: string }): Promise<string> => {
-    const path = castTranscode ? `${castTranscode}?start=${Math.floor(positionRef.current)}` : src;
-    const res = await fetch('/api/cast/play', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device: device.id, path, title }) });
+    const start = Math.floor(positionRef.current);
+    const path = castTranscode ? `${castTranscode}?start=${start}` : src;
+    const body: Record<string, unknown> = { device: device.id, path, title, start };
+    if (mediaType) body.mediaType = mediaType;
+    if (mediaId) body.mediaId = mediaId;
+    if (seriesId) body.seriesId = seriesId;
+    if (durationSeconds) body.duration = durationSeconds;
+    if (poster) body.poster = poster;
+    const res = await fetch('/api/cast/play', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = (await res.json()) as { message?: string };
     if (!res.ok) throw new Error(data.message ?? 'The TV did not accept it.');
     wantPlay.current = false;
@@ -327,13 +349,19 @@ export default function VideoPlayer({
     return data.message ?? `Playing on ${device.name}.`;
   };
 
-  /** Stop the TV; `here` carries on watching on this screen. */
+  /** Stop the TV; `here` resumes watching on this screen from where the TV was. */
   const leaveTv = (here: boolean) => {
     const device = onTvRef.current;
     if (!device) return;
     setOnTv(null);
-    void fetch('/api/cast/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device: device.id }) }).catch(() => undefined);
-    if (here) { wantPlay.current = true; void videoRef.current?.play().catch(() => setPlaying(false)); }
+    void (async () => {
+      try {
+        const res = await fetch('/api/cast/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device: device.id }) });
+        const data = (await res.json()) as { position?: number };
+        if (res.ok && data.position !== undefined && data.position > 0) seekTo(data.position);
+      } catch { /* best effort */ }
+      if (here) { wantPlay.current = true; void videoRef.current?.play().catch(() => setPlaying(false)); }
+    })();
   };
 
   const skip = useCallback((delta: number) => seekTo(position + delta), [seekTo, position]);

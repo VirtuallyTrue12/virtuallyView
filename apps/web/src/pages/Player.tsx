@@ -115,6 +115,8 @@ export default function Player() {
             src={`/api/stream/${encodeURIComponent(movie.id)}`}
             transcodeSrc={needsTranscode ? `/api/stream/${encodeURIComponent(movie.id)}/transcode` : undefined}
             castTranscode={`/api/stream/${encodeURIComponent(movie.id)}/transcode`}
+            mediaType="movie"
+            mediaId={movie.id}
             durationSeconds={playback?.durationSeconds ?? null}
             audioTracks={audioLabels(playback)}
             imageSubtitles={imageSubtitleLabels(playback)}

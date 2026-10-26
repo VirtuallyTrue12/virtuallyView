@@ -2,7 +2,7 @@ import dgram from 'node:dgram';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { castPlay, castStop } from './chromecast.js';
+import { castPlay, castStop, castStatus, castControl, type CastPlayOptions, type CastStatus } from './chromecast.js';
 
 // DLNA / UPnP is an open standard that most smart TVs, game consoles and
 // media boxes speak. No account, no cloud: this server finds them on the local
@@ -75,7 +75,7 @@ export async function discoverDevices(force = false): Promise<CastDevice[]> {
   return devices;
 }
 
-async function soap(device: CastDevice & { controlUrl: string }, action: string, args: string): Promise<void> {
+async function soap(device: CastDevice & { controlUrl: string }, action: string, args: string): Promise<string> {
   const body = `<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:${action} xmlns:u="${SERVICE}"><InstanceID>0</InstanceID>${args}</u:${action}></s:Body></s:Envelope>`;
   const res = await fetch(device.controlUrl, {
     method: 'POST',
@@ -84,6 +84,24 @@ async function soap(device: CastDevice & { controlUrl: string }, action: string,
     signal: AbortSignal.timeout(6000)
   });
   if (!res.ok) throw new Error(`${device.name} refused ${action} (status ${res.status}).`);
+  return res.text();
+}
+
+/** Parse DLNA RelTime (H:MM:SS) to seconds. */
+function relTimeToSeconds(t: string): number {
+  const parts = t.split(':').map(Number);
+  if (parts.length === 3) return (parts[0]! * 3600) + (parts[1]! * 60) + (parts[2]! || 0);
+  if (parts.length === 2) return (parts[0]! * 60) + (parts[1]! || 0);
+  return Number(parts[0]) || 0;
+}
+
+/** Format seconds as DLNA RelTime (H:MM:SS). */
+function secondsToRelTime(s: number): string {
+  const sec = Math.floor(s);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const rest = sec % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
 }
 
 /** Only devices found by discovery can be controlled, so this cannot be pointed at other hosts. */
@@ -91,14 +109,51 @@ export function knownDevice(id: string): CastDevice | undefined {
   return cache?.devices.find(d => d.id === id);
 }
 
-export async function playOnDevice(device: CastDevice, url: string, title: string): Promise<void> {
-  if (device.host !== undefined) return castPlay(device.host, url, title);
+export async function playOnDevice(device: CastDevice, url: string, title: string, opts: CastPlayOptions = {}): Promise<void> {
+  if (device.host !== undefined) return castPlay(device.host, url, title, opts);
   const didl = `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="0" restricted="1"><dc:title>${xmlEscape(title)}</dc:title><upnp:class>object.item.videoItem</upnp:class><res protocolInfo="http-get:*:video/mp4:*">${xmlEscape(url)}</res></item></DIDL-Lite>`;
   await soap(device, 'SetAVTransportURI', `<CurrentURI>${xmlEscape(url)}</CurrentURI><CurrentURIMetaData>${xmlEscape(didl)}</CurrentURIMetaData>`);
   await soap(device, 'Play', '<Speed>1</Speed>');
 }
 
-export async function stopDevice(device: CastDevice): Promise<void> {
+/** Read the device's current playback state and position. */
+export async function deviceStatus(device: CastDevice): Promise<CastStatus | null> {
+  if (device.host !== undefined) return castStatus(device.host);
+  try {
+    const posXml = await soap(device, 'GetPositionInfo', '');
+    const currentTime = relTimeToSeconds(/<RelTime>([^<]+)<\/RelTime>/i.exec(posXml)?.[1] ?? '0:00:00');
+    const duration = relTimeToSeconds(/<TrackDuration>([^<]+)<\/TrackDuration>/i.exec(posXml)?.[1] ?? '0:00:00');
+    const stateXml = await soap(device, 'GetTransportInfo', '');
+    const transportState = /<CurrentTransportState>([^<]+)<\/CurrentTransportState>/i.exec(stateXml)?.[1] ?? 'STOPPED';
+    let state: CastStatus['state'] = 'IDLE';
+    if (transportState === 'PLAYING') state = 'PLAYING';
+    else if (transportState === 'PAUSED_PLAYBACK') state = 'PAUSED';
+    else if (transportState === 'TRANSITIONING') state = 'BUFFERING';
+    return { state, currentTime, duration: duration > 0 ? duration : undefined };
+  } catch {
+    return null;
+  }
+}
+
+/** Send play, pause or seek to the device. */
+export async function controlDevice(device: CastDevice, action: 'PLAY' | 'PAUSE' | 'SEEK', time?: number): Promise<void> {
+  if (device.host !== undefined) return castControl(device.host, action, time);
+  if (action === 'PLAY') { await soap(device, 'Play', '<Speed>1</Speed>'); return; }
+  if (action === 'PAUSE') { await soap(device, 'Pause', ''); return; }
+  if (action === 'SEEK' && time !== undefined) {
+    await soap(device, 'Seek', `<Unit>REL_TIME</Unit><Target>${xmlEscape(secondsToRelTime(time))}</Target>`);
+    return;
+  }
+}
+
+/** Stop the device; returns the position the device had reached (0 if it could not be read). */
+export async function stopDevice(device: CastDevice): Promise<number> {
   if (device.host !== undefined) return castStop(device.host);
-  await soap(device, 'Stop', '');
+  let position = 0;
+  try {
+    const xml = await soap(device, 'GetPositionInfo', '');
+    position = relTimeToSeconds(/<RelTime>([^<]+)<\/RelTime>/i.exec(xml)?.[1] ?? '0:00:00');
+  } catch { /* best effort */ }
+  await soap(device, 'Stop', '').catch(() => undefined);
+  return position;
 }

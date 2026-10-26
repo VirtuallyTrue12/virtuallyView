@@ -80,27 +80,129 @@ function session<T>(host: string, run: (send: (to: string, ns: string, payload: 
 interface App { appId?: string; sessionId?: string; transportId?: string }
 const appsOf = (r: Reply) => ((r.data.status as { applications?: App[] } | undefined)?.applications ?? []);
 
-export async function castPlay(host: string, url: string, title: string): Promise<void> {
+/** What the TV is currently doing with the media app. */
+export interface CastStatus {
+  state: 'PLAYING' | 'PAUSED' | 'BUFFERING' | 'IDLE';
+  currentTime: number;
+  duration?: number;
+  idleReason?: string;
+}
+
+/** Ask the TV what it is playing right now. Returns null if no media is loaded. */
+export async function castStatus(host: string): Promise<CastStatus | null> {
+  try {
+    return await session(host, async (send, wait) => {
+      send('receiver-0', NS.receiver, { type: 'GET_STATUS', requestId: 1 });
+      const recv = await wait(r => r.namespace === NS.receiver && r.data.type === 'RECEIVER_STATUS');
+      const app = appsOf(recv).find(a => a.appId === MEDIA_APP && a.transportId);
+      if (!app) return null;
+      send(app.transportId!, NS.connection, { type: 'CONNECT' });
+      send(app.transportId!, NS.media, { type: 'GET_STATUS', requestId: 2 });
+      const ms = await wait(r => r.namespace === NS.media && r.data.type === 'MEDIA_STATUS');
+      const statuses = (ms.data.status as Array<Record<string, unknown>> | undefined) ?? [];
+      const s = statuses[0];
+      if (!s) return null;
+      const state = String(s.playerState ?? 'IDLE') as CastStatus['state'];
+      const currentTime = Number(s.currentTime ?? 0);
+      const duration = typeof s.media === 'object' && s.media !== null ? Number((s.media as Record<string, unknown>).duration ?? 0) || undefined : undefined;
+      const idleReason = typeof s.idleReason === 'string' ? s.idleReason : undefined;
+      return { state, currentTime, duration, idleReason };
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Send a play, pause or seek command to the TV. */
+export async function castControl(host: string, action: 'PLAY' | 'PAUSE' | 'SEEK', time?: number): Promise<void> {
+  await session(host, async (send, wait) => {
+    send('receiver-0', NS.receiver, { type: 'GET_STATUS', requestId: 1 });
+    const recv = await wait(r => r.namespace === NS.receiver && r.data.type === 'RECEIVER_STATUS');
+    const app = appsOf(recv).find(a => a.appId === MEDIA_APP && a.transportId);
+    if (!app) throw new Error('The TV is not playing anything.');
+    send(app.transportId!, NS.connection, { type: 'CONNECT' });
+    send(app.transportId!, NS.media, { type: 'GET_STATUS', requestId: 2 });
+    const ms = await wait(r => r.namespace === NS.media && r.data.type === 'MEDIA_STATUS');
+    const statuses = (ms.data.status as Array<Record<string, unknown>> | undefined) ?? [];
+    const mediaSessionId = statuses[0]?.mediaSessionId as number | undefined;
+    if (!mediaSessionId) throw new Error('No active media session on the TV.');
+    const payload: Record<string, unknown> = { type: action, mediaSessionId, requestId: 3 };
+    if (action === 'SEEK' && time !== undefined) payload.currentTime = time;
+    send(app.transportId!, NS.media, payload);
+    await wait(r => r.namespace === NS.media && r.data.type === 'MEDIA_STATUS' && (r.data.requestId === 3 || r.data.type === 'MEDIA_STATUS'));
+  });
+}
+
+export interface CastPlayOptions {
+  /** Metadata for the TV's now-playing overlay. */
+  poster?: string;
+  metadataType?: 0 | 1 | 2; // 0=generic, 1=movie, 2=tv episode
+  seriesTitle?: string;
+  season?: number;
+  episode?: number;
+  /** Subtitle track (WebVTT URL). */
+  subtitleUrl?: string;
+  subtitleLabel?: string;
+  subtitleLang?: string;
+}
+
+export async function castPlay(host: string, url: string, title: string, opts: CastPlayOptions = {}): Promise<void> {
   const contentType = /\.m3u8(\?|$)/.test(url) ? 'application/x-mpegURL' : /\/music\//.test(url) ? 'audio/mpeg' : 'video/mp4';
   await session(host, async (send, wait) => {
     send('receiver-0', NS.receiver, { type: 'LAUNCH', appId: MEDIA_APP, requestId: 1 });
     const status = await wait(r => r.namespace === NS.receiver && appsOf(r).some(a => a.appId === MEDIA_APP && a.transportId));
     const app = appsOf(status).find(a => a.appId === MEDIA_APP)!;
     send(app.transportId!, NS.connection, { type: 'CONNECT' });
-    send(app.transportId!, NS.media, {
+
+    const metadata: Record<string, unknown> = { metadataType: opts.metadataType ?? 0, title };
+    if (opts.poster) metadata.images = [{ url: opts.poster }];
+    if (opts.metadataType === 2 && opts.seriesTitle) {
+      metadata.seriesTitle = opts.seriesTitle;
+      if (opts.season !== undefined) metadata.season = opts.season;
+      if (opts.episode !== undefined) metadata.episode = opts.episode;
+    }
+
+    const tracks: Array<Record<string, unknown>> = [];
+    const activeTrackIds: number[] = [];
+    if (opts.subtitleUrl && opts.subtitleUrl.includes('.vtt')) {
+      tracks.push({ trackId: 1, type: 'TEXT', trackContentId: opts.subtitleUrl, trackContentType: 'text/vtt', subtype: 'SUBTITLES', name: opts.subtitleLabel ?? 'Subtitles', language: opts.subtitleLang ?? 'en' });
+      activeTrackIds.push(1);
+    }
+
+    const mediaPayload: Record<string, unknown> = {
       type: 'LOAD', requestId: 2, autoplay: true,
-      media: { contentId: url, contentType, streamType: 'BUFFERED', metadata: { metadataType: 0, title } }
-    });
+      media: { contentId: url, contentType, streamType: 'BUFFERED', metadata, ...(tracks.length ? { tracks } : {}) },
+      ...(activeTrackIds.length ? { activeTrackIds } : {})
+    };
+
+    send(app.transportId!, NS.media, mediaPayload);
     const result = await wait(r => r.namespace === NS.media && ['MEDIA_STATUS', 'LOAD_FAILED', 'LOAD_CANCELLED', 'INVALID_REQUEST'].includes(String(r.data.type)) && (r.data.requestId === 2 || r.data.type !== 'MEDIA_STATUS'));
     if (result.data.type !== 'MEDIA_STATUS') throw new Error('The TV could not play this video.');
   });
 }
 
-export async function castStop(host: string): Promise<void> {
+/** Stop the TV; returns the position the TV had reached (0 if the state could not be read). */
+export async function castStop(host: string): Promise<number> {
+  let lastPosition = 0;
   await session(host, async (send, wait) => {
     send('receiver-0', NS.receiver, { type: 'GET_STATUS', requestId: 1 });
     const status = await wait(r => r.namespace === NS.receiver && r.data.type === 'RECEIVER_STATUS');
     const app = appsOf(status).find(a => a.appId === MEDIA_APP);
-    if (app?.sessionId) send('receiver-0', NS.receiver, { type: 'STOP', sessionId: app.sessionId, requestId: 2 });
+    if (!app) return;
+    // Read the media position before stopping.
+    if (app.transportId) {
+      send(app.transportId, NS.connection, { type: 'CONNECT' });
+      send(app.transportId, NS.media, { type: 'GET_STATUS', requestId: 2 });
+      try {
+        const ms = await Promise.race([
+          wait(r => r.namespace === NS.media && r.data.type === 'MEDIA_STATUS'),
+          new Promise<Reply>(resolve => setTimeout(() => resolve({ namespace: '', data: {} }), 3000))
+        ]);
+        const statuses = (ms.data.status as Array<Record<string, unknown>> | undefined) ?? [];
+        lastPosition = Number(statuses[0]?.currentTime ?? 0);
+      } catch { /* best effort */ }
+    }
+    if (app.sessionId) send('receiver-0', NS.receiver, { type: 'STOP', sessionId: app.sessionId, requestId: 3 });
   });
+  return lastPosition;
 }

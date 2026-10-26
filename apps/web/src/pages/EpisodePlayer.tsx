@@ -147,6 +147,9 @@ export default function EpisodePlayer() {
             src={`/api/stream/episode/${encodeURIComponent(episodeId)}`}
             transcodeSrc={needsTranscode ? `/api/stream/episode/${encodeURIComponent(episodeId)}/transcode` : undefined}
             castTranscode={`/api/stream/episode/${encodeURIComponent(episodeId)}/transcode`}
+            mediaType="episode"
+            mediaId={episodeId ?? ''}
+            seriesId={id}
             durationSeconds={playback?.durationSeconds ?? null}
             audioTracks={audioLabels(playback)}
             imageSubtitles={imageSubtitleLabels(playback)}
