@@ -45,7 +45,7 @@ export default function CastMenu({ browserCast, onBrowserCast, onDevice, onClose
         </button>
       ))}
       {devices?.length === 0 && (
-        <div className="vp-menu-empty">No TV found. The server must be on the same network as the TV (see the casting notes in the docs).</div>
+        <div className="vp-menu-empty">No TV found. Check that the TV is switched on and on the same Wi-Fi as this server. TVs with Chromecast built-in (Google TV, Android TV) show up by themselves; others need DLNA / Renderer switched on in the TV's network settings.</div>
       )}
       <button type="button" role="menuitem" className="vp-menu-item" onClick={() => load(true)}>Search again</button>
       {note && <div className="vp-menu-empty">{note}</div>}

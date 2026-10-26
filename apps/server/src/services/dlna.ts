@@ -2,12 +2,13 @@ import dgram from 'node:dgram';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { castPlay, castStop } from './chromecast.js';
 
 // DLNA / UPnP is an open standard that most smart TVs, game consoles and
 // media boxes speak. No account, no cloud: this server finds them on the local
 // network and tells them which URL to play.
 
-export interface CastDevice { id: string; name: string; controlUrl: string }
+export type CastDevice = { id: string; name: string } & ({ controlUrl: string; host?: undefined } | { host: string; controlUrl?: undefined });
 
 const SERVICE = 'urn:schemas-upnp-org:service:AVTransport:1';
 let cache: { at: number; devices: CastDevice[] } | null = null;
@@ -50,24 +51,31 @@ async function describe(location: string): Promise<CastDevice | null> {
   }
 }
 
-/** Renderers found by the host-network helper (the container cannot reach the home network's multicast). */
-function hostFound(): string[] {
+/** Renderers and Chromecasts found by the host-network helper (the container cannot reach the home network's multicast). */
+function hostFound(): { locations: string[]; cast: CastDevice[] } {
   try {
     const file = path.join(path.dirname(process.env.VV_HOST_NET_FILE ?? '/host-net/addresses.json'), 'renderers.json');
-    const data = JSON.parse(readFileSync(file, 'utf8')) as { locations?: unknown };
-    return Array.isArray(data.locations) ? data.locations.filter((l): l is string => typeof l === 'string' && /^http:\/\//i.test(l)) : [];
-  } catch { return []; }
+    const data = JSON.parse(readFileSync(file, 'utf8')) as { locations?: unknown; cast?: unknown };
+    const locations = Array.isArray(data.locations) ? data.locations.filter((l): l is string => typeof l === 'string' && /^http:\/\//i.test(l)) : [];
+    const cast = (Array.isArray(data.cast) ? data.cast : [])
+      .filter((c): c is { host: string; name: string } => typeof c?.host === 'string' && /^(10|172|192)\.[\d.]+$/.test(c.host) && typeof c.name === 'string')
+      .map(c => ({ id: idOf(`cast:${c.host}`), name: c.name.slice(0, 80), host: c.host }));
+    return { locations, cast };
+  } catch { return { locations: [], cast: [] }; }
 }
 
 export async function discoverDevices(force = false): Promise<CastDevice[]> {
   if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache.devices;
-  const locations = [...new Set([...hostFound(), ...(await search(2800))])];
-  const devices = (await Promise.all(locations.map(describe))).filter((d): d is CastDevice => d !== null);
+  const host = hostFound();
+  const locations = [...new Set([...host.locations, ...(await search(2800))])];
+  const dlna = (await Promise.all(locations.map(describe))).filter((d): d is CastDevice => d !== null);
+  // A TV that speaks both is listed once, through Google Cast (it plays more formats and needs no TV setting).
+  const devices = [...host.cast, ...dlna.filter(d => !host.cast.some(c => d.controlUrl?.includes(`//${c.host}:`)))];
   cache = { at: Date.now(), devices };
   return devices;
 }
 
-async function soap(device: CastDevice, action: string, args: string): Promise<void> {
+async function soap(device: CastDevice & { controlUrl: string }, action: string, args: string): Promise<void> {
   const body = `<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:${action} xmlns:u="${SERVICE}"><InstanceID>0</InstanceID>${args}</u:${action}></s:Body></s:Envelope>`;
   const res = await fetch(device.controlUrl, {
     method: 'POST',
@@ -84,11 +92,13 @@ export function knownDevice(id: string): CastDevice | undefined {
 }
 
 export async function playOnDevice(device: CastDevice, url: string, title: string): Promise<void> {
+  if (device.host !== undefined) return castPlay(device.host, url, title);
   const didl = `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item id="0" parentID="0" restricted="1"><dc:title>${xmlEscape(title)}</dc:title><upnp:class>object.item.videoItem</upnp:class><res protocolInfo="http-get:*:video/mp4:*">${xmlEscape(url)}</res></item></DIDL-Lite>`;
   await soap(device, 'SetAVTransportURI', `<CurrentURI>${xmlEscape(url)}</CurrentURI><CurrentURIMetaData>${xmlEscape(didl)}</CurrentURIMetaData>`);
   await soap(device, 'Play', '<Speed>1</Speed>');
 }
 
 export async function stopDevice(device: CastDevice): Promise<void> {
+  if (device.host !== undefined) return castStop(device.host);
   await soap(device, 'Stop', '');
 }

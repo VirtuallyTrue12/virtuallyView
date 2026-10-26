@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Added.** Cast to TVs with Chromecast built-in (Google TV, Android TV such as Sony Bravia, Chromecast sticks) straight from the player menu, in any browser: the server talks to the TV directly and it plays in the TV's own player. TVs are found by asking each address on the home network, because a firewall on the server usually drops the replies to the multicast search; nothing to switch on in the TV.
 - **Changed.** Casting to a TV: the search for TVs and boxes that can play a video sent to them (DLNA) now runs on the host's network (the netinfo service), because the dashboard's container never saw them; iPhone and iPad offer AirPlay from the player. A TV's own player decodes HEVC in hardware, so casting is the smooth way to watch on a TV whose browser has no acceleration.
 - **Changed.** Without graphics acceleration in the browser: video starts at 720p (converted on the server, much lighter to decode and draw; Auto is still one tap away), GPU-only visualizer scenes are hidden and fall back to Bars, and a one-time tip says where to switch acceleration on.
 - **Added.** Hardware video conversion on an Intel or AMD graphics chip (VA-API), with docker-compose.gpu.yml. The app checks at start-up that the GPU really encodes and otherwise uses the CPU.

@@ -12,6 +12,10 @@
  * It also looks for TVs and boxes that can play a video sent to them (DLNA / UPnP renderers) and writes their
  * description addresses next to it (renderers.json): that search needs the home network's multicast, which the
  * dashboard's container cannot reach. Nothing is listened on apart from the replies to that search.
+ *
+ * A firewall on this computer (ufw, firewalld) usually drops the replies to a multicast search, so it also asks
+ * every address on the home network directly, over plain HTTP, whether it is a Chromecast (Google TV, Android TV,
+ * Chromecast sticks): those answer on port 8008 with their name.
  */
 import dgram from 'node:dgram';
 import { networkInterfaces } from 'node:os';
@@ -69,13 +73,29 @@ export function findRenderers(timeoutMs = 3000) {
   });
 }
 
+/** Chromecasts on the home network, found by asking each address of each /24 the computer is on. */
+export async function findCastDevices(timeoutMs = 900) {
+  const prefixes = [...new Set(hostAddresses().filter(a => a.kind === 'lan').map(a => a.address.split('.').slice(0, 3).join('.')))];
+  const own = new Set(hostAddresses().map(a => a.address));
+  const hosts = prefixes.flatMap(p => Array.from({ length: 254 }, (_, i) => `${p}.${i + 1}`)).filter(h => !own.has(h));
+  const found = await Promise.all(hosts.map(async host => {
+    try {
+      const res = await fetch(`http://${host}:8008/ssdp/device-desc.xml`, { signal: AbortSignal.timeout(timeoutMs) });
+      const xml = res.ok ? await res.text() : '';
+      const name = /<friendlyName>([^<]+)<\/friendlyName>/i.exec(xml)?.[1];
+      return name ? { host, name, model: /<modelName>([^<]+)<\/modelName>/i.exec(xml)?.[1] ?? '' } : null;
+    } catch { return null; }
+  }));
+  return found.filter(Boolean);
+}
+
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const file = process.argv[2] ?? '/host-net/addresses.json';
   const renderers = path.join(dirname(file), 'renderers.json');
   const tick = async () => {
     try { write(file); } catch (err) { console.log(`host-addresses: ${err instanceof Error ? err.message : err}`); }
     try {
-      const body = JSON.stringify({ updatedAt: new Date().toISOString(), locations: await findRenderers() });
+      const body = JSON.stringify({ updatedAt: new Date().toISOString(), locations: await findRenderers(), cast: await findCastDevices() });
       writeFileSync(`${renderers}.tmp`, body); renameSync(`${renderers}.tmp`, renderers);
     } catch (err) { console.log(`renderers: ${err instanceof Error ? err.message : err}`); }
   };
