@@ -8,12 +8,15 @@ import { startSession, getSession, endSession, updateSessionOffset, activeSessio
  * The Cast content type when the TV's own player can play the original file (so it seeks with its remote and
  * starts at once), or null when it needs the server's conversion. Google Cast on Android TV plays these.
  */
-export function tvContentType(info: { container?: string; videoCodec?: string | null; audioCodec?: string | null }): string | null {
+export function tvContentType(info: { container?: string; videoCodec?: string | null; audioCodec?: string | null; audioTracks?: unknown[] }): string | null {
   const container = String(info.container ?? '').toLowerCase();
   const video = String(info.videoCodec ?? '').toLowerCase();
   const audio = String(info.audioCodec ?? '').toLowerCase();
   if (!['h264', 'hevc', 'h265', 'vp9'].includes(video)) return null;
-  if (audio && !['aac', 'mp3', 'opus', 'vorbis', 'flac', 'ac3', 'eac3'].includes(audio)) return null;
+  // Cast's player always plays the first audio track and cannot decode Dolby (AC3/E-AC3: silence, confirmed on a
+  // Bravia). Several tracks, or Dolby audio, go through the conversion, which plays the chosen track as AAC.
+  if ((info.audioTracks?.length ?? 0) > 1) return null;
+  if (audio && !['aac', 'mp3', 'opus', 'vorbis', 'flac'].includes(audio)) return null;
   if (['mp4', 'm4v', 'mov'].includes(container)) return 'video/mp4';
   if (container === 'mkv') return 'video/x-matroska';
   if (container === 'webm') return 'video/webm';
@@ -35,6 +38,8 @@ export default async function castRoutes(server: FastifyInstance) {
     mediaType?: string; mediaId?: string; seriesId?: string;
     start?: number; duration?: number; poster?: string;
     subtitle?: { path?: string; label?: string; lang?: string };
+    /** The audio track chosen in the player (index among the file's audio tracks). */
+    audio?: number;
   } }>('/api/cast/play', async (request, reply) => {
     const device = knownDevice(String(request.body?.device ?? ''));
     if (!device) return reply.code(404).send({ message: 'That device was not found. Refresh the list and try again.' });
@@ -51,6 +56,8 @@ export default async function castRoutes(server: FastifyInstance) {
     const mediaId = String(body.mediaId ?? '');
     const seriesId = body.seriesId ? String(body.seriesId) : undefined;
     const start = Math.max(0, Math.floor(Number(body.start ?? 0) || 0));
+    const audio = Math.max(0, Math.floor(Number(body.audio ?? 0) || 0));
+    const audioQuery = audio ? `&audio=${audio}` : '';
     let duration = Number(body.duration ?? 0) || 0;
     const sub = body.subtitle?.path && isStreamPath(String(body.subtitle.path).split('?')[0] ?? '') ? body.subtitle : undefined;
     const subPath = sub ? String(sub.path).split('?')[0]! : '';
@@ -79,14 +86,14 @@ export default async function castRoutes(server: FastifyInstance) {
     }
     try {
       if (!mode) {
-        await playOnDevice(device, signed(transcodePath, `start=${start}`), title, { ...common, subtitleUrl: sub ? signed(subPath, `offset=${start}`) : undefined });
+        await playOnDevice(device, signed(transcodePath, `start=${start}${audioQuery}`), title, { ...common, subtitleUrl: sub ? signed(subPath, `offset=${start}`) : undefined });
         mode = 'transcode';
       }
       // Track the session so progress is saved while the TV plays, and the remote can follow it.
       if (mediaType && mediaId) {
         startSession(device, {
           mediaType, mediaId, seriesId, offset: mode === 'direct' ? 0 : start, duration, title, actor, mode,
-          resend: { transcodePath, subtitlePath: subPath || undefined, subtitleLabel: common.subtitleLabel, subtitleLang: common.subtitleLang }
+          resend: { transcodePath, audioQuery, subtitlePath: subPath || undefined, subtitleLabel: common.subtitleLabel, subtitleLang: common.subtitleLang }
         });
       }
       return { ok: true, mode, message: `Playing on ${device.name}.` };
@@ -136,10 +143,10 @@ export default async function castRoutes(server: FastifyInstance) {
         if (session.mode === 'direct' || !session.resend) await controlDevice(device, 'SEEK', seekTo);
         else {
           // A conversion cannot seek in place: send it again, converted from the new position.
-          const { transcodePath, subtitlePath, subtitleLabel, subtitleLang } = session.resend;
+          const { transcodePath, audioQuery, subtitlePath, subtitleLabel, subtitleLang } = session.resend;
           const origin = shareOrigin(request.headers.host, request.protocol);
           const signed = (pathname: string, query: string) => `${origin}${pathname}?${query}&st=${signStreamPath(pathname, session.userId)}`;
-          await playOnDevice(device, signed(transcodePath, `start=${seekTo}`), session.title, {
+          await playOnDevice(device, signed(transcodePath, `start=${seekTo}${audioQuery ?? ''}`), session.title, {
             subtitleUrl: subtitlePath ? signed(subtitlePath, `offset=${seekTo}`) : undefined, subtitleLabel, subtitleLang
           });
           updateSessionOffset(deviceId, seekTo);

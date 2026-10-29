@@ -24,7 +24,7 @@ interface Session {
   /** How it was sent: the original file (the TV seeks by itself) or a conversion from `offset` (seeking reloads). */
   mode: 'direct' | 'transcode';
   /** What is needed to send it again from another position. */
-  resend?: { transcodePath: string; subtitlePath?: string; subtitleLabel?: string; subtitleLang?: string };
+  resend?: { transcodePath: string; audioQuery?: string; subtitlePath?: string; subtitleLabel?: string; subtitleLang?: string };
 }
 
 const sessions = new Map<string, Session>();

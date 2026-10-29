@@ -339,6 +339,7 @@ export default function VideoPlayer({
     const path = castTranscode ? `${castTranscode}?start=${start}` : src;
     const body: Record<string, unknown> = { device: device.id, path, title, start };
     if (castTranscode) body.direct = src.split('?')[0];
+    if (audioIndex) body.audio = audioIndex;
     const sub = subtitles[subIndex];
     if (sub) body.subtitle = { path: sub.src.split('?')[0], label: sub.label, lang: sub.srclang };
     if (mediaType) body.mediaType = mediaType;
