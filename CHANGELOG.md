@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Fixed.** Back buttons that name a place ("Movies", "TV Shows", "Music") now go there, instead of stepping back in history (which after watching led back into the player).
 - **Added.** TV remote on the laptop or phone while a video plays on the TV: it follows the TV's own time, with play/pause, 10 s skips and a seek bar; when it ends on the TV the page says so (and offers the next episode). Casting now sends the original file whenever the TV can play it, so the TV's own remote seeks properly (it used to restart from where casting began), and the subtitle you had on goes to the TV too.
 - **Fixed.** Cast sessions, hardened: the TV's own clock is added to where the conversion started, against the full length (it used to compare with the remaining length, which could mark half-watched items as watched); a TV stopped from its own remote keeps the last real position instead of the start point; casting reports success only once the TV actually plays (a failed load used to look fine); a TV busy loading no longer ends the session; only the person who cast can stop it; TV posters only from public image addresses.
 - **Added.** Cast sessions: while the TV plays the server polls its position every 10 s and saves watch progress; "Stop on TV" / "Watch here instead" now resume from the TV's actual position, not where the laptop was; reloading the player page reconnects to the running TV session automatically.
