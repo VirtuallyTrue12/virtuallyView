@@ -1392,6 +1392,21 @@ describe('e2e: request rules, notifications, backup, indexers, HTTPS cookie', ()
     expect((await req('DELETE', `/api/requests/${adminOwn.id}`, { cookieOverride: viewer })).status).toBe(403);
   });
 
+  it('the same notice twice is one line, back on top and unread; every notice links somewhere', async () => {
+    const { notify, listNotifications, markRead } = await import('../../apps/server/src/services/notifications.js');
+    notify({ type: 'ai.digest', role: 'admin', title: 'Since you were last here', body: 'one' });
+    markRead('all');
+    notify({ type: 'ai.digest', role: 'admin', title: 'Since you were last here', body: 'two' });
+    notify({ type: 'backup', role: 'admin', title: 'Backup created' });
+    notify({ type: 'backup', role: 'admin', title: 'Backup created' });
+    const list = listNotifications(50);
+    const digests = list.items.filter(n => n.type === 'ai.digest');
+    expect(digests).toHaveLength(1);
+    expect(digests[0]).toMatchObject({ body: 'two', read: false });
+    expect(list.items.filter(n => n.title === 'Backup created')).toHaveLength(1);
+    expect(list.items.every(n => n.link.startsWith('/'))).toBe(true);
+  });
+
   it('bad request settings and channels are rejected; channel secrets stay hidden from users', async () => {
     expect((await req('POST', '/api/server-settings', { body: { requests: { approval: 'sometimes' } }, cookieOverride: cookieAdmin })).status).toBe(400);
     expect((await req('POST', '/api/server-settings', { body: { notifications: { channels: [{ kind: 'carrier-pigeon' }] } }, cookieOverride: cookieAdmin })).status).toBe(400);

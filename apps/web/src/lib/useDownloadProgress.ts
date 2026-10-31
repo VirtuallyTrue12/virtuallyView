@@ -9,6 +9,8 @@ export interface TitleDownload {
   eta?: string;
   speed?: string;
   message?: string;
+  /** What is downloading (the release name), for lists that show several at once. */
+  title?: string;
 }
 
 const ACTIVE_MS = 4000;
@@ -42,7 +44,8 @@ export function summarise(rows: DownloadItem[]): Map<string, TitleDownload> {
     const progress = counted.length ? counted.reduce((sum, r) => sum + (r.progress || 0), 0) / counted.length : lead.progress || 0;
     out.set(id, {
       state, progress: Math.max(0, Math.min(100, progress)), count: list.length,
-      ...(lead.eta ? { eta: lead.eta } : {}), ...(lead.speed ? { speed: lead.speed } : {}), ...(lead.message ? { message: lead.message } : {})
+      ...(lead.eta ? { eta: lead.eta } : {}), ...(lead.speed ? { speed: lead.speed } : {}), ...(lead.message ? { message: lead.message } : {}),
+      ...(lead.title ? { title: lead.title } : {})
     });
   }
   return out;

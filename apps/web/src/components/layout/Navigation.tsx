@@ -4,7 +4,6 @@ import { SvgIcon } from '../ui/SvgIcon';
 import { VvLogo } from './VvLogo';
 import { UserMenu } from './UserMenu';
 import { NotificationBell } from './NotificationBell';
-import { SystemActivity } from './SystemActivity';
 import { RefreshButton } from './RefreshButton';
 import type { AuthUser } from '../../lib/api';
 
@@ -155,7 +154,6 @@ export function Navigation({ user, onSignOut, onRefresh }: { user?: AuthUser | n
       <div className="nav-tools" ref={tools}>
         {user && <NavLink to="/search" className="nav-search" aria-label="Search"><SvgIcon name="search" size={19} /></NavLink>}
         {user && onRefresh && <RefreshButton onRefresh={onRefresh} />}
-        {user && <SystemActivity />}
         {user && <NotificationBell />}
         {user && onSignOut && <UserMenu user={user} onSignOut={onSignOut} />}
       </div>

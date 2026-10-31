@@ -162,11 +162,15 @@ describe('notifications and backup', () => {
     expect(other.status).toBe(200);
     await ctx.request.post(`${base}/api/server-settings`, { data: { allowSignup: false } });
     await page.goto(base + '/');
-    await page.waitForSelector('.bell-count', { timeout: 30_000 });
-    await page.locator('.bell-button').click();
+    await page.waitForSelector('.nb-count', { timeout: 30_000 });
+    await page.locator('.nb-button').click();
     await page.getByText('guest1 created an account').waitFor();
+    // A notice is a link: it opens the page it is about.
+    expect(await page.locator('.nb-section-title', { hasText: 'New' }).count()).toBe(1);
     await page.getByRole('button', { name: 'Mark all read' }).click();
-    await page.waitForSelector('.bell-count', { state: 'detached' });
+    await page.waitForSelector('.nb-count', { state: 'detached' });
+    await page.getByText('guest1 created an account').click();
+    await page.waitForURL(/\/settings\?cat=users/);
   });
 
   it('starts a missing-content search for every service from Settings > Library', async () => {

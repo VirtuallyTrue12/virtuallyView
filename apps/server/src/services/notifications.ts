@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { all, run } from '../db/app-db.js';
+import { all, get, run } from '../db/app-db.js';
 import { getServerSettings, type NotificationChannel } from './server-settings.js';
 import { currentActor, type Actor } from './user-context.js';
 
@@ -31,9 +31,22 @@ interface Row { id: number; type: string; title: string; body: string; link: str
 /** Record a notification for the in-app bell and send it to every enabled channel that listens for it. */
 export function notify(input: NotifyInput): void {
   try {
+    const now = new Date().toISOString();
+    const audience = [input.userId ?? null, input.role ?? null] as const;
+    // The same news again is not new: the AI summary replaces the previous one, and a repeat of the same notice
+    // within a day moves the existing one back to the top (unread) instead of adding another line.
+    const same = input.type === 'ai.digest'
+      ? get<{ id: number }>('SELECT id FROM notifications WHERE type = ? AND audience_user IS ? AND audience_role IS ? ORDER BY id DESC LIMIT 1', input.type, ...audience)
+      : get<{ id: number }>('SELECT id FROM notifications WHERE type = ? AND title = ? AND audience_user IS ? AND audience_role IS ? AND created_at > ? ORDER BY id DESC LIMIT 1',
+        input.type, input.title, ...audience, new Date(Date.now() - 86_400_000).toISOString());
+    if (same) {
+      // A new id puts it back on top and makes it unread for everyone again.
+      run('DELETE FROM notification_reads WHERE notification_id = ?', same.id);
+      run('DELETE FROM notifications WHERE id = ?', same.id);
+    }
     run(
       'INSERT INTO notifications (audience_user, audience_role, type, title, body, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      input.userId ?? null, input.role ?? null, input.type, input.title, input.body ?? '', input.link ?? '', new Date().toISOString()
+      ...audience, input.type, input.title, input.body ?? '', input.link ?? '', now
     );
     // Keep the table small: the newest 500 are plenty.
     run('DELETE FROM notifications WHERE id NOT IN (SELECT id FROM notifications ORDER BY id DESC LIMIT 500)');
@@ -46,7 +59,32 @@ export function notify(input: NotifyInput): void {
 const visible = (a: Actor) =>
   `(audience_user = ? OR (audience_user IS NULL AND (audience_role IS NULL${a.role !== 'user' ? " OR audience_role = 'admin'" : ''})))`;
 
+/** Where a notice goes when tapped, for kinds that were recorded without a link. */
+export function linkFor(type: string, link: string): string {
+  if (link) return link;
+  if (type.startsWith('request.') || type === 'ai.digest') return '/requests';
+  if (type.startsWith('downloads.')) return '/downloads';
+  if (type === 'user.signup') return '/settings?cat=people';
+  if (type === 'backup') return '/settings?cat=backup';
+  if (type.startsWith('system.')) return '/settings?cat=server';
+  return '/activity';
+}
+
+let collapsed = false;
+/** Once per start: drop repeats stored before notify() merged them (only the newest of each stays). */
+function collapseOldRepeats(): void {
+  if (collapsed) return;
+  collapsed = true;
+  try {
+    const dupes = `SELECT id FROM notifications n WHERE EXISTS (SELECT 1 FROM notifications m WHERE m.id > n.id AND m.type = n.type
+      AND (m.title = n.title OR n.type = 'ai.digest') AND m.audience_user IS n.audience_user AND m.audience_role IS n.audience_role)`;
+    run(`DELETE FROM notification_reads WHERE notification_id IN (${dupes})`);
+    run(`DELETE FROM notifications WHERE id IN (${dupes})`);
+  } catch { /* tidying only */ }
+}
+
 export function listNotifications(limit = 30) {
+  collapseOldRepeats();
   const a = currentActor();
   const rows = all<Row & { read: number }>(
     `SELECT n.*, EXISTS(SELECT 1 FROM notification_reads r WHERE r.user_id = ? AND r.notification_id = n.id) AS read
@@ -55,7 +93,7 @@ export function listNotifications(limit = 30) {
   );
   return {
     unread: rows.filter(r => !r.read).length,
-    items: rows.map(r => ({ id: r.id, type: r.type, title: r.title, body: r.body, link: r.link, createdAt: r.created_at, read: !!r.read }))
+    items: rows.map(r => ({ id: r.id, type: r.type, title: r.title, body: r.body, link: linkFor(r.type, r.link), createdAt: r.created_at, read: !!r.read }))
   };
 }
 
