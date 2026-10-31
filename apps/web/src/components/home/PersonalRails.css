@@ -1,0 +1,144 @@
+/* Personal home page: the ranked "Top 10" rail, the rail editor and its switches. */
+
+/* ===== Top 10 ===== */
+
+.ranked-card {
+  position: relative;
+  flex: 0 0 auto;
+  /* Room on the left for the big number, which hangs over the poster's lower-left corner. */
+  padding-left: 2.6rem;
+  scroll-snap-align: start;
+}
+
+.ranked-number {
+  position: absolute;
+  left: 0;
+  bottom: 0.4rem;
+  z-index: 1;
+  font-size: 7.5rem;
+  font-weight: 800;
+  line-height: 0.8;
+  letter-spacing: -0.06em;
+  color: var(--color-background, #0a0a10);
+  -webkit-text-stroke: 2px var(--color-text-secondary, #a8adbf);
+  pointer-events: none;
+  user-select: none;
+}
+
+.ranked-card .media-card {
+  margin-left: 0;
+}
+
+@media (max-width: 480px) {
+  .ranked-card { padding-left: 1.8rem; }
+  .ranked-number { font-size: 5rem; }
+}
+
+/* ===== Edit home ===== */
+
+.home-edit-bar {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-xl) var(--spacing-md) var(--spacing-lg);
+}
+
+.home-editor {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.home-editor-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.home-editor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.07));
+  border-radius: var(--radius-small);
+  background: var(--color-surface, rgba(255, 255, 255, 0.04));
+  min-width: 0;
+}
+
+.home-editor-row.is-hidden .home-editor-title {
+  color: var(--color-text-muted, #6b7186);
+}
+
+.home-editor-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary, #f0f1f4);
+}
+
+.home-editor-note {
+  color: var(--color-text-muted, #6b7186);
+  font-size: 0.85rem;
+}
+
+.home-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex: none;
+}
+
+.home-editor-move {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+/* A switch: a pill with a knob. Lit (accent) means the rail shows on home. */
+.home-switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  background: var(--color-surface-elevated, rgba(255, 255, 255, 0.07));
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+  transition: background 0.15s ease;
+}
+
+.home-switch[aria-checked='true'] {
+  background: var(--color-accent, #d4a24e);
+  border-color: var(--color-accent, #d4a24e);
+}
+
+.home-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-text-primary, #f0f1f4);
+  transition: transform 0.15s ease;
+}
+
+.home-switch[aria-checked='true'] .home-switch-knob {
+  transform: translateX(20px);
+  background: #14110a;
+}
+
+.home-switch:focus-visible,
+.home-editor-move:focus-visible {
+  outline: 2px solid var(--color-border-focus, #d4a24e);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-switch,
+  .home-switch-knob { transition: none; }
+}

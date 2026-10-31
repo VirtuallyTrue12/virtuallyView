@@ -121,6 +121,22 @@ export function allWatchProgress(): WatchProgress[] {
     currentUserId()
   );
 }
+/**
+ * Watch events from every viewer in the household since `sinceIso`: resume points and finished marks
+ * on movies and shows. An episode is reported under its show.
+ */
+export function householdViewRows(sinceIso: string): Array<{ userId: string; mediaId: string; at: string }> {
+  return all<{ userId: string; mediaId: string; at: string }>(
+    `SELECT user_id AS userId, CASE WHEN media_type = 'episode' THEN context ELSE media_id END AS mediaId, updated_at AS at
+     FROM watch_progress
+     WHERE updated_at >= ? AND (media_type IN ('movie', 'series') OR (media_type = 'episode' AND context IS NOT NULL))
+     UNION ALL
+     SELECT user_id AS userId, media_id AS mediaId, updated_at AS at
+     FROM user_flags WHERE watched = 1 AND media_type IN ('movie', 'series') AND updated_at >= ?`,
+    sinceIso, sinceIso
+  );
+}
+
 /** Series this viewer has started, most recent first, with the last episode they touched. */
 export function lastWatchedSeries(limit = 8): Array<{ seriesId: string; episodeId: string }> {
   return all<{ seriesId: string; episodeId: string }>(

@@ -12,6 +12,8 @@ export interface Media {
   artwork?: ArtworkSet;
   genres?: string[];
   rating?: number;
+  /** Critic and audience scores from the media manager. A missing or zero score is left out. */
+  ratings?: MediaRatings;
   overview?: string;
   /** Age rating such as PG-13 or TV-MA, when the media manager knows it. */
   certification?: string;
@@ -21,7 +23,21 @@ export interface Media {
   updatedAt: Date;
 }
 
-export type MediaStatus = 'available' | 'missing' | 'requested' | 'downloading' | 'importing' | 'paused' | 'failed' | 'offline' | 'unknown';
+export interface RatingScore {
+  value: number;
+  votes?: number;
+}
+
+/** IMDb, TMDB, Rotten Tomatoes and Metacritic from Radarr; TheTVDB from Sonarr. */
+export interface MediaRatings {
+  imdb?: RatingScore;
+  tmdb?: RatingScore;
+  rottenTomatoes?: RatingScore;
+  metacritic?: RatingScore;
+  tvdb?: RatingScore;
+}
+
+export type MediaStatus ='available' | 'missing' | 'requested' | 'downloading' | 'importing' | 'paused' | 'failed' | 'offline' | 'unknown';
 
 export interface ProviderReference {
   name: string;

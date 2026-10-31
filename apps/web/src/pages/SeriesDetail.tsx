@@ -14,6 +14,7 @@ import { TitleQuality } from '../components/media/TitleQuality';
 import { FavoriteButton } from '../components/media/UserFlagButtons';
 import { api, type PersonInfo, type EpisodeItem, type MediaDescription, type SeriesItem } from '../lib/api';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import { ScoreChips, ThumbRating } from '../components/media/RatingControls';
 
 export default function SeriesDetail() {
   const { id } = useParams<{ id: string }>();
@@ -156,6 +157,7 @@ export default function SeriesDetail() {
                 {series.seasons?.length ? <span>{series.seasons.filter(s => s.number > 0).length} seasons</span> : null}
                 {totalEpisodes > 0 && <span>{availableEpisodes}/{totalEpisodes} episodes</span>}
                 {series.rating ? <span className="rating"><SvgIcon name="star" size={14} /> {series.rating.toFixed(1)}</span> : null}
+                <ScoreChips ratings={series.ratings} />
                 {series.quality && <span>{series.quality}</span>}
                 {series.certification && <span className="cert-badge">{series.certification}</span>}
                 {series.studio && <Link to={`/series?studio=${encodeURIComponent(series.studio)}`}>{series.studio}</Link>}
@@ -185,6 +187,7 @@ export default function SeriesDetail() {
                   </button>
                 )}
                 <FavoriteButton mediaType="series" mediaId={series.id} initial={series.favorite} />
+                <ThumbRating mediaType="series" mediaId={series.id} initial={series.myThumb} />
                 {isAdmin && (
                   <MoreMenu label="More for this show">
                     {/* `series.status` turns 'available' the moment a single episode has a file, so it can't be

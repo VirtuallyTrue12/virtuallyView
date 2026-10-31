@@ -3,11 +3,13 @@ import type { FastifyInstance } from 'fastify';
 import type { Media } from '@virtuallyview/types';
 import { getAdapter } from '../services/registry.js';
 import { getDownloads as getQueueDownloads } from '../services/real-downloads.js';
-import { allWatchProgress } from '../services/progress.js';
-import { listFlagged } from '../services/user-flags.js';
+import { allWatchProgress, householdViewRows } from '../services/progress.js';
+import { listFlagged, flagSignalRows } from '../services/user-flags.js';
 import { filterByRating } from '../services/parental.js';
 import { lastWatchedSeries } from '../services/progress.js';
 import { flagsForLibrary } from '../services/user-flags.js';
+import { savedHomeLayout } from '../services/home-layout.js';
+import { applyHomeLayout, pickAnchors, similarTitles, topHousehold } from '../services/home-rails.js';
 import type { SonarrAdapter } from '@virtuallyview/integrations';
 
 export default async function dashboardRoutes(server: FastifyInstance) {
@@ -131,19 +133,65 @@ export default async function dashboardRoutes(server: FastifyInstance) {
       .filter((i): i is Media => !!i && i.type === typeOf(i.type))
       .map(i => ({ ...i, favorite: true }));
 
+    // Personal rails. Taste comes from this viewer's flags; candidates are the movies and shows
+    // already in the library (the lists above are already filtered by the viewer's age limit).
+    const flagRows = flagSignalRows();
+    const signals = {
+      finished: new Set(flagRows.filter(r => r.watched).map(r => r.mediaId)),
+      thumbsUp: new Set(flagRows.filter(r => r.thumb === 1).map(r => r.mediaId)),
+      thumbsDown: new Set(flagRows.filter(r => r.thumb === -1).map(r => r.mediaId))
+    };
+    const libraryTitles = [...movies, ...series];
+    const libraryById = new Map(libraryTitles.map(i => [i.id, i]));
+    const availableTitles = libraryTitles.filter(i => i.status === 'available');
+    // Anchors: titles this viewer has got past half way, or finished (an episode counts for its show).
+    const anchorEvents = [
+      ...allWatchProgress()
+        .filter(r => r.percent > 50)
+        .flatMap(r => (r.mediaType === 'movie' || r.mediaType === 'series' ? [{ id: r.mediaId, at: r.updatedAt }]
+          : r.mediaType === 'episode' && r.context ? [{ id: r.context, at: r.updatedAt }] : [])),
+      ...flagRows.filter(r => r.watched && (r.mediaType === 'movie' || r.mediaType === 'series'))
+        .map(r => ({ id: r.mediaId, at: r.updatedAt }))
+    ];
+    const becauseRails = pickAnchors(anchorEvents, signals.thumbsDown, new Set(libraryById.keys()), 4)
+      .map(anchorId => {
+        const anchor = libraryById.get(anchorId)!;
+        const picks = similarTitles(anchor, availableTitles, signals, 12).map(s => s.item);
+        return picks.length
+          ? { id: `because-${anchor.id}`, title: `Because you watched ${anchor.title}`, items: withStream(picks) }
+          : null;
+      })
+      .filter((rail): rail is NonNullable<typeof rail> => rail !== null)
+      .slice(0, 2);
+
+    // Top 10: what the whole household watched most in the last 7 days. Needs at least 3 titles to show.
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const top10 = topHousehold(
+      householdViewRows(weekAgo).map(r => ({ userId: r.userId, id: r.mediaId, at: r.at })), now, 7, 50
+    )
+      .filter(t => libraryById.has(t.id))
+      .slice(0, 10)
+      .map((t, i) => ({ ...libraryById.get(t.id)!, rank: i + 1 }));
+
+    // Default order; the viewer's saved order and hidden flags are applied on top of it.
+    const railList = [
+      ...(continueItems.length ? [{ id: 'continue-watching', title: 'Continue Watching', items: continueItems.slice(0, 12) }] : []),
+      ...(nextUp.length ? [{ id: 'next-up', title: 'Next Up', items: nextUp }] : []),
+      ...(top10.length >= 3 ? [{ id: 'top-10', title: 'Top 10 in Your Home', items: withStream(top10), kind: 'ranked' }] : []),
+      ...becauseRails,
+      { id: 'trending-movies', title: 'Trending Movies', href: '/movies', items: withStream(byRating(movies, 10)) },
+      { id: 'trending-series', title: 'Trending TV Shows', href: '/series', items: withStream(byRating(series, 10)) },
+      { id: 'trending-music', title: 'Trending Music', href: '/music', items: byRating(artists, 10) },
+      { id: 'recent', title: 'Recently Added', href: '/movies', items: withStream(sortedByAdded.slice(0, 10)) },
+      ...(myList.length ? [{ id: 'my-list', title: 'My List', items: myList }] : []),
+      { id: 'downloads', title: 'Downloads', href: '/downloads', items: downloads, kind: 'download' }
+    ];
+
     return {
       hero: heroCandidates[0] ?? null,
       heroCandidates,
-      rails: [
-        ...(continueItems.length ? [{ id: 'continue-watching', title: 'Continue Watching', items: continueItems.slice(0, 12) }] : []),
-        ...(nextUp.length ? [{ id: 'next-up', title: 'Next Up', items: nextUp }] : []),
-        { id: 'trending-movies', title: 'Trending Movies', href: '/movies', items: withStream(byRating(movies, 10)) },
-        { id: 'trending-series', title: 'Trending TV Shows', href: '/series', items: withStream(byRating(series, 10)) },
-        { id: 'trending-music', title: 'Trending Music', href: '/music', items: byRating(artists, 10) },
-        { id: 'recent', title: 'Recently Added', href: '/movies', items: withStream(sortedByAdded.slice(0, 10)) },
-        ...(myList.length ? [{ id: 'my-list', title: 'My List', items: myList }] : []),
-        { id: 'downloads', title: 'Downloads', href: '/downloads', items: downloads, kind: 'download' }
-      ]
+      rails: applyHomeLayout(railList, savedHomeLayout())
     };
   });
 }

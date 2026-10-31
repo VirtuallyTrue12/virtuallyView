@@ -1,0 +1,86 @@
+/* Thumbs buttons and score chips on the movie and show pages. */
+
+.thumb-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.thumb-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  border: 1px solid var(--color-border-focus, #d4a24e);
+  background: var(--color-surface, rgba(255, 255, 255, 0.04));
+  color: var(--color-text-secondary, #a8adbf);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.thumb-btn:hover:not(:disabled) {
+  color: var(--color-text-primary, #f0f1f4);
+  background: var(--color-surface-elevated, rgba(255, 255, 255, 0.07));
+}
+
+.thumb-btn:focus-visible {
+  outline: 2px solid var(--color-border-focus, #d4a24e);
+  outline-offset: 3px;
+}
+
+.thumb-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.thumb-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* The lit state: a solid disc, so the chosen thumb is obvious at a glance. */
+.thumb-btn.is-on {
+  background: var(--color-accent, #d4a24e);
+  border-color: var(--color-accent, #d4a24e);
+  color: #14110a;
+}
+
+.thumb-btn.is-down.is-on {
+  background: var(--color-danger, #e06a6a);
+  border-color: var(--color-danger, #e06a6a);
+  color: #1a0d0d;
+}
+
+.thumb-btn svg {
+  transform: translateY(1px);
+}
+
+.thumb-btn.is-down svg {
+  transform: translateY(-1px);
+}
+
+.thumb-failed {
+  font-size: 0.85rem;
+  color: var(--color-danger, #e06a6a);
+}
+
+.score-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.15em 0.6em;
+  border-radius: 999px;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  background: var(--color-surface, rgba(255, 255, 255, 0.04));
+  color: var(--color-text-secondary, #a8adbf);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.score-chip strong {
+  color: var(--color-text-primary, #f0f1f4);
+  font-weight: 650;
+}

@@ -15,6 +15,7 @@ import { MenuDivider, MenuItem, MoreMenu } from '../components/ui/MoreMenu';
 import { CastRow } from '../components/media/CastRow';
 import { TitleQuality } from '../components/media/TitleQuality';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import { ScoreChips, ThumbRating } from '../components/media/RatingControls';
 
 export default function MovieDetails() {
   const { id } = useParams<{ id: string }>();
@@ -179,6 +180,7 @@ export default function MovieDetails() {
                 {movie.year && <span>{movie.year}</span>}
                 {movie.runtime && <span>{movie.runtime} min</span>}
                 {movie.rating ? <span className="rating"><SvgIcon name="star" size={14} /> {movie.rating.toFixed(1)}</span> : null}
+                <ScoreChips ratings={movie.ratings} />
                 {movie.quality && <span>{movie.quality}</span>}
                 {movie.language && <span>{movie.language}</span>}
                 {movie.certification && <span className="cert-badge">{movie.certification}</span>}
@@ -208,6 +210,7 @@ export default function MovieDetails() {
                   </button>
                 )}
                 <FavoriteButton mediaType="movie" mediaId={movie.id} initial={(movie as { favorite?: boolean }).favorite} />
+                <ThumbRating mediaType="movie" mediaId={movie.id} initial={movie.myThumb} />
                 {movie.status === 'available' && (
                   <WatchedButton mediaType="movie" mediaId={movie.id} initial={(movie as { watched?: boolean }).watched} onChange={w => { if (w) setWatchProgress(null); }} />
                 )}

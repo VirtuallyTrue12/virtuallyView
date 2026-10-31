@@ -40,3 +40,40 @@ export function listFlagged(kind: 'favorite' | 'watched'): Array<{ mediaType: st
     currentUserId()
   ).map(r => ({ mediaType: r.media_type, mediaId: r.media_id }));
 }
+
+/** A viewer's thumb on a title: 1 up, -1 down, 0 none. */
+export type Thumb = 1 | -1 | 0;
+
+const asThumb = (n: number | undefined): Thumb => (n === 1 ? 1 : n === -1 ? -1 : 0);
+
+export function getThumb(mediaType: string, mediaId: string): Thumb {
+  const row = get<{ thumb: number }>('SELECT thumb FROM user_flags WHERE user_id = ? AND media_type = ? AND media_id = ?', currentUserId(), mediaType, mediaId);
+  return asThumb(row?.thumb);
+}
+
+/**
+ * Set or clear the viewer's thumb. The row's updated_at is left alone when the row already exists,
+ * because that time also means "last watched" for the home page.
+ */
+export function setThumb(mediaType: string, mediaId: string, thumb: Thumb): Thumb {
+  run(
+    `INSERT INTO user_flags (user_id, media_type, media_id, favorite, watched, thumb, updated_at) VALUES (?, ?, ?, 0, 0, ?, ?)
+     ON CONFLICT(user_id, media_type, media_id) DO UPDATE SET thumb = excluded.thumb`,
+    currentUserId(), mediaType, mediaId, thumb, new Date().toISOString()
+  );
+  return thumb;
+}
+
+/** Every title this viewer has thumbed up or down, or marked watched, with when that last changed. */
+export function flagSignalRows(): Array<{ mediaType: string; mediaId: string; watched: boolean; thumb: Thumb; updatedAt: string }> {
+  return all<{ media_type: string; media_id: string; watched: number; thumb: number; updated_at: string }>(
+    'SELECT media_type, media_id, watched, thumb, updated_at FROM user_flags WHERE user_id = ? AND (watched = 1 OR thumb != 0)',
+    currentUserId()
+  ).map(r => ({
+    mediaType: r.media_type,
+    mediaId: r.media_id,
+    watched: r.watched === 1,
+    thumb: asThumb(r.thumb),
+    updatedAt: r.updated_at
+  }));
+}

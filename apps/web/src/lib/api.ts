@@ -26,6 +26,12 @@ export interface MediaItem {
   createdAt?: string;
   favorite?: boolean;
   watched?: boolean;
+  /** This viewer's thumb: 1 up, -1 down, 0 none. */
+  myThumb?: 1 | -1 | 0;
+  /** Critic and audience scores (movies from Radarr, shows from Sonarr). */
+  ratings?: Partial<Record<'imdb' | 'tmdb' | 'rottenTomatoes' | 'metacritic' | 'tvdb', { value: number; votes?: number }>>;
+  /** Position on the "Top 10 in Your Home" rail, 1 to 10. */
+  rank?: number;
   certification?: string;
   collection?: string;
   studio?: string;
@@ -219,10 +225,15 @@ export interface MediaPlaybackInfo {
 export type Rail = {
   id: string;
   title: string;
-  kind?: 'media' | 'download';
+  kind?: 'media' | 'download' | 'ranked';
   href?: string;
+  /** Set by the server when the viewer has hidden this rail (the home editor still lists it). */
+  hidden?: boolean;
   items: (MediaItem & Partial<DownloadItem>)[];
 };
+
+/** One rail's place in the viewer's saved home layout. */
+export interface HomeLayoutRail { id: string; hidden: boolean; position: number }
 
 export interface Dashboard {
   hero: HeroCandidate;
@@ -829,6 +840,12 @@ export const api = {
   setAiPermissions: (level: string) => postJSON<{ level: string }>('/api/ai/permissions', { level }),
   aiHistory: () => getJSON<{ history: AiActionRecord[] }>('/api/ai/history'),
   activity: () => getJSON<ActivityEvent[]>('/api/activity'),
+  /** Thumbs up (1), down (-1) or clear (0) for a movie or show. */
+  setThumb: (mediaType: 'movie' | 'series', mediaId: string, thumb: 1 | -1 | 0) =>
+    postJSON<{ mediaType: string; mediaId: string; thumb: 1 | -1 | 0 }>(`/api/ratings/${encodeURIComponent(mediaType)}/${encodeURIComponent(mediaId)}`, { thumb }),
+  homeLayout: () => getJSON<{ rails: HomeLayoutRail[] }>('/api/home-layout'),
+  /** Replace this viewer's home layout. An empty list resets it to the default. */
+  saveHomeLayout: (rails: HomeLayoutRail[]) => requestJSON<{ rails: HomeLayoutRail[] }>('PUT', '/api/home-layout', { rails }),
   progress: (mediaType: string, mediaId: string) => getJSON<WatchProgress>(`/api/progress/${encodeURIComponent(mediaType)}/${encodeURIComponent(mediaId)}`),
   saveProgress: (mediaType: string, mediaId: string, positionSeconds: number, durationSeconds: number, seriesId?: string) =>
     postJSON<WatchProgress>(`/api/progress/${encodeURIComponent(mediaType)}/${encodeURIComponent(mediaId)}`, { positionSeconds, durationSeconds, ...(seriesId ? { seriesId } : {}) }),
