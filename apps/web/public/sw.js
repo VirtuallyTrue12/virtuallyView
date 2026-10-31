@@ -54,7 +54,7 @@ self.addEventListener('fetch', (event) => {
         return fetch(request).then((response) => {
           if (response.ok && response.type === 'basic') {
             const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
+            caches.open(CACHE).then((cache) => cache.put(request, copy).then(() => trim(cache)));
           }
           return response;
         });
@@ -62,3 +62,12 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+// Every release brings new hashed files; keep only the newest ones so old releases do not pile up on the phone.
+const MAX_ASSETS = 120;
+function trim(cache) {
+  return cache.keys().then((keys) => {
+    const assets = keys.filter((k) => new URL(k.url).pathname.startsWith('/assets/'));
+    return Promise.all(assets.slice(0, Math.max(0, assets.length - MAX_ASSETS)).map((k) => cache.delete(k)));
+  });
+}
