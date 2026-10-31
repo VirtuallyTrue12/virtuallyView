@@ -9,6 +9,8 @@ export const EVENTS = [
   { key: 'request.declined', label: 'A request was declined' },
   { key: 'request.available', label: 'A request is ready to watch' },
   { key: 'request.failed', label: 'A request failed' },
+  { key: 'library.new-episode', label: 'A new episode of a show you watch' },
+  { key: 'library.new-release', label: 'A new album by an artist you follow' },
   { key: 'user.signup', label: 'Someone created an account' },
   { key: 'backup', label: 'A backup finished or failed' },
   { key: 'downloads.fixed', label: 'A dead or unmatched download was replaced' },

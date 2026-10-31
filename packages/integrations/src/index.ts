@@ -1,9 +1,9 @@
 export type { IntegrationAdapter } from './adapter-interface.js';
 export { pingService } from './adapter-interface.js';
 export { RadarrAdapter, type ReleaseInfo } from './adapters/RadarrAdapter.js';
-export { SonarrAdapter } from './adapters/SonarrAdapter.js';
+export { SonarrAdapter, type SonarrImport } from './adapters/SonarrAdapter.js';
 export { ProwlarrAdapter, type ProwlarrIndexer, type ProwlarrIndexerDefinition, type ProwlarrRelease } from './adapters/ProwlarrAdapter.js';
-export { LidarrAdapter } from './adapters/LidarrAdapter.js';
+export { LidarrAdapter, type LidarrImport } from './adapters/LidarrAdapter.js';
 export { BazarrAdapter, type SubtitleWantedItem } from './adapters/BazarrAdapter.js';
 export { QBittorrentAdapter, type TorrentInfo } from './adapters/QBittorrentAdapter.js';
 export { NZBGetAdapter } from './adapters/NZBGetAdapter.js';

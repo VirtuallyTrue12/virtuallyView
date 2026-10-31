@@ -17,6 +17,17 @@ export interface LidarrAlbum {
   artwork?: { cover?: string };
 }
 
+/** One track file imported into the library (from Lidarr's history). */
+export interface LidarrImport {
+  at: string;
+  artistId: string;
+  artistName: string;
+  albumId: number;
+  albumTitle: string;
+  /** A better copy replacing an older one, not something new. */
+  upgrade: boolean;
+}
+
 export interface LidarrTrack {
   id: number;
   title: string;
@@ -595,6 +606,46 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     });
     if (!res.ok) return { success: false, message: `Lidarr could not search for that artist (status ${res.status}).` };
     return { success: true, message: 'Lidarr search started.' };
+  }
+
+  /**
+   * Track files imported since a time, newest first, for the new-album check. Pages stop at the first
+   * record older than `since`.
+   */
+  async getRecentImports(since: Date): Promise<LidarrImport[]> {
+    const { url, apiKey } = this.requireConfig();
+    const out: LidarrImport[] = [];
+    for (let page = 1; page <= 5; page++) {
+      const res = await fetch(`${url}/api/v1/history?page=${page}&pageSize=250&sortKey=date&sortDirection=descending&includeArtist=true&includeAlbum=true`, {
+        headers: { 'X-Api-Key': apiKey },
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!res.ok) throw new Error(`Lidarr returned ${res.status} while listing history.`);
+      const records = ((await res.json()) as { records?: Array<Record<string, unknown>> }).records ?? [];
+      let reachedOld = false;
+      for (const r of records) {
+        const at = Date.parse(String(r.date ?? ''));
+        if (!Number.isFinite(at)) continue;
+        if (at <= since.getTime()) { reachedOld = true; break; }
+        if (r.eventType !== 'trackFileImported') continue;
+        const artist = (r.artist ?? {}) as { artistName?: string };
+        const album = (r.album ?? {}) as { title?: string };
+        const artistNumber = r.artistId;
+        const albumNumber = Number(r.albumId);
+        if (artistNumber === undefined || artistNumber === null || !Number.isInteger(albumNumber)) continue;
+        const data = (r.data ?? {}) as { isUpgrade?: unknown };
+        out.push({
+          at: new Date(at).toISOString(),
+          artistId: `lidarr-${artistNumber}`,
+          artistName: artist.artistName ?? 'Unknown artist',
+          albumId: albumNumber,
+          albumTitle: album.title ?? 'Unknown album',
+          upgrade: data.isUpgrade === true || String(data.isUpgrade).toLowerCase() === 'true'
+        });
+      }
+      if (reachedOld || records.length < 250) break;
+    }
+    return out;
   }
 
   async getHistory(): Promise<{ events: { timestamp: Date; service: string; message: string }[] }> {

@@ -17,6 +17,17 @@ export interface SonarrEpisode {
   monitored?: boolean;
 }
 
+/** One episode file that was imported into the library (from Sonarr's history). */
+export interface SonarrImport {
+  at: string;
+  seriesId: string;
+  seriesTitle: string;
+  season: number;
+  episode: number;
+  /** A better copy replacing an older one, not something new. */
+  upgrade: boolean;
+}
+
 export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: string }> {
   id = 'sonarr';
   name = 'Sonarr';
@@ -476,6 +487,45 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
     });
     if (!res.ok) return { success: false, message: `Sonarr could not search for that series (status ${res.status}).` };
     return { success: true, message: 'Sonarr search started.' };
+  }
+
+  /**
+   * Episodes imported since a time, newest first, for the new-episode check. Pages stop at the first
+   * record older than `since`, so a normal check reads one short page.
+   */
+  async getRecentImports(since: Date): Promise<SonarrImport[]> {
+    const { url, apiKey } = this.requireConfig();
+    const out: SonarrImport[] = [];
+    for (let page = 1; page <= 5; page++) {
+      const res = await fetch(`${url}/api/v3/history?page=${page}&pageSize=250&sortKey=date&sortDirection=descending&includeSeries=true&includeEpisode=true`, {
+        headers: { 'X-Api-Key': apiKey },
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!res.ok) throw new Error(`Sonarr returned ${res.status} while listing history.`);
+      const records = ((await res.json()) as { records?: Array<Record<string, unknown>> }).records ?? [];
+      let reachedOld = false;
+      for (const r of records) {
+        const at = Date.parse(String(r.date ?? ''));
+        if (!Number.isFinite(at)) continue;
+        if (at <= since.getTime()) { reachedOld = true; break; }
+        if (r.eventType !== 'downloadFolderImported') continue;
+        const episode = (r.episode ?? {}) as { seasonNumber?: number; episodeNumber?: number };
+        const series = (r.series ?? {}) as { id?: number; title?: string };
+        const seriesNumber = r.seriesId ?? series.id;
+        if (seriesNumber === undefined || seriesNumber === null) continue;
+        const data = (r.data ?? {}) as { isUpgrade?: unknown };
+        out.push({
+          at: new Date(at).toISOString(),
+          seriesId: `sonarr-${seriesNumber}`,
+          seriesTitle: series.title ?? String(r.sourceTitle ?? 'Unknown show'),
+          season: Number(episode.seasonNumber ?? 0),
+          episode: Number(episode.episodeNumber ?? 0),
+          upgrade: data.isUpgrade === true || String(data.isUpgrade).toLowerCase() === 'true'
+        });
+      }
+      if (reachedOld || records.length < 250) break;
+    }
+    return out;
   }
 
   async getHistory(): Promise<{ events: { timestamp: Date; service: string; message: string }[] }> {

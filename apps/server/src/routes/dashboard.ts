@@ -7,6 +7,7 @@ import { allWatchProgress } from '../services/progress.js';
 import { listFlagged } from '../services/user-flags.js';
 import { filterByRating } from '../services/parental.js';
 import { lastWatchedSeries } from '../services/progress.js';
+import { newForYouRails } from '../services/new-for-you.js';
 import { flagsForLibrary } from '../services/user-flags.js';
 import type { SonarrAdapter } from '@virtuallyview/integrations';
 
@@ -137,6 +138,7 @@ export default async function dashboardRoutes(server: FastifyInstance) {
       rails: [
         ...(continueItems.length ? [{ id: 'continue-watching', title: 'Continue Watching', items: continueItems.slice(0, 12) }] : []),
         ...(nextUp.length ? [{ id: 'next-up', title: 'Next Up', items: nextUp }] : []),
+        ...newForYouRails(byId, artists.map(a => a.id)),
         { id: 'trending-movies', title: 'Trending Movies', href: '/movies', items: withStream(byRating(movies, 10)) },
         { id: 'trending-series', title: 'Trending TV Shows', href: '/series', items: withStream(byRating(series, 10)) },
         { id: 'trending-music', title: 'Trending Music', href: '/music', items: byRating(artists, 10) },

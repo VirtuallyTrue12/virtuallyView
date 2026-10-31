@@ -1230,3 +1230,24 @@ describe('Videos (Invidious)', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('New for You home rail', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const show = { id: 'sonarr-901', title: 'Newly Aired Show', type: 'series', year: 2026, status: 'available', artwork: {}, href: '/series/sonarr-901' };
+  const dashboard = (rails: unknown[]) => ({ hero: null, heroCandidates: [], rails });
+
+  it('shows a New for You rail on home when a followed show got something new, and hides it when nothing did', async () => {
+    await page.route('**/api/dashboard', r => r.fulfill(json(dashboard([{ id: 'new-for-you', title: 'New for You', items: [show] }]))));
+    await page.goto(base + '/');
+    await page.locator('section.rail[aria-label="New for You"] .media-card[aria-label="Newly Aired Show"]').waitFor();
+    expect(await page.locator('a[href="/series/sonarr-901"]').count()).toBeGreaterThan(0);
+
+    await page.unroute('**/api/dashboard');
+    await page.route('**/api/dashboard', r => r.fulfill(json(dashboard([]))));
+    await page.goto(base + '/');
+    await page.locator('.home main.page').waitFor();
+    expect(await page.locator('section.rail[aria-label="New for You"]').count()).toBe(0);
+    await page.unroute('**/api/dashboard');
+    expect(errors).toEqual([]);
+  });
+});

@@ -207,6 +207,16 @@ function open(): DatabaseSync {
       updated_at TEXT NOT NULL,
       PRIMARY KEY (user_id, series_id)
     );
+
+    -- Shows and albums that arrived in the library ("New for You" reads this; kind is 'episode' or 'album').
+    CREATE TABLE IF NOT EXISTS new_arrivals (
+      arrival_key TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      media_id TEXT NOT NULL,
+      detail TEXT NOT NULL DEFAULT '',
+      arrived_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS new_arrivals_arrived ON new_arrivals (arrived_at);
   `);
   // Older databases kept one shared progress table; move it to per-user rows
   // (existing rows become 'shared' and stay visible until a user has their own).
