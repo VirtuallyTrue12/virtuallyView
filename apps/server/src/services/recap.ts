@@ -37,13 +37,33 @@ export function rememberRecap(key: string, bullets: string[]): void {
   cache.set(key, bullets);
 }
 
-/** Bullet lines from the assistant's reply. Falls back to any non-empty line when it used no bullets. */
+/** The request itself: the dialogue fenced off, then what to do with it. */
+export function recapRequest(transcript: string): string {
+  return [
+    'Here is the subtitle dialogue of a film or show, up to where the viewer stopped:',
+    '<<<DIALOGUE',
+    transcript,
+    'DIALOGUE>>>',
+    'Write a recap of what has happened so far in the story: 5 to 8 bullet points, one per line, each starting with "- ".',
+    'Describe events and characters in plain English. Do not talk to me, ask questions, or comment on the dialogue itself.'
+  ].join('\n');
+}
+
+/**
+ * Bullet lines from the assistant's reply. Only real bullets count: a reply without them is the model talking
+ * to the viewer ("Can you give more context?"), which is no recap at all.
+ */
 export function parseBullets(reply: string): string[] {
-  const lines = reply.split('\n').map(line => line.trim()).filter(Boolean);
-  const bulleted = lines.filter(line => /^([-*•]|\d+[.)])\s+/.test(line));
-  const source = bulleted.length ? bulleted : lines;
+  // Small models sometimes run every bullet into one line ("A. - B. - C."): split those apart first.
+  const source = reply.split('\n').map(line => line.trim())
+    // Chatter around the list ("Here is the recap:") is not part of it.
+    .filter(line => /^([-*•]|\d+[.)])\s+/.test(line))
+    .flatMap(line => line.split(/\s+-\s+(?=\S)/));
+  const seen = new Set<string>();
   return source
     .map(line => line.replace(/^([-*•]|\d+[.)])\s*/, '').trim())
     .filter(line => line.length > 2)
+    // A model stuck in a loop repeats the same line; each event once is enough.
+    .filter(line => { const key = line.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; })
     .slice(0, MAX_BULLETS);
 }

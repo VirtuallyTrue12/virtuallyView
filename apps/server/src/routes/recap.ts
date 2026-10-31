@@ -6,7 +6,7 @@ import { ratingAllowed } from '../services/parental.js';
 import { OllamaProvider } from '../services/ollama-provider.js';
 import { capText, englishSubtitleVtt, vttPlainText } from '../services/subtitle-text.js';
 import {
-  getCachedRecap, parseBullets, rememberRecap, recapCacheKey, recapCutoff, RECAP_SYSTEM_PROMPT, RECAP_TEXT_CAP
+  getCachedRecap, parseBullets, rememberRecap, recapCacheKey, recapCutoff, recapRequest, RECAP_SYSTEM_PROMPT, RECAP_TEXT_CAP
 } from '../services/recap.js';
 import { episodeAllowed } from './stream.js';
 
@@ -80,7 +80,9 @@ async function recapFor(kind: 'episode' | 'movie', id: string, at: number, gathe
   try {
     reply = await new OllamaProvider().sendPlain([
       { role: 'system', content: RECAP_SYSTEM_PROMPT },
-      { role: 'user', content: `Dialogue so far:\n${transcript}` }
+      // Small local models answer the last thing they read: the dialogue goes first, clearly fenced, and the
+      // instruction after it, or the model "replies" to the dialogue instead of summarising it.
+      { role: 'user', content: recapRequest(transcript) }
     ]);
   } catch {
     return { available: false, message: AI_OFF };

@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { capText, vttPlainText } from '../../apps/server/src/services/subtitle-text.js';
-import { parseBullets, recapCacheKey, recapCutoff, RECAP_TEXT_CAP } from '../../apps/server/src/services/recap.js';
+import { parseBullets, recapRequest, recapCacheKey, recapCutoff, RECAP_TEXT_CAP } from '../../apps/server/src/services/recap.js';
 
 const VTT = `WEBVTT
 
@@ -69,8 +69,21 @@ describe('recap bullets', () => {
     ]);
   });
 
-  test('falls back to plain lines when no bullets are used, and caps the count', () => {
-    const plain = Array.from({ length: 12 }, (_, i) => `Event number ${i}`).join('\n');
-    expect(parseBullets(plain)).toHaveLength(8);
+  test('caps the count, and a reply with no bullets is not a recap', () => {
+    const many = Array.from({ length: 12 }, (_, i) => `- Event number ${i}`).join('\n');
+    expect(parseBullets(many)).toHaveLength(8);
+    // What a small model says when it mistakes the dialogue for a chat.
+    expect(parseBullets("It seems like you're discussing a conversation. Can you provide more context?")).toEqual([]);
+  });
+
+  test('splits bullets run into one line, and drops lines a model repeats', () => {
+    const run = 'Anna and John arrive. - Anna invites Oleg. - They plan dinner. - They plan dinner. - They plan dinner.';
+    expect(parseBullets('- ' + run)).toEqual(['Anna and John arrive.', 'Anna invites Oleg.', 'They plan dinner.']);
+  });
+
+  test('puts the instruction after the dialogue, fenced off', () => {
+    const req = recapRequest('Hello there.');
+    expect(req.indexOf('Hello there.')).toBeLessThan(req.indexOf('Write a recap'));
+    expect(req).toContain('<<<DIALOGUE');
   });
 });
