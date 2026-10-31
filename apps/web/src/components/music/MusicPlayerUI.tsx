@@ -8,6 +8,10 @@ import { SvgIcon } from '../ui/SvgIcon';
 import LyricsPanel from '../media/LyricsPanel';
 import { SeekBar, formatClock } from './SeekBar';
 import { useArtworkTint } from '../../lib/artwork-tint';
+import { DEVICE_STALE_MS } from '../../lib/music-together';
+import ListenTogether from './ListenTogether';
+import DevicesMenu from './DevicesMenu';
+import './Together.css';
 
 function Cover({ src, label, className }: { src?: string; label: string; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -300,10 +304,36 @@ function VisualsPanel({ tint }: { tint: string }) {
   );
 }
 
+/** While playing on another device: which one, and what to do if it cannot start or has gone quiet. */
+function RemoteNote() {
+  const { remote, endRemote } = useMusicPlayer();
+  if (!remote) return null;
+  const quiet = Date.now() - remote.stateAt > DEVICE_STALE_MS;
+  return (
+    <div className="mp-remote" role="status">
+      <span>Playing on <strong>{remote.name}</strong></span>
+      {remote.state?.blocked && <span className="mp-remote-tap">Tap the screen on {remote.name} once to allow playback.</span>}
+      {quiet && <span className="mp-remote-tap">Lost contact with {remote.name}. Controls work again when it is back.</span>}
+      <button type="button" className="mp-link" onClick={() => void endRemote(true)}>Bring back here</button>
+    </div>
+  );
+}
+
+/** The browser would not start audio without a tap: one big button, and the music starts. */
+function TapToStart() {
+  const { blocked, remote, resumePlayback } = useMusicPlayer();
+  if (!blocked || remote) return null;
+  return (
+    <button type="button" className="mp-tap" onClick={resumePlayback}>
+      <SvgIcon name="play" size={28} /> Tap to start
+    </button>
+  );
+}
+
 const loadPref = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 const savePref = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 
-type Tab = 'queue' | 'lyrics' | 'visuals' | 'eq' | 'mix';
+type Tab = 'queue' | 'lyrics' | 'visuals' | 'eq' | 'mix' | 'together';
 
 function NowPlaying() {
   const { entry, expanded, setExpanded, currentTime, duration, error, stopPlayback, getTime, playing, djTalking } = useMusicPlayer();
@@ -379,7 +409,7 @@ function NowPlaying() {
 
           <div className="np-panel">
             <div className="np-tabs" role="tablist" aria-label="Now playing sections">
-              {([['queue', 'Up next'], ['lyrics', 'Lyrics'], ['visuals', 'Visuals'], ['eq', 'Equalizer'], ['mix', 'Mix & DJ']] as const).map(([key, label]) => (
+              {([['queue', 'Up next'], ['lyrics', 'Lyrics'], ['visuals', 'Visuals'], ['eq', 'Equalizer'], ['mix', 'Mix & DJ'], ['together', 'Together']] as const).map(([key, label]) => (
                 <button key={key} type="button" role="tab" aria-selected={tab === key} className={`np-tab${tab === key ? ' is-active' : ''}`} onClick={() => setTab(key)} tabIndex={expanded ? 0 : -1}>{label}</button>
               ))}
             </div>
@@ -391,6 +421,7 @@ function NowPlaying() {
               {expanded && tab === 'visuals' && <VisualsPanel tint={tint} />}
               {expanded && tab === 'eq' && <EqualizerPanel />}
               {expanded && tab === 'mix' && <MixPanel />}
+              {expanded && tab === 'together' && <ListenTogether />}
             </div>
           </div>
         </div>
@@ -435,6 +466,8 @@ export default function MusicPlayerUI() {
       <NowPlaying />
       <VizStage />
       <div ref={bar} className={`mp${expanded ? ' is-hidden' : ''}`} role="region" aria-label="Music player">
+        <RemoteNote />
+        <TapToStart />
         {playing && !expanded && <VizCanvas scene="bars" tint={tint} variant="strip" className="mp-strip" />}
         <div className="mp-edge"><Progress times="none" /></div>
         <div className="mp-row">
@@ -453,6 +486,7 @@ export default function MusicPlayerUI() {
 
           <div className="mp-side">
             <Volume />
+            <DevicesMenu />
             <button type="button" className="mp-icon" onClick={() => setViz({ stage: 'open' })} aria-label="Full-screen visualizer" title="Full-screen visualizer"><SvgIcon name="maximize" size={18} /></button>
             <button type="button" className="mp-icon" onClick={() => setExpanded(true)} aria-label="Open Now Playing" title="Open Now Playing"><SvgIcon name="chevron-up" size={20} /></button>
             <button type="button" className="mp-icon" onClick={stopPlayback} aria-label="Close player" title="Close player"><SvgIcon name="close" size={16} /></button>
