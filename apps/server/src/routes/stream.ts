@@ -170,7 +170,10 @@ async function transcodeOptionsFor(filePath: string, query: TranscodeQuery): Pro
   const options: TranscodeOptions = {
     audio: Math.max(0, Math.round(Number(query.audio) || 0)),
     ...(height >= 144 && height <= 4320 && (!probe.height || height < probe.height) ? { height } : {}),
-    copyVideo: probe.videoCopyOk === true,
+    // Copying the original video only works from the very start. Started part-way, a copy can only begin at the
+    // keyframe before that point while the sound begins exactly there, so the picture runs behind the sound by up
+    // to the keyframe gap (10 s in some Blu-ray files, confirmed by matching frames). Any other start converts.
+    copyVideo: probe.videoCopyOk === true && start === 0,
     ...(probe.height ? { sourceHeight: probe.height } : {}),
     ...(probe.bitrate ? { sourceBitrate: probe.bitrate } : {})
   };

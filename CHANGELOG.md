@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Fixed.** Picture running seconds behind the sound after jumping ahead in some films (Blu-ray MKVs such as Premature and The Hummingbird Project): the original video was copied from the keyframe before the jump while the sound started exactly at it, so the gap was the keyframe distance (up to 10 s). Jumps now convert the video; playing from the start still copies it.
 - **Fixed.** Casting a film with several audio tracks or Dolby (AC3/E-AC3) audio, such as a French film with an English dub: it used to play silently on the TV (Cast cannot decode Dolby, and always takes the first track). Those are now sent converted, with the audio track chosen in the player (English by default).
 - **Fixed.** Back buttons that name a place ("Movies", "TV Shows", "Music") now go there, instead of stepping back in history (which after watching led back into the player).
 - **Added.** TV remote on the laptop or phone while a video plays on the TV: it follows the TV's own time, with play/pause, 10 s skips and a seek bar; when it ends on the TV the page says so (and offers the next episode). Casting now sends the original file whenever the TV can play it, so the TV's own remote seeks properly (it used to restart from where casting began), and the subtitle you had on goes to the TV too.
