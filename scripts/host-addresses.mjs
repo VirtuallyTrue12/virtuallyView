@@ -83,7 +83,7 @@ export async function findCastDevices(timeoutMs = 900) {
       const res = await fetch(`http://${host}:8008/ssdp/device-desc.xml`, { signal: AbortSignal.timeout(timeoutMs) });
       const xml = res.ok ? await res.text() : '';
       const name = /<friendlyName>([^<]+)<\/friendlyName>/i.exec(xml)?.[1];
-      return name ? { host, name, model: /<modelName>([^<]+)<\/modelName>/i.exec(xml)?.[1] ?? '' } : null;
+      return name ? { host, name, model: /<modelName>([^<]+)<\/modelName>/i.exec(xml)?.[1] ?? '', udn: /<UDN>([^<]+)<\/UDN>/i.exec(xml)?.[1] ?? '' } : null;
     } catch { return null; }
   }));
   return found.filter(Boolean);
@@ -92,13 +92,19 @@ export async function findCastDevices(timeoutMs = 900) {
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const file = process.argv[2] ?? '/host-net/addresses.json';
   const renderers = path.join(dirname(file), 'renderers.json');
+  // After a power cut the network (and the TV) come up after this does: look again every 10 s until a TV
+  // answers, then once a minute.
   const tick = async () => {
+    let found = false;
     try { write(file); } catch (err) { console.log(`host-addresses: ${err instanceof Error ? err.message : err}`); }
     try {
-      const body = JSON.stringify({ updatedAt: new Date().toISOString(), locations: await findRenderers(), cast: await findCastDevices() });
+      const locations = await findRenderers();
+      const cast = await findCastDevices();
+      found = locations.length + cast.length > 0;
+      const body = JSON.stringify({ updatedAt: new Date().toISOString(), locations, cast });
       writeFileSync(`${renderers}.tmp`, body); renameSync(`${renderers}.tmp`, renderers);
     } catch (err) { console.log(`renderers: ${err instanceof Error ? err.message : err}`); }
+    setTimeout(() => void tick(), found ? 60_000 : 10_000);
   };
   void tick();
-  setInterval(() => void tick(), 60_000);
 }

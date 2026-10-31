@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { castPlay, castStop, castStatus, castControl, type CastPlayOptions, type CastStatus } from './chromecast.js';
+import { hostAddresses } from './stream-token.js';
 
 // DLNA / UPnP is an open standard that most smart TVs, game consoles and
 // media boxes speak. No account, no cloud: this server finds them on the local
@@ -58,15 +59,43 @@ function hostFound(): { locations: string[]; cast: CastDevice[] } {
     const data = JSON.parse(readFileSync(file, 'utf8')) as { locations?: unknown; cast?: unknown };
     const locations = Array.isArray(data.locations) ? data.locations.filter((l): l is string => typeof l === 'string' && /^http:\/\//i.test(l)) : [];
     const cast = (Array.isArray(data.cast) ? data.cast : [])
-      .filter((c): c is { host: string; name: string } => typeof c?.host === 'string' && /^(10|172|192)\.[\d.]+$/.test(c.host) && typeof c.name === 'string')
-      .map(c => ({ id: idOf(`cast:${c.host}`), name: c.name.slice(0, 80), host: c.host }));
+      .filter((c): c is { host: string; name: string; udn?: string } => typeof c?.host === 'string' && /^(10|172|192)\.[\d.]+$/.test(c.host) && typeof c.name === 'string')
+      .map(c => castDevice(c.host, c.name, c.udn));
     return { locations, cast };
   } catch { return { locations: [], cast: [] }; }
+}
+
+/**
+ * A TV keeps its id when the router hands it a new address (after a power cut): the id comes from the TV's own
+ * unique device name, falling back to its name and then its address.
+ */
+export function castDevice(host: string, name: string, udn?: string): CastDevice {
+  return { id: idOf(`cast:${udn || name || host}`), name: name.slice(0, 80), host };
+}
+
+/** Chromecasts on the home network, asked directly (the same sweep the netinfo helper does), for "Search again". */
+async function sweepCast(): Promise<CastDevice[]> {
+  const prefixes = [...new Set(hostAddresses().addresses.filter(a => a.kind === 'lan').map(a => a.address.split('.').slice(0, 3).join('.')))];
+  const own = new Set(hostAddresses().addresses.map(a => a.address));
+  const hosts = prefixes.flatMap(p => Array.from({ length: 254 }, (_, i) => `${p}.${i + 1}`)).filter(h => !own.has(h));
+  const found = await Promise.all(hosts.map(async host => {
+    try {
+      const res = await fetch(`http://${host}:8008/ssdp/device-desc.xml`, { signal: AbortSignal.timeout(900) });
+      const xml = res.ok ? await res.text() : '';
+      const name = /<friendlyName>([^<]+)<\/friendlyName>/i.exec(xml)?.[1];
+      return name ? castDevice(host, name, /<UDN>([^<]+)<\/UDN>/i.exec(xml)?.[1]) : null;
+    } catch { return null; }
+  }));
+  return found.filter((d): d is CastDevice => d !== null);
 }
 
 export async function discoverDevices(force = false): Promise<CastDevice[]> {
   if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache.devices;
   const host = hostFound();
+  // Asked to look again, or the helper has nothing yet (the network just came back): sweep from here as well.
+  if (force || host.cast.length === 0) {
+    for (const d of await sweepCast()) if (!host.cast.some(c => c.id === d.id)) host.cast.push(d);
+  }
   const locations = [...new Set([...host.locations, ...(await search(2800))])];
   const dlna = (await Promise.all(locations.map(describe))).filter((d): d is CastDevice => d !== null);
   // A TV that speaks both is listed once, through Google Cast (it plays more formats and needs no TV setting).

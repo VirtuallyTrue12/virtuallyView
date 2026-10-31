@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- **Fixed.** Finding the TV after a power cut: the search retries every 10 s until a TV answers (it used to wait a minute and often ran before the network was back), "Search again" now also sweeps the network straight away, and a TV keeps its identity when the router gives it a new address.
 - **Fixed.** Picture running seconds behind the sound after jumping ahead in some films (Blu-ray MKVs such as Premature and The Hummingbird Project): the original video was copied from the keyframe before the jump while the sound started exactly at it, so the gap was the keyframe distance (up to 10 s). Jumps now convert the video; playing from the start still copies it.
 - **Fixed.** Casting a film with several audio tracks or Dolby (AC3/E-AC3) audio, such as a French film with an English dub: it used to play silently on the TV (Cast cannot decode Dolby, and always takes the first track). Those are now sent converted, with the audio track chosen in the player (English by default).
 - **Fixed.** Back buttons that name a place ("Movies", "TV Shows", "Music") now go there, instead of stepping back in history (which after watching led back into the player).
