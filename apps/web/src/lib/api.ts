@@ -533,6 +533,9 @@ export interface YoutubeJob { id: string; videoId: string; title: string; dir: s
 
 export interface PersonInfo { edited?: boolean; name: string; role?: string; photo?: string; years?: string; current?: boolean; group?: 'main' | 'supporting'; episodes?: number }
 
+/** A spoiler-safe recap of what happened before the viewer's point, or why there is none. */
+export type RecapResult = { available: true; bullets: string[] } | { available: false; message: string };
+
 export interface PhotoEntry { path: string; name: string; size: number; modified: number }
 export interface PhotoAlbum { id: string; name: string; count: number; cover: string | null; updatedAt: string }
 export interface PhotoFolder { path: string; folders: string[]; files: Array<{ name: string; size: number; modified?: number }> }
@@ -820,6 +823,9 @@ export const api = {
   },
   verifyMedia: (id: string) => getJSON<VerifyResult>(`/api/media/${encodeURIComponent(id)}/verify`),
   mediaDescription: (id: string) => getJSON<MediaDescription>(`/api/media/${encodeURIComponent(id)}/description`),
+  /** "Previously on" (an episode, with its show id) or "Catch me up" (a film), up to `at` seconds. */
+  recap: (kind: 'episode' | 'movie', id: string, at: number, seriesId?: string) =>
+    getJSON<RecapResult>(`/api/recap/${kind}/${encodeURIComponent(id)}?at=${Math.max(0, Math.floor(at))}${seriesId ? `&series=${encodeURIComponent(seriesId)}` : ''}`),
   movieCast: (id: string) => getJSON<{ mediaId: string; title: string; cast: { name: string; role: string; photo?: string }[]; source: string }>(`/api/movies/${encodeURIComponent(id)}/cast`).then(r => r.cast),
   toggleIntegration: (adapter: string) =>
     postJSON<IntegrationStatus>(`/api/integrations/${encodeURIComponent(adapter)}/toggle`),

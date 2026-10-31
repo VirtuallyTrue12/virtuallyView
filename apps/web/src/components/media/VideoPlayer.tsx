@@ -1,5 +1,7 @@
 import CastMenu from './CastMenu';
 import CastRemote from './CastRemote';
+import PlayerInfoPanel, { type PlayerInfo } from './PlayerInfoPanel';
+import './subtitle-style.css';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { SubtitleTrack } from './PlyrPlayer';
 import { SvgIcon } from '../ui/SvgIcon';
@@ -54,11 +56,36 @@ interface VideoPlayerProps {
   mediaType?: string;
   mediaId?: string;
   seriesId?: string;
+  /** Who is on screen and the synopsis, shown in the Info panel. */
+  info?: PlayerInfo;
 }
 
 /** The person's last subtitle choice in the menu: turned off stays off for the next film. */
 const subsTurnedOff = () => { try { return localStorage.getItem('vv-subs') === 'off'; } catch { return false; } };
 const rememberSubs = (v: 'on' | 'off') => { try { localStorage.setItem('vv-subs', v); } catch { /* this visit only */ } };
+
+/** How captions look. Saved per browser in localStorage 'vv-sub-style'. */
+interface SubStyle { size: 'small' | 'medium' | 'large' | 'xlarge'; color: 'white' | 'yellow'; background: 'none' | 'shadow' | 'box'; position: 'bottom' | 'raised' }
+const SUB_STYLE_DEFAULT: SubStyle = { size: 'medium', color: 'white', background: 'shadow', position: 'bottom' };
+const SUB_CHOICES: Array<{ key: keyof SubStyle; label: string; options: Array<[string, string]> }> = [
+  { key: 'size', label: 'Size', options: [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large'], ['xlarge', 'Extra large']] },
+  { key: 'color', label: 'Text colour', options: [['white', 'White'], ['yellow', 'Yellow']] },
+  { key: 'background', label: 'Background', options: [['none', 'None'], ['shadow', 'Shadow'], ['box', 'Box']] },
+  { key: 'position', label: 'Position', options: [['bottom', 'Bottom'], ['raised', 'Raised']] }
+];
+const loadSubStyle = (): SubStyle => {
+  try {
+    const saved = JSON.parse(localStorage.getItem('vv-sub-style') ?? 'null') as Partial<SubStyle> | null;
+    // Only known values are kept, so an old or edited value can never break the menu.
+    const pick = <K extends keyof SubStyle>(key: K): SubStyle[K] => {
+      const options = SUB_CHOICES.find(c => c.key === key)?.options.map(([v]) => v) ?? [];
+      const value = saved?.[key];
+      return (typeof value === 'string' && options.includes(value) ? value : SUB_STYLE_DEFAULT[key]) as SubStyle[K];
+    };
+    return { size: pick('size'), color: pick('color'), background: pick('background'), position: pick('position') };
+  } catch { return SUB_STYLE_DEFAULT; }
+};
+const saveSubStyle = (style: SubStyle) => { try { localStorage.setItem('vv-sub-style', JSON.stringify(style)); } catch { /* this visit only */ } };
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const QUALITY_STEPS = [1080, 720, 480, 360];
@@ -95,7 +122,7 @@ const ICONS = {
 export default function VideoPlayer({
   src, transcodeSrc, durationSeconds, poster, title, heading, subheading, onBack, subtitles = [], startAt = 0, autoPlay = true,
   onProgress, onEnded, onError, next, previous, episodes, audioTracks = [], imageSubtitles = [], sourceHeight, chapters = [], isEpisode = false, party, castTranscode, onPullSubtitles,
-  mediaType, mediaId, seriesId
+  mediaType, mediaId, seriesId, info
 }: VideoPlayerProps) {
   const [pulling, setPulling] = useState(false);
   const [pullNote, setPullNote] = useState<string | null>(null);
@@ -132,6 +159,15 @@ export default function VideoPlayer({
   const [rate, setRate] = useState(1);
   const [subIndex, setSubIndex] = useState(-1);
   const [menu, setMenu] = useState<null | 'settings' | 'subs' | 'episodes' | 'cast'>(null);
+  const [subStyle, setSubStyle] = useState<SubStyle>(loadSubStyle);
+  useEffect(() => saveSubStyle(subStyle), [subStyle]);
+  // Values come from SUB_CHOICES, so each one is one of the SubStyle options.
+  const pickSubStyle = (key: keyof SubStyle, value: string) => setSubStyle(s => ({ ...s, [key]: value }) as SubStyle);
+  // The Info panel: opening it pauses the film, and closing it resumes only if it was playing.
+  const [infoOpen, setInfoOpen] = useState(false);
+  const infoOpenRef = useRef(false);
+  infoOpenRef.current = infoOpen;
+  const infoWasPlaying = useRef(false);
   const [audioIndex, setAudioIndex] = useState(0);
   const [quality, setQuality] = useState(0);
   // Stall watch: a few genuine buffering pauses in a minute (not the ones right after a start, seek or
@@ -243,6 +279,21 @@ export default function VideoPlayer({
     if (!v || onTvRef.current) return;
     if (v.paused || v.ended) { wantPlay.current = true; void v.play().catch(() => setPlaying(false)); }
     else { wantPlay.current = false; v.pause(); }
+  }, []);
+
+  const openInfo = useCallback(() => {
+    const v = videoRef.current;
+    infoWasPlaying.current = !!v && !v.paused && !onTvRef.current;
+    v?.pause();
+    setMenu(null);
+    setInfoOpen(true);
+  }, []);
+  const closeInfo = useCallback(() => {
+    setInfoOpen(false);
+    if (!infoWasPlaying.current) return;
+    infoWasPlaying.current = false;
+    wantPlay.current = true;
+    void videoRef.current?.play().catch(() => setPlaying(false));
   }, []);
 
   const seekTo = useCallback((target: number) => {
@@ -507,6 +558,8 @@ export default function VideoPlayer({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // While the Info panel is open the film stays paused; its own Escape handler closes it.
+      if (infoOpenRef.current) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       switch (e.key) {
@@ -568,7 +621,7 @@ export default function VideoPlayer({
     onError?.(message);
   };
 
-  const shown_ = visible || !playing || !!menu;
+  const shown_ = visible || !playing || !!menu || infoOpen;
   // The pointer hides only while a film plays untouched; any movement brings it back at once.
   const cls = `vp${shown_ ? ' vp--show' : ' vp--idle'}${fullscreen ? ' vp--fs' : ''}`;
 
@@ -576,6 +629,10 @@ export default function VideoPlayer({
     <div
       ref={wrapRef}
       className={cls}
+      data-sub-size={subStyle.size}
+      data-sub-color={subStyle.color}
+      data-sub-bg={subStyle.background}
+      data-sub-pos={subStyle.position}
       onPointerMove={wake}
       onPointerDown={wake}
       onMouseLeave={() => { if (playing && !fullscreen) setVisible(false); }}
@@ -682,8 +739,14 @@ export default function VideoPlayer({
             <div className="vp-heading-main">{heading ?? title}</div>
             {subheading && <div className="vp-heading-sub">{subheading}{currentChapter ? ` · ${currentChapter.title}` : ''}</div>}
           </div>
+          {info && (
+            <button type="button" className={`vp-info-btn${infoOpen ? ' is-on' : ''}`} aria-expanded={infoOpen} onClick={() => (infoOpen ? closeInfo() : openInfo())}>
+              Info
+            </button>
+          )}
         </div>
       )}
+      {infoOpen && info && <PlayerInfoPanel info={info} getPosition={() => positionRef.current} onClose={closeInfo} />}
 
       {failed && (
         <div className="vp-fail" role="alert">
@@ -859,6 +922,21 @@ export default function VideoPlayer({
                       {pullNote && <div className="vp-menu-empty">{pullNote}</div>}
                     </>
                   )}
+                  <div className="vp-menu-head">Subtitle style</div>
+                  {SUB_CHOICES.map(group => (
+                    <div key={group.key} className="vp-substyle">
+                      <span className="vp-substyle-label">{group.label}</span>
+                      <div className="vp-speeds">
+                        {group.options.map(([value, text]) => (
+                          <button
+                            key={value} type="button" role="menuitemradio" aria-checked={subStyle[group.key] === value}
+                            className={`vp-chip${subStyle[group.key] === value ? ' is-active' : ''}`}
+                            onClick={() => pickSubStyle(group.key, value)}
+                          >{text}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

@@ -125,6 +125,7 @@ export default function Player() {
             poster={movie.artwork?.backdrop}
             title={movie.title}
             subtitles={subtitles}
+            info={{ cast: { kind: 'movie', id: movie.id }, synopsis: movie.overview }}
             startAt={resumeStart}
             onProgress={onProgress}
             party={partyCode ? { remote: party.remote, onLocal: party.onLocal } : undefined}
