@@ -1,0 +1,61 @@
+/* Voice search: the mic button inside the search box, and the live "heard" line under it. */
+
+.search-box--voice .search-input { padding-right: 4rem; }
+/* The clear (x) button moves left so the mic has the right edge. */
+.search-box--voice .search-clear { right: 48px; }
+
+.voice-mic {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--easing-default), color var(--duration-fast) var(--easing-default);
+}
+
+.voice-mic:hover { background: var(--color-surface-overlay); color: var(--color-text-primary); }
+
+.voice-mic:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* Listening: a filled accent disc with a ring that pulses outward. */
+.voice-mic.is-listening { background: var(--color-accent); color: var(--color-background); }
+.voice-mic.is-listening::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+  opacity: 0.5;
+  animation: voice-pulse 1.4s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes voice-pulse {
+  from { transform: scale(1); opacity: 0.5; }
+  to { transform: scale(1.8); opacity: 0; }
+}
+
+.voice-live {
+  margin: 8px 4px 0;
+  font-size: 0.92rem;
+  color: var(--color-text-muted);
+}
+
+.voice-live-text { color: var(--color-text-primary); }
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-mic.is-listening::before { animation: none; opacity: 0.25; }
+}

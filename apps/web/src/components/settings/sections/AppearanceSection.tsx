@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type ThemeSummary } from '../../../lib/api';
 import { ModeSwitch } from '../ModeSwitch';
+import InstallApp from '../InstallApp';
 import { SvgIcon } from '../../ui/SvgIcon';
 
 export default function AppearanceSection() {
@@ -23,6 +24,7 @@ export default function AppearanceSection() {
           <Link className="btn btn-secondary btn-sm" to="/themes/create"><SvgIcon name="edit" size={15} /> Make your own</Link>
         </div>
       </div>
+      <InstallApp />
     </div>
   );
 }

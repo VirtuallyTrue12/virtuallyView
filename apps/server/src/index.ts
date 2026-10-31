@@ -126,10 +126,12 @@ const server = Fastify({
 // configuration error" over the trailer means. The other two close the concrete gap that matters most for
 // a browser dashboard with no login-attempt lockout beyond rate limiting: a hostile page framing this one
 // to trick an administrator into clicking something ("clickjacking").
-server.addHook('onSend', (_request, reply, payload, done) => {
+server.addHook('onSend', (request, reply, payload, done) => {
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('X-Frame-Options', 'SAMEORIGIN');
   reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // The static file server resets the type for pre-compressed copies, so the service worker type is set here, last.
+  if (request.raw.url?.split('?')[0] === '/sw.js') reply.header('Content-Type', 'text/javascript; charset=utf-8');
   done(null, payload);
 });
 
@@ -516,6 +518,17 @@ const start = async () => {
       preCompressed: true,
       cacheControl: false,
       setHeaders: (res, filePath) => {
+        // Install-as-app files. The browser must see a new service worker the moment it ships, so sw.js is never cached.
+        if (filePath.endsWith('.webmanifest')) {
+          res.type('application/manifest+json');
+          res.header('Cache-Control', 'no-cache');
+          return;
+        }
+        // The pre-compressed copies (sw.js.br, sw.js.gz) count too.
+        if (/[\\/]sw\.js(\.br|\.gz)?$/.test(filePath)) {
+          res.header('Cache-Control', 'no-cache');
+          return;
+        }
         // Files under /assets carry a content hash in their name, so they never
         // change: cache them for a year. The page itself is always re-checked so
         // a new release shows up on the next load.

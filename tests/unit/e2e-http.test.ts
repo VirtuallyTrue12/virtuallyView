@@ -1359,6 +1359,21 @@ describe('e2e: static SPA + route fallback', () => {
     expect(api404.status).toBe(404);
     expect(api404.json.error).toBe('not_found');
   }, 30_000);
+
+  it('serves the install-as-app files with the right types and cache rules', async () => {
+    const manifest = await fetch(`${base}/manifest.webmanifest`);
+    expect(manifest.status).toBe(200);
+    expect(manifest.headers.get('content-type')).toContain('application/manifest+json');
+    const json = await manifest.json() as { name: string; display: string; icons: unknown[] };
+    expect(json.name).toBe('virtuallyView');
+    expect(json.display).toBe('standalone');
+    expect(json.icons.length).toBeGreaterThan(0);
+
+    const sw = await fetch(`${base}/sw.js`);
+    expect(sw.status).toBe(200);
+    expect(sw.headers.get('content-type')).toContain('text/javascript');
+    expect(sw.headers.get('cache-control')).toBe('no-cache');
+  }, 30_000);
 });
 
 describe('e2e: request rules, notifications, backup, indexers, HTTPS cookie', () => {
