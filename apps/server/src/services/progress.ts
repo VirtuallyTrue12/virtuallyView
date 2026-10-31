@@ -56,7 +56,12 @@ export function saveWatchProgress(
   }
   if (percent >= COMPLETE_PERCENT) {
     clearWatchProgress(type, id);
-    // Finishing something marks it watched, as viewers expect.
+    // Finishing something marks it watched, as viewers expect. The finish is also kept for Year in Review.
+    run(
+      `INSERT INTO watch_finished (user_id, media_type, media_id, series_id, finished_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, media_type, media_id) DO UPDATE SET finished_at = excluded.finished_at, series_id = COALESCE(excluded.series_id, watch_finished.series_id)`,
+      currentUserId(), type, id, type === 'episode' ? (context ?? null) : null, now
+    );
     run(
       `INSERT INTO user_flags (user_id, media_type, media_id, favorite, watched, updated_at) VALUES (?, ?, ?, 0, 1, ?)
        ON CONFLICT(user_id, media_type, media_id) DO UPDATE SET watched = 1, updated_at = excluded.updated_at`,

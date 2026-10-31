@@ -15,6 +15,16 @@ export interface LidarrAlbum {
   mediumCount?: number;
   ratings?: { votes: number; value: number };
   artwork?: { cover?: string };
+  /** MusicBrainz release-group id of the album, and the id of its monitored release. */
+  foreignAlbumId?: string;
+  foreignReleaseId?: string;
+}
+
+/** The MusicBrainz id of the release Lidarr is following (the one whose tracks it uses). */
+function monitoredReleaseId(album: Record<string, unknown>): string | undefined {
+  const releases = Array.isArray(album.releases) ? (album.releases as Array<{ foreignReleaseId?: string; monitored?: boolean }>) : [];
+  const picked = releases.find(r => r.monitored && r.foreignReleaseId) ?? releases.find(r => r.foreignReleaseId);
+  return picked?.foreignReleaseId ? String(picked.foreignReleaseId) : undefined;
 }
 
 /** One track file imported into the library (from Lidarr's history). */
@@ -496,7 +506,9 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       duration: Number(album.duration) || 0,
       mediumCount: Number(album.mediumCount) || 0,
       ...(raw ? { artwork: { cover: artProxyUrl(raw) } } : {}),
-      ...(artistTitle ? { artistTitle } : {})
+      ...(artistTitle ? { artistTitle } : {}),
+      ...(album.foreignAlbumId ? { foreignAlbumId: String(album.foreignAlbumId) } : {}),
+      ...(monitoredReleaseId(album) ? { foreignReleaseId: monitoredReleaseId(album) } : {})
     };
   }
 

@@ -6,6 +6,7 @@ import { api, type AlbumItem, type PlaylistTrack, type TrackItem } from '../lib/
 import { useMusicPlayer } from '../components/media/MusicProvider';
 import PlaylistPicker from '../components/media/PlaylistPicker';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import AlbumCredits from '../components/music/AlbumCredits';
 
 type PickerState = null | { kind: 'album' } | { kind: 'track'; track: TrackItem };
 
@@ -47,6 +48,7 @@ export default function AlbumDetails() {
     albumTitle: album?.title,
     artistTitle: album?.artistTitle,
     albumId: album ? `album-${album.id}` : undefined,
+    artistId: album?.artistId ? `lidarr-${album.artistId}` : undefined,
     cover: album?.artwork?.cover
   }));
 
@@ -196,6 +198,8 @@ export default function AlbumDetails() {
           </div>
         </div>
       )}
+
+      {tracks.length > 0 && <AlbumCredits albumId={String(album.id)} />}
     </main>
   );
 }

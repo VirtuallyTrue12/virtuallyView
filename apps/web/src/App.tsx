@@ -39,6 +39,7 @@ const Account = lazy(() => import('./pages/Account'));
 const Themes = lazy(() => import('./pages/Themes'));
 const ThemeCreator = lazy(() => import('./pages/ThemeCreator'));
 const Statistics = lazy(() => import('./pages/Statistics'));
+const YearInReview = lazy(() => import('./pages/YearInReview'));
 const Diagnostics = lazy(() => import('./pages/Diagnostics'));
 const Activity = lazy(() => import('./pages/Activity'));
 import NotFound from './pages/NotFound';
@@ -182,6 +183,7 @@ export default function App() {
         <Route path="/wiki" element={<Wiki />} />
         <Route path="/apps" element={<HomeLabApps />} />
         <Route path="/party/:code" element={<PartyJoin />} />
+        <Route path="/music/year/:year" element={<YearInReview />} />
         <Route path="/music/:id" element={<ArtistDetails />} />
         <Route path="/music/:id/watch/:videoId" element={<ConcertPlayer />} />
         <Route path="/albums/:id" element={<AlbumDetails />} />

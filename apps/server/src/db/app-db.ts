@@ -224,6 +224,43 @@ function open(): DatabaseSync {
       hidden INTEGER NOT NULL DEFAULT 0,
       position INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (user_id, rail_id)
+    -- One row per song that counted as played (30 seconds in, or to the end). Feeds mixes and Year in Review.
+    CREATE TABLE IF NOT EXISTS music_plays (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      track_id TEXT NOT NULL,
+      artist_id TEXT,
+      album_id TEXT,
+      title TEXT NOT NULL,
+      artist TEXT NOT NULL DEFAULT '',
+      genre TEXT,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      played_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS music_plays_user_time ON music_plays (user_id, played_at);
+
+    -- Films and episodes this viewer finished. Feeds Year in Review (series_id is set for episodes).
+    CREATE TABLE IF NOT EXISTS watch_finished (
+      user_id TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      media_id TEXT NOT NULL,
+      series_id TEXT,
+      finished_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, media_type, media_id)
+    );
+
+    -- MusicBrainz credits per release, so each album is asked for once.
+    CREATE TABLE IF NOT EXISTS musicbrainz_credits (
+      release_id TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      fetched_at TEXT NOT NULL
+    );
+
+    -- Lyrics translations per track and language.
+    CREATE TABLE IF NOT EXISTS lyrics_translations (
+      cache_key TEXT PRIMARY KEY,
+      lines TEXT NOT NULL,
+      created_at TEXT NOT NULL
     );
   `);
   // Older databases kept one shared progress table; move it to per-user rows

@@ -403,6 +403,59 @@ export interface PlaylistItem {
   updatedAt: string;
 }
 
+/** A playable library track as the music discovery routes describe it. */
+export interface LibraryTrack {
+  trackId: string;
+  title: string;
+  artistId: string;
+  artistTitle: string;
+  albumId?: string;
+  albumTitle?: string;
+  genre?: string;
+  year?: number;
+  cover?: string;
+  durationMs?: number;
+  quality?: string;
+}
+
+export interface MusicMix {
+  id: 'favourites' | 'rediscover' | 'deep-cuts';
+  name: string;
+  blurb: string;
+  week: string;
+  tracks: LibraryTrack[];
+  covers: string[];
+}
+
+export interface PromptedPlaylist {
+  source: 'assistant' | 'keywords' | 'none';
+  assistant: 'on' | 'off';
+  name: string;
+  message?: string;
+  tracks: LibraryTrack[];
+}
+
+export interface YearReview {
+  year: number;
+  totals: { plays: number; films: number; episodes: number };
+  minutesListened: number;
+  topArtists: Array<{ name: string; plays: number }>;
+  topSongs: Array<{ title: string; artist: string; plays: number }>;
+  topGenre: { name: string; plays: number } | null;
+  topFilms: Array<{ title: string; finishedAt: string }>;
+  topShows: Array<{ title: string; episodes: number }>;
+  firstPlay: { title: string; artist: string; playedAt: string } | null;
+}
+
+export interface CreditList { writers: string[]; producers: string[]; performers: string[] }
+
+export interface AlbumCredits {
+  status: 'found' | 'none' | 'unavailable';
+  message?: string;
+  album?: CreditList;
+  tracks?: Array<CreditList & { position: number; title: string }>;
+}
+
 export interface ServerSettings {
   serverName: string;
   mediaRoots: { movies: string; tv: string; music: string; staging: string };
@@ -728,6 +781,15 @@ export const api = {
     postJSON<PlaylistItem>(`/api/playlists/${encodeURIComponent(id)}/tracks`, { track }),
   removePlaylistTrack: (id: string, trackId: string) =>
     deleteJSON<PlaylistItem>(`/api/playlists/${encodeURIComponent(id)}/tracks/${encodeURIComponent(trackId)}`),
+  // Music discovery: plays, weekly mixes, prompted playlists, credits, lyrics translation and the year in review.
+  recordMusicPlay: (play: { trackId: string; title: string; artistId?: string; artist?: string; albumId?: string; genre?: string; durationMs?: number }) =>
+    postJSON<{ ok: boolean }>('/api/music/plays', play),
+  musicMixes: () => getJSON<{ week: string; mixes: MusicMix[]; message?: string }>('/api/music/mixes'),
+  promptPlaylist: (prompt: string) => postJSON<PromptedPlaylist>('/api/music/playlist-prompt', { prompt }),
+  yearReview: (year: number) => getJSON<{ review: YearReview }>(`/api/review/${year}`),
+  albumCredits: (id: string) => getJSON<AlbumCredits>(`/api/albums/${encodeURIComponent(id)}/credits`),
+  translateLyrics: (body: { artist: string; title: string; album?: string; language: string; lines: string[] }) =>
+    postJSON<{ language: string; lines: string[]; cached: boolean }>('/api/lyrics/translate', body),
   search: (q: string) => getJSON<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`),
   searchDetect: (q: string) => getJSON<SearchDetection>(`/api/search/detect?q=${encodeURIComponent(q)}`),
   searchAll: (q: string) => getJSON<SearchAll>(`/api/search/all?q=${encodeURIComponent(q)}`),
