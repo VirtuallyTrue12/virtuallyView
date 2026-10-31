@@ -8,6 +8,7 @@ import { api, type Dashboard, type MediaItem, type SearchAll, type SearchCandida
 import { addRecentSearch, clearRecentSearches, getRecentSearches, removeRecentSearch } from '../lib/recent-searches';
 import { useRequester } from '../lib/useRequester';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import { VoiceSearchButton, getSpeechRecognition } from '../components/search/VoiceSearchButton';
 
 type Filter = 'all' | 'library' | 'movie' | 'series' | 'artist' | 'track';
 const FILTERS: Array<{ key: Filter; label: string }> = [
@@ -75,6 +76,8 @@ export default function Search() {
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const version = useRef(0);
+  // Only browsers with speech recognition get the mic, and their search box leaves room for it.
+  const [voiceOn] = useState(() => getSpeechRecognition() !== null);
 
   const requester = useRequester((outcome, base) => {
     setNotice({ tone: outcome.kind === 'ok' ? 'ok' : 'err', text: outcome.message });
@@ -185,7 +188,7 @@ export default function Search() {
       <PageHeader title="Search" sub="Your library, and anything you can request" />
       <SubNav label="Requests and downloads" items={[{ to: '/search', label: 'Find', icon: 'search' }, { to: '/requests', label: 'Requests', icon: 'list' }, { to: '/downloads', label: 'Downloads', icon: 'download' }]} />
 
-      <div className="search-box search-box--wide" ref={boxRef}>
+      <div className={`search-box search-box--wide${voiceOn ? ' search-box--voice' : ''}`} ref={boxRef}>
         <input
           ref={inputRef}
           className="search-input"
@@ -200,6 +203,7 @@ export default function Search() {
           onKeyDown={onKeyDown}
         />
         {query && <button className="search-clear" type="button" onClick={() => { setQuery(''); inputRef.current?.focus(); }} aria-label="Clear search"><SvgIcon name="close" size={16} /></button>}
+        {voiceOn && <VoiceSearchButton onResult={submit} />}
         {sugOpen && suggestions.length > 0 && (
           <ul className="suggest-list" role="listbox">
             {suggestions.map((s, i) => (

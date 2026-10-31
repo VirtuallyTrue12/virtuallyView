@@ -1251,3 +1251,99 @@ describe('New for You home rail', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('install as an app and voice search', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  // A stand-in for the browser's speech recognizer. The test drives it by calling its handlers directly.
+  const fakeRecognizer = () => {
+    class FakeRecognition {
+      lang = '';
+      continuous = false;
+      interimResults = false;
+      maxAlternatives = 1;
+      onresult: ((e: unknown) => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      constructor() { (window as unknown as { __fakeRec: unknown }).__fakeRec = this; }
+      start() { (window as unknown as { __fakeRecStarted: boolean }).__fakeRecStarted = true; }
+      stop() { this.onend?.(); }
+      abort() { /* nothing to stop in the fake */ }
+    }
+    const define = (name: string, value: unknown) => Object.defineProperty(window, name, { value, configurable: true, writable: true });
+    define('SpeechRecognition', FakeRecognition);
+    define('webkitSpeechRecognition', FakeRecognition);
+  };
+  const noRecognizer = () => {
+    Object.defineProperty(window, 'SpeechRecognition', { value: undefined, configurable: true, writable: true });
+    Object.defineProperty(window, 'webkitSpeechRecognition', { value: undefined, configurable: true, writable: true });
+  };
+  const emptySearch = { library: [], movies: [], series: [], artists: [], tracks: [] };
+
+  it('links the install manifest, and the manifest is valid JSON with the app name', async () => {
+    await page.goto(base + '/');
+    await page.waitForSelector('link[rel="manifest"]', { state: 'attached' });
+    expect(await page.locator('link[rel="manifest"]').getAttribute('href')).toBe('/manifest.webmanifest');
+    expect(await page.locator('meta[name="apple-mobile-web-app-status-bar-style"]').getAttribute('content')).toBe('black-translucent');
+    const res = await ctx.request.get(`${base}/manifest.webmanifest`);
+    expect(res.status()).toBe(200);
+    const manifest = await res.json();
+    expect(manifest.name).toBe('virtuallyView');
+    expect(manifest.display).toBe('standalone');
+  });
+
+  it('hides the mic when the browser has no speech recognition', async () => {
+    const p = await ctx.newPage();
+    await p.addInitScript(noRecognizer);
+    await p.goto(base + '/search');
+    await p.waitForSelector('.search-input');
+    expect(await p.locator('.voice-mic').count()).toBe(0);
+    await p.close();
+  });
+
+  it('shows the mic, shows the words heard, and runs the search when speech ends', async () => {
+    const p = await ctx.newPage();
+    await p.addInitScript(fakeRecognizer);
+    const searched: string[] = [];
+    await p.route('**/api/search/all**', r => {
+      searched.push(new URL(r.request().url()).searchParams.get('q') ?? '');
+      return r.fulfill(json(emptySearch));
+    });
+    await p.route('**/api/search/suggestions**', r => r.fulfill(json({ suggestions: [] })));
+    await p.goto(base + '/search');
+    const mic = p.getByRole('button', { name: 'Search by voice' });
+    await mic.waitFor();
+    await mic.click();
+    await p.getByRole('button', { name: 'Stop voice search' }).waitFor();
+    await p.evaluate(() => {
+      const r = (window as unknown as { __fakeRec: { onresult: (e: unknown) => void } }).__fakeRec;
+      r.onresult({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: 'the mat' } }] });
+    });
+    await p.locator('.voice-live', { hasText: 'the mat' }).waitFor();
+    await p.evaluate(() => {
+      const r = (window as unknown as { __fakeRec: { onresult: (e: unknown) => void; onend: () => void } }).__fakeRec;
+      r.onresult({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: 'the matrix' } }] });
+      r.onend();
+    });
+    await p.waitForFunction(() => document.querySelector<HTMLInputElement>('.search-input')?.value === 'the matrix');
+    await p.waitForFunction(() => !document.querySelector('.voice-live'));
+    await p.waitForTimeout(200);
+    expect(searched).toContain('the matrix');
+    await p.close();
+  });
+
+  it('tells the viewer in plain words when the microphone is blocked', async () => {
+    const p = await ctx.newPage();
+    await p.addInitScript(fakeRecognizer);
+    await p.goto(base + '/search');
+    await p.getByRole('button', { name: 'Search by voice' }).click();
+    await p.waitForFunction(() => (window as unknown as { __fakeRecStarted?: boolean }).__fakeRecStarted === true);
+    await p.evaluate(() => {
+      const r = (window as unknown as { __fakeRec: { onerror: (e: unknown) => void; onend: () => void } }).__fakeRec;
+      r.onerror({ error: 'not-allowed' });
+      r.onend();
+    });
+    await p.getByText(/Microphone access is blocked/).waitFor();
+    expect(await p.locator('.search-input').inputValue()).toBe('');
+    await p.close();
+  });
+});
