@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- **Fixed.** Downloads that arrive as one .zip (music from Internet Archive, some packs) were stuck for ever with "Found archive file, might need to be extracted": they are now unpacked next to the archive and handed to Radarr, Sonarr or Lidarr to import. The dashboard gets the downloads folder for this.
+- **Fixed.** "Find the release myself": picking a release qBittorrent already has said "qBittorrent returned 409"; it now says it is already downloading (or, for another refusal, why, in words).
 - **Changed.** Notifications, redone as one bell: "Happening now" (downloads by name with progress and time left, requests being looked for, AI models being fetched; a ring on the bell while anything runs), then New and Earlier. Every line opens the page it is about, the same notice repeated becomes one line back on top (the assistant summary keeps only the latest; it had piled up 29 times), and on phones the panel is a full-width sheet. The separate activity button in the top bar is gone.
 - **Fixed.** Finding the TV after a power cut: the search retries every 10 s until a TV answers (it used to wait a minute and often ran before the network was back), "Search again" now also sweeps the network straight away, and a TV keeps its identity when the router gives it a new address.
 - **Fixed.** Picture running seconds behind the sound after jumping ahead in some films (Blu-ray MKVs such as Premature and The Hummingbird Project): the original video was copied from the keyframe before the jump while the sound started exactly at it, so the gap was the keyframe distance (up to 10 s). Jumps now convert the video; playing from the start still copies it.

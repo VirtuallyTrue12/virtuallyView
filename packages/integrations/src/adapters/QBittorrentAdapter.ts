@@ -19,6 +19,14 @@ export interface TorrentInfo {
   size: number;
 }
 
+
+/** What a refused add means, in words. 409: qBittorrent already has it, or the link held no usable torrent. */
+export function refusal(status: number): string {
+  if (status === 409) return 'qBittorrent already has this release, or the link has no usable torrent. Check Downloads, or pick another release.';
+  if (status === 415) return 'That link is not a torrent qBittorrent can open. Pick another release.';
+  if (status === 403) return 'qBittorrent refused the sign-in. Check its user name and password in Settings.';
+  return `qBittorrent could not add it (status ${status}). Try another release.`;
+}
 export class QBittorrentAdapter implements IntegrationAdapter<{ url: string; apiKey: string }> {
   id = 'qbittorrent';
   name = 'qBittorrent';
@@ -212,7 +220,22 @@ export class QBittorrentAdapter implements IntegrationAdapter<{ url: string; api
     const res = await this.authedFetch('/api/v2/torrents/add', {
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ urls: magnet, category })
     });
-    return res.ok ? { success: true, message: 'Started.' } : { success: false, message: `qBittorrent returned ${res.status}.` };
+    if (res.ok) return { success: true, message: 'Started.' };
+    // qBittorrent answers 409 when it already has this torrent: the person picked something already downloading.
+    const hash = /xt=urn:btih:([a-z0-9]+)/i.exec(magnet)?.[1];
+    if (res.status === 409 && hash && await this.hasTorrent(hash)) return { success: true, message: 'Already downloading. Follow it on the Downloads page.' };
+    return { success: false, message: refusal(res.status) };
+  }
+
+  /** Whether qBittorrent already has the torrent with this info-hash (40 hex or 32 base32 characters). */
+  private async hasTorrent(hash: string): Promise<boolean> {
+    try {
+      const all = await this.authedFetch('/api/v2/torrents/info');
+      if (!all.ok) return false;
+      const list = (await all.json()) as Array<{ hash?: string; infohash_v1?: string; magnet_uri?: string }>;
+      const want = hash.toLowerCase();
+      return list.some(t => t.hash?.toLowerCase() === want || t.infohash_v1?.toLowerCase() === want || t.magnet_uri?.toLowerCase().includes(want));
+    } catch { return false; }
   }
 
   /** Starts a download from the bytes of a .torrent file. */
@@ -221,7 +244,7 @@ export class QBittorrentAdapter implements IntegrationAdapter<{ url: string; api
     form.append('torrents', new Blob([new Uint8Array(bytes)], { type: 'application/x-bittorrent' }), 'release.torrent');
     form.append('category', category);
     const res = await this.authedFetch('/api/v2/torrents/add', { method: 'POST', body: form });
-    return res.ok ? { success: true, message: 'Started.' } : { success: false, message: `qBittorrent returned ${res.status}.` };
+    return res.ok ? { success: true, message: 'Started.' } : { success: false, message: refusal(res.status) };
   }
 
   /** File names inside one torrent, relative to its folder. */

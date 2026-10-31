@@ -392,6 +392,8 @@ services:
       - host-net:/host-net:ro
       - secrets:/secrets:ro
       - app-data:/app/apps/server/data
+      # Read-write only to unpack downloads that arrive as one .zip, which the media apps cannot import.
+      - downloads:/downloads
       - ${MOVIES_DIR:-media-movies}:/media/movies:ro
       - ${TV_DIR:-media-tv}:/media/tv:ro
       - ${MUSIC_DIR:-media-music}:/media/music:ro

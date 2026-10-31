@@ -5,6 +5,7 @@ import { getDownloadsDetailed, type QueueItem } from './real-downloads.js';
 import { getServerSettings } from './server-settings.js';
 import { notify } from './notifications.js';
 import { retryDownload } from './retry.js';
+import { unpackArchives } from './archives.js';
 
 /**
  * The download doctor. Public sources are messy, and two things keep going wrong by themselves:
@@ -138,7 +139,11 @@ export function doctorEntries(): DoctorEntry[] {
 }
 
 export function startDownloadDoctor(): void {
-  const tick = () => { if (getServerSettings().autoFixDownloads) void runDoctor().catch(() => undefined); };
+  const tick = () => {
+    // Unpacking an archive is never harmful, so it runs whatever the auto-fix setting says.
+    void unpackArchives().catch(() => undefined);
+    if (getServerSettings().autoFixDownloads) void runDoctor().catch(() => undefined);
+  };
   setTimeout(tick, 2 * 60_000).unref();
   setInterval(tick, TICK_MS).unref();
 }
