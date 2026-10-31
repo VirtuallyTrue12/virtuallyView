@@ -139,7 +139,8 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
           provider: { name: 'Radarr', id: m.id as number, metadata: { tmdbId: m.tmdbId, imdbId: m.imdbId } },
           artwork: { poster, backdrop },
           genres: m.genres ?? [],
-          rating: m.ratings?.value,
+          // Radarr's own scores sit under tmdb and imdb (out of 10); a plain value is what older versions sent.
+          rating: m.ratings?.tmdb?.value || m.ratings?.imdb?.value || m.ratings?.value,
           ratings: radarrRatings(m.ratings),
           overview: m.overview,
           fileInfo: m.movieFile ? {
