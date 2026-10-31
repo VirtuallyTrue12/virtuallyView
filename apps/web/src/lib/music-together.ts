@@ -16,6 +16,12 @@ export interface ListenRow {
   genres?: string[];
 }
 
+/** True for a real session view, not an error body or an empty answer. */
+export function isListenView(value: unknown): value is ListenView {
+  const v = value as Partial<ListenView> | null;
+  return !!v && typeof v === 'object' && typeof v.code === 'string' && Array.isArray(v.queue) && typeof v.seq === 'number';
+}
+
 export interface ListenMember { userId: string; name: string; host: boolean }
 
 /** The shared session as one listener sees it. `position` is where playback was at `serverNow`. */

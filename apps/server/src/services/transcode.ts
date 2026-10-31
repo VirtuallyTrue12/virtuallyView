@@ -451,7 +451,8 @@ export function ffmpegFileArgs(input: string, output: string, options: FileOutpu
   const audio = Math.max(0, Math.round(options.audio ?? 0));
   const args = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y'];
   if (options.kind === 'audio') {
-    const copy = ['mp3', 'aac'].includes((options.audioCodec ?? '').toLowerCase());
+    // Only AAC goes into an .m4a as it is: MP3 inside MP4 plays in Chrome but not reliably on an iPhone.
+    const copy = (options.audioCodec ?? '').toLowerCase() === 'aac';
     args.push('-i', input, '-map', '0:a:0', '-vn');
     args.push(...(copy ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '256k']));
   } else {

@@ -7,7 +7,7 @@ import { DjBrain, type DjBreak, type DjFrequency, type DjSong } from '../../lib/
 import { fetchLyrics } from '../../lib/viz-store';
 import type { Lyrics } from '../../lib/api';
 import { api } from '../../lib/api';
-import { call, defaultDeviceName, deviceId, loadDeviceName, saveDeviceName, useDeviceHeartbeat, useDeviceStream, useListenStream, type DeviceCommand, type DeviceInfo, type DeviceState, type ListenRow, type ListenView } from '../../lib/music-together';
+import { call, isListenView, defaultDeviceName, deviceId, loadDeviceName, saveDeviceName, useDeviceHeartbeat, useDeviceStream, useListenStream, type DeviceCommand, type DeviceInfo, type DeviceState, type ListenRow, type ListenView } from '../../lib/music-together';
 import { toast } from '../ui/Toast';
 
 export { EQ_BANDS, EQ_PRESETS };
@@ -749,6 +749,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   /** Puts the shared state on this player: the queue, the track, and where playback is. */
   const applyListen = useCallback((view: ListenView) => {
+    // Only a real session moves the player: an expired code or a server hiccup can answer with something else,
+    // and a missing queue here took the whole page down.
+    if (!isListenView(view)) return;
     if (view.seq === lastSeq.current) return;
     lastSeq.current = view.seq;
     listenClock.current = { view, at: Date.now() };
@@ -803,6 +806,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const enterListen = useCallback((view: ListenView) => {
+    if (!isListenView(view)) {
+      try { sessionStorage.removeItem('vv-listen-code'); } catch { /* nothing stored */ }
+      return;
+    }
     lastSeq.current = -1;
     try { sessionStorage.setItem('vv-listen-code', view.code); } catch { /* storage off: a reload leaves the session */ }
     setListenCode(view.code);
@@ -871,7 +878,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   const refreshDevices = useCallback(async () => {
     const out = await call<{ devices: DeviceInfo[] }>('GET', '/api/devices');
-    if (out.ok) setDevices(out.data.devices.filter(d => d.id !== thisDevice));
+    if (out.ok) setDevices((Array.isArray(out.data?.devices) ? out.data.devices : []).filter(d => d.id !== thisDevice));
   }, [thisDevice]);
 
   /** What this tab reports about its playback, read live when a heartbeat goes out. */

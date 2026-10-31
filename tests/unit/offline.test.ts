@@ -127,7 +127,10 @@ describe('file-output arguments for offline copies', () => {
 
   it('copies MP3 or AAC song audio unchanged, and converts anything else to AAC 256k', () => {
     const mp3 = transcode.ffmpegFileArgs('/s.mp3', '/o', { kind: 'audio', audioCodec: 'mp3' });
-    expect(mp3[mp3.indexOf('-c:a') + 1]).toBe('copy');
+    // MP3 in an MP4 container is unreliable on iPhones, so it is converted; AAC is copied as it is.
+    expect(mp3[mp3.indexOf('-c:a') + 1]).toBe('aac');
+    const aac = transcode.ffmpegFileArgs('/s.m4a', '/o', { kind: 'audio', audioCodec: 'aac' });
+    expect(aac[aac.indexOf('-c:a') + 1]).toBe('copy');
     expect(mp3).toContain('-vn');
     const flac = transcode.ffmpegFileArgs('/s.flac', '/o', { kind: 'audio', audioCodec: 'flac' });
     expect(flac[flac.indexOf('-c:a') + 1]).toBe('aac');
