@@ -1,0 +1,9 @@
+/* Shown across the top while there is no connection to the server. */
+.offline-banner {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px;
+  padding: 8px 16px; font-size: 0.9rem;
+  background: var(--color-surface-elevated, #2c2c2e); color: var(--color-text-primary, inherit);
+  border-bottom: 1px solid var(--color-border, rgba(127, 127, 127, 0.3));
+  text-align: center;
+}
+.offline-banner a { color: var(--color-accent, #4a8cff); font-weight: 600; }

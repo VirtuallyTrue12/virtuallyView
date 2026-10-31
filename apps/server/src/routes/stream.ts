@@ -352,7 +352,7 @@ function listSubtitleTracks(mediaFilePath: string, baseStreamUrl: string) {
   return tracks;
 }
 
-async function resolveStreamable(id: string): Promise<Streamable | null> {
+export async function resolveStreamable(id: string): Promise<Streamable | null> {
   if (id.startsWith('musicvideo-')) {
     const file = await resolveMusicVideoPath(id);
     return file ? { fileInfo: { path: file } } as unknown as Streamable : null;
@@ -375,7 +375,7 @@ async function resolveStreamable(id: string): Promise<Streamable | null> {
 }
 
 /** Resolve the on-disk file for a Sonarr episode id (`episode-123`). */
-async function resolveEpisodeFile(id: string): Promise<string | null> {
+export async function resolveEpisodeFile(id: string): Promise<string | null> {
   try {
     const sonarr = getAdapter<SonarrAdapter>('sonarr');
     const file = await sonarr.getEpisodeFile(id);

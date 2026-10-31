@@ -1593,3 +1593,79 @@ describe('profiles and Kids mode (mocked APIs)', () => {
     await page.keyboard.press('Escape');
   });
 });
+
+describe('save to this device (offline downloads)', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const film = { id: 'radarr-901', title: 'Offline Reel', year: 2001, type: 'movie', status: 'available', runtime: 90, certification: 'PG', artwork: {} };
+  // A tiny stand-in for the converted MP4: the browser only needs bytes to store, not a playable film.
+  const fakeMp4 = Buffer.from('fake mp4 bytes for the offline browser test');
+
+  const mockSignedIn = async () => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+  };
+
+  afterEach(async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await ctx.setOffline(false);
+  });
+
+  it('a movie goes from Download, to preparing, to saving, to Saved', async () => {
+    await mockSignedIn();
+    await page.route('**/api/movies', r => r.fulfill(json([film])));
+    await page.route('**/api/movies/radarr-901', r => r.fulfill(json(film)));
+    let polls = 0;
+    await page.route('**/api/offline/prepare', r => r.fulfill(json({ jobId: 'job901', status: 'queued', percent: 0, hasSubtitles: false })));
+    await page.route('**/api/offline/jobs/job901', r => {
+      polls++;
+      r.fulfill(json(polls < 2
+        ? { jobId: 'job901', status: 'preparing', percent: 40, hasSubtitles: false }
+        : { jobId: 'job901', status: 'ready', percent: 100, size: fakeMp4.length, hasSubtitles: false }));
+    });
+    await page.route('**/api/offline/file/job901', r => r.fulfill({ status: 200, contentType: 'video/mp4', body: fakeMp4 }));
+
+    await page.goto(base + '/movies/radarr-901');
+    await page.getByRole('button', { name: 'Download Offline Reel to this device' }).click();
+    await page.getByText('Preparing 40%').waitFor();
+    await page.getByText('Saved ✓').waitFor();
+    expect(polls).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the saved movie is listed on On this device', async () => {
+    await mockSignedIn();
+    await page.goto(base + '/offline');
+    await page.getByRole('heading', { name: 'On this device' }).waitFor();
+    await page.locator('.offline-title', { hasText: 'Offline Reel' }).waitFor();
+    expect(await page.getByRole('button', { name: 'Play Offline Reel' }).count()).toBe(1);
+  });
+
+  it('the list still opens with no connection, from the device alone', async () => {
+    await mockSignedIn();
+    await page.goto(base + '/offline');
+    await page.locator('.offline-title', { hasText: 'Offline Reel' }).waitFor();
+    // With a service worker in control, the offline reload is served from the cached shell. Without one,
+    // every API call is cut off and the page must still draw its list from the device.
+    const controlled = await page.evaluate(() => !!navigator.serviceWorker?.controller);
+    if (controlled) {
+      await ctx.setOffline(true);
+      await page.reload();
+    } else {
+      await page.route('**/api/**', r => r.abort());
+      await page.goto(base + '/offline');
+    }
+    await page.locator('.offline-banner').waitFor();
+    await page.locator('.offline-title', { hasText: 'Offline Reel' }).waitFor();
+  });
+
+  it('Delete removes the film from the device, after one more tap to confirm', async () => {
+    await mockSignedIn();
+    await page.goto(base + '/offline');
+    await page.getByRole('button', { name: 'Delete Offline Reel' }).click();
+    await page.getByText('Tap again to delete').waitFor();
+    await page.getByRole('button', { name: 'Delete Offline Reel' }).click();
+    await page.getByText('Nothing is saved yet.').waitFor();
+    expect(await page.locator('.offline-title', { hasText: 'Offline Reel' }).count()).toBe(0);
+  });
+});

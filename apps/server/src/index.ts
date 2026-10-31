@@ -35,6 +35,7 @@ import youtubeRoutes from './routes/youtube.js';
 import troubleshootRoutes from './routes/troubleshoot.js';
 import settingsOverviewRoutes from './routes/settings-overview.js';
 import importExistingRoutes from './routes/import-existing.js';
+import offlineRoutes from './routes/offline.js';
 import ratingRoutes from './routes/ratings.js';
 import homeLayoutRoutes from './routes/home-layout.js';
 import { recordChange } from './services/settings-history.js';
@@ -525,6 +526,7 @@ const start = async () => {
   await server.register(troubleshootRoutes);
   await server.register(settingsOverviewRoutes);
   await server.register(importExistingRoutes);
+  await server.register(offlineRoutes);
   await server.register(ratingRoutes);
   await server.register(homeLayoutRoutes);
 
