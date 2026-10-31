@@ -155,6 +155,29 @@ describe('appearance', () => {
   });
 });
 
+describe('Apple TV style theme', () => {
+  it('lays the app out with a sidebar on wide screens, and a top bar again on narrow ones', async () => {
+    await page.goto(base + '/');
+    await page.evaluate(() => localStorage.setItem('vv-appearance', JSON.stringify({ mode: 'dark', dark: 'apple-tv-style', light: 'light' })));
+    await page.setViewportSize({ width: 1366, height: 860 });
+    await page.reload();
+    await page.waitForSelector('.sidebar');
+    expect(await page.locator('nav.nav').count()).toBe(0);
+    await page.locator('.sidebar .side-link', { hasText: 'Movies' }).click();
+    await page.waitForURL(/\/movies$/);
+    await page.locator('.sidebar .side-link.active', { hasText: 'Movies' }).waitFor();
+    expect(await page.locator('.sidebar .side-link.active').count()).toBe(1);
+    // The page moves over for the sidebar instead of sliding under it.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(2);
+    await page.setViewportSize({ width: 800, height: 860 });
+    await page.waitForSelector('nav.nav');
+    expect(await page.locator('.sidebar').count()).toBe(0);
+    await page.evaluate(() => localStorage.removeItem('vv-appearance'));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.reload();
+  });
+});
+
 describe('notifications and backup', () => {
   it('rings the bell when someone signs up and clears it when read', async () => {
     await ctx.request.post(`${base}/api/server-settings`, { data: { allowSignup: true } });

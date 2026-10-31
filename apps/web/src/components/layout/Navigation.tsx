@@ -123,7 +123,81 @@ function useFittingLinks(nav: React.RefObject<HTMLElement | null>, brand: React.
   return fit;
 }
 
-export function Navigation({ user, onSignOut, onRefresh }: { user?: AuthUser | null; onSignOut?: () => void; onRefresh?: () => void }) {
+type IconName = Parameters<typeof SvgIcon>[0]['name'];
+const SIDE_LIBRARY: Array<{ to: string; label: string; icon: IconName }> = [
+  { to: '/movies', label: 'Movies', icon: 'film' },
+  { to: '/series', label: 'TV Shows', icon: 'tv' },
+  { to: '/music', label: 'Music', icon: 'music-note' },
+  { to: '/live', label: 'Live TV', icon: 'tv-tab' },
+  { to: '/radio', label: 'Radio', icon: 'radio' },
+  { to: '/videos', label: 'Videos', icon: 'youtube' },
+  { to: '/photos', label: 'Photos', icon: 'image' },
+  { to: '/books', label: 'Books', icon: 'book' }
+];
+const SIDE_MANAGE: Array<{ to: string; label: string; icon: IconName }> = [
+  { to: '/requests', label: 'Requests', icon: 'plus' },
+  { to: '/downloads', label: 'Downloads', icon: 'download' },
+  { to: '/apps', label: 'Apps', icon: 'grid' },
+  { to: '/wiki', label: 'Wiki', icon: 'globe' },
+  { to: '/statistics', label: 'Stats', icon: 'chart' },
+  { to: '/themes', label: 'Themes', icon: 'palette' },
+  { to: '/settings', label: 'Settings', icon: 'gear' }
+];
+
+/** Themes that lay the app out with a sidebar (like the Apple TV app on a Mac) instead of a top bar, on wide screens. */
+const SIDEBAR_THEMES = new Set(['apple-tv-style']);
+function useSidebarLayout(): boolean {
+  const read = () => typeof window !== 'undefined' && SIDEBAR_THEMES.has(document.documentElement.dataset.theme ?? '') && window.innerWidth > 900;
+  const [on, setOn] = useState(read);
+  useEffect(() => {
+    const update = () => setOn(read());
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    window.addEventListener('resize', update);
+    return () => { observer.disconnect(); window.removeEventListener('resize', update); };
+  }, []);
+  // The page moves over to make room for the sidebar.
+  useEffect(() => { document.documentElement.classList.toggle('has-sidebar', on); }, [on]);
+  return on;
+}
+
+function SideLink({ to, label, icon }: { to: string; label: string; icon: IconName }) {
+  return (
+    <NavLink to={to} end={to === '/'} className={({ isActive }) => `side-link${isActive ? ' active' : ''}`}>
+      <SvgIcon name={icon} size={20} /> <span>{label}</span>
+    </NavLink>
+  );
+}
+
+function Sidebar({ user, onSignOut, onRefresh }: { user?: AuthUser | null; onSignOut?: () => void; onRefresh?: () => void }) {
+  return (
+    <nav className="sidebar" aria-label="Primary">
+      <NavLink to="/" className="sidebar-brand"><VvLogo variant="tile" size={28} /><span>virtuallyView</span></NavLink>
+      {user && <SideLink to="/search" label="Search" icon="search" />}
+      <SideLink to="/" label="Home" icon="home" />
+      <p className="sidebar-group">Library</p>
+      {SIDE_LIBRARY.map(l => <SideLink key={l.to} {...l} />)}
+      <p className="sidebar-group">Manage</p>
+      {SIDE_MANAGE.map(l => <SideLink key={l.to} {...l} />)}
+      {user && (
+        <div className="sidebar-foot">
+          {onSignOut && <UserMenu user={user} onSignOut={onSignOut} />}
+          <span className="sidebar-foot-tools">
+            {onRefresh && <RefreshButton onRefresh={onRefresh} />}
+            <NotificationBell />
+          </span>
+        </div>
+      )}
+    </nav>
+  );
+}
+
+export function Navigation(props: { user?: AuthUser | null; onSignOut?: () => void; onRefresh?: () => void }) {
+  const sidebar = useSidebarLayout();
+  return sidebar ? <Sidebar {...props} /> : <TopBar {...props} />;
+}
+
+function TopBar({ user, onSignOut, onRefresh }: { user?: AuthUser | null; onSignOut?: () => void; onRefresh?: () => void }) {
   const nav = useRef<HTMLElement>(null);
   const brand = useRef<HTMLAnchorElement>(null);
   const tools = useRef<HTMLDivElement>(null);

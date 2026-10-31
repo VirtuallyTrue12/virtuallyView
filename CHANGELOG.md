@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- **Changed.** Apple TV style theme, redone after the Mac app: a sidebar with blue icons (Search, Home, your library, then Manage, with your account, refresh and the bell at the bottom) on screens wider than 900px, Mac-app greys, white Play pills, softer 12px cards, a round back button and round cast photos with names underneath. Narrower screens keep the top bar.
+- **Fixed.** The search page was far wider than the screen (a section grew to fit the longest row), and a movie's Details facts had no styling (the studio was indented under its label) with the file info box centred instead of lined up with the page.
 - **Fixed.** Downloads that arrive as one .zip (music from Internet Archive, some packs) were stuck for ever with "Found archive file, might need to be extracted": they are now unpacked next to the archive and handed to Radarr, Sonarr or Lidarr to import. The dashboard gets the downloads folder for this.
 - **Fixed.** "Find the release myself": picking a release qBittorrent already has said "qBittorrent returned 409"; it now says it is already downloading (or, for another refusal, why, in words).
 - **Changed.** Notifications, redone as one bell: "Happening now" (downloads by name with progress and time left, requests being looked for, AI models being fetched; a ring on the bell while anything runs), then New and Earlier. Every line opens the page it is about, the same notice repeated becomes one line back on top (the assistant summary keeps only the latest; it had piled up 29 times), and on phones the panel is a full-width sheet. The separate activity button in the top bar is gone.

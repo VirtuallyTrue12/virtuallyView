@@ -818,6 +818,8 @@ a { color: inherit; text-decoration: none; }
 /* Empty search box: the page browses the live rails instead of dead-ending. */
 .search-trending {
   display: grid;
+  /* One column no wider than the page: an auto column grew to fit the longest rail and pushed the page sideways. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--spacing-lg);
   padding-top: var(--spacing-md);
 }
@@ -5150,7 +5152,8 @@ iframe.hero-trailer { pointer-events: none; }
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 14px 24px;
   max-width: 900px;
-  margin: var(--spacing-lg) auto 0;
+  /* Lined up with the page's other sections, not centred under them. */
+  margin: var(--spacing-lg) 0 0;
   padding: var(--spacing-lg) var(--spacing-xl);
   background: var(--color-surface);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -6236,3 +6239,44 @@ body.is-watching .toaster { bottom: 120px; }
 .nb-foot a:hover { color: var(--color-text-primary); }
 /* Phones: a sheet across the screen under the top bar. */
 @media (max-width: 600px) { .nb-panel { position: fixed; left: 8px; right: 8px; top: 64px; width: auto; max-height: calc(100vh - 80px); } }
+
+/* Sidebar layout (Apple TV style on wide screens): the navigation is a column on the left, as in the Mac app. */
+html.has-sidebar .app { padding-left: 260px; }
+html.has-sidebar body.is-watching .app { padding-left: 0; }
+body.is-watching .sidebar { display: none !important; }
+.sidebar { position: fixed; inset: 0 auto 0 0; z-index: 60; width: 260px; display: flex; flex-direction: column; gap: 2px; padding: 18px 12px 12px; overflow-y: auto; background: linear-gradient(180deg, #2f2f32, #262628); border-right: 1px solid rgba(255, 255, 255, 0.06); }
+.sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 2px 12px 12px; color: #fff; font-weight: 700; font-size: 1.02rem; text-decoration: none; }
+.side-link { display: flex; align-items: center; gap: 12px; padding: 7px 12px; border-radius: 10px; color: #fff; font-size: 1rem; font-weight: 500; text-decoration: none; transition: background 0.12s; }
+.side-link svg { flex: none; color: #0a84ff; }
+.side-link:hover { background: rgba(255, 255, 255, 0.06); }
+.side-link.active { background: rgba(255, 255, 255, 0.14); }
+.side-link:focus-visible { outline: 2px solid #0a84ff; outline-offset: -2px; }
+.sidebar-group { margin: 14px 12px 4px; font-size: 0.78rem; font-weight: 600; color: rgba(235, 235, 245, 0.5); }
+.sidebar-foot { margin-top: auto; padding: 14px 4px 2px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.sidebar-foot-tools { display: flex; align-items: center; gap: 6px; }
+.sidebar .user-menu, .sidebar .nb { margin-left: 0; }
+/* Menus open beside the sidebar instead of off the left edge. */
+.sidebar .user-menu-panel, .sidebar .nb-panel { position: fixed; left: 268px; right: auto; top: auto; bottom: 14px; }
+
+/* Apple TV style content: Mac-app greys, white Play pills, soft 12px cards, round cast photos. */
+html[data-theme='apple-tv-style'] .btn-primary { background: #ffffff; color: #000000; border-radius: 999px; font-weight: 600; padding-left: 1.6rem; padding-right: 1.6rem; }
+html[data-theme='apple-tv-style'] .btn-primary:hover { background: #e8e8ed; filter: none; }
+html[data-theme='apple-tv-style'] .btn-secondary { background: rgba(255, 255, 255, 0.14); border-color: transparent; color: #fff; border-radius: 999px; }
+html[data-theme='apple-tv-style'] .btn-secondary:hover { background: rgba(255, 255, 255, 0.22); }
+html[data-theme='apple-tv-style'] .rail-title { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; }
+html[data-theme='apple-tv-style'] .media-card-artwork { border: 0; border-radius: 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
+html[data-theme='apple-tv-style'] .hero, html[data-theme='apple-tv-style'] .detail-hero { background: #000; }
+html[data-theme='apple-tv-style'] .hero-title, html[data-theme='apple-tv-style'] .detail-title { letter-spacing: -0.03em; font-weight: 800; }
+html[data-theme='apple-tv-style'] .back-btn { width: 38px; height: 38px; padding: 0; justify-content: center; border-radius: 50%; background: rgba(60, 60, 64, 0.85); font-size: 0; }
+html[data-theme='apple-tv-style'] .back-btn .back-btn-arrow { font-size: 1rem; margin: 0; }
+html[data-theme='apple-tv-style'] .cast-card { width: 140px; height: auto; border: 0; border-radius: 0; background: none; overflow: visible; text-align: center; }
+html[data-theme='apple-tv-style'] .cast-portrait { position: relative; inset: auto; width: 140px; height: 140px; border-radius: 50%; }
+html[data-theme='apple-tv-style'] .cast-caption { position: static; padding: 0.7rem 0 0; background: none; align-items: center; }
+html[data-theme='apple-tv-style'] .cast-name { white-space: normal; text-shadow: none; font-size: 0.9rem; font-weight: 500; }
+html[data-theme='apple-tv-style'] .cast-role { white-space: normal; color: rgba(235, 235, 245, 0.6); font-size: 0.82rem; }
+
+/* Facts on a detail page (director, released, studio); every page that shows them, not only those on the page kit. */
+.detail-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem 2rem; margin: 0 0 var(--spacing-lg); }
+.detail-facts div { display: grid; gap: 0.15rem; }
+.detail-facts dt { font-size: 0.74rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); }
+.detail-facts dd { margin: 0; color: var(--color-text-primary); }

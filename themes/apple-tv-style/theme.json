@@ -3,7 +3,7 @@
   "id": "apple-tv-style",
   "version": "1.0.0",
   "author": "virtuallyView",
-  "description": "Pure black with frosted glass, a floating pill navigation, white pill buttons and soft parallax hover. An unofficial look-alike, not affiliated with any company.",
+  "description": "Like the Apple TV app on a Mac: a sidebar with blue icons, full-width artwork with white Play pills, big rounded cards and round cast photos. An unofficial look-alike, not affiliated with any company.",
   "engine": "1.x",
   "license": "MIT",
   "categories": [
