@@ -65,6 +65,15 @@ function reachable(scope: ParentNode): HTMLElement[] {
   return all.filter(el => !all.some(other => other !== el && el.contains(other)));
 }
 
+/** Inside something fixed to the screen (checked up to the page root). */
+function isFixed(el: Element): boolean {
+  for (let n: Element | null = el; n && n !== document.body; n = n.parentElement) {
+    const position = getComputedStyle(n).position;
+    if (position === 'fixed' || position === 'sticky') return true;
+  }
+  return false;
+}
+
 const boxOf = (el: Element): Box => {
   const r = el.getBoundingClientRect();
   return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
@@ -87,7 +96,13 @@ export function moveFocus(dir: Direction): boolean {
     first.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     return true;
   }
-  const target = nearestInDirection(boxOf(active), candidates.map(el => ({ item: el, box: boxOf(el) })), dir);
+  // Bars pinned to the screen (the music player, a tab bar) sit "below" everything. From the page, move through
+  // the page first and reach a pinned bar only when nothing else lies that way; from inside a bar, anything goes.
+  const pinned = (el: Element) => isFixed(el);
+  const toBox = (el: HTMLElement) => ({ item: el, box: boxOf(el) });
+  const inPage = pinned(active) ? candidates : candidates.filter(el => !pinned(el));
+  const target = nearestInDirection(boxOf(active), inPage.map(toBox), dir)
+    ?? (inPage.length !== candidates.length ? nearestInDirection(boxOf(active), candidates.map(toBox), dir) : null);
   if (!target) return false;
   target.focus({ preventScroll: true });
   target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
