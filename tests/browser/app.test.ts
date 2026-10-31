@@ -9,7 +9,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 let server: ChildProcess;
@@ -1228,5 +1228,78 @@ describe('Videos (Invidious)', () => {
     await page.getByRole('button', { name: `Remove ${video.title} from history` }).click();
     await page.getByText('Nothing watched yet').waitFor();
     expect(errors).toEqual([]);
+  });
+});
+
+describe('profiles and Kids mode (mocked APIs)', () => {
+  const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  const parent = { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } };
+  const sam = { id: 'u-sam', username: 'Sam', role: 'user', createdAt: '2026-01-02T00:00:00.000Z', shown: true, isKid: false, hasPin: true, profileAvatar: { color: '#43a047', emoji: '🦊' } };
+  const ava = { id: 'u-ava', username: 'Ava', role: 'user', createdAt: '2026-01-03T00:00:00.000Z', shown: true, isKid: true, maxRating: 'PG', hasPin: false, profileAvatar: { color: '#fb8c00', emoji: '🐻' } };
+  const picker = [parent, sam, ava].map(u => ({ id: u.id, name: u.username, avatar: u.profileAvatar, hasPin: u.hasPin, isKid: u.isKid }));
+  const family = { id: 'radarr-7', title: 'Paddington', type: 'movie', year: 2014, certification: 'PG', artwork: {} };
+
+  /** Every API answers with an empty object unless a test replaces it below. */
+  const mockApis = async (me: typeof parent) => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: me })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    await page.route('**/api/profiles', r => r.fulfill(json({ profiles: picker, currentId: me.id })));
+  };
+
+  afterEach(async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
+
+  it("the picker shows the household, and a profile with a PIN opens the PIN pad", async () => {
+    await mockApis(parent);
+    const attempts: string[] = [];
+    await page.route('**/api/profiles/switch', r => {
+      const body = r.request().postDataJSON() as { id: string; pin?: string };
+      attempts.push(`${body.id}:${body.pin ?? ''}`);
+      if (body.pin === '1234') return r.fulfill(json({ message: 'That PIN is not right. Try again.', needs: 'pin', attemptsLeft: 4 }, 403));
+      return r.fulfill(json({ message: 'Enter the PIN for this profile.', needs: 'pin' }, 403));
+    });
+    await page.goto(base + '/profiles');
+    await page.getByRole('heading', { name: /who.s watching/i }).waitFor();
+    expect(await page.getByRole('button', { name: /^Parent/ }).count()).toBe(1);
+    expect(await page.getByRole('button', { name: /^Ava, Kids profile/ }).count()).toBe(1);
+    // The lock icon marks the profile with a PIN.
+    await page.getByRole('button', { name: /^Sam, PIN needed/ }).click();
+    await page.getByRole('dialog', { name: 'Unlock Sam' }).waitFor();
+    // Keyboard digits fill the PIN; the fourth digit sends it.
+    for (const digit of ['1', '2', '3', '4']) await page.keyboard.press(digit);
+    await page.getByRole('alert').filter({ hasText: /not right/ }).waitFor();
+    expect(attempts).toEqual(['u-sam:', 'u-sam:1234']);
+    // The on-screen keys work too.
+    await page.getByRole('button', { name: 'Digit 9' }).click();
+    expect(await page.getByRole('dialog').getByRole('button', { name: 'Digit 9' }).isVisible()).toBe(true);
+    await page.getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('dialog').waitFor({ state: 'detached' });
+  });
+
+  it('a Kids profile gets its own home and no Requests or Downloads in the navigation', async () => {
+    await mockApis(ava);
+    await page.route('**/api/dashboard', r => r.fulfill(json({
+      kids: true,
+      hero: null,
+      heroCandidates: [],
+      rails: [
+        { id: 'family', title: 'Family Favorites', items: [family] },
+        { id: 'my-list', title: 'My List', items: [{ ...family, id: 'radarr-8', title: 'Frozen' }] }
+      ]
+    })));
+    await page.goto(base + '/');
+    await page.getByRole('heading', { name: 'What do you want to watch?' }).waitFor();
+    expect(await page.locator('.kids-tile').count()).toBe(2);
+    expect(await page.evaluate(() => document.documentElement.classList.contains('kids'))).toBe(true);
+    // The bright top bar is on, and the grown-up pages are gone from the menus.
+    expect(await page.locator('.nav').getByText('Requests', { exact: true }).count()).toBe(0);
+    expect(await page.locator('.nav').getByText('Downloads', { exact: true }).count()).toBe(0);
+    expect(await page.getByRole('menuitem', { name: 'Switch profile' }).count()).toBe(0);
+    await page.locator('.user-menu-button').click();
+    expect(await page.getByRole('menuitem', { name: 'Switch profile' }).count()).toBe(1);
+    await page.keyboard.press('Escape');
   });
 });

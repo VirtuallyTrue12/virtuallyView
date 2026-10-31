@@ -6,6 +6,7 @@ import { UserMenu } from './UserMenu';
 import { NotificationBell } from './NotificationBell';
 import { RefreshButton } from './RefreshButton';
 import type { AuthUser } from '../../lib/api';
+import { forViewer } from '../kids/kids-rules';
 
 const LINKS = [
   { to: '/', label: 'Home' },
@@ -32,13 +33,13 @@ const MORE = [
 ];
 
 /** "More" pages: opens on hover or click, closes on a choice, outside click, Escape or page change. */
-function MoreMenu({ extra = [] }: { extra?: Array<{ to: string; label: string }> }) {
+function MoreMenu({ extra = [], more }: { extra?: Array<{ to: string; label: string }>; more: Array<{ to: string; label: string }> }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const closeTimer = useRef<number | null>(null);
   const { pathname } = useLocation();
-  const all = [...extra, ...MORE];
+  const all = [...extra, ...more];
   const current = all.some(link => link.to === '/' ? pathname === '/' : pathname.startsWith(link.to));
 
   useEffect(() => { setOpen(false); }, [pathname]);
@@ -88,15 +89,15 @@ function MoreMenu({ extra = [] }: { extra?: Array<{ to: string; label: string }>
 }
 
 /** How many of the main links fit next to the logo and the buttons; the rest move under More. Recomputed whenever the bar changes size. */
-function useFittingLinks(nav: React.RefObject<HTMLElement | null>, brand: React.RefObject<HTMLElement | null>, tools: React.RefObject<HTMLElement | null>, measure: React.RefObject<HTMLElement | null>) {
-  const [fit, setFit] = useState(LINKS.length);
+function useFittingLinks(nav: React.RefObject<HTMLElement | null>, brand: React.RefObject<HTMLElement | null>, tools: React.RefObject<HTMLElement | null>, measure: React.RefObject<HTMLElement | null>, count: number) {
+  const [fit, setFit] = useState(count);
   useLayoutEffect(() => {
     const bar = nav.current;
     if (!bar) return;
     const compute = () => {
       const m = measure.current;
       // Phones use the tab bar instead of these links.
-      if (window.innerWidth <= 860 || !m) { setFit(LINKS.length); return; }
+      if (window.innerWidth <= 860 || !m) { setFit(count); return; }
       const widths = [...m.children].map(c => c.getBoundingClientRect().width);
       const cs = getComputedStyle(bar);
       const gap = parseFloat(cs.columnGap) || 16;
@@ -119,7 +120,7 @@ function useFittingLinks(nav: React.RefObject<HTMLElement | null>, brand: React.
     window.addEventListener('resize', compute);
     void document.fonts?.ready.then(compute);
     return () => { observer?.disconnect(); window.removeEventListener('resize', compute); };
-  }, [nav, brand, tools, measure]);
+  }, [nav, brand, tools, measure, count]);
   return fit;
 }
 
@@ -170,6 +171,7 @@ function SideLink({ to, label, icon }: { to: string; label: string; icon: IconNa
 }
 
 function Sidebar({ user, onSignOut, onRefresh }: { user?: AuthUser | null; onSignOut?: () => void; onRefresh?: () => void }) {
+  const manage = forViewer(SIDE_MANAGE, user?.isKid);
   return (
     <nav className="sidebar" aria-label="Primary">
       <NavLink to="/" className="sidebar-brand"><VvLogo variant="tile" size={28} /><span>virtuallyView</span></NavLink>
@@ -178,7 +180,7 @@ function Sidebar({ user, onSignOut, onRefresh }: { user?: AuthUser | null; onSig
       <p className="sidebar-group">Library</p>
       {SIDE_LIBRARY.map(l => <SideLink key={l.to} {...l} />)}
       <p className="sidebar-group">Manage</p>
-      {SIDE_MANAGE.map(l => <SideLink key={l.to} {...l} />)}
+      {manage.map(l => <SideLink key={l.to} {...l} />)}
       {user && (
         <div className="sidebar-foot">
           {onSignOut && <UserMenu user={user} onSignOut={onSignOut} />}
@@ -202,7 +204,9 @@ function TopBar({ user, onSignOut, onRefresh }: { user?: AuthUser | null; onSign
   const brand = useRef<HTMLAnchorElement>(null);
   const tools = useRef<HTMLDivElement>(null);
   const measure = useRef<HTMLDivElement>(null);
-  const fit = useFittingLinks(nav, brand, tools, measure);
+  const links = forViewer(LINKS, user?.isKid);
+  const more = forViewer(MORE, user?.isKid);
+  const fit = useFittingLinks(nav, brand, tools, measure, links.length);
   return (
     <nav className="nav" aria-label="Primary" ref={nav}>
       <NavLink to="/" className="nav-brand" ref={brand}>
@@ -210,7 +214,7 @@ function TopBar({ user, onSignOut, onRefresh }: { user?: AuthUser | null; onSign
         <span>virtuallyView</span>
       </NavLink>
       <div className="nav-links">
-        {LINKS.slice(0, fit).map(link => (
+        {links.slice(0, fit).map(link => (
           <NavLink
             key={link.to}
             to={link.to}
@@ -221,9 +225,9 @@ function TopBar({ user, onSignOut, onRefresh }: { user?: AuthUser | null; onSign
           </NavLink>
         ))}
         {/* On phones the links scroll sideways in one row, so the extra pages sit inline instead of in a menu. */}
-        {MORE.map(link => <NavLink key={`m-${link.to}`} to={link.to} className={({ isActive }) => `nav-link nav-link--extra${isActive ? ' active' : ''}`}>{link.label}</NavLink>)}
-        <MoreMenu extra={LINKS.slice(fit)} />
-        <div className="nav-measure" ref={measure} aria-hidden="true">{LINKS.map(l => <span key={l.to} className="nav-link">{l.label}</span>)}</div>
+        {more.map(link => <NavLink key={`m-${link.to}`} to={link.to} className={({ isActive }) => `nav-link nav-link--extra${isActive ? ' active' : ''}`}>{link.label}</NavLink>)}
+        <MoreMenu extra={links.slice(fit)} more={more} />
+        <div className="nav-measure" ref={measure} aria-hidden="true">{links.map(l => <span key={l.to} className="nav-link">{l.label}</span>)}</div>
       </div>
       <div className="nav-tools" ref={tools}>
         {user && <NavLink to="/search" className="nav-search" aria-label="Search"><SvgIcon name="search" size={19} /></NavLink>}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type AuthSession, type AuthUser } from '../../lib/api';
+import { MyProfile, ProfileAccounts } from './ProfileSettings';
 
 /**
  * Administrator-only account management. The server enforces the role on every
@@ -217,6 +218,9 @@ export default function UsersPanel() {
               ))}
             </ul>
           </section>
+
+          <ProfileAccounts users={users} onChanged={setUsers} />
+          {me && <MyProfile me={me} onChanged={setMe} />}
 
           <section className="settings-section">
             <h3>Add an account</h3>

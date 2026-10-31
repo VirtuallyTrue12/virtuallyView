@@ -7,6 +7,8 @@ export interface Actor {
   role: 'admin' | 'user' | 'system';
   /** Age limit for this viewer (see RATING_LIMITS); empty or missing means unrestricted. */
   maxRating?: string;
+  /** A Kids profile: see services/kids.ts for what it cannot reach. */
+  kid?: boolean;
 }
 
 const SYSTEM: Actor = { userId: 'shared', username: 'system', role: 'system' };

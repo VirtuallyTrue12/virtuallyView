@@ -6,6 +6,7 @@ import { api, type AuthSession, type AuthUser } from '../lib/api';
 import { Avatar } from '../components/ui/Avatar';
 import QuickConnectApprove from '../components/settings/QuickConnectApprove';
 import { pictureToAvatar } from '../lib/avatar-image';
+import { MyProfile } from '../components/settings/ProfileSettings';
 
 /** Your own account: who you are, your password, and the devices signed in as you. */
 export default function Account() {
@@ -105,6 +106,8 @@ export default function Account() {
   return (
     <main className="page account-page">
       <PageHeader title="Account" sub="Your profile, password and the devices you are signed in on" />
+
+      <MyProfile me={me} onChanged={setMe} />
 
       <section className="ac-profile">
         <Avatar user={me} large />

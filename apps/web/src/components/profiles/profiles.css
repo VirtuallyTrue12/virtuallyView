@@ -1,0 +1,222 @@
+/* Profiles: the "Who's watching?" picker, the PIN pad, and the profile badges. */
+
+.picker-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.25rem;
+  padding: max(2rem, env(safe-area-inset-top, 0px)) 1rem max(2rem, env(safe-area-inset-bottom, 0px));
+  background: #141414;
+  color: #fff;
+}
+
+.picker-title {
+  margin: 0;
+  font-size: clamp(1.7rem, 4vw, 2.6rem);
+  font-weight: 600;
+  text-align: center;
+}
+
+.picker-state,
+.picker-notice {
+  margin: 0;
+  max-width: 34rem;
+  text-align: center;
+  color: #d4d4d4;
+}
+
+.picker-notice { color: #ffb4a8; }
+.picker-state a { color: #fff; }
+
+.picker-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(1rem, 3vw, 2.25rem);
+  max-width: 62rem;
+}
+
+.picker-profile {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: 9.5rem;
+  max-width: 40vw;
+  padding: 0.5rem;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.picker-profile:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+.picker-profile:hover:not(:disabled) .picker-avatar,
+.picker-profile:focus-visible .picker-avatar { box-shadow: 0 0 0 3px #fff; }
+.picker-profile:hover:not(:disabled) .picker-name { color: #fff; }
+.picker-profile:disabled { opacity: 0.6; cursor: progress; }
+
+.picker-avatar {
+  position: relative;
+  display: inline-flex;
+  width: clamp(6.5rem, 16vw, 9rem);
+  height: clamp(6.5rem, 16vw, 9rem);
+  border-radius: 50%;
+  transition: box-shadow 0.15s ease;
+}
+
+.picker-name {
+  font-size: 1.05rem;
+  color: #b3b3b3;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.picker-lock {
+  position: absolute;
+  right: 0.1rem;
+  bottom: 0.1rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: #141414;
+  color: #fff;
+}
+
+.picker-kids {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #141414;
+  background: #ffd23f;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+.picker-foot {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.picker-back {
+  color: #b3b3b3;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.picker-back:hover,
+.picker-back:focus-visible { color: #fff; border-bottom-color: #fff; }
+
+/* Badges: a coloured circle with an emoji or initials. */
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+  user-select: none;
+}
+
+.profile-badge--large {
+  width: 100%;
+  height: 100%;
+  font-size: clamp(2.6rem, 7vw, 4rem);
+  font-weight: 600;
+}
+
+/* PIN pad (inside the shared dialog). */
+.pin-pad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0 0.25rem;
+}
+
+.pin-pad--password { align-items: stretch; }
+
+.pin-pad-help { margin: 0; text-align: center; }
+
+.pin-dots { display: flex; gap: 0.9rem; }
+
+.pin-dot {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0.5;
+}
+
+.pin-dot.is-filled { background: currentColor; opacity: 1; }
+
+.pin-keys {
+  display: grid;
+  grid-template-columns: repeat(3, 4.5rem);
+  gap: 0.7rem;
+}
+
+.pin-key {
+  height: 4.5rem;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-size: 1.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.pin-key:hover:not(:disabled),
+.pin-key:focus-visible { background: rgba(127, 127, 127, 0.2); outline: none; }
+.pin-key:disabled { opacity: 0.5; cursor: progress; }
+
+.pin-error { margin: 0; color: #c62828; text-align: center; font-weight: 600; }
+
+.pin-alt {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.25rem;
+}
+
+@media (max-width: 480px) {
+  .picker-profile { width: 7.5rem; }
+  .pin-keys { grid-template-columns: repeat(3, 4rem); }
+  .pin-key { height: 4rem; }
+}
+
+/* Settings > People: per-profile rows and your own profile. */
+.profile-row { flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; }
+.profile-row-who { display: inline-flex; align-items: center; gap: 0.6rem; min-width: 9rem; }
+.profile-check { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+.profile-choices { display: inline-flex; gap: 0.4rem; }
+.profile-choices select { min-width: 6.5rem; }
+.profile-mine { display: flex; flex-wrap: wrap; align-items: center; gap: 0.9rem; }
+.profile-mine .profile-badge--large { width: 3.5rem; height: 3.5rem; font-size: 1.8rem; }
+.profile-mine-pin { display: inline-flex; gap: 0.5rem; }
+.profile-pin-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem; margin-top: 0.75rem; }

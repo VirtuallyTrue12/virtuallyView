@@ -3,6 +3,7 @@ import { Hero } from '../components/media/Hero';
 import { MediaRail } from '../components/media/MediaRail';
 import { api, type Dashboard } from '../lib/api';
 import { SetupChecklist } from '../components/home/SetupChecklist';
+import KidsHome from '../components/kids/KidsHome';
 
 export default function Home() {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -26,7 +27,8 @@ export default function Home() {
     <div className="home">
       {error && <div className="loading-state">Dashboard could not be loaded: {error}</div>}
       {!data && !error && <div className="loading-state">Loading dashboard...</div>}
-      {data && (
+      {data?.kids && <KidsHome rails={data.rails} />}
+      {data && !data.kids && (
         <>
           <Hero items={data.heroCandidates ?? [data.hero]} />
           <main className="page">

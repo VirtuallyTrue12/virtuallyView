@@ -162,6 +162,8 @@ export interface IntegrationStatus {
   setupRequired?: boolean;
 }
 
+export interface ProfileAvatar { color: string; emoji: string }
+
 export interface AuthUser {
   id: string;
   username: string;
@@ -169,7 +171,17 @@ export interface AuthUser {
   createdAt: string;
   avatar?: string;
   maxRating?: string;
+  /** Listed in the "Who's watching?" picker. */
+  shown?: boolean;
+  /** A Kids profile. */
+  isKid?: boolean;
+  /** Whether a PIN is set (the PIN itself is never sent). */
+  hasPin?: boolean;
+  profileAvatar?: ProfileAvatar;
 }
+
+/** One entry in the "Who's watching?" picker. */
+export interface ProfileSummary { id: string; name: string; avatar: ProfileAvatar; hasPin: boolean; isKid: boolean }
 
 export interface Lyrics {
   plain: string | null;
@@ -228,6 +240,8 @@ export interface Dashboard {
   hero: HeroCandidate;
   heroCandidates: HeroCandidate[];
   rails: Rail[];
+  /** Set for a Kids profile: a shorter, family-only home. */
+  kids?: boolean;
 }
 
 export interface SearchResults {
@@ -519,6 +533,10 @@ function patchJSON<T>(path: string, body?: unknown): Promise<T> {
   return requestJSON<T>('PATCH', path, body);
 }
 
+function putJSON<T>(path: string, body?: unknown): Promise<T> {
+  return requestJSON<T>('PUT', path, body);
+}
+
 function deleteJSON<T>(path: string): Promise<T> {
   return requestJSON<T>('DELETE', path);
 }
@@ -645,6 +663,10 @@ export const api = {
   setAvatar: (avatar: string) => postJSON<{ user: AuthUser }>('/api/auth/profile/avatar', { avatar }),
   setUserLimit: (id: string, maxRating: string) =>
     postJSON<{ users: AuthUser[] }>(`/api/auth/users/${encodeURIComponent(id)}/limit`, { maxRating }),
+  profiles: () => getJSON<{ profiles: ProfileSummary[]; currentId: string | null }>('/api/profiles'),
+  switchProfile: (id: string, secret?: { pin?: string; password?: string }) => postJSON<AuthStatus>('/api/profiles/switch', { id, ...secret }),
+  setMyProfile: (body: { avatar?: ProfileAvatar; pin?: string | null }) => putJSON<{ user: AuthUser }>('/api/profiles/me', body),
+  setProfile: (id: string, body: { shown?: boolean; isKid?: boolean; avatar?: ProfileAvatar }) => putJSON<{ users: AuthUser[] }>(`/api/profiles/${encodeURIComponent(id)}`, body),
   lyrics: (artist: string, title: string, album?: string, durationSeconds?: number) =>
     getJSON<Lyrics>(`/api/lyrics?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}${album ? `&album=${encodeURIComponent(album)}` : ''}${durationSeconds ? `&duration=${Math.round(durationSeconds)}` : ''}`),
   authBackdrop: () => getJSON<{ backdrop: AuthBackdrop | null }>('/api/auth/backdrop'),

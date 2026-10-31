@@ -50,6 +50,8 @@ import refreshRoutes from './routes/refresh.js';
 import libraryFolderRoutes from './routes/library-folders.js';
 import artRoutes from './routes/art.js';
 import setupRoutes from './routes/setup.js';
+import profileRoutes from './routes/profiles.js';
+import { kidsBlocked } from './services/kids.js';
 import { VERSION } from './lib/version.js';
 import { redactUrl } from './lib/redact.js';
 import { all } from './db/app-db.js';
@@ -384,7 +386,7 @@ function streamTokenOwner(request: FastifyRequest): ReturnType<typeof listUsers>
 // progress, My List) resolves without threading a user id through every call.
 server.addHook('onRequest', (request, _reply, done) => {
   const user = currentUser(readSessionCookie(request.headers.cookie)) ?? streamTokenOwner(request);
-  runAsActor(user ? { userId: user.id, username: user.username, role: user.role, ...(user.maxRating ? { maxRating: user.maxRating } : {}) } : { userId: 'shared', username: 'guest', role: 'user' }, done);
+  runAsActor(user ? { userId: user.id, username: user.username, role: user.role, ...(user.maxRating ? { maxRating: user.maxRating } : {}), ...(user.isKid ? { kid: true } : {}) } : { userId: 'shared', username: 'guest', role: 'user' }, done);
 });
 
 // Regular users may watch, request and manage their own lists; anything that
@@ -417,6 +419,15 @@ server.addHook('preHandler', async (request, reply) => {
   }
 });
 
+// A Kids profile cannot reach requests, downloads, settings, apps or diagnostics (see services/kids.ts).
+server.addHook('preHandler', async (request, reply) => {
+  const path = request.url.split('?')[0] ?? '';
+  const me = currentUser(readSessionCookie(request.headers.cookie));
+  if (kidsBlocked(me?.isKid === true, request.method, path)) {
+    return reply.code(403).send({ message: 'That is not available on a Kids profile.' });
+  }
+});
+
 server.addHook('preHandler', async (request, reply) => {
   metrics.requests++;
   const path = request.url.split('?')[0] ?? '';
@@ -430,7 +441,7 @@ server.addHook('preHandler', async (request, reply) => {
     return bucket.count;
   };
   // Password guessing is limited tightly per address.
-  if (request.method === 'POST' && (path === '/api/auth/login' || path === '/api/auth/signup' || path === '/api/auth/quickconnect/start' || path === '/api/auth/quickconnect/approve') && bump(loginCounts) > loginRateLimit) {
+  if (request.method === 'POST' && (path === '/api/auth/login' || path === '/api/auth/signup' || path === '/api/auth/quickconnect/start' || path === '/api/auth/quickconnect/approve' || path === '/api/profiles/switch') && bump(loginCounts) > loginRateLimit) {
     return reply.code(429).header('Retry-After', '60').send({ error: 'rate_limited', message: 'Too many sign-in attempts. Wait a minute and try again.' });
   }
   if (/^\/api\/watch-party\/[^/]+/.test(path) && bump(partyCodeCounts) > partyCodeRateLimit) {
@@ -489,6 +500,7 @@ const start = async () => {
   await server.register(libraryFolderRoutes);
   await server.register(artRoutes);
   await server.register(setupRoutes);
+  await server.register(profileRoutes);
   await server.register(playlistRoutes);
   await server.register(artistCoversRoutes);
   await server.register(searchRoutes);

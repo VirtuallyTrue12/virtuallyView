@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Dialog } from '../ui/Dialog';
+import { forViewer } from '../kids/kids-rules';
 import { SvgIcon, type IconName } from '../ui/SvgIcon';
 
 const TABS: Array<{ to: string; label: string; icon: IconName; end?: boolean }> = [
@@ -22,10 +23,11 @@ const MORE: Array<{ to: string; label: string; icon: IconName }> = [
  * Hidden on larger screens (the top bar has the links there). Tells the page how tall it is, so
  * the music bar and floating buttons sit above it.
  */
-export function MobileTabs() {
+export function MobileTabs({ kid }: { kid?: boolean }) {
   const [more, setMore] = useState(false);
   const bar = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
+  const moreLinks = forViewer(MORE, kid);
   useEffect(() => { setMore(false); }, [pathname]);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function MobileTabs() {
     return () => { observer?.disconnect(); window.removeEventListener('resize', update); root.style.removeProperty('--tabbar-h'); };
   }, []);
 
-  const inMore = MORE.some(m => pathname.startsWith(m.to));
+  const inMore = moreLinks.some(m => pathname.startsWith(m.to));
   // Full-screen players and watch parties have their own controls.
   if (/\/play$|\/watch\/|^\/party\//.test(pathname)) return null;
   return (
@@ -57,7 +59,7 @@ export function MobileTabs() {
       </nav>
       <Dialog open={more} onClose={() => setMore(false)} title="More">
         <div className="more-grid">
-          {MORE.map(m => (
+          {moreLinks.map(m => (
             <NavLink key={m.to} to={m.to} className={({ isActive }) => `more-tile${isActive ? ' is-active' : ''}`}>
               <SvgIcon name={m.icon} size={22} /><span>{m.label}</span>
             </NavLink>
