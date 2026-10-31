@@ -4,6 +4,7 @@ import { MediaCard } from './MediaCard';
 import { StatusPill } from './StatusPill';
 import type { Rail, DownloadItem, MediaItem } from '../../lib/api';
 import { SvgIcon } from '../ui/SvgIcon';
+import { RankedCard } from '../home/RankedCard';
 
 export function MediaRail({ rail }: { rail: Rail }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -63,10 +64,9 @@ export function MediaRail({ rail }: { rail: Rail }) {
         </div>
       </div>
       <div className="rail-scroll" ref={scrollRef} tabIndex={0} onKeyDown={handleRailKeyDown} aria-label={`${rail.title} (use arrow keys to scroll)`}>
-        {rail.items.map(item =>
-          rail.kind === 'download' ? (
-            <DownloadCard key={item.id} item={item as DownloadItem} />
-          ) : (
+        {rail.items.map(item => {
+          if (rail.kind === 'download') return <DownloadCard key={item.id} item={item as DownloadItem} />;
+          const card = (
             <MediaCard
               key={item.id}
               item={item as MediaItem}
@@ -74,8 +74,10 @@ export function MediaRail({ rail }: { rail: Rail }) {
               progress={(item as MediaItem).watchProgress}
               to={(item as MediaItem & { href?: string }).href ?? detailPath(item as MediaItem)}
             />
-          )
-        )}
+          );
+          const rank = (item as MediaItem).rank;
+          return rank ? <RankedCard key={item.id} rank={rank}>{card}</RankedCard> : card;
+        })}
       </div>
     </section>
   );

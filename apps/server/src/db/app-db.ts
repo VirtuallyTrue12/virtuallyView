@@ -217,6 +217,14 @@ function open(): DatabaseSync {
       arrived_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS new_arrivals_arrived ON new_arrivals (arrived_at);
+    -- Each viewer's home page: which rails they hid and where the others sit.
+    CREATE TABLE IF NOT EXISTS home_layout (
+      user_id TEXT NOT NULL,
+      rail_id TEXT NOT NULL,
+      hidden INTEGER NOT NULL DEFAULT 0,
+      position INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, rail_id)
+    );
   `);
   // Older databases kept one shared progress table; move it to per-user rows
   // (existing rows become 'shared' and stay visible until a user has their own).
@@ -241,6 +249,10 @@ function open(): DatabaseSync {
   }
   if (!(db.prepare('PRAGMA table_info(watch_progress)').all() as Array<{ name: string }>).some(c => c.name === 'context')) {
     db.exec('ALTER TABLE watch_progress ADD COLUMN context TEXT');
+  }
+  // Thumbs up / down on a title (1, -1, or 0 for none), kept on the user's flags row.
+  if (!(db.prepare('PRAGMA table_info(user_flags)').all() as Array<{ name: string }>).some(c => c.name === 'thumb')) {
+    db.exec('ALTER TABLE user_flags ADD COLUMN thumb INTEGER NOT NULL DEFAULT 0');
   }
   _db = db;
   return db;

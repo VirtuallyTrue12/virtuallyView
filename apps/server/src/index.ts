@@ -35,6 +35,8 @@ import youtubeRoutes from './routes/youtube.js';
 import troubleshootRoutes from './routes/troubleshoot.js';
 import settingsOverviewRoutes from './routes/settings-overview.js';
 import importExistingRoutes from './routes/import-existing.js';
+import ratingRoutes from './routes/ratings.js';
+import homeLayoutRoutes from './routes/home-layout.js';
 import { recordChange } from './services/settings-history.js';
 import lyricsRoutes from './routes/lyrics.js';
 import ttsRoutes from './routes/tts.js';
@@ -509,6 +511,8 @@ const start = async () => {
   await server.register(troubleshootRoutes);
   await server.register(settingsOverviewRoutes);
   await server.register(importExistingRoutes);
+  await server.register(ratingRoutes);
+  await server.register(homeLayoutRoutes);
 
   // In production (Docker, `npm start`) the built web app ships alongside the
   // server, so one process serves both the API and the UI on one port. In

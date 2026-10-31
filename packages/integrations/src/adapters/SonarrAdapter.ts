@@ -3,6 +3,7 @@ import { Media, MediaStatus, Download } from '@virtuallyview/types';
 import { runArrCommand, arrHealthCheck, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listRootFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
 import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
 import { TtlCache } from '../ttl-cache.js';
+import { sonarrRatings } from '../arr-ratings.js';
 
 export interface SonarrEpisode {
   id: string;
@@ -140,6 +141,7 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
           artwork: { poster, backdrop },
           genres: s.genres ?? [],
           rating: s.ratings?.value,
+          ratings: sonarrRatings(s.ratings),
           overview: s.overview,
           studio: s.network,
           certification: s.certification,

@@ -1398,3 +1398,76 @@ describe('player: subtitle style, who is on screen, and recaps', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('personal home page', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  // Waits until the button with this accessible name shows the wanted aria-pressed value.
+  const waitPressed = (name: string, value: 'true' | 'false') => page.waitForFunction(
+    ([n, v]) => [...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === n)?.getAttribute('aria-pressed') === v,
+    [name, value]
+  );
+
+  it('thumbs up and down toggle, and pressing the lit one again clears it', async () => {
+    const movie = { id: 'radarr-801', title: 'Thumbed Film', type: 'movie', status: 'available', year: 2020, genres: ['Drama'], artwork: {}, myThumb: 0, ratings: { imdb: { value: 7.4 }, rottenTomatoes: { value: 92 }, tmdb: { value: 0 } } };
+    let stored = 0;
+    const posted: number[] = [];
+    await page.route('**/api/movies/radarr-801', r => r.fulfill(json({ ...movie, myThumb: stored })));
+    await page.route('**/api/ratings/movie/radarr-801', r => {
+      const thumb = r.request().postDataJSON().thumb as number;
+      posted.push(thumb);
+      stored = thumb;
+      return r.fulfill(json({ mediaType: 'movie', mediaId: 'radarr-801', thumb }));
+    });
+    await page.goto(base + '/movies/radarr-801');
+    await page.getByRole('button', { name: 'Thumbs up' }).waitFor();
+    // Scores with a value show as chips; a zero score is left out.
+    await page.locator('.score-chip', { hasText: 'IMDb 7.4' }).waitFor();
+    expect(await page.locator('.score-chip', { hasText: 'Rotten Tomatoes 92%' }).count()).toBe(1);
+    expect(await page.locator('.score-chip', { hasText: 'TMDB' }).count()).toBe(0);
+
+    await page.getByRole('button', { name: 'Thumbs up' }).click();
+    await waitPressed('Thumbs up', 'true');
+    await page.getByRole('button', { name: 'Thumbs up' }).click();
+    await waitPressed('Thumbs up', 'false');
+    await page.getByRole('button', { name: 'Thumbs down' }).click();
+    await waitPressed('Thumbs down', 'true');
+    await waitPressed('Thumbs up', 'false');
+    expect(posted).toEqual([1, 0, -1]);
+    expect(errors).toEqual([]);
+  });
+
+  it('Edit home hides a rail and the rail disappears from the page', async () => {
+    const card = (id: string, title: string) => ({ id, title, type: 'movie', status: 'available', artwork: {}, genres: [] });
+    const dashboard = {
+      hero: null,
+      heroCandidates: [{ ...card('radarr-820', 'Edit Home Hero'), tagline: 'A tagline', inLibrary: true }],
+      rails: [
+        { id: 'recent', title: 'Recently Added', items: [card('radarr-821', 'Fresh Film')] },
+        { id: 'trending-movies', title: 'Trending Movies', items: [card('radarr-822', 'Popular Film')] }
+      ]
+    };
+    let layout: Array<{ id: string; hidden: boolean; position: number }> | null = null;
+    await page.route('**/api/dashboard', r => r.fulfill(json(dashboard)));
+    await page.route('**/api/home-layout', async r => {
+      if (r.request().method() === 'PUT') {
+        layout = r.request().postDataJSON().rails;
+        return r.fulfill(json({ rails: layout }));
+      }
+      return r.fulfill(json({ rails: layout ?? [] }));
+    });
+    await page.goto(base + '/');
+    await page.getByRole('region', { name: 'Trending Movies' }).waitFor();
+
+    await page.getByRole('button', { name: 'Edit home', exact: true }).click();
+    await page.getByRole('switch', { name: 'Show Trending Movies on home' }).click();
+    await page.waitForFunction(() => document.querySelector('[role="switch"][aria-label="Show Trending Movies on home"]')?.getAttribute('aria-checked') === 'false');
+    await page.keyboard.press('Escape');
+    await page.getByRole('region', { name: 'Trending Movies' }).waitFor({ state: 'detached' });
+    expect(await page.getByRole('region', { name: 'Recently Added' }).count()).toBe(1);
+    expect(layout).toEqual([
+      { id: 'recent', hidden: false, position: 0 },
+      { id: 'trending-movies', hidden: true, position: 1 }
+    ]);
+    expect(errors).toEqual([]);
+  });
+});

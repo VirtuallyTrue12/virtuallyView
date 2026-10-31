@@ -6,7 +6,7 @@ import type { RadarrAdapter, SonarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from '../services/registry.js';
 import { getRequests } from '../services/requests.js';
 import { getWatchProgress, progressForLibrary } from '../services/progress.js';
-import { flagsForLibrary, getFlags } from '../services/user-flags.js';
+import { flagsForLibrary, getFlags, getThumb } from '../services/user-flags.js';
 import { ensureCast, freshCast, getCastCache, setCastCache, type CastMember } from '../services/cast.js';
 import { seriesCast } from '../services/cast-more.js';
 import { sweepConcertMovies, withoutConcerts } from '../services/concert-movies.js';
@@ -178,6 +178,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
           ...movie,
           watchProgress: progress?.percent ?? 0,
           ...getFlags('movie', id),
+          myThumb: getThumb('movie', id),
           tmdbId: movie.provider?.metadata?.tmdbId,
           warnings: warningsFor(movie as Parameters<typeof warningsFor>[0]),
           streamUrl: (movie as { fileInfo?: { path?: string } }).fileInfo?.path ? `/api/stream/${movie.id}` : undefined,
@@ -272,7 +273,7 @@ export default async function mediaRoutes(server: FastifyInstance) {
       if (series && series.id === id) {
         if (!ratingAllowed(series.certification)) return reply.code(403).send({ error: 'age_restricted', message: 'This title is above the age limit set for your account.' });
         const progress = getWatchProgress('series', id);
-        return { ...series, watchProgress: progress?.percent ?? 0, ...getFlags('series', id) };
+        return { ...series, watchProgress: progress?.percent ?? 0, ...getFlags('series', id), myThumb: getThumb('series', id) };
       }
     } catch {
       // Sonarr unavailable: fall through to the 404 below.

@@ -3,8 +3,9 @@ import { Media, MediaStatus, Download } from '@virtuallyview/types';
 import { queueProblem, joinApiUrl, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listRootFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, runArrCommand, arrHealthCheck, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
 import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
 import { TtlCache } from '../ttl-cache.js';
+import { radarrRatings } from '../arr-ratings.js';
 
-const ART = 'https://image.tmdb.org/t/p/w500';
+const ART ='https://image.tmdb.org/t/p/w500';
 const ART_LARGE = 'https://image.tmdb.org/t/p/w1280';
 
 export interface ReleaseInfo { status?: string | undefined; inCinemas?: string | undefined; digitalRelease?: string | undefined; physicalRelease?: string | undefined }
@@ -95,7 +96,13 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       imdbId?: string;
       overview?: string;
       runtime?: number;
-      ratings?: { value?: number };
+      ratings?: {
+        value?: number;
+        imdb?: { value?: number; votes?: number };
+        tmdb?: { value?: number; votes?: number };
+        rottenTomatoes?: { value?: number; votes?: number };
+        metacritic?: { value?: number; votes?: number };
+      };
       genres?: string[];
       hasFile?: boolean;
       images?: Array<{ coverType: string; url: string; remoteUrl?: string }>;
@@ -133,6 +140,7 @@ export class RadarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
           artwork: { poster, backdrop },
           genres: m.genres ?? [],
           rating: m.ratings?.value,
+          ratings: radarrRatings(m.ratings),
           overview: m.overview,
           fileInfo: m.movieFile ? {
             path: m.movieFile.path, size: m.movieFile.size,
