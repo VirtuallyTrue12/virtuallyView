@@ -6,6 +6,7 @@ import { getDownloads as getQueueDownloads } from '../services/real-downloads.js
 import { allWatchProgress, householdViewRows } from '../services/progress.js';
 import { listFlagged, flagSignalRows } from '../services/user-flags.js';
 import { filterByRating } from '../services/parental.js';
+import { currentActor } from '../services/user-context.js';
 import { lastWatchedSeries } from '../services/progress.js';
 import { newForYouRails } from '../services/new-for-you.js';
 import { flagsForLibrary } from '../services/user-flags.js';
@@ -133,6 +134,22 @@ export default async function dashboardRoutes(server: FastifyInstance) {
       .map(f => byId.get(f.mediaId))
       .filter((i): i is Media => !!i && i.type === typeOf(i.type))
       .map(i => ({ ...i, favorite: true }));
+
+    // A Kids profile gets a short, family-only home: its own Continue Watching and My List, plus family
+    // titles (the rating limit already keeps those to G and PG).
+    if (currentActor().kid) {
+      const family = byRating([...movies, ...series], 24);
+      return {
+        kids: true,
+        hero: heroCandidates.find(h => h.type !== 'artist') ?? null,
+        heroCandidates: heroCandidates.filter(h => h.type !== 'artist'),
+        rails: [
+          ...(continueItems.length ? [{ id: 'continue-watching', title: 'Continue Watching', items: continueItems.slice(0, 12) }] : []),
+          { id: 'family', title: 'Family Favorites', items: withStream(family) },
+          ...(myList.length ? [{ id: 'my-list', title: 'My List', items: myList }] : [])
+        ]
+      };
+    }
 
     // Personal rails. Taste comes from this viewer's flags; candidates are the movies and shows
     // already in the library (the lists above are already filtered by the viewer's age limit).

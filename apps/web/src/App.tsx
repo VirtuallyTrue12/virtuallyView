@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Routes, Route, Link, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import ProfilePicker from './components/profiles/ProfilePicker';
 import { MobileTabs } from './components/layout/MobileTabs';
 import { UpdateBanner } from './components/layout/UpdateBanner';
 import { Navigation } from './components/layout/Navigation';
@@ -44,12 +45,18 @@ const Diagnostics = lazy(() => import('./pages/Diagnostics'));
 const Activity = lazy(() => import('./pages/Activity'));
 import NotFound from './pages/NotFound';
 import { api, type AuthUser } from './lib/api';
+
+type AuthState = { enabled: boolean; setupRequired: boolean; authenticated: boolean; user?: AuthUser | null };
 import { paintCachedTheme, syncTheme } from './lib/appearance';
 import { MusicProvider } from './components/media/MusicProvider';
 import { RadioProvider } from './components/radio/RadioProvider';
 
 export default function App() {
   const authedRef = useRef(false);
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // Set after a fresh sign-in, so a household with two or more profiles is offered the picker once.
+  const [pickerOnEntry, setPickerOnEntry] = useState(false);
   // Bumping this remounts the current page, so it loads its data again.
   const [refreshKey, setRefreshKey] = useState(0);
   const [auth, setAuth] = useState<{ enabled: boolean; setupRequired: boolean; authenticated: boolean; user?: AuthUser | null } | null>(null);
@@ -114,6 +121,26 @@ export default function App() {
     if (auth?.authenticated) void syncTheme().catch(() => {});
   }, [auth?.authenticated]);
 
+  // A Kids profile gets the bright top bar: a class on <html> that kids.css keys off.
+  const kid = auth?.authenticated === true && auth.user?.isKid === true;
+  useEffect(() => {
+    document.documentElement.classList.toggle('kids', kid);
+  }, [kid]);
+
+  // After signing in (not on a page load), offer the picker when two or more profiles are shown.
+  useEffect(() => {
+    if (!pickerOnEntry || !auth?.authenticated || onboarding.loading || onboarding.required) return;
+    setPickerOnEntry(false);
+    api.profiles()
+      .then(result => { if (result.profiles.length >= 2) navigate('/profiles', { replace: true }); })
+      .catch(() => { /* no picker: the home page still works */ });
+  }, [pickerOnEntry, auth?.authenticated, onboarding.loading, onboarding.required, navigate]);
+
+  const signedIn = (next: AuthState) => {
+    setAuth(next);
+    setPickerOnEntry(true);
+  };
+
   const signOut = async () => {
     try { await api.logout(); } catch { /* the cookie is cleared server-side either way */ }
     setAuth({ enabled: true, setupRequired: false, authenticated: false, user: null });
@@ -122,7 +149,7 @@ export default function App() {
   if (!auth) return (
     <LoginScreen
       auth={{ enabled: true, setupRequired: false, authenticated: false, user: null }}
-      onAuthenticated={setAuth}
+      onAuthenticated={signedIn}
       onRetry={() => void loadAuth()}
       loading={authLoading}
       retryError={authLoading ? undefined : error}
@@ -131,7 +158,7 @@ export default function App() {
   if (auth.setupRequired || (auth.enabled && !auth.authenticated)) return (
     <LoginScreen
       auth={auth}
-      onAuthenticated={setAuth}
+      onAuthenticated={signedIn}
       onRetry={() => void loadAuth()}
       loading={authLoading}
       retryError={authLoading ? undefined : error}
@@ -150,6 +177,11 @@ export default function App() {
       <OnboardingWizard onDone={() => setOnboarding({ loading: false, required: false })} />
     );
   }
+  // "Who's watching?" is full-screen, outside the app's top bar.
+  if (auth.authenticated && pathname === '/profiles') return <ProfilePicker />;
+
+  // Pages a Kids profile cannot use go back to Home (the server refuses their data anyway).
+  const forGrownUps = (page: ReactNode) => (kid ? <Navigate to="/" replace /> : page);
 
   return (
     <MusicProvider>
@@ -167,11 +199,11 @@ export default function App() {
         <Route path="/series/:id" element={<SeriesDetail />} />
         <Route path="/series/:id/watch/:episodeId" element={<EpisodePlayer />} />
         <Route path="/music" element={<Music />} />
-        <Route path="/requests" element={<Requests />} />
+        <Route path="/requests" element={forGrownUps(<Requests />)} />
         <Route path="/activity" element={<Activity />} />
         <Route path="/search" element={<Search />} />
-        <Route path="/downloads" element={<Downloads />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/downloads" element={forGrownUps(<Downloads />)} />
+        <Route path="/settings" element={forGrownUps(<Settings />)} />
         <Route path="/account" element={<Account />} />
         <Route path="/people/:name" element={<Person />} />
         <Route path="/live" element={<LiveTV />} />
@@ -181,19 +213,19 @@ export default function App() {
         <Route path="/photos" element={<Photos />} />
         <Route path="/books" element={<Books />} />
         <Route path="/wiki" element={<Wiki />} />
-        <Route path="/apps" element={<HomeLabApps />} />
+        <Route path="/apps" element={forGrownUps(<HomeLabApps />)} />
         <Route path="/party/:code" element={<PartyJoin />} />
         <Route path="/music/year/:year" element={<YearInReview />} />
         <Route path="/music/:id" element={<ArtistDetails />} />
         <Route path="/music/:id/watch/:videoId" element={<ConcertPlayer />} />
         <Route path="/albums/:id" element={<AlbumDetails />} />
         <Route path="/playlists/:id" element={<PlaylistDetail />} />
-        <Route path="/themes" element={<Themes />} />
+        <Route path="/themes" element={forGrownUps(<Themes />)} />
         <Route path="/themes/installed" element={<Navigate to="/themes" replace />} />
         <Route path="/themes/marketplace" element={<Navigate to="/themes" replace />} />
-        <Route path="/themes/create" element={<ThemeCreator />} />
-        <Route path="/statistics" element={<Statistics />} />
-        <Route path="/diagnostics" element={<Diagnostics />} />
+        <Route path="/themes/create" element={forGrownUps(<ThemeCreator />)} />
+        <Route path="/statistics" element={forGrownUps(<Statistics />)} />
+        <Route path="/diagnostics" element={forGrownUps(<Diagnostics />)} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       </Suspense>
@@ -201,7 +233,7 @@ export default function App() {
         <span>virtuallyView</span>
         <span><Link to="/requests">Requests</Link> · <Link to="/downloads">Downloads</Link> · <Link to="/settings">Settings</Link></span>
       </footer>
-      {auth.authenticated && <MobileTabs />}
+      {auth.authenticated && <MobileTabs kid={kid} />}
       <ChatWidget />
       <CommandPalette />
       <Toaster />

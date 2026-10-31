@@ -5,6 +5,13 @@ import { DATA_DIR } from '../lib/paths.js';
 
 export type Role = 'admin' | 'user';
 
+/** Colour and emoji for the profile picker. An empty emoji shows the name's initials. */
+export interface ProfileAvatar { color: string; emoji: string }
+
+// Fixed choices, so a profile can only ever be drawn from this list.
+export const PROFILE_COLORS = ['#e50914', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#d81b60', '#6d4c41'] as const;
+export const PROFILE_EMOJIS = ['', '🦊', '🐻', '🐼', '🦁', '🐸', '🐙', '🚀', '⭐', '🎸', '🌈', '🍕', '🎮', '🦖'] as const;
+
 export interface PublicUser {
   id: string;
   username: string;
@@ -12,8 +19,16 @@ export interface PublicUser {
   createdAt: string;
   /** Small profile picture as a data URL, or empty for the initial-letter default. */
   avatar?: string;
-  /** Highest age rating this person may watch, such as PG-13. Empty means no limit. */
+  /** Highest age rating this person may watch, such as PG-13. Empty means no limit. Kids profiles are always G or PG. */
   maxRating?: string;
+  /** Listed in the "Who's watching?" picker. */
+  shown: boolean;
+  /** A Kids profile: family titles only, and no requests, downloads or settings. */
+  isKid: boolean;
+  /** Whether a PIN is set. The PIN and its hash are never returned. */
+  hasPin: boolean;
+  /** Colour and emoji shown in the profile picker. */
+  profileAvatar: ProfileAvatar;
 }
 
 interface StoredUser {
@@ -24,6 +39,12 @@ interface StoredUser {
   createdAt: string;
   avatar?: string;
   maxRating?: string;
+  /** Missing means shown (accounts from before profiles existed). */
+  shown?: boolean;
+  isKid?: boolean;
+  /** Same scrypt format as passwords. Never leaves this module. */
+  pinHash?: string;
+  profileAvatar?: ProfileAvatar;
 }
 
 interface Session {
@@ -168,11 +189,46 @@ function isRole(value: unknown): value is Role {
   return value === 'admin' || value === 'user';
 }
 
+/** A Kids profile is never allowed past PG (G stays G). */
+export function kidsRatingLimit(limit?: string): string {
+  return limit === 'G' ? 'G' : 'PG';
+}
+
+function defaultProfileAvatar(id: string): ProfileAvatar {
+  const sum = [...id].reduce((total, ch) => total + ch.charCodeAt(0), 0);
+  return { color: PROFILE_COLORS[sum % PROFILE_COLORS.length]!, emoji: '' };
+}
+
+function validProfileAvatar(value: unknown): ProfileAvatar | null {
+  if (!value || typeof value !== 'object') return null;
+  const { color, emoji } = value as Partial<ProfileAvatar>;
+  if (!(PROFILE_COLORS as readonly string[]).includes(color ?? '')) return null;
+  if (!(PROFILE_EMOJIS as readonly string[]).includes(emoji ?? '')) return null;
+  return { color: color!, emoji: emoji! };
+}
+
 function toPublic(user: StoredUser): PublicUser {
+  const kid = user.isKid === true && user.role === 'user';
+  const limit = kid ? kidsRatingLimit(user.maxRating) : user.maxRating;
   return {
     id: user.id, username: user.username, role: user.role, createdAt: user.createdAt,
     ...(user.avatar ? { avatar: user.avatar } : {}),
-    ...(user.maxRating ? { maxRating: user.maxRating } : {})
+    ...(limit ? { maxRating: limit } : {}),
+    shown: user.shown !== false,
+    isKid: kid,
+    hasPin: typeof user.pinHash === 'string',
+    profileAvatar: user.profileAvatar ?? defaultProfileAvatar(user.id)
+  };
+}
+
+/** Profile fields read from the store. A malformed PIN hash is kept on purpose: it then never matches (fails closed). */
+function optionalProfileFields(user: Partial<StoredUser>): Partial<StoredUser> {
+  const avatar = validProfileAvatar(user.profileAvatar);
+  return {
+    ...(typeof user.shown === 'boolean' ? { shown: user.shown } : {}),
+    ...(typeof user.isKid === 'boolean' ? { isKid: user.isKid } : {}),
+    ...(typeof user.pinHash === 'string' && user.pinHash ? { pinHash: user.pinHash } : {}),
+    ...(avatar ? { profileAvatar: avatar } : {})
   };
 }
 
@@ -211,7 +267,8 @@ function parseUsers(raw: string): StoredUser[] {
         role: isRole(user.role) ? user.role : 'user',
         createdAt: typeof user.createdAt === 'string' ? user.createdAt : new Date(0).toISOString(),
         ...(typeof user.avatar === 'string' && user.avatar ? { avatar: user.avatar } : {}),
-        ...(typeof user.maxRating === 'string' && user.maxRating ? { maxRating: user.maxRating } : {})
+        ...(typeof user.maxRating === 'string' && user.maxRating ? { maxRating: user.maxRating } : {}),
+        ...optionalProfileFields(user)
       });
     }
     return users;
@@ -248,6 +305,13 @@ function envPassword(): string | null {
 
 function envUsername(): string {
   return process.env.DASHBOARD_AUTH_USERNAME?.trim() || 'root';
+}
+
+function envAccount(): PublicUser {
+  return {
+    id: 'env', username: envUsername(), role: 'admin', createdAt: new Date(0).toISOString(),
+    shown: true, isKid: false, hasPin: false, profileAvatar: defaultProfileAvatar('env')
+  };
 }
 
 export function authEnabled(): boolean {
@@ -425,7 +489,7 @@ export function currentUser(token: string | undefined): PublicUser | null {
   if (!userId) return null;
   if (userId === 'env') {
     if (!envPassword() || storeExists()) return null;
-    return { id: 'env', username: envUsername(), role: 'admin', createdAt: new Date(0).toISOString() };
+    return envAccount();
   }
   try {
     const user = readUsersStrict().find(entry => entry.id === userId);
@@ -443,7 +507,7 @@ export function listUsers(): PublicUser[] {
   try {
     const users = readUsersStrict();
     if (users.length === 0 && envPassword()) {
-      return [{ id: 'env', username: envUsername(), role: 'admin', createdAt: new Date(0).toISOString() }];
+      return [envAccount()];
     }
     return users.map(toPublic);
   } catch {
@@ -494,7 +558,12 @@ export function setUserRole(id: string, role: Role): { ok: boolean; message?: st
     return { ok: false, message: 'The last administrator account cannot be demoted.' };
   }
   try {
-    writeUsers(users.map(user => (user.id === id ? { ...user, role } : user)));
+    writeUsers(users.map(user => {
+      if (user.id !== id) return user;
+      const next: StoredUser = { ...user, role };
+      if (role === 'admin') delete next.isKid;
+      return next;
+    }));
   } catch {
     return { ok: false, message: 'Could not write the user store.' };
   }
@@ -603,4 +672,71 @@ export function revokeOtherSessions(userId: string, keepToken: string): number {
   }
   if (removed) persistSessions();
   return removed;
+}
+
+/** Profile settings: picker visibility, Kids mode, colour/emoji, and the PIN (4 digits, or null to remove). Leave a field undefined to keep it. */
+export function updateAccountProfile(id: string, patch: { shown?: boolean; isKid?: boolean; profileAvatar?: unknown; pin?: string | null }): { ok: boolean; message?: string } {
+  if (patch.profileAvatar !== undefined && !validProfileAvatar(patch.profileAvatar)) {
+    return { ok: false, message: 'Pick a colour and an emoji from the list.' };
+  }
+  if (typeof patch.pin === 'string' && !/^\d{4}$/.test(patch.pin)) return { ok: false, message: 'A PIN is exactly 4 digits.' };
+  let users: StoredUser[];
+  try {
+    users = readUsersStrict();
+  } catch {
+    return { ok: false, message: 'Stored user data is corrupt.' };
+  }
+  const target = users.find(user => user.id === id);
+  if (!target) return { ok: false, message: 'User not found.' };
+  if (patch.isKid === true && target.role === 'admin') return { ok: false, message: 'An administrator account cannot be a Kids profile.' };
+  const next: StoredUser = { ...target };
+  if (patch.shown !== undefined) next.shown = patch.shown;
+  if (patch.isKid !== undefined) { if (patch.isKid) next.isKid = true; else delete next.isKid; }
+  if (patch.profileAvatar !== undefined) next.profileAvatar = validProfileAvatar(patch.profileAvatar)!;
+  if (patch.pin === null) delete next.pinHash;
+  else if (typeof patch.pin === 'string') next.pinHash = hashPassword(patch.pin);
+  try {
+    writeUsers(users.map(user => (user.id === id ? next : user)));
+  } catch {
+    return { ok: false, message: 'Could not write the user store.' };
+  }
+  return { ok: true };
+}
+
+/** What a profile switch needs to know, without exposing any hash. */
+export interface SwitchTarget {
+  id: string;
+  role: Role;
+  shown: boolean;
+  hasPin: boolean;
+  checkPin: (pin: string) => boolean;
+  checkPassword: (password: string) => boolean;
+}
+
+export function switchTarget(id: string): SwitchTarget | null {
+  let users: StoredUser[];
+  try {
+    users = readUsersStrict();
+  } catch {
+    return null;
+  }
+  const user = users.find(entry => entry.id === id);
+  if (!user) return null;
+  const pinHash = user.pinHash;
+  return {
+    id: user.id,
+    role: user.role,
+    shown: user.shown !== false,
+    hasPin: typeof pinHash === 'string',
+    checkPin: pin => typeof pinHash === 'string' && typeof pin === 'string' && verifyPassword(pinHash, pin),
+    checkPassword: password => typeof password === 'string' && verifyPassword(user.passwordHash, password)
+  };
+}
+
+/** True for a "stay signed in" session, so a profile switch keeps the same length of sign-in. */
+export function sessionIsLongLived(token: string | undefined): boolean {
+  if (!token) return false;
+  loadSessions();
+  const session = sessions.get(tokenKey(token));
+  return !!session && session.expiresAt - Date.now() > SESSION_LIFETIME_MS;
 }

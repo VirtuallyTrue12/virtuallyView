@@ -1,0 +1,140 @@
+/* Kids profiles: a brighter top bar (html.kids) and the big-tile home. */
+
+/* Top bar: bright, rounded and friendly. Only applies while a Kids profile is signed in. */
+html.kids .nav {
+  background: linear-gradient(90deg, #ffd23f 0%, #ff9f1c 45%, #2ec4b6 100%);
+  color: #1b1b3a;
+  border-bottom: 0;
+  box-shadow: 0 4px 0 rgba(27, 27, 58, 0.15);
+}
+
+html.kids .nav-brand,
+html.kids .nav-brand span {
+  color: #1b1b3a;
+  font-weight: 800;
+}
+
+html.kids .nav-link {
+  color: #1b1b3a;
+  font-weight: 700;
+  border-radius: 999px;
+  padding-inline: 0.8rem;
+}
+
+html.kids .nav-link:hover,
+html.kids .nav-link.active {
+  background: #ffffff;
+  color: #1b1b3a;
+  box-shadow: 0 2px 0 rgba(27, 27, 58, 0.2);
+}
+
+html.kids .user-menu-button,
+html.kids .nav-search {
+  color: #1b1b3a;
+}
+
+/* Kids home: big poster tiles. */
+.kids-home {
+  box-sizing: border-box;
+  padding: 1.5rem 1rem 3rem;
+  max-width: 88rem;
+  margin: 0 auto;
+}
+
+.kids-title {
+  margin: 0 0 1.25rem;
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  font-weight: 800;
+  color: #1b1b3a;
+}
+
+html.kids .kids-title,
+html.kids .kids-rail-title { color: #1b1b3a; }
+
+.kids-empty { font-size: 1.1rem; }
+
+.kids-rail { margin-bottom: 2.25rem; }
+
+.kids-rail-title {
+  margin: 0 0 0.9rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.kids-tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1.25rem;
+}
+
+@media (min-width: 900px) {
+  .kids-tiles { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+}
+
+.kids-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+
+.kids-poster {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #ffd23f;
+  box-shadow: 0 6px 0 rgba(27, 27, 58, 0.18);
+  transition: transform 0.15s ease;
+}
+
+.kids-poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  object-fit: cover;
+}
+
+.kids-poster-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 3rem;
+  font-weight: 800;
+  color: #1b1b3a;
+}
+
+.kids-tile:hover .kids-poster,
+.kids-tile:focus-visible .kids-poster { transform: translateY(-4px) rotate(-1deg); }
+
+.kids-tile:focus-visible { outline: 3px solid #2ec4b6; outline-offset: 4px; border-radius: 22px; }
+
+.kids-tile-name {
+  font-weight: 700;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.kids-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 8px;
+  background: rgba(27, 27, 58, 0.35);
+}
+
+.kids-progress > span {
+  display: block;
+  height: 100%;
+  background: #ff5d8f;
+}

@@ -6,6 +6,7 @@ import { SetupChecklist } from '../components/home/SetupChecklist';
 import { HomeLayoutEditor } from '../components/home/HomeLayoutEditor';
 import { Dialog } from '../components/ui/Dialog';
 import '../components/home/PersonalRails.css';
+import KidsHome from '../components/kids/KidsHome';
 
 export default function Home() {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -61,7 +62,8 @@ export default function Home() {
     <div className="home">
       {error && <div className="loading-state">Dashboard could not be loaded: {error}</div>}
       {!data && !error && <div className="loading-state">Loading dashboard...</div>}
-      {data && (
+      {data?.kids && <KidsHome rails={data.rails} />}
+      {data && !data.kids && (
         <>
           <Hero items={data.heroCandidates ?? [data.hero]} />
           <main className="page">

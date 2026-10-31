@@ -29,10 +29,11 @@ export function UserMenu({ user, onSignOut }: { user: AuthUser; onSignOut: () =>
         <div className="user-menu-panel" role="menu">
           <div className="user-menu-head">
             <strong>{user.username}</strong>
-            <span>{user.role === 'admin' ? 'Administrator' : 'User'}</span>
+            <span>{user.isKid ? 'Kids profile' : user.role === 'admin' ? 'Administrator' : 'User'}</span>
           </div>
+          <Link role="menuitem" to="/profiles" onClick={() => setOpen(false)}>Switch profile</Link>
           <Link role="menuitem" to="/account" onClick={() => setOpen(false)}>Account</Link>
-          <Link role="menuitem" to="/themes" onClick={() => setOpen(false)}>Appearance</Link>
+          {!user.isKid && <Link role="menuitem" to="/themes" onClick={() => setOpen(false)}>Appearance</Link>}
           {user.role === 'admin' && <Link role="menuitem" to="/settings?cat=users" onClick={() => setOpen(false)}>Manage users</Link>}
           <button role="menuitem" type="button" className="user-menu-signout" onClick={() => { setOpen(false); onSignOut(); }}>Sign out</button>
         </div>
