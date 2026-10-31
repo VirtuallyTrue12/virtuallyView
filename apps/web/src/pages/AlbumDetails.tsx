@@ -7,6 +7,7 @@ import { useMusicPlayer } from '../components/media/MusicProvider';
 import PlaylistPicker from '../components/media/PlaylistPicker';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import AlbumCredits from '../components/music/AlbumCredits';
+import DownloadButton, { DownloadAlbum } from '../components/offline/DownloadButton';
 
 type PickerState = null | { kind: 'album' } | { kind: 'track'; track: TrackItem };
 
@@ -131,6 +132,7 @@ export default function AlbumDetails() {
               <button type="button" className="btn btn-secondary" onClick={() => { setSavedNote(null); setPicker({ kind: 'album' }); }}>
                 Save to playlist
               </button>
+              <DownloadAlbum tracks={tracks.map(t => ({ id: String(t.id), title: t.title, hasFile: !!t.hasFile }))} albumTitle={album.title} />
             </div>
           )}
           {missing > 0 && (
@@ -182,6 +184,7 @@ export default function AlbumDetails() {
                 <span className="album-track-dur">
                   {track.durationMs ? `${Math.floor(track.durationMs / 60000)}:${String(Math.floor((track.durationMs % 60000) / 1000)).padStart(2, '0')}` : ''}
                 </span>
+                {track.hasFile && <DownloadButton inline compact kind="track" id={String(track.id)} title={track.title} subtitle={album.title} />}
                 <span
                   className="album-track-save"
                   role="button"

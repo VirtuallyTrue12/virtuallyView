@@ -32,6 +32,7 @@ export function UserMenu({ user, onSignOut }: { user: AuthUser; onSignOut: () =>
             <span>{user.isKid ? 'Kids profile' : user.role === 'admin' ? 'Administrator' : 'User'}</span>
           </div>
           <Link role="menuitem" to="/profiles" onClick={() => setOpen(false)}>Switch profile</Link>
+          <Link role="menuitem" to="/offline" onClick={() => setOpen(false)}>On this device</Link>
           <Link role="menuitem" to="/account" onClick={() => setOpen(false)}>Account</Link>
           {!user.isKid && <Link role="menuitem" to="/themes" onClick={() => setOpen(false)}>Appearance</Link>}
           {user.role === 'admin' && <Link role="menuitem" to="/settings?cat=users" onClick={() => setOpen(false)}>Manage users</Link>}

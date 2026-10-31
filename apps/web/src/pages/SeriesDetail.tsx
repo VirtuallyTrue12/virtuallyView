@@ -14,6 +14,7 @@ import { TitleQuality } from '../components/media/TitleQuality';
 import { FavoriteButton } from '../components/media/UserFlagButtons';
 import { api, type PersonInfo, type EpisodeItem, type MediaDescription, type SeriesItem } from '../lib/api';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import DownloadButton from '../components/offline/DownloadButton';
 import { ScoreChips, ThumbRating } from '../components/media/RatingControls';
 
 export default function SeriesDetail() {
@@ -291,6 +292,9 @@ export default function SeriesDetail() {
                       } catch (err) { setNotice({ tone: 'err', text: (err as Error).message }); }
                     }}
                   ><SvgIcon name="check" size={14} /></button>
+                )}
+                {episode.hasFile && (
+                  <DownloadButton kind="episode" id={episode.id} title={episode.title} subtitle={series?.title} seriesId={series?.id} durationSeconds={episode.runtime ? episode.runtime * 60 : null} compact />
                 )}
                 </div>
               );

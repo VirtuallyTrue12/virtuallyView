@@ -15,6 +15,7 @@ import { MenuDivider, MenuItem, MoreMenu } from '../components/ui/MoreMenu';
 import { CastRow } from '../components/media/CastRow';
 import { TitleQuality } from '../components/media/TitleQuality';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import DownloadButton from '../components/offline/DownloadButton';
 import { ScoreChips, ThumbRating } from '../components/media/RatingControls';
 
 export default function MovieDetails() {
@@ -210,6 +211,9 @@ export default function MovieDetails() {
                   </button>
                 )}
                 <FavoriteButton mediaType="movie" mediaId={movie.id} initial={(movie as { favorite?: boolean }).favorite} />
+                {movie.status === 'available' && (
+                  <DownloadButton kind="movie" id={movie.id} title={movie.title} subtitle={movie.year ? String(movie.year) : undefined} posterUrl={movie.artwork?.poster} durationSeconds={movie.runtime ? movie.runtime * 60 : null} />
+                )}
                 <ThumbRating mediaType="movie" mediaId={movie.id} initial={movie.myThumb} />
                 {movie.status === 'available' && (
                   <WatchedButton mediaType="movie" mediaId={movie.id} initial={(movie as { watched?: boolean }).watched} onChange={w => { if (w) setWatchProgress(null); }} />

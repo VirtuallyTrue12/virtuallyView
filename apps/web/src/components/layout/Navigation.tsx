@@ -38,6 +38,8 @@ function MoreMenu({ extra = [], more }: { extra?: Array<{ to: string; label: str
   const wrap = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const closeTimer = useRef<number | null>(null);
+  // A mouse that just opened the menu by hovering it: the click that follows must keep it open, not toggle it shut.
+  const openedByHover = useRef(false);
   const { pathname } = useLocation();
   const all = [...extra, ...more];
   const current = all.some(link => link.to === '/' ? pathname === '/' : pathname.startsWith(link.to));
@@ -59,8 +61,8 @@ function MoreMenu({ extra = [], more }: { extra?: Array<{ to: string; label: str
   const hover = (pointerType: string, entering: boolean) => {
     if (pointerType !== 'mouse') return;
     if (closeTimer.current) window.clearTimeout(closeTimer.current);
-    if (entering) setOpen(true);
-    else closeTimer.current = window.setTimeout(() => setOpen(false), 180);
+    if (entering) { openedByHover.current = true; setOpen(true); }
+    else { openedByHover.current = false; closeTimer.current = window.setTimeout(() => setOpen(false), 180); }
   };
 
   return (
@@ -71,7 +73,10 @@ function MoreMenu({ extra = [], more }: { extra?: Array<{ to: string; label: str
         className={`nav-link nav-more-button${current ? ' active' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen(o => !o)}
+        onClick={() => {
+          if (openedByHover.current) { openedByHover.current = false; setOpen(true); return; }
+          setOpen(o => !o);
+        }}
       >
         More <SvgIcon name="chevron-down" size={12} />
       </button>
@@ -138,6 +143,7 @@ const SIDE_LIBRARY: Array<{ to: string; label: string; icon: IconName }> = [
 const SIDE_MANAGE: Array<{ to: string; label: string; icon: IconName }> = [
   { to: '/requests', label: 'Requests', icon: 'plus' },
   { to: '/downloads', label: 'Downloads', icon: 'download' },
+  { to: '/offline', label: 'On this device', icon: 'hdd' },
   { to: '/apps', label: 'Apps', icon: 'grid' },
   { to: '/wiki', label: 'Wiki', icon: 'globe' },
   { to: '/statistics', label: 'Stats', icon: 'chart' },

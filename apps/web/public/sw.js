@@ -1,7 +1,9 @@
 // virtuallyView service worker. It only caches the app shell so the app opens from the home screen.
 // Media, the API and anything with a Range header are never touched: the browser handles them as normal.
 // Bump CACHE when the shell logic changes. Hashed /assets files never change, so they stay cached.
-const CACHE = 'vv-shell-v1';
+// v2: "On this device" works offline, so /offline (any page URL) falls back to the cached app shell, and
+// the page's own code chunk is cached the first time it is visited online (hashed /assets files below).
+const CACHE = 'vv-shell-v2';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {

@@ -421,6 +421,61 @@ export function startAudioTranscode(filePath: string, startSeconds = 0): Transco
   return { process: child };
 }
 
+/** The audio track to keep for an offline copy: the one asked for, else the first English track, else the first. */
+export function pickAudioIndex(tracks: AudioTrack[], requested?: number): number {
+  if (Number.isInteger(requested) && (requested ?? -1) >= 0 && (requested ?? 0) < tracks.length) return requested as number;
+  const english = tracks.findIndex(t => /^(eng|en)$/i.test(t.language));
+  return english >= 0 ? english : 0;
+}
+
+export interface FileOutputOptions {
+  /** 'video' writes an H.264/AAC MP4 with picture; 'audio' writes an AAC (or copied MP3/AAC) M4A. */
+  kind: 'video' | 'audio';
+  /** standard = 720p, high = 1080p; never taller than the source. */
+  quality?: 'standard' | 'high';
+  /** Zero-based audio track among the audio streams. */
+  audio?: number;
+  sourceHeight?: number | null;
+  /** Codec of the source audio (for tracks): MP3 and AAC are copied, anything else is converted. */
+  audioCodec?: string | null;
+  /** VA-API device path when the GPU encodes the picture (see vaapiDevice). */
+  vaapi?: string | null;
+}
+
+/**
+ * ffmpeg arguments that write one finished, progressively-playable file (not a stream) for offline
+ * use. The output is faststart so it can play before it has fully downloaded. Progress is printed to
+ * stdout as key=value lines (`-progress pipe:1`) for the job's percentage.
+ */
+export function ffmpegFileArgs(input: string, output: string, options: FileOutputOptions): string[] {
+  const audio = Math.max(0, Math.round(options.audio ?? 0));
+  const args = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y'];
+  if (options.kind === 'audio') {
+    const copy = ['mp3', 'aac'].includes((options.audioCodec ?? '').toLowerCase());
+    args.push('-i', input, '-map', '0:a:0', '-vn');
+    args.push(...(copy ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '256k']));
+  } else {
+    const target = options.quality === 'high' ? 1080 : 720;
+    // Never upscale: a 480p source stays 480p, and 1080p is only used when the source is that tall.
+    const height = Math.min(target, options.sourceHeight && options.sourceHeight > 0 ? options.sourceHeight : target);
+    const scale = !options.sourceHeight || options.sourceHeight > height;
+    const hw = options.vaapi ?? null;
+    if (hw) args.push('-init_hw_device', `vaapi=va:${hw}`, '-filter_hw_device', 'va');
+    args.push('-i', input, '-map', '0:v:0', '-map', `0:a:${audio}?`, '-sn', '-dn', '-map_chapters', '-1');
+    if (hw) {
+      args.push('-vf', `format=nv12,hwupload${scale ? `,scale_vaapi=w=-2:h=${height}` : ''}`,
+        '-c:v', 'h264_vaapi', '-qp', options.quality === 'high' ? '21' : '23', '-profile:v', 'high');
+    } else {
+      if (scale) args.push('-vf', `scale=-2:${height}`);
+      args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', options.quality === 'high' ? '21' : '23',
+        '-profile:v', 'high', '-pix_fmt', 'yuv420p');
+    }
+    args.push('-c:a', 'aac', '-b:a', '160k', '-ac', '2');
+  }
+  args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', '-f', 'mp4', output);
+  return args;
+}
+
 /** Extract an embedded text subtitle stream as WebVTT (bitmap subtitles are not supported). */
 export function extractSubtitleVtt(filePath: string, streamIndex: number): Promise<string | null> {
   const ffmpeg = resolveBinary('ffmpeg');

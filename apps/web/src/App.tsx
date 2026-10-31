@@ -44,6 +44,9 @@ const Statistics = lazy(() => import('./pages/Statistics'));
 const YearInReview = lazy(() => import('./pages/YearInReview'));
 const Diagnostics = lazy(() => import('./pages/Diagnostics'));
 const Activity = lazy(() => import('./pages/Activity'));
+const Offline = lazy(() => import('./pages/Offline'));
+import { useOfflineMode } from './lib/offline-status';
+import { OfflineBanner } from './components/offline/OfflineBanner';
 import NotFound from './pages/NotFound';
 import { api, type AuthUser } from './lib/api';
 
@@ -63,6 +66,8 @@ export default function App() {
   const [auth, setAuth] = useState<{ enabled: boolean; setupRequired: boolean; authenticated: boolean; user?: AuthUser | null } | null>(null);
   const [error, setError] = useState('');
   const [authLoading, setAuthLoading] = useState(true);
+  // No connection to the server: the home page goes to "On this device" and sign-in is skipped.
+  const offline = useOfflineMode();
   const [onboarding, setOnboarding] = useState<{ loading: boolean; required: boolean }>({ loading: true, required: false });
   const loadAuth = async () => {
     setAuthLoading(true);
@@ -147,6 +152,14 @@ export default function App() {
     setAuth({ enabled: true, setupRequired: false, authenticated: false, user: null });
   };
 
+  if (offline && !auth?.authenticated) return (
+    <div className="app" data-theme="midnight">
+      <OfflineBanner />
+      <Suspense fallback={<div className="loading-state">Loading...</div>}>
+        <Offline />
+      </Suspense>
+    </div>
+  );
   if (!auth) return (
     <LoginScreen
       auth={{ enabled: true, setupRequired: false, authenticated: false, user: null }}
@@ -188,11 +201,13 @@ export default function App() {
     <MusicProvider>
       <RadioProvider>
       <div className="app" data-theme="midnight">
+      {offline && <OfflineBanner />}
       <UpdateBanner />
       <Navigation user={auth.user} onSignOut={() => void signOut()} onRefresh={() => setRefreshKey(key => key + 1)} />
       <Suspense fallback={<div className="loading-state">Loading...</div>}>
       <Routes key={refreshKey}>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={offline ? <Navigate to="/offline" replace /> : <Home />} />
+        <Route path="/offline" element={<Offline />} />
         <Route path="/movies" element={<Movies />} />
         <Route path="/movies/:id" element={<MovieDetails />} />
         <Route path="/movies/:id/play" element={<Player />} />
