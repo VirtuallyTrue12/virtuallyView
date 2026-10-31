@@ -10,6 +10,8 @@
 !scripts
 **/node_modules
 **/dist
+# The built TV app (apps/android-tv/dist) is served by the server when it exists.
+!apps/android-tv/dist
 **/data
 **/*.log
 **/*.tsbuildinfo

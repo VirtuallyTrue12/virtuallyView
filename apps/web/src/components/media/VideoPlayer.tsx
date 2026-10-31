@@ -628,6 +628,7 @@ export default function VideoPlayer({
   return (
     <div
       ref={wrapRef}
+      data-dpad="own"
       className={cls}
       data-sub-size={subStyle.size}
       data-sub-color={subStyle.color}

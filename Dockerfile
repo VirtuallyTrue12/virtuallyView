@@ -6,6 +6,8 @@ COPY . .
 # Check it loaded and try again a few times, so one bad download does not sink the install.
 RUN for i in 1 2 3 4; do npm ci && node -e "require('rollup')" && exit 0; echo "install attempt $i failed, retrying"; rm -rf node_modules; sleep 3; done; exit 1
 RUN npm run build --workspace=apps/server --workspace=apps/web
+# The Android TV app is built on the host (apps/android-tv/build.sh) and copied in when present; this keeps the folder even when it is not.
+RUN mkdir -p apps/android-tv/dist
 # Drop dev tooling; workspace packages stay linked.
 RUN npm prune --omit=dev
 
@@ -26,6 +28,7 @@ COPY --from=build /app/apps/server ./apps/server
 COPY --from=build /app/apps/web/package.json ./apps/web/package.json
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY --from=build /app/packages ./packages
+COPY --from=build /app/apps/android-tv/dist ./apps/android-tv/dist
 COPY --from=build /app/themes ./themes
 COPY --from=build /app/scripts ./scripts
 LABEL org.opencontainers.image.title="virtuallyView" \

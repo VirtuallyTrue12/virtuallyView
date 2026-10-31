@@ -1593,3 +1593,44 @@ describe('profiles and Kids mode (mocked APIs)', () => {
     await page.keyboard.press('Escape');
   });
 });
+
+describe('remote control in TV mode', () => {
+  const card = (id: string, title: string) => ({ id, title, type: 'movie', year: 2014, certification: 'PG', artwork: {} });
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const focused = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.textContent?.trim() ?? '');
+
+  it('ArrowRight and ArrowDown move focus between home cards, and typing in search is left alone', async () => {
+    // Drop the blanket mocks the earlier profile tests left behind; the real signed-in session stays.
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await page.route('**/api/dashboard', r => r.fulfill(json({
+      kids: false,
+      hero: null,
+      heroCandidates: [],
+      rails: [
+        { id: 'first', title: 'Rail one', items: [card('m-1', 'First film'), card('m-2', 'Second film')] },
+        { id: 'second', title: 'Rail two', items: [card('m-3', 'Third film')] }
+      ]
+    })));
+    await page.goto(base + '/');
+    await page.waitForFunction(() => document.querySelectorAll('a.media-card-link').length >= 3);
+    await page.evaluate(() => document.documentElement.classList.add('tv'));
+
+    await page.evaluate(() => (document.querySelectorAll('a.media-card-link')[0] as HTMLElement).focus());
+    await page.keyboard.press('ArrowRight');
+    expect(await focused()).toContain('Second film');
+    await page.keyboard.press('ArrowDown');
+    expect(await focused()).toContain('Third film');
+
+    // Search: the arrows belong to the text box while it has focus.
+    await page.goto(base + '/search');
+    const input = page.locator('input[type="search"]').first();
+    await input.focus();
+    await page.keyboard.type('arrow');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowDown');
+    expect(await input.inputValue()).toBe('arrow');
+    expect(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute('type'))).toBe('search');
+
+    await page.evaluate(() => document.documentElement.classList.remove('tv'));
+  });
+});

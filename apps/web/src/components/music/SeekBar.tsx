@@ -124,7 +124,7 @@ export function SeekBar({ getTime, duration, buffered, playing, onSeek, label = 
   const b = duration > 0 ? Math.max(0, Math.min(1, buffered / duration)) : 0;
 
   return (
-    <div className={`seek seek--${size}${dragging ? ' is-dragging' : ''}${duration <= 0 ? ' is-idle' : ''}`} ref={root} style={{ ['--b' as string]: b }}>
+    <div data-dpad="own" className={`seek seek--${size}${dragging ? ' is-dragging' : ''}${duration <= 0 ? ' is-idle' : ''}`} ref={root} style={{ ['--b' as string]: b }}>
       {times === 'sides' && <span className="seek-time" ref={elapsedEl}>0:00</span>}
       <div
         ref={track}

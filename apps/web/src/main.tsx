@@ -6,8 +6,11 @@ import App from './App';
 import { paintCachedTheme } from './lib/appearance';
 import { initPerformanceMode } from './lib/perf';
 import { registerServiceWorker, startInstallCapture } from './lib/pwa';
+import { initDpad } from './lib/dpad';
+import './lib/tv-focus.css';
 
 initPerformanceMode();
+initDpad();
 
 paintCachedTheme();
 registerServiceWorker();

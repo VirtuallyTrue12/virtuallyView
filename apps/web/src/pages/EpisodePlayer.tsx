@@ -11,6 +11,8 @@ import { useProgressSaver } from '../lib/useProgressSaver';
 import { audioLabels, imageSubtitleLabels } from '../lib/media-info';
 import SubtitleManager from '../components/media/SubtitleManager';
 import { MediaInfoPanel } from '../components/media/MediaInfoPanel';
+import { inTvApp } from '../lib/perf';
+import { TvAppHandoff } from '../components/media/TvAppHandoff';
 
 function EpisodeInfo({ episodeId }: { episodeId: string }) {
   const load = useCallback(() => api.episodeInfo(episodeId), [episodeId]);
@@ -116,6 +118,29 @@ export default function EpisodePlayer() {
   const needsTranscode = playback !== null && !playback.playable;
   const transcodeAvailable = playback?.transcodingAvailable ?? false;
   const title = current ? `${series?.title ?? ''} · ${code(current)} · ${current.title}` : series?.title;
+  // Inside the Android TV app the episode plays in the TV's own player instead.
+  if (inTvApp() && current && episodeId) {
+    return (
+      <TvAppHandoff
+        backTo={`/series/${id ?? ''}`}
+        backLabel="Back"
+        request={{
+          path: `/api/stream/episode/${encodeURIComponent(episodeId)}`,
+          transcodePath: `/api/stream/episode/${encodeURIComponent(episodeId)}/transcode`,
+          title: title ?? '',
+          subtitle: `${code(current)} · ${current.title}`,
+          startSeconds: resumeStart,
+          durationSeconds: playback?.durationSeconds ?? 0,
+          subtitles,
+          mediaType: 'episode',
+          mediaId: episodeId,
+          seriesId: id,
+          returnPath: `/series/${id ?? ''}`,
+        }}
+      />
+    );
+  }
+
 
   return (
     <main className="player">

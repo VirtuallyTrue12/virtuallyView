@@ -5,6 +5,8 @@ import { BackButton } from '../components/layout/BackButton';
 import VideoPlayer from '../components/media/VideoPlayer';
 import { useProgressSaver } from '../lib/useProgressSaver';
 import { audioLabels, imageSubtitleLabels } from '../lib/media-info';
+import { inTvApp } from '../lib/perf';
+import { TvAppHandoff } from '../components/media/TvAppHandoff';
 
 /** Plays a concert or music video that is filed under an artist. */
 export default function ConcertPlayer() {
@@ -36,6 +38,27 @@ export default function ConcertPlayer() {
     return <main className="page"><BackButton to={`/music/${id ?? ''}`} label="Back to artist" /><p role="alert">{error}</p></main>;
   }
   if (!videoId || !ready || resumeStart === null || !title) return <main className="page"><div className="loading-state">Loading player...</div></main>;
+
+  // Inside the Android TV app the video plays in the TV's own player instead.
+  if (inTvApp()) {
+    return (
+      <TvAppHandoff
+        backTo={`/music/${id ?? ''}`}
+        backLabel="Back"
+        request={{
+          path: `/api/stream/${encodeURIComponent(videoId)}`,
+          transcodePath: `/api/stream/${encodeURIComponent(videoId)}/transcode`,
+          title,
+          startSeconds: resumeStart,
+          durationSeconds: playback?.durationSeconds ?? 0,
+          subtitles: [],
+          mediaType: 'movie',
+          mediaId: videoId,
+          returnPath: `/music/${id ?? ''}`,
+        }}
+      />
+    );
+  }
 
   const needsTranscode = playback !== null && !playback.playable;
   const src = `/api/stream/${encodeURIComponent(videoId)}`;
