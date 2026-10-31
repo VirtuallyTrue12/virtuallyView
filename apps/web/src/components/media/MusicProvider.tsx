@@ -6,6 +6,8 @@ import { audioEngine, EQ_BANDS, EQ_PRESETS, lineSeconds, prepareLine, say } from
 import { DjBrain, type DjBreak, type DjFrequency, type DjSong } from '../../lib/dj-brain';
 import { fetchLyrics } from '../../lib/viz-store';
 import type { Lyrics } from '../../lib/api';
+import { call, defaultDeviceName, deviceId, loadDeviceName, saveDeviceName, useDeviceHeartbeat, useDeviceStream, useListenStream, type DeviceCommand, type DeviceInfo, type DeviceState, type ListenRow, type ListenView } from '../../lib/music-together';
+import { toast } from '../ui/Toast';
 
 export { EQ_BANDS, EQ_PRESETS };
 
@@ -91,9 +93,32 @@ interface MusicContextValue {
   setDjFrequency: (f: DjFrequency) => void;
   /** Try DJ mode without waiting: jump near the end of this song and have the host talk at the change. */
   djTryNow: () => void;
+  /** The browser refused to start audio without a tap: show a "Tap to start" button. */
+  blocked: boolean;
+  resumePlayback: () => void;
+  /** Listen together: the shared session as this person sees it, or null. */
+  listen: ListenView | null;
+  /** Each returns an error message, or null when it worked. */
+  startListen: () => Promise<string | null>;
+  joinListen: (code: string) => Promise<string | null>;
+  leaveListen: () => void;
+  setEveryoneControl: (on: boolean) => void;
+  /** Adds songs to the end of the queue (the shared one while listening together). */
+  addToQueue: (entries: QueueEntry[]) => void;
+  /** Play on another device: this account's other devices, and the one this tab is handing playback to. */
+  devices: DeviceInfo[];
+  refreshDevices: () => Promise<void>;
+  deviceName: string;
+  renameDevice: (name: string) => void;
+  remote: RemoteState | null;
+  playOn: (id: string, name: string) => Promise<string | null>;
+  endRemote: (takeHere: boolean) => Promise<void>;
 }
 
 export type RepeatMode = 'off' | 'all' | 'one';
+
+/** A device this tab has handed playback to: its own copy of the queue, and the state it last reported. */
+export interface RemoteState { id: string; name: string; queue: QueueEntry[]; index: number; state: DeviceState | null; stateAt: number }
 
 const MusicContext = createContext<MusicContextValue | null>(null);
 
@@ -198,6 +223,26 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [djVoice, setDjVoiceState] = useState(() => load('vv-dj-voice') ?? '');
   const [djTalking, setDjTalking] = useState(false);
   const [djFrequency, setDjFrequencyState] = useState<DjFrequency>(() => { const f = load('vv-dj-freq'); return f === 'minimal' || f === 'chatty' ? f : 'balanced'; });
+  const [blocked, setBlocked] = useState(false);
+  const [listen, setListen] = useState<ListenView | null>(null);
+  // The session code is read back on a reload (see the restore effect below), so it starts empty.
+  const [listenCode, setListenCode] = useState<string | null>(null);
+  const [devices, setDevices] = useState<DeviceInfo[]>([]);
+  const [deviceName, setDeviceNameState] = useState(() => loadDeviceName());
+  const [thisDevice] = useState(() => deviceId());
+  const [remote, setRemote] = useState<RemoteState | null>(null);
+  const listenRef = useRef<ListenView | null>(null);
+  listenRef.current = listen;
+  const remoteRef = useRef<RemoteState | null>(null);
+  remoteRef.current = remote;
+  const deviceNameRef = useRef(deviceName);
+  deviceNameRef.current = deviceName;
+  // The last session change applied here, so the same change is never applied twice.
+  const lastSeq = useRef(-1);
+  // The session view and when it arrived: the shared position moves on from there while playing.
+  const listenClock = useRef<{ view: ListenView; at: number } | null>(null);
+  const bufferingRef = useRef(false);
+  bufferingRef.current = buffering;
 
   // Live refs for callbacks that must never close over stale state (the documented "latest ref" pattern).
   const indexRef = useRef(index); indexRef.current = index;
@@ -238,6 +283,12 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (deckA.current && deckB.current && audioEngine.attach([deckA.current, deckB.current])) void audioEngine.resume();
   }, []);
 
+  // A browser that refuses to start audio without a tap shows a "Tap to start" button; any other failure is an error line.
+  const playFailed = useCallback((err: unknown) => {
+    if ((err as Error | undefined)?.name === 'NotAllowedError') setBlocked(true);
+    else setError('Could not start playback of this track.');
+  }, []);
+
   const urlFor = (e: QueueEntry) => `/api/music/stream/${e.track.id}`;
 
   const startOn = useCallback((el: HTMLAudioElement, e: QueueEntry, at = 0) => {
@@ -246,8 +297,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (at > 0) el.currentTime = at;
     setCurrentTime(at);
     setDuration(0);
-    if (wantPlay.current) void el.play().catch(() => setError('Could not start playback of this track.'));
-  }, []);
+    if (wantPlay.current) void el.play().then(() => setBlocked(false), playFailed);
+  }, [playFailed]);
 
   const playQueue = useCallback((nextQueue: QueueEntry[], startIndex = 0) => {
     const audio = live();
@@ -681,12 +732,355 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     navigator.mediaSession.playbackState = queue.length ? (playing ? 'playing' : 'paused') : 'none';
   }, [playing, queue.length]);
 
+  // ---- Listen together ----
+
+  /** Sends a change to the shared session. The result comes back on the event stream, to everyone in it. */
+  const listenCommand = useCallback(async (cmd: Record<string, unknown>) => {
+    const code = listenRef.current?.code;
+    if (!code) return;
+    const out = await call<unknown>('POST', `/api/listen/${encodeURIComponent(code)}/command`, cmd);
+    if (!out.ok) toast(out.message, { tone: 'err' });
+  }, []);
+
+  /** Puts the shared state on this player: the queue, the track, and where playback is. */
+  const applyListen = useCallback((view: ListenView) => {
+    if (view.seq === lastSeq.current) return;
+    lastSeq.current = view.seq;
+    listenClock.current = { view, at: Date.now() };
+    setListen(view);
+    if (remoteRef.current) return; // playing on another device: this one stays quiet
+    const audio = live();
+    if (!audio) return;
+    const rows = view.queue as unknown as QueueEntry[];
+    setQueue(rows);
+    if (!rows.length) { wantPlay.current = false; audio.pause(); return; }
+    const i = Math.max(0, Math.min(view.index, rows.length - 1));
+    const to = rows[i]!;
+    setIndex(i);
+    if (rawSrc.current !== urlFor(to)) {
+      // A different track: load it at the shared position.
+      mixing.current = false;
+      other()?.pause();
+      audioEngine.level(audio, 1);
+      wantPlay.current = view.playing;
+      startOn(audio, to, view.position);
+      return;
+    }
+    if (view.playing) {
+      wantPlay.current = true;
+      if (audio.paused) {
+        audio.currentTime = view.position;
+        void audio.play().then(() => setBlocked(false), playFailed);
+      } else if (Math.abs(audio.currentTime - view.position) > 2) {
+        audio.currentTime = view.position;
+      }
+    } else {
+      wantPlay.current = false;
+      audio.pause();
+      if (Math.abs(audio.currentTime - view.position) > 0.5) audio.currentTime = view.position;
+    }
+  }, [playFailed, startOn]);
+
+  // Every few seconds: if this player has drifted more than 2 seconds from the shared position, move it back.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const clock = listenClock.current;
+      const audio = live();
+      if (!clock || !audio || remoteRef.current || !audio.src || bufferingRef.current || !clock.view.queue.length) return;
+      const { view, at } = clock;
+      const row = (view.queue as unknown as QueueEntry[])[Math.min(view.index, view.queue.length - 1)];
+      if (!row || rawSrc.current !== urlFor(row)) return;
+      if (!view.playing) { if (!audio.paused) audio.pause(); return; }
+      const expected = view.position + (Date.now() - at) / 1000;
+      if (Math.abs(audio.currentTime - expected) > 2) { audio.currentTime = expected; setCurrentTime(expected); }
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const enterListen = useCallback((view: ListenView) => {
+    lastSeq.current = -1;
+    try { sessionStorage.setItem('vv-listen-code', view.code); } catch { /* storage off: a reload leaves the session */ }
+    setListenCode(view.code);
+    applyListen(view);
+  }, [applyListen]);
+
+  const startListen = useCallback(async (): Promise<string | null> => {
+    const rows = queueRef.current;
+    if (!rows.length) return 'Play something first, then start listening together.';
+    const a = live();
+    // Starting a session means the music plays for everyone, so it starts playing here too.
+    const out = await call<ListenView>('POST', '/api/listen', { queue: rows.slice(0, 2000), index: indexRef.current, position: a?.currentTime ?? 0, playing: true });
+    if (!out.ok) return out.message;
+    enterListen(out.data);
+    return null;
+  }, [enterListen]);
+
+  const joinListen = useCallback(async (code: string): Promise<string | null> => {
+    const out = await call<ListenView>('POST', `/api/listen/${encodeURIComponent(code.trim().toUpperCase())}/join`);
+    if (!out.ok) return out.message;
+    enterListen(out.data);
+    return null;
+  }, [enterListen]);
+
+  const forgetListen = useCallback(() => {
+    lastSeq.current = -1;
+    listenClock.current = null;
+    try { sessionStorage.removeItem('vv-listen-code'); } catch { /* ignore */ }
+    setListenCode(null);
+    setListen(null);
+  }, []);
+
+  const leaveListen = useCallback(() => {
+    const code = listenRef.current?.code;
+    if (code) void call<unknown>('POST', `/api/listen/${encodeURIComponent(code)}/leave`);
+    forgetListen();
+  }, [forgetListen]);
+
+  // The session ended (the host left, it sat idle, or access was refused). Local playback carries on.
+  const sessionEnded = useCallback(() => {
+    forgetListen();
+    toast('The listening session has ended.');
+  }, [forgetListen]);
+
+  useListenStream(listenCode, applyListen, sessionEnded);
+
+  // A tab reopened in the middle of a session rejoins it.
+  useEffect(() => {
+    let saved: string | null = null;
+    try { saved = sessionStorage.getItem('vv-listen-code'); } catch { /* ignore */ }
+    if (!saved) return;
+    void joinListen(saved).then(err => { if (err) forgetListen(); });
+    // Runs once per page load on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setEveryoneControl = useCallback((on: boolean) => { void listenCommand({ type: 'everyone', on }); }, [listenCommand]);
+
+  // ---- Play on another device ----
+
+  const renameDevice = useCallback((name: string) => {
+    const clean = name.trim().slice(0, 40) || defaultDeviceName();
+    saveDeviceName(clean);
+    setDeviceNameState(clean);
+  }, []);
+
+  const refreshDevices = useCallback(async () => {
+    const out = await call<{ devices: DeviceInfo[] }>('GET', '/api/devices');
+    if (out.ok) setDevices(out.data.devices.filter(d => d.id !== thisDevice));
+  }, [thisDevice]);
+
+  /** What this tab reports about its playback, read live when a heartbeat goes out. */
+  const snapshotRef = useRef<() => DeviceState | null>(() => null);
+  snapshotRef.current = () => {
+    const rows = queueRef.current;
+    if (!rows.length) return null;
+    const row = rows[Math.min(indexRef.current, rows.length - 1)];
+    const a = live();
+    const length = a && Number.isFinite(a.duration) && a.duration > 0 ? a.duration : (row?.track.durationMs ?? 0) / 1000;
+    return {
+      playing: !!a && !a.paused, position: a?.currentTime ?? 0, duration: length, index: indexRef.current, queueLength: rows.length,
+      title: row?.track.title, artist: row?.artistTitle, cover: row?.cover, volume, blocked
+    };
+  };
+  useDeviceHeartbeat(thisDevice, true, () => deviceNameRef.current, () => snapshotRef.current());
+
+  /** A command from a remote, applied here. */
+  const onDeviceCommand = (cmd: DeviceCommand) => {
+    const audio = live();
+    if (!audio) return;
+    switch (cmd.type) {
+      case 'load': {
+        const rows = cmd.queue as unknown as QueueEntry[];
+        if (!rows.length) return;
+        const i = Math.max(0, Math.min(cmd.index, rows.length - 1));
+        setQueue(rows);
+        setIndex(i);
+        mixing.current = false;
+        other()?.pause();
+        audioEngine.level(audio, 1);
+        wantPlay.current = cmd.playing;
+        startOn(audio, rows[i]!, cmd.position);
+        return;
+      }
+      case 'play':
+        if (!audio.src && queueRef.current.length) { toggle(); return; }
+        wantPlay.current = true;
+        void audio.play().then(() => setBlocked(false), playFailed);
+        return;
+      case 'pause':
+      case 'stop':
+        wantPlay.current = false;
+        audio.pause();
+        return;
+      case 'next': nextTrack(); return;
+      case 'prev': prevTrack(); return;
+      case 'seek': seek(cmd.position); return;
+      case 'volume': setVolume(cmd.value); return;
+    }
+  };
+
+  const onDeviceState = (st: DeviceState) => {
+    setRemote(prev => (prev && prev.id === st.deviceId ? { ...prev, state: st, stateAt: Date.now() } : prev));
+  };
+  useDeviceStream(thisDevice, true, onDeviceCommand, onDeviceState);
+
+  const sendRemote = useCallback(async (cmd: DeviceCommand) => {
+    const r = remoteRef.current;
+    if (!r) return;
+    const out = await call<unknown>('POST', `/api/devices/${encodeURIComponent(r.id)}/command`, cmd);
+    if (!out.ok) toast(out.message, { tone: 'err' });
+  }, []);
+
+  /** Hands playback to another device: its queue, its place in it, and it starts playing. */
+  const playOn = useCallback(async (id: string, name: string): Promise<string | null> => {
+    const rows = queueRef.current;
+    if (!rows.length) return 'Play something here first, then pick a device.';
+    const a = live();
+    const idx = indexRef.current;
+    const out = await call<unknown>('POST', `/api/devices/${encodeURIComponent(id)}/command`, {
+      type: 'load', queue: rows.slice(0, 2000), index: idx, position: a?.currentTime ?? 0, playing: true
+    });
+    if (!out.ok) return out.message;
+    if (a) { wantPlay.current = false; a.pause(); other()?.pause(); }
+    setRemote({ id, name, queue: rows, index: idx, state: null, stateAt: Date.now() });
+    return null;
+  }, []);
+
+  /** Takes playback back: here (picking up where the device is) or stops it there. */
+  const endRemote = useCallback(async (takeHere: boolean) => {
+    const r = remoteRef.current;
+    if (!r) return;
+    remoteRef.current = null;
+    await call<unknown>('POST', `/api/devices/${encodeURIComponent(r.id)}/command`, { type: 'stop' });
+    setRemote(null);
+    const audio = live();
+    if (takeHere && audio) {
+      const st = r.state;
+      const idx = Math.max(0, Math.min(st?.index ?? r.index, r.queue.length - 1));
+      const pos = st ? st.position + (st.playing ? (Date.now() - r.stateAt) / 1000 : 0) : 0;
+      setQueue(r.queue);
+      setIndex(idx);
+      other()?.pause();
+      audioEngine.level(audio, 1);
+      wantPlay.current = st?.playing ?? true;
+      startOn(audio, r.queue[idx]!, pos);
+    }
+    if (listenClock.current) { lastSeq.current = -1; applyListen(listenClock.current.view); }
+  }, [applyListen, startOn]);
+
+  // ---- Transport: what the controls do depends on where playback is ----
+
+  const remoteIndex = remote ? Math.max(0, Math.min(remote.state?.index ?? remote.index, Math.max(0, remote.queue.length - 1))) : index;
+  const remotePosition = (): number => {
+    const st = remote?.state;
+    if (!remote || !st) return 0;
+    return st.position + (st.playing ? (Date.now() - remote.stateAt) / 1000 : 0);
+  };
+
+  const toggleR = () => {
+    if (remote) { void sendRemote({ type: remote.state?.playing ? 'pause' : 'play' }); return; }
+    if (listen) { void listenCommand({ type: listen.playing ? 'pause' : 'play' }); return; }
+    toggle();
+  };
+  const nextR = () => {
+    if (remote) { void sendRemote({ type: 'next' }); return; }
+    if (listen) { const n = peekNext(false); if (n !== null) void listenCommand({ type: 'skip', index: n }); return; }
+    nextTrack();
+  };
+  const prevR = () => {
+    if (remote) { void sendRemote({ type: 'prev' }); return; }
+    if (listen) {
+      const a = live();
+      if (a && a.currentTime > 4) { void listenCommand({ type: 'seek', position: 0 }); return; }
+      const n = listen.queue.length;
+      if (n) void listenCommand({ type: 'skip', index: (listen.index - 1 + n) % n });
+      return;
+    }
+    prevTrack();
+  };
+  const skipToR = (i: number) => {
+    if (remote) return;
+    if (listen) { void listenCommand({ type: 'skip', index: i }); return; }
+    skipTo(i);
+  };
+  const seekR = (s: number) => {
+    if (remote) { void sendRemote({ type: 'seek', position: Math.max(0, s) }); return; }
+    if (listen) { void listenCommand({ type: 'seek', position: Math.max(0, s) }); return; }
+    seek(s);
+  };
+  const setVolumeR = (v: number) => {
+    if (remote) { void sendRemote({ type: 'volume', value: Math.max(0, Math.min(1, v)) }); return; }
+    setVolume(v);
+  };
+  const playQueueR = (rows: QueueEntry[], i = 0) => {
+    if (remote) {
+      const at = Math.max(0, Math.min(i, rows.length - 1));
+      void sendRemote({ type: 'load', queue: rows.slice(0, 2000) as unknown as ListenRow[], index: at, position: 0, playing: true });
+      setRemote(prev => (prev ? { ...prev, queue: rows, index: at, state: prev.state ? { ...prev.state, index: at, position: 0, playing: true } : null, stateAt: Date.now() } : prev));
+      return;
+    }
+    if (listen) { void listenCommand({ type: 'replace', queue: rows.slice(0, 2000), index: i, position: 0, playing: true }); return; }
+    playQueue(rows, i);
+  };
+  const shufflePlayR = (tracks: QueueEntry[]) => {
+    if (remote || listen) { if (tracks.length) playQueueR(spreadShuffle(tracks), 0); return; }
+    shufflePlay(tracks);
+  };
+  const removeR = (i: number) => {
+    if (remote) return;
+    if (listen) { void listenCommand({ type: 'remove', index: i }); return; }
+    removeFromQueue(i);
+  };
+  const clearUpcomingR = () => {
+    if (remote) return;
+    if (listen) {
+      const a = live();
+      const keep = queueRef.current.slice(0, indexRef.current + 1);
+      if (keep.length < queueRef.current.length) void listenCommand({ type: 'replace', queue: keep.slice(0, 2000), index: indexRef.current, position: a?.currentTime ?? 0, playing: listen.playing });
+      return;
+    }
+    clearUpcoming();
+  };
+  const addToQueueR = (entries: QueueEntry[]) => {
+    if (!entries.length) return;
+    if (remote) { toast('Songs are added on the device that is playing.', { tone: 'info' }); return; }
+    if (listen) { void listenCommand({ type: 'add', entries: entries.slice(0, 2000) }); return; }
+    setQueue(prev => [...prev, ...entries].slice(0, 2000));
+  };
+  const stopR = () => {
+    if (listen) leaveListen();
+    if (remote) void endRemote(false);
+    stopPlayback();
+  };
+  const resumePlayback = useCallback(() => {
+    const a = live();
+    if (!a) return;
+    if (!a.src && queueRef.current.length) { toggle(); return; }
+    wantPlay.current = true;
+    void a.play().then(() => setBlocked(false), playFailed);
+  }, [playFailed, toggle]);
+
+  // What the bar shows: the device's copy while playing on another device, otherwise this player.
+  const shownQueue = remote ? remote.queue : queue;
+  const shownEntry = remote ? remote.queue[remoteIndex] ?? null : entry;
+
   const value: MusicContextValue = {
-    queue, index, entry, playing, currentTime, duration, error, volume, muted, shuffle, repeat, buffered, buffering,
-    expanded, setExpanded, getTime, removeFromQueue, clearUpcoming, eqEnabled, eqPreset, eqBands, preamp, balance,
-    leveller, customPresets, crossfade, djMode, djVoice, djFrequency, djTalking, playQueue, shufflePlay, toggle, stopPlayback,
-    nextTrack, prevTrack, skipTo, seek, setVolume, toggleMute, toggleShuffle, toggleRepeat, setEqEnabled, setEqPreset,
-    setEqBand, setPreamp, setBalance, setLeveller, saveCustomPreset, deleteCustomPreset, setCrossfade, setDjMode, setDjVoice, setDjFrequency, djTryNow
+    queue: shownQueue, index: remoteIndex, entry: shownEntry,
+    playing: remote ? !!remote.state?.playing : playing,
+    currentTime: remote ? remotePosition() : currentTime,
+    duration: remote ? remote.state?.duration ?? 0 : duration,
+    error, volume: remote ? remote.state?.volume ?? 1 : volume, muted, shuffle, repeat,
+    buffered, buffering: remote ? false : buffering,
+    expanded, setExpanded, getTime: remote ? remotePosition : getTime, removeFromQueue: removeR, clearUpcoming: clearUpcomingR,
+    eqEnabled, eqPreset, eqBands, preamp, balance,
+    leveller, customPresets, crossfade, djMode, djVoice, djFrequency, djTalking, playQueue: playQueueR, shufflePlay: shufflePlayR,
+    toggle: toggleR, stopPlayback: stopR,
+    nextTrack: nextR, prevTrack: prevR, skipTo: skipToR, seek: seekR, setVolume: setVolumeR, toggleMute, toggleShuffle, toggleRepeat,
+    setEqEnabled, setEqPreset, setEqBand, setPreamp, setBalance, setLeveller, saveCustomPreset, deleteCustomPreset,
+    setCrossfade, setDjMode, setDjVoice, setDjFrequency, djTryNow,
+    blocked, resumePlayback,
+    listen, startListen, joinListen, leaveListen, setEveryoneControl, addToQueue: addToQueueR,
+    devices, refreshDevices, deviceName, renameDevice, remote, playOn, endRemote
   };
 
   const deckProps = {
@@ -706,7 +1100,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       setCurrentTime(a.currentTime);
       const fade = crossfadeRef.current || (djRef.current.on ? 5 : 0);
       const left = a.duration - a.currentTime;
-      if (fade && !mixing.current && Number.isFinite(a.duration) && a.duration > 30) {
+      // Crossfade and DJ mode change tracks on their own, so they stay off while the session or another device sets the pace.
+      if (fade && !mixing.current && !listenRef.current && !remoteRef.current && Number.isFinite(a.duration) && a.duration > 30) {
         if (djRef.current.on) {
           if (left <= 40) void prepareDj();
           const plan = djPlan.current;
@@ -721,7 +1116,18 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       }
     },
     onDurationChange: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget)) setDuration(e.currentTarget.duration); },
-    onEnded: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget) && !mixing.current) goNext(true); },
+    onEnded: (e: React.SyntheticEvent<HTMLAudioElement>) => {
+      if (!isLive(e.currentTarget) || mixing.current) return;
+      // In a shared session only the host moves it on; everyone else hears the change arrive.
+      if (listenRef.current) {
+        if (listenRef.current.youAreHost && !remoteRef.current) {
+          const next = peekNext(true);
+          void listenCommand(next === null ? { type: 'pause' } : { type: 'skip', index: next });
+        }
+        return;
+      }
+      goNext(true);
+    },
     onError: (e: React.SyntheticEvent<HTMLAudioElement>) => {
       const audio = e.currentTarget;
       if (!isLive(audio)) return;
@@ -741,7 +1147,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       {children}
       <audio ref={el => { deckA.current = el; if (!audioRef.current) audioRef.current = el; }} {...deckProps} />
       <audio ref={el => { deckB.current = el; }} {...deckProps} />
-      {queue.length > 0 && <MusicPlayerUI />}
+      {(queue.length > 0 || remote !== null) && <MusicPlayerUI />}
     </MusicContext.Provider>
   );
 }

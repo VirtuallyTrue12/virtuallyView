@@ -35,6 +35,7 @@ const Books = lazy(() => import('./pages/Books'));
 const Wiki = lazy(() => import('./pages/Wiki'));
 const HomeLabApps = lazy(() => import('./pages/HomeLabApps'));
 const PartyJoin = lazy(() => import('./pages/PartyJoin'));
+const ListenJoin = lazy(() => import('./pages/ListenJoin'));
 const Account = lazy(() => import('./pages/Account'));
 const Themes = lazy(() => import('./pages/Themes'));
 const ThemeCreator = lazy(() => import('./pages/ThemeCreator'));
@@ -182,6 +183,7 @@ export default function App() {
         <Route path="/wiki" element={<Wiki />} />
         <Route path="/apps" element={<HomeLabApps />} />
         <Route path="/party/:code" element={<PartyJoin />} />
+        <Route path="/music/together/:code" element={<ListenJoin />} />
         <Route path="/music/:id" element={<ArtistDetails />} />
         <Route path="/music/:id/watch/:videoId" element={<ConcertPlayer />} />
         <Route path="/albums/:id" element={<AlbumDetails />} />

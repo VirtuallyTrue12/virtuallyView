@@ -1,0 +1,63 @@
+/* Listen together, play on another device, and the tap-to-start prompt. */
+
+.together { display: grid; gap: 10px; padding: 4px 0; max-width: 560px; }
+.together-title { margin: 0; font-size: 1.05rem; }
+.together-sub { margin: 8px 0 0; font-size: 0.9rem; opacity: 0.8; }
+.together-help { margin: 0; font-size: 0.88rem; opacity: 0.8; line-height: 1.45; }
+.together-code { margin: 0; font-size: 0.95rem; }
+.together-code strong { font-size: 1.4rem; letter-spacing: 0.12em; margin-left: 4px; }
+.together-link { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.together-link-text { font-size: 0.82rem; opacity: 0.75; overflow-wrap: anywhere; min-width: 0; flex: 1 1 220px; }
+.together-members { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.together-member { display: flex; align-items: center; gap: 10px; }
+.together-avatar {
+  width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center;
+  background: var(--accent, #d4a24e); color: #1a1408; font-weight: 600; font-size: 0.85rem; flex: none;
+}
+.together-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.together-tag { font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border, rgba(255,255,255,0.2)); }
+.together-leave { justify-self: start; }
+
+.listen-join { display: grid; gap: 12px; }
+
+/* The Devices button and its list */
+.devices { position: relative; display: inline-block; }
+.devices-chip {
+  font: inherit; font-size: 0.8rem; padding: 6px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border, rgba(255,255,255,0.18)); background: transparent; color: inherit; white-space: nowrap;
+}
+.devices-chip.is-on { border-color: var(--accent, #d4a24e); color: var(--accent, #d4a24e); }
+.devices-pop {
+  position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 30; width: min(300px, 86vw);
+  display: grid; gap: 12px; padding: 12px; border-radius: 12px; text-align: left;
+  background: var(--surface, #1b1b1f); border: 1px solid var(--border, rgba(255,255,255,0.14));
+  box-shadow: 0 12px 30px rgba(0,0,0,0.35); font-size: 0.88rem;
+}
+.devices-now { display: grid; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--border, rgba(255,255,255,0.12)); }
+.devices-now p { margin: 0; }
+.devices-section { display: grid; gap: 6px; }
+.devices-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; }
+.devices-rename { display: flex; gap: 6px; }
+.devices-rename input { flex: 1; min-width: 0; font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border, rgba(255,255,255,0.18)); background: transparent; color: inherit; }
+.devices-item {
+  display: flex; justify-content: space-between; gap: 10px; align-items: center; width: 100%;
+  font: inherit; text-align: left; padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border, rgba(255,255,255,0.12)); background: transparent; color: inherit;
+}
+.devices-item:hover, .devices-item:focus-visible { border-color: var(--accent, #d4a24e); }
+.devices-item-sub { font-size: 0.75rem; opacity: 0.65; }
+.devices-empty, .devices-note { margin: 0; font-size: 0.82rem; opacity: 0.7; line-height: 1.4; }
+
+/* The bar while playing on another device */
+.mp-remote {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 6px 14px; font-size: 0.84rem;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.12));
+}
+.mp-remote-tap { color: var(--accent, #d4a24e); }
+
+/* Browser refused to start audio: one big tap */
+.mp-tap {
+  position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 10px;
+  font: inherit; font-size: 1.1rem; font-weight: 600; cursor: pointer; border: 0;
+  background: rgba(10,10,12,0.72); color: #fff;
+}

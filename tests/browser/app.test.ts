@@ -1230,3 +1230,47 @@ describe('Videos (Invidious)', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('listen together and play on another device', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const queue = [
+    { track: { id: 9001, title: 'Opening Song', durationMs: 200000 }, artistTitle: 'The Testers', albumTitle: 'Demo' },
+    { track: { id: 9002, title: 'Second Song', durationMs: 180000 }, artistTitle: 'The Testers', albumTitle: 'Demo' }
+  ];
+
+  it('starts a listening session that shows a code and who is listening', async () => {
+    const now = Date.now();
+    const view = { code: 'TOGTH1', host: 'owner', everyoneControl: false, members: [{ userId: 'owner', name: 'owner', host: true }], queue, index: 0, playing: true, position: 0, updatedAt: now, seq: 1, serverNow: now, you: 'owner', youAreHost: true, canControl: true, canAdd: true };
+    let started: { index: number; playing: boolean; queue: unknown[] } | null = null;
+    await page.route('**/api/listen', r => { started = r.request().postDataJSON(); return r.fulfill(json(view)); });
+    await page.route('**/api/listen/TOGTH1/events*', r => r.fulfill({ status: 200, contentType: 'text/event-stream', body: `event: state\ndata: ${JSON.stringify(view)}\n\n` }));
+    await page.goto(base + '/');
+    // A saved queue gives the player something to share, without any music library calls.
+    await page.evaluate(q => localStorage.setItem('vv-music-session', JSON.stringify({ queue: q, index: 0, time: 0, at: Date.now(), shuffle: false })), queue);
+    await page.goto(base + '/');
+    await page.getByRole('region', { name: 'Music player' }).waitFor();
+    await page.getByRole('button', { name: 'Open Now Playing' }).first().click();
+    await page.getByRole('tab', { name: 'Together' }).click();
+    await page.getByRole('button', { name: 'Start listening together' }).click();
+    await page.locator('.together-code strong').waitFor();
+    expect(await page.locator('.together-code strong').innerText()).toBe('TOGTH1');
+    await page.getByText('Listening now (1)').waitFor();
+    await page.getByText('owner (you)').waitFor();
+    expect(started).toMatchObject({ index: 0, playing: true });
+    expect((started as unknown as { queue: unknown[] }).queue).toHaveLength(2);
+  });
+
+  it('lists another device of this account, and picking it shows Playing on that device', async () => {
+    const commands: Array<Record<string, unknown>> = [];
+    await page.route('**/api/devices', r => r.fulfill(json({ devices: [{ id: 'tv-living-1', name: 'TV browser', state: null }] })));
+    await page.route('**/api/devices/tv-living-1/command', r => { commands.push(r.request().postDataJSON()); return r.fulfill(json({ ok: true })); });
+    await page.getByRole('button', { name: 'Close Now Playing' }).click();
+    await page.getByRole('button', { name: 'Devices' }).click();
+    await page.getByRole('menuitem', { name: /TV browser/ }).click();
+    await page.locator('.mp-remote').waitFor();
+    expect(await page.locator('.mp-remote').innerText()).toContain('Playing on TV browser');
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatchObject({ type: 'load', index: 0, playing: true });
+    expect((commands[0] as { queue: unknown[] }).queue).toHaveLength(2);
+  });
+});

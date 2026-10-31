@@ -11,7 +11,7 @@ type PickerState = null | { kind: 'album' } | { kind: 'track'; track: TrackItem 
 
 export default function AlbumDetails() {
   const { id } = useParams<{ id: string }>();
-  const { entry, playQueue, playing, index } = useMusicPlayer();
+  const { entry, playQueue, playing, index, addToQueue } = useMusicPlayer();
   const [album, setAlbum] = useState<AlbumItem & { artistTitle?: string } | null>(null);
   const [tracks, setTracks] = useState<TrackItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -190,6 +190,19 @@ export default function AlbumDetails() {
                 >
                   <SvgIcon name="plus" size={16} />
                 </span>
+                {track.hasFile && i >= 0 && (
+                  <span
+                    className="album-track-save"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Add ${track.title} to the queue`}
+                    title="Add to queue"
+                    onClick={e => { e.stopPropagation(); addToQueue([queue[i]!]); }}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); addToQueue([queue[i]!]); } }}
+                  >
+                    <SvgIcon name="list" size={16} />
+                  </span>
+                )}
               </button>
               );
             })}
