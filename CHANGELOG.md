@@ -2,6 +2,16 @@
 
 ## 0.4.0
 
+- **Added.** Android TV app (`apps/android-tv`): install it on a Google TV or Android TV (such as a Sony Bravia) from `http://<server>:3000/download/virtuallyview-tv.apk`; it finds the server on the home network, opens the whole library full screen, works with the TV remote, and plays video in the TV's own player (HEVC, 4K, Dolby passthrough) with the server's converted copy as a fallback. Steps in docs/android-tv.md. The website itself now moves with a remote's arrow keys in TV browsers.
+- **Added.** Save to this device: movies, episodes and songs can be downloaded for watching offline (a phone-friendly 720p or 1080p MP4 with English audio and subtitles, prepared on the server). "On this device" lists them, plays them with no connection, and syncs progress later.
+- **Added.** Listen together (one code or link, everyone hears the same song in step; the host controls playback unless they let everyone) and Play on another device (hand music over to another of your open browsers or devices and control it from here).
+- **Added.** Household profiles: a "Who's watching?" picker with avatars and an optional 4-digit PIN (an administrator profile always needs its PIN or password). Kids profiles get a family-only home, a bright top bar, and no requests, downloads or settings, enforced on the server.
+- **Added.** Music: describe a playlist in words and get one from your own library; three weekly "Made for you" mixes; Year in Review; album credits from MusicBrainz; lyrics translation and romanisation. What you play is now remembered for these.
+- **Added.** A personal home: "Because you watched" rows, a household Top 10, thumbs up or down on titles, and Edit home to hide and reorder rows. IMDb, Rotten Tomatoes, Metacritic and TMDB scores on title pages.
+- **Added.** In the player: a subtitle style menu (size, colour, background, raised), an Info panel with the cast and synopsis, and spoiler-safe recaps of what happened so far (needs the assistant).
+- **Added.** New episodes of shows you watch and new albums by artists you follow now notify you, and a "New for You" row lists them for two weeks.
+- **Added.** Install virtuallyView as an app on iPhone, iPad, Mac and Android (home-screen icon, full screen), and voice search from the search box.
+- **Fixed.** Trending Movies is ordered by the films' real scores (it read a field Radarr does not send).
 - **Changed.** Apple TV style theme, redone after the Mac app: a sidebar with blue icons (Search, Home, your library, then Manage, with your account, refresh and the bell at the bottom) on screens wider than 900px, Mac-app greys, white Play pills, softer 12px cards, a round back button and round cast photos with names underneath. Narrower screens keep the top bar.
 - **Fixed.** The search page was far wider than the screen (a section grew to fit the longest row), and a movie's Details facts had no styling (the studio was indented under its label) with the file info box centred instead of lined up with the page.
 - **Fixed.** Downloads that arrive as one .zip (music from Internet Archive, some packs) were stuck for ever with "Found archive file, might need to be extracted": they are now unpacked next to the archive and handed to Radarr, Sonarr or Lidarr to import. The dashboard gets the downloads folder for this.
