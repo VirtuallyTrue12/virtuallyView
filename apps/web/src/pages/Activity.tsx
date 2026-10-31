@@ -22,7 +22,7 @@ export default function Activity() {
 
       {loading && <div className="loading-state">Loading activity...</div>}
       {!loading && events.length === 0 && (
-        <div className="loading-state">Nothing has happened yet. Request a movie or ask the assistant something.</div>
+        <div className="empty-state">Nothing has happened yet. Request a movie or ask the assistant something.</div>
       )}
 
       <div className="activity-list">
