@@ -70,7 +70,7 @@ export function PhotoViewer({ photos, index, onIndex, onClose, favorites, onFavo
   const folder = photo.path.includes('/') ? photo.path.slice(0, photo.path.lastIndexOf('/')) : 'Top folder';
 
   return (
-    <div className={`pv${idle ? ' is-idle' : ''}${zoomed ? ' is-zoomed' : ''}`} role="dialog" aria-modal="true" aria-label="Photo viewer" onMouseMove={wake} onTouchStart={e => { touch.current = { x: e.touches[0]!.clientX, y: e.touches[0]!.clientY }; wake(); }}
+    <div data-dpad="own" className={`pv${idle ? ' is-idle' : ''}${zoomed ? ' is-zoomed' : ''}`} role="dialog" aria-modal="true" aria-label="Photo viewer" onMouseMove={wake} onTouchStart={e => { touch.current = { x: e.touches[0]!.clientX, y: e.touches[0]!.clientY }; wake(); }}
       onTouchEnd={e => {
         const t = touch.current; touch.current = null;
         if (!t || zoomed) return;

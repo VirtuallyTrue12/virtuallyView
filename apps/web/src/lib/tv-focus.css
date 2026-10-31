@@ -1,0 +1,34 @@
+/* Focus rings for remote-control (TV) navigation. Only applies in TV mode (html.tv). */
+
+html.tv :focus {
+  outline: none;
+}
+
+html.tv :focus-visible {
+  outline: 3px solid var(--color-accent, #d4a24e);
+  outline-offset: 4px;
+  border-radius: 10px;
+  transition: transform 0.15s ease, outline-color 0.15s ease;
+}
+
+/* Cards and buttons lift a little when the remote lands on them, so the focus is clear from the couch. */
+html.tv a:focus-visible,
+html.tv button:focus-visible,
+html.tv [tabindex]:focus-visible {
+  transform: scale(1.04);
+  box-shadow: 0 0 0 6px rgba(212, 162, 78, 0.18);
+}
+
+/* Text boxes keep a plain ring: they do not need to grow. */
+html.tv input:focus-visible,
+html.tv textarea:focus-visible,
+html.tv select:focus-visible {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.tv :focus-visible {
+    transition: none;
+    transform: none;
+  }
+}

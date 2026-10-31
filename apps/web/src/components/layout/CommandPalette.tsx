@@ -81,7 +81,7 @@ export default function CommandPalette() {
 
   return (
     <div className="command-palette-overlay" onClick={() => setOpen(false)} role="dialog" aria-modal="true" aria-label="Command palette">
-      <div className="command-palette" onClick={e => e.stopPropagation()} onKeyDown={handleKeyDown}>
+      <div className="command-palette" data-dpad="own" onClick={e => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className="command-palette-head">
           <span className="command-palette-label">Go anywhere</span>
           <kbd className="command-palette-shortcut">Esc</kbd>

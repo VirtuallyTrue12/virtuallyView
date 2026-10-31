@@ -1,0 +1,11 @@
+# Build outputs (the APK is built, not committed)
+build/
+app/build/
+.gradle/
+dist/
+
+# Signing key and machine-specific settings: never committed
+signing/
+*.keystore
+*.jks
+local.properties

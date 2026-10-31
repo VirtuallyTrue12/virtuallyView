@@ -20,7 +20,10 @@ export function softwareRendering(): boolean {
   return software;
 }
 
-const tvBrowser = () => /Android TV|BRAVIA|SmartTV|SMART-TV|AFT[A-Z]|Tizen|Web0S|webOS|BrowseHere|TV Bro|Silk/i.test(navigator.userAgent);
+const tvBrowser = () => /Android TV|BRAVIA|SmartTV|SMART-TV|AFT[A-Z]|Tizen|Web0S|webOS|BrowseHere|TV Bro|Silk|virtuallyViewTV/i.test(navigator.userAgent);
+
+/** Running inside the virtuallyView Android TV app: video plays in the native player through VVNative. */
+export const inTvApp = (): boolean => /virtuallyViewTV/.test(navigator.userAgent) && typeof window !== 'undefined' && 'VVNative' in window;
 
 function apply(on: boolean) {
   lite = on;

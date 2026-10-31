@@ -219,7 +219,7 @@ export default function LiveTV() {
   const cn = current ? nowNext(guide[current.id]) : { now: undefined, next: undefined };
 
   return (
-    <main className={`page lv-page${current ? ' has-player' : ''}${wide ? ' lv-wide' : ''}`}>
+    <main data-dpad="own" className={`page lv-page${current ? ' has-player' : ''}${wide ? ' lv-wide' : ''}`}>
       <PageHeader
         title="Live TV"
         sub={channels.length ? `${channels.length.toLocaleString()} channels${favs.size ? ` · ${favs.size} favorite${favs.size === 1 ? '' : 's'}` : ''}${dead.size ? ` · ${dead.size} offline` : ''}` : undefined}

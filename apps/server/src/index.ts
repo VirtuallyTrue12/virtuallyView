@@ -57,6 +57,7 @@ import libraryFolderRoutes from './routes/library-folders.js';
 import artRoutes from './routes/art.js';
 import setupRoutes from './routes/setup.js';
 import profileRoutes from './routes/profiles.js';
+import tvAppRoutes from './routes/tv-app.js';
 import { kidsBlocked } from './services/kids.js';
 import { VERSION } from './lib/version.js';
 import { redactUrl } from './lib/redact.js';
@@ -529,6 +530,7 @@ const start = async () => {
   await server.register(settingsOverviewRoutes);
   await server.register(importExistingRoutes);
   await server.register(offlineRoutes);
+  await server.register(tvAppRoutes);
   await server.register(ratingRoutes);
   await server.register(homeLayoutRoutes);
 

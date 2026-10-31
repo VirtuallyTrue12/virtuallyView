@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.VV" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF0E0E12</item>
+        <item name="android:colorBackground">#FF0E0E12</item>
+        <item name="android:textColorPrimary">#FFF5F5F7</item>
+        <item name="android:textColorSecondary">#FFB8B8C2</item>
+    </style>
+</resources>

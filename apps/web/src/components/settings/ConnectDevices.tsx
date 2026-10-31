@@ -86,6 +86,9 @@ export default function ConnectDevices({ settings, onSaved }: { settings: Server
         <li>Tick <em>Stay signed in</em> on personal devices so it remembers them for 30 days.</li>
         <li>Can't connect? Allow port {settings?.port ?? 3000} through this computer's firewall.</li>
       </ol>
+      <p className="model-suggest-meta">
+        Have an Android TV or Google TV (such as a Sony Bravia)? Install the virtuallyView TV app: on the TV, open <a href="/download/virtuallyview-tv.apk">/download/virtuallyview-tv.apk</a> (after allowing unknown sources). Step-by-step help is in <code>docs/android-tv.md</code>.
+      </p>
       <label className="settings-row" style={{ gap: 8, flexWrap: 'nowrap', alignItems: 'flex-start' }}>
         <input
           type="checkbox"

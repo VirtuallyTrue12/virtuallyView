@@ -10,6 +10,8 @@ import VideoPlayer from '../components/media/VideoPlayer';
 import type { SubtitleTrack } from '../components/media/PlyrPlayer';
 import { useProgressSaver } from '../lib/useProgressSaver';
 import { audioLabels, imageSubtitleLabels } from '../lib/media-info';
+import { inTvApp } from '../lib/perf';
+import { TvAppHandoff } from '../components/media/TvAppHandoff';
 
 export default function Player() {
   const navigate = useNavigate();
@@ -79,6 +81,28 @@ export default function Player() {
         <h1>{movie.title}</h1>
         <p role="status">This movie has no imported file available for playback yet.</p>
       </main>
+    );
+  }
+
+  // Inside the Android TV app the title plays in the TV's own player instead.
+  if (inTvApp()) {
+    return (
+      <TvAppHandoff
+        backTo={`/movies/${movie.id}`}
+        backLabel="Back"
+        request={{
+          path: `/api/stream/${encodeURIComponent(movie.id)}`,
+          transcodePath: `/api/stream/${encodeURIComponent(movie.id)}/transcode`,
+          title: movie.title,
+          subtitle: movie.year ? String(movie.year) : undefined,
+          startSeconds: resumeStart,
+          durationSeconds: playback?.durationSeconds ?? 0,
+          subtitles,
+          mediaType: 'movie',
+          mediaId: movie.id,
+          returnPath: `/movies/${movie.id}`,
+        }}
+      />
     );
   }
 
