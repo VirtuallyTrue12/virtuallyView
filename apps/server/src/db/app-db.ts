@@ -224,6 +224,8 @@ function open(): DatabaseSync {
       hidden INTEGER NOT NULL DEFAULT 0,
       position INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (user_id, rail_id)
+    );
+
     -- One row per song that counted as played (30 seconds in, or to the end). Feeds mixes and Year in Review.
     CREATE TABLE IF NOT EXISTS music_plays (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
