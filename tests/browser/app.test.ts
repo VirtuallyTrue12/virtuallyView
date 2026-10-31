@@ -1347,3 +1347,54 @@ describe('install as an app and voice search', () => {
     await p.close();
   });
 });
+
+describe('player: subtitle style, who is on screen, and recaps', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('sets the subtitle size, lists the film cast in the Info panel, and shows a catch-up', async () => {
+    await page.route('**/api/movies/radarr-520', r => r.fulfill(json({ id: 'radarr-520', title: 'Cast Reel', year: 2001, overview: 'A short test film.', status: 'available' })));
+    await page.route('**/api/movies/radarr-520/cast', r => r.fulfill(json({ mediaId: 'radarr-520', title: 'Cast Reel', source: 'test', cast: [{ name: 'Ada Test', role: 'Pilot', photo: '' }, { name: 'Ben Mock', role: 'Navigator' }] })));
+    await page.route('**/api/recap/movie/radarr-520**', r => r.fulfill(json({ available: true, bullets: ['The pilot leaves port.', 'A storm forms.'] })));
+    await page.route('**/api/stream/radarr-520/info', r => r.fulfill(json({ playable: true, transcodingAvailable: false, durationSeconds: 100 })));
+    await page.route('**/api/progress/movie/radarr-520', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await page.route('**/api/stream/radarr-520/subtitles', r => r.fulfill(json({ subtitles: [] })));
+    await page.route('**/api/stream/radarr-520', r => r.fulfill({ status: 200, contentType: 'video/mp4', body: '' }));
+
+    await page.goto(base + '/movies/radarr-520/play');
+    await page.waitForSelector('.vp-heading');
+
+    await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
+    await page.getByRole('menuitemradio', { name: 'Large', exact: true }).click();
+    expect(await page.locator('.vp').getAttribute('data-sub-size')).toBe('large');
+
+    await page.getByRole('button', { name: 'Info', exact: true }).click();
+    await page.getByRole('link', { name: /Ada Test/ }).waitFor();
+    expect(await page.locator('.vp-cast').innerText()).toContain('Ben Mock');
+    await page.getByRole('button', { name: 'Catch me up' }).click();
+    await page.getByText('The pilot leaves port.').waitFor();
+    await page.keyboard.press('Escape');
+    await page.locator('.vp-info').waitFor({ state: 'detached' });
+    expect(errors).toEqual([]);
+  });
+
+  it('shows the episode cast and a Previously on recap for an episode', async () => {
+    const episode = { id: 'ep-520a', seriesId: 'sonarr-520', seasonNumber: 1, episodeNumber: 1, title: 'Pilot Night', overview: 'The crew takes off.', hasFile: true };
+    await page.route('**/api/series/sonarr-520', r => r.fulfill(json({ id: 'sonarr-520', title: 'Recap Show', overview: 'A show about a crew.', status: 'available' })));
+    await page.route('**/api/series/sonarr-520/episodes', r => r.fulfill(json({ episodes: [episode] })));
+    await page.route('**/api/series/sonarr-520/cast', r => r.fulfill(json({ cast: [{ name: 'Cara Series', role: 'Captain' }] })));
+    await page.route('**/api/recap/episode/ep-520a**', r => r.fulfill(json({ available: true, bullets: ['The crew wakes early.'] })));
+    await page.route('**/api/stream/episode/ep-520a/info', r => r.fulfill(json({ playable: true, transcodingAvailable: false, durationSeconds: 100 })));
+    await page.route('**/api/progress/episode/ep-520a', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await page.route('**/api/stream/episode/ep-520a/subtitles', r => r.fulfill(json({ subtitles: [] })));
+    await page.route('**/api/stream/episode/ep-520a', r => r.fulfill({ status: 200, contentType: 'video/mp4', body: '' }));
+
+    await page.goto(base + '/series/sonarr-520/watch/ep-520a');
+    await page.waitForSelector('.vp-heading');
+    await page.getByRole('button', { name: 'Info', exact: true }).click();
+    await page.getByRole('link', { name: /Cara Series/ }).waitFor();
+    expect(await page.locator('.vp-info').innerText()).toContain('The crew takes off.');
+    await page.getByRole('button', { name: 'Recap', exact: true }).click();
+    await page.getByText('The crew wakes early.').waitFor();
+    expect(errors).toEqual([]);
+  });
+});

@@ -13,6 +13,7 @@ import aiRoutes from './routes/ai.js';
 import requestsRoutes from './routes/requests.js';
 import integrationsRoutes from './routes/integrations.js';
 import streamRoutes from './routes/stream.js';
+import recapRoutes from './routes/recap.js';
 import themesRoutes from './routes/themes.js';
 import serviceLaunchRoutes from './routes/service-launch.js';
 import activityRoutes from './routes/activity.js';
@@ -471,6 +472,7 @@ const start = async () => {
   await server.register(requestsRoutes);
   await server.register(integrationsRoutes);
   await server.register(streamRoutes);
+  await server.register(recapRoutes);
   await server.register(themesRoutes);
   await server.register(serviceLaunchRoutes);
   await server.register(activityRoutes);

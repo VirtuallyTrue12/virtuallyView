@@ -159,6 +159,11 @@ export default function EpisodePlayer() {
             poster={series?.artwork?.backdrop}
             title={title}
             subtitles={subtitles}
+            info={current && id ? {
+              cast: { kind: 'series', id },
+              synopsis: series?.overview,
+              episode: { id: current.id, seriesId: id, title: current.title, synopsis: current.overview }
+            } : undefined}
             startAt={resumeStart}
             onProgress={onProgress}
             party={partyCode ? { remote: party.remote, onLocal: party.onLocal } : undefined}

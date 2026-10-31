@@ -1,0 +1,33 @@
+/*
+ * Subtitle look. The player's subtitle menu sets data attributes on .vp (data-sub-size, data-sub-color,
+ * data-sub-bg, data-sub-pos), so these rules only ever touch this player's captions.
+ * ::cue takes only a few properties (colour, background, text-shadow, font size, line height).
+ */
+.vp video::cue {
+  font-size: clamp(14px, 3vh, 24px);
+  line-height: 1.25;
+  color: #fff;
+  background: transparent;
+  text-shadow: 0 0 4px #000, 0 0 8px #000, 1px 1px 2px #000;
+}
+
+/* Size */
+.vp[data-sub-size='small'] video::cue { font-size: clamp(11px, 2.2vh, 17px); }
+.vp[data-sub-size='large'] video::cue { font-size: clamp(18px, 4.2vh, 34px); }
+.vp[data-sub-size='xlarge'] video::cue { font-size: clamp(22px, 5.6vh, 46px); }
+
+/* Text colour */
+.vp[data-sub-color='yellow'] video::cue { color: #ffe14d; }
+
+/* Background: None is bare text, Shadow is the default outline, Box is a dark panel behind the words */
+.vp[data-sub-bg='none'] video::cue { text-shadow: none; }
+.vp[data-sub-bg='box'] video::cue { background: rgba(0, 0, 0, 0.78); text-shadow: none; }
+
+/* Position: raise the captions above the control bar. Chromium and Safari move the whole cue layer;
+   other browsers keep the bottom position. */
+.vp[data-sub-pos='raised'] video::-webkit-media-text-track-display { transform: translateY(-14vh); }
+
+/* The menu's style rows */
+.vp-substyle { padding: 2px 0 4px; }
+.vp-substyle-label { display: block; padding: 6px 10px 0; font-size: 0.78rem; opacity: 0.7; }
+.vp-substyle .vp-speeds { padding-bottom: 4px; }

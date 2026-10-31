@@ -5,6 +5,7 @@ import type { Media } from '@virtuallyview/types';
 import type { SonarrAdapter } from '@virtuallyview/integrations';
 import { getAdapter } from '../services/registry.js';
 import { getMediaRoots, isAllowedMediaFile } from '../services/media-roots.js';
+import { subtitleToVtt } from '../services/subtitle-text.js';
 import { resolveMusicVideoPath } from '../services/music-video-library.js';
 import { extractSubtitleVtt, ffmpegAvailable, playableFor, probeMedia, startTranscode, type ClientCodecs, type TranscodeOptions } from '../services/transcode.js';
 import { ensureHlsSession, HLS_SEGMENT_RE, playlistPath, segmentPath, touchHlsSession } from '../services/hls-sessions.js';
@@ -276,29 +277,6 @@ function hlsSegment(reply: FastifyReply, sessionKey: string, segment: string) {
   return reply.header('Content-Type', 'video/mp2t').header('Cache-Control', 'no-store').header('Access-Control-Allow-Origin', '*').send(createReadStream(file));
 }
 
-/** Browsers only load WebVTT in <track>; convert SRT/ASS sidecars on the fly. */
-function subtitleToVtt(text: string, ext: string): string {
-  const clean = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
-  if (ext === '.vtt') return clean;
-  if (ext === '.srt') {
-    return 'WEBVTT\n\n' + clean.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
-  }
-  // .ass / .ssa: keep Dialogue lines only, strip override tags.
-  const toTime = (t: string) => {
-    const m = /^(\d+):(\d{2}):(\d{2})[.](\d{2})$/.exec(t.trim());
-    return m ? `${m[1].padStart(2, '0')}:${m[2]}:${m[3]}.${m[4]}0` : '00:00:00.000';
-  };
-  const cues: string[] = [];
-  for (const line of clean.split('\n')) {
-    if (!line.startsWith('Dialogue:')) continue;
-    const parts = line.slice(9).split(',');
-    if (parts.length < 10) continue;
-    const body = parts.slice(9).join(',').replace(/\{[^}]*\}/g, '').replace(/\\N/gi, '\n').trim();
-    if (body) cues.push(`${toTime(parts[1])} --> ${toTime(parts[2])}\n${body}`);
-  }
-  return 'WEBVTT\n\n' + cues.join('\n\n');
-}
-
 /** Shift every cue back by `offset` seconds (transcoded streams restart at 0). */
 function shiftVtt(vtt: string, offset: number): string {
   if (!(offset > 0)) return vtt;
@@ -413,7 +391,7 @@ async function resolveEpisodeFile(id: string): Promise<string | null> {
  * enough. A restricted viewer with a rating that cannot be confirmed is
  * refused (unknown is not safe).
  */
-async function episodeAllowed(id: string): Promise<boolean> {
+export async function episodeAllowed(id: string): Promise<boolean> {
   const actor = currentActor();
   if (actor.role !== 'user' || !actor.maxRating) return true;
   try {
