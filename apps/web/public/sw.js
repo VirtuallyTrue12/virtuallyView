@@ -64,7 +64,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 // Every release brings new hashed files; keep only the newest ones so old releases do not pile up on the phone.
-const MAX_ASSETS = 120;
+const MAX_ASSETS = 400;
 function trim(cache) {
   return cache.keys().then((keys) => {
     const assets = keys.filter((k) => new URL(k.url).pathname.startsWith('/assets/'));
