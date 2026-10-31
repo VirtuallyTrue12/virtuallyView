@@ -1230,3 +1230,52 @@ describe('Videos (Invidious)', () => {
     expect(errors).toEqual([]);
   });
 });
+
+describe('music discovery: prompted playlists and Made for you', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const svg = { status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>' };
+  const track = (trackId: string, title: string) => ({ trackId, title, artistId: 'lidarr-1', artistTitle: 'Night Owls', albumId: 'album-1', albumTitle: 'An Album', cover: '/c1.svg', durationMs: 200_000, genre: 'Synthwave' });
+  const tracks = [track('11', 'Midnight Highway'), track('12', 'Neon Drive'), track('13', 'Slow Heart')];
+  const mixes = [
+    { id: 'favourites', name: 'Your favourites', blurb: 'What you played most lately.', week: '2026-W44', tracks, covers: ['/c1.svg', '/c2.svg'] },
+    { id: 'deep-cuts', name: 'Deep cuts', blurb: 'Tracks you have not heard yet.', week: '2026-W44', tracks: tracks.slice(0, 2), covers: ['/c1.svg'] }
+  ];
+
+  it('makes a playlist from the library for a described mood, and shows the Made for you row', async () => {
+    let asked = '';
+    await page.route('**/c1.svg', r => r.fulfill(svg));
+    await page.route('**/c2.svg', r => r.fulfill(svg));
+    await page.route('**/api/music/mixes', r => r.fulfill(json({ week: '2026-W44', mixes })));
+    await page.route('**/api/music/playlist-prompt', r => {
+      asked = (r.request().postDataJSON() as { prompt: string }).prompt;
+      return r.fulfill(json({ source: 'assistant', assistant: 'on', name: 'Late drive', tracks }));
+    });
+    await page.goto(base + '/music');
+    await page.getByLabel('Describe a playlist').fill('late-night drive, no ballads');
+    await page.getByRole('button', { name: 'Make playlist' }).click();
+    await page.locator('.pp-track').first().waitFor();
+    expect(asked).toBe('late-night drive, no ballads');
+    expect(await page.locator('.pp-track-title').allInnerTexts()).toEqual(['Midnight Highway', 'Neon Drive', 'Slow Heart']);
+    expect(await page.getByRole('button', { name: 'Save as playlist' }).count()).toBe(1);
+
+    await page.getByRole('heading', { name: 'Made for you' }).waitFor();
+    expect(await page.getByRole('button', { name: /^Play (Your favourites|Deep cuts)$/ }).count()).toBe(2);
+    expect(await page.locator('.mix-card').first().locator('.mix-cover img').count()).toBe(2);
+    expect(errors).toEqual([]);
+  });
+
+  it('says the assistant is off and still offers keyword matches', async () => {
+    await page.route('**/api/music/mixes', r => r.fulfill(json({ week: '2026-W44', mixes: [], message: 'Mixes need a few plays first.' })));
+    await page.route('**/api/music/playlist-prompt', r => r.fulfill(json({
+      source: 'keywords', assistant: 'off', name: 'rain songs',
+      message: 'Prompted playlists need the assistant, which is switched off right now.', tracks: tracks.slice(0, 1)
+    })));
+    await page.goto(base + '/music');
+    await page.getByLabel('Describe a playlist').fill('rain songs');
+    await page.getByRole('button', { name: 'Make playlist' }).click();
+    await page.getByText('Prompted playlists need the assistant, which is switched off right now.').waitFor();
+    expect(await page.locator('.pp-track').count()).toBe(1);
+    await page.getByText('Mixes need a few plays first.').waitFor();
+    expect(errors).toEqual([]);
+  });
+});

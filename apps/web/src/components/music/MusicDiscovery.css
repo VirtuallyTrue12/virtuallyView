@@ -1,0 +1,224 @@
+/* Music discovery: prompted playlists, Made for you, album credits and lyrics translation. */
+
+.made-for-you,
+.prompted-playlist {
+  margin: var(--spacing-lg) 0;
+}
+
+.made-for-you-note {
+  color: var(--color-text-muted);
+  margin: var(--spacing-md) 0;
+}
+
+.mix-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.mix-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.mix-card:hover,
+.mix-card:focus-visible {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border-focus);
+}
+
+/* Four album arts in a 2 by 2 grid. */
+.mix-cover {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-small);
+  overflow: hidden;
+  background: var(--color-surface-elevated);
+  margin-bottom: var(--spacing-sm);
+}
+
+.mix-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mix-cover-empty {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+}
+
+.mix-name {
+  font-weight: 600;
+}
+
+.mix-blurb,
+.mix-count {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.year-link-row {
+  margin: var(--spacing-md) 0;
+}
+
+.year-link {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.pp-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.pp-label {
+  font-weight: 600;
+}
+
+.pp-row {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.pp-row input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.pp-result {
+  margin-top: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.pp-name {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.pp-note {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.pp-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.pp-tracks {
+  margin: 0;
+  padding-left: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pp-track {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.pp-track-artist {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.album-credits {
+  margin: var(--spacing-lg) 0;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--spacing-md);
+}
+
+.album-credits > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.album-credits-body {
+  margin-top: var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.credit-line {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.credit-label {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.credit-note {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.credit-tracks {
+  margin: var(--spacing-sm) 0 0;
+  padding-left: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.credit-track-title {
+  font-weight: 600;
+}
+
+.lyrics-translate {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-sm);
+}
+
+.lyrics-translate select {
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  padding: 4px 8px;
+}
+
+.lyrics-tr {
+  display: block;
+  font-size: 0.85em;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  opacity: 0.9;
+}
+
+@media (max-width: 480px) {
+  .mix-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

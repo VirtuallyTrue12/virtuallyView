@@ -14,6 +14,16 @@ import { LibraryControls, useLibraryView } from '../components/media/LibraryCont
 import { useMusicPlayer } from '../components/media/MusicProvider';
 import { libraryMix } from '../lib/instant-mix';
 import MusicHero from '../components/music/MusicHero';
+import MadeForYou from '../components/music/MadeForYou';
+import PromptedPlaylist from '../components/music/PromptedPlaylist';
+
+/** The year-in-review link is offered in December and January: the year just ended, or the one that is ending. */
+function reviewYearNow(): number | null {
+  const now = new Date();
+  if (now.getMonth() === 11) return now.getFullYear();
+  if (now.getMonth() === 0) return now.getFullYear() - 1;
+  return null;
+}
 
 export default function Music() {
   const navigate = useNavigate();
@@ -96,6 +106,12 @@ export default function Music() {
       </header>
 
       <MusicHero />
+
+      <PromptedPlaylist />
+      <MadeForYou />
+      {reviewYearNow() !== null && (
+        <p className="year-link-row"><Link to={`/music/year/${reviewYearNow()}`} className="year-link">Your {reviewYearNow()} in music and film</Link></p>
+      )}
 
       <Dialog open={adding} onClose={() => setAdding(false)} title="Add an artist">
         <AddArtist bare onAdded={() => { setAdding(false); api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />

@@ -1,0 +1,68 @@
+{
+  "id": "2b1d7f2e-0a31-4a6e-9a51-0c3f0e7a1111",
+  "title": "Test Album",
+  "media": [
+    {
+      "position": 1,
+      "format": "CD",
+      "tracks": [
+        {
+          "id": "t1",
+          "position": 1,
+          "number": "1",
+          "title": "First Song",
+          "recording": {
+            "id": "r1",
+            "title": "First Song",
+            "artist-credit": [{ "name": "Test Band", "artist": { "id": "a1", "name": "Test Band" } }],
+            "relations": [
+              { "type": "producer", "direction": "backward", "artist": { "id": "p1", "name": "Pat Producer" } },
+              { "type": "vocal", "direction": "backward", "artist": { "id": "s1", "name": "Sam Singer" } },
+              { "type": "instrument", "direction": "backward", "artist": { "id": "g1", "name": "Gina Guitar" } },
+              { "type": "mix", "direction": "backward", "artist": { "id": "m1", "name": "Mo Mixer" } },
+              {
+                "type": "performance",
+                "direction": "forward",
+                "target-type": "work",
+                "work": {
+                  "id": "w1",
+                  "title": "First Song",
+                  "relations": [
+                    { "type": "composer", "artist": { "id": "c1", "name": "Casey Composer" } },
+                    { "type": "lyricist", "artist": { "id": "l1", "name": "Lee Lyricist" } }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "t2",
+          "position": 2,
+          "number": "2",
+          "title": "Second Song",
+          "recording": {
+            "id": "r2",
+            "title": "Second Song",
+            "artist-credit": [{ "name": "Test Band", "artist": { "id": "a1", "name": "Test Band" } }],
+            "relations": [
+              { "type": "producer", "direction": "backward", "artist": { "id": "p1", "name": "Pat Producer" } },
+              {
+                "type": "performance",
+                "direction": "forward",
+                "target-type": "work",
+                "work": {
+                  "id": "w2",
+                  "title": "Second Song",
+                  "relations": [
+                    { "type": "composer", "artist": { "id": "c2", "name": "Dee Writer" } }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import { audioEngine, EQ_BANDS, EQ_PRESETS, lineSeconds, prepareLine, say } from
 import { DjBrain, type DjBreak, type DjFrequency, type DjSong } from '../../lib/dj-brain';
 import { fetchLyrics } from '../../lib/viz-store';
 import type { Lyrics } from '../../lib/api';
+import { api } from '../../lib/api';
 
 export { EQ_BANDS, EQ_PRESETS };
 
@@ -21,6 +22,8 @@ export interface QueueEntry {
   cover?: string;
   /** The artist's genres, for the DJ (a long run of one genre gets a mention). */
   genres?: string[];
+  /** Library artist id (lidarr-<n>), recorded with each play. */
+  artistId?: string;
 }
 
 export interface CustomPreset { name: string; gains: number[]; preamp: number }
@@ -228,6 +231,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const djSpeaking = useRef(false);
   const outroBreak = useRef<DjBreak | null>(null);
   const songLyrics = useRef<{ index: number; lyrics: Lyrics | null } | null>(null);
+  // The song that has already counted as played, so each one is recorded once.
+  const playCounted = useRef<string | null>(null);
 
   const live = () => audioRef.current;
   const isLive = (el: EventTarget) => el === audioRef.current;
@@ -689,6 +694,22 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setEqBand, setPreamp, setBalance, setLeveller, saveCustomPreset, deleteCustomPreset, setCrossfade, setDjMode, setDjVoice, setDjFrequency, djTryNow
   };
 
+  // A song counts as played once it has run 30 seconds, or has reached its end. A replay starts the count again.
+  const notePlay = (a: HTMLAudioElement) => {
+    const src = rawSrc.current;
+    if (a.currentTime < 2) playCounted.current = null;
+    if (!src || playCounted.current === src || !queue.length) return;
+    const atEnd = Number.isFinite(a.duration) && a.duration > 0 && a.duration - a.currentTime <= 1;
+    if (a.currentTime < 30 && !atEnd) return;
+    playCounted.current = src;
+    const e = queue.find(x => urlFor(x) === src);
+    if (!e) return;
+    void api.recordMusicPlay({
+      trackId: String(e.track.id), title: e.track.title, artistId: e.artistId, artist: e.artistTitle,
+      albumId: e.albumId, genre: e.genres?.[0], durationMs: e.track.durationMs
+    }).catch(() => undefined);
+  };
+
   const deckProps = {
     preload: 'metadata' as const,
     onPlay: handlePlay,
@@ -704,6 +725,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       const a = e.currentTarget;
       if (!isLive(a)) return;
       setCurrentTime(a.currentTime);
+      notePlay(a);
       const fade = crossfadeRef.current || (djRef.current.on ? 5 : 0);
       const left = a.duration - a.currentTime;
       if (fade && !mixing.current && Number.isFinite(a.duration) && a.duration > 30) {
@@ -721,7 +743,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       }
     },
     onDurationChange: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget)) setDuration(e.currentTarget.duration); },
-    onEnded: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget) && !mixing.current) goNext(true); },
+    onEnded: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget) && !mixing.current) { notePlay(e.currentTarget); goNext(true); } },
     onError: (e: React.SyntheticEvent<HTMLAudioElement>) => {
       const audio = e.currentTarget;
       if (!isLive(audio)) return;

@@ -1,0 +1,134 @@
+/* Year in Review: one scrolling story, a card per stat, large type. */
+
+.yr-page {
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.yr-story {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding-block: var(--spacing-lg) var(--spacing-xxl);
+}
+
+.yr-card {
+  min-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: clamp(var(--spacing-lg), 5vw, var(--spacing-xl));
+  border-radius: var(--radius-large);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.yr-card--accent {
+  background: linear-gradient(160deg, var(--color-accent-soft), var(--color-surface));
+}
+
+.yr-card--hero {
+  background: var(--color-surface-elevated);
+}
+
+.yr-card--end {
+  min-height: 0;
+  align-items: flex-start;
+}
+
+.yr-kicker {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.yr-title {
+  margin: 0;
+  font-size: clamp(2.2rem, 9vw, 4rem);
+  line-height: 1.05;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.yr-big {
+  margin: 0;
+  font-size: clamp(3.2rem, 14vw, 7rem);
+  line-height: 1;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.yr-big--word {
+  font-size: clamp(2.6rem, 11vw, 5.5rem);
+}
+
+.yr-lead {
+  margin: 0;
+  font-size: clamp(1.15rem, 3vw, 1.5rem);
+  color: var(--color-text-primary);
+}
+
+.yr-sub {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.yr-first strong {
+  font-size: clamp(1.6rem, 6vw, 2.6rem);
+  display: block;
+  margin-bottom: var(--spacing-xs);
+}
+
+.yr-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.yr-list li {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  font-size: clamp(1.1rem, 3.2vw, 1.6rem);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--spacing-sm);
+}
+
+.yr-rank {
+  color: var(--color-accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.yr-item {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.yr-by {
+  display: block;
+  font-size: 0.7em;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.yr-count {
+  color: var(--color-text-muted);
+  font-size: 0.7em;
+  white-space: nowrap;
+}
+
+.yr-share {
+  font-size: 1rem;
+}

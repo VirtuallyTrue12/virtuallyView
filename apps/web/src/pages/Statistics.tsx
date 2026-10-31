@@ -121,7 +121,7 @@ export default function Statistics() {
 
   return (
     <main className="page">
-      <PageHeader title="Statistics" sub="Your library at a glance" actions={<button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}><SvgIcon name="refresh" size={17} /> Refresh</button>} />
+      <PageHeader title="Statistics" sub="Your library at a glance" actions={<><Link to={`/music/year/${new Date().getFullYear()}`} className="btn btn-secondary">Your year in review</Link><button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}><SvgIcon name="refresh" size={17} /> Refresh</button></>} />
 
       <div className="ui-stats">
         <StatTile label="Movies" value={availableMovies} hint={`of ${totalMovies} tracked`} />
