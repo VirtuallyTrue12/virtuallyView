@@ -49,6 +49,8 @@ export default async function tvAppRoutes(server: FastifyInstance) {
     const report = cleanReport(request.body);
     if (!report) return reply.code(400).send({ message: 'Send a report object.' });
     reports.unshift({ ...report, at: new Date().toISOString() });
+    // Also in the server log, so a report can be read on the server computer without signing in.
+    request.log.info({ tvReport: report }, 'tv report');
     reports.length = Math.min(reports.length, MAX_REPORTS);
     return { ok: true };
   });
