@@ -33,3 +33,16 @@ describe('GET /download/virtuallyview-tv.apk', () => {
     await server.close();
   });
 });
+
+describe('TV reports', async () => {
+  const { cleanReport } = await import('../../apps/server/src/routes/tv-app.js');
+  it('keeps plain values, cut short, and drops anything else', () => {
+    const out = cleanReport({ viewport: '960x540', devicePixelRatio: 2, errors: ['x'.repeat(500)], nested: { a: 1 }, 'bad key!': 1, long: 'y'.repeat(2000) });
+    expect(out).toMatchObject({ viewport: '960x540', devicePixelRatio: 2 });
+    expect((out!.errors as string[])[0]).toHaveLength(300);
+    expect(out!.long).toHaveLength(600);
+    expect(out).not.toHaveProperty('nested');
+    expect(out).not.toHaveProperty('bad key!');
+    expect(cleanReport([1, 2])).toBeNull();
+  });
+});

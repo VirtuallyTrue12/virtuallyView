@@ -7,10 +7,12 @@ import { paintCachedTheme } from './lib/appearance';
 import { initPerformanceMode } from './lib/perf';
 import { registerServiceWorker, startInstallCapture } from './lib/pwa';
 import { initDpad } from './lib/dpad';
+import { startTvReports } from './lib/tv-report';
 import './lib/tv-focus.css';
 
 initPerformanceMode();
 initDpad();
+startTvReports();
 
 paintCachedTheme();
 registerServiceWorker();
