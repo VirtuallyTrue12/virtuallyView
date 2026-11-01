@@ -6193,8 +6193,8 @@ html.lite .np-glow, html.lite .player-bg { filter: none !important; opacity: 0.2
 /* In the player, notices sit above its controls instead of over them. */
 body.is-watching .toaster { bottom: 120px; }
 /* TV browsers (lib/perf): bigger text and targets for viewing from across the room. */
-@media (min-width: 1100px) { html.tv body { zoom: 1.25; } }
-@media (min-width: 1700px) { html.tv body { zoom: 1.5; } }
+/* TVs lay the page out 1280 wide and scale it to the screen (perf.ts sets --tv-zoom from the reported width). */
+html.tv body { zoom: var(--tv-zoom, 1); }
 /* The remote for a video playing on a TV. */
 .cast-remote { display: flex; flex-direction: column; gap: 12px; align-items: center; width: min(520px, 100%); }
 .cast-remote-title { font-size: 1.25rem; font-weight: 600; margin: 0; }

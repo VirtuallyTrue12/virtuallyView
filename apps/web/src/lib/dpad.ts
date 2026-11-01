@@ -104,6 +104,7 @@ export function moveFocus(dir: Direction): boolean {
   const target = nearestInDirection(boxOf(active), inPage.map(toBox), dir)
     ?? (inPage.length !== candidates.length ? nearestInDirection(boxOf(active), candidates.map(toBox), dir) : null);
   if (!target) return false;
+  arm(target);
   target.focus({ preventScroll: true });
   target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   return true;
@@ -117,10 +118,20 @@ function onKeyDown(e: KeyboardEvent) {
     if (back()) e.preventDefault();
     return;
   }
+  // OK on a highlighted text box opens the keyboard; until then the box is only highlighted (see arm()).
+  if (e.key === 'Enter' && active && isArmed(active)) {
+    e.preventDefault();
+    startTyping(active);
+    return;
+  }
   const dir = KEYS[e.key];
   if (!dir) return;
-  // Typing and the arrow keys inside a text box belong to the text box.
-  if (active && active.matches(TEXT_ENTRY)) return;
+  if (active && active.matches(TEXT_ENTRY) && !isArmed(active)) {
+    // Typing: left and right move inside the text; up and down leave the box, so the remote never gets stuck.
+    if (dir === 'left' || dir === 'right') return;
+    if (moveFocus(dir)) { e.preventDefault(); e.stopPropagation(); }
+    return;
+  }
   // Areas with their own arrow keys (the video player, carousels that handle them) keep them while focus is in them.
   if (ownZone(active)) return;
   if (!active || active === document.body) {
@@ -140,13 +151,53 @@ export function back(): boolean {
   return false;
 }
 
-/** Keeps focus inside an open dialog when the remote moves it elsewhere. */
+/**
+ * A text box the remote lands on is only highlighted: read-only, so Android does not pop its keyboard up just
+ * because focus passed through. OK (Enter) makes it editable and opens the keyboard.
+ */
+function arm(el: HTMLElement): void {
+  if (!isTv() || !el.matches(TEXT_ENTRY) || !('readOnly' in el)) return;
+  const field = el as HTMLInputElement | HTMLTextAreaElement;
+  if (field.readOnly) return; // read-only on its own: nothing to type into anyway
+  field.readOnly = true;
+  field.dataset.dpadArmed = '1';
+}
+
+export const isArmed = (el: Element): boolean => (el as HTMLElement).dataset?.dpadArmed === '1';
+
+function disarm(el: HTMLElement): void {
+  if (!isArmed(el)) return;
+  (el as HTMLInputElement).readOnly = false;
+  delete el.dataset.dpadArmed;
+}
+
+function startTyping(el: HTMLElement): void {
+  disarm(el);
+  // Focus again now that it is editable: that is what brings the on-screen keyboard up.
+  typing = true;
+  try {
+    el.blur();
+    el.focus({ preventScroll: true });
+    el.click();
+  } finally { typing = false; }
+}
+
+/** Keeps focus inside an open dialog when the remote moves it elsewhere; text boxes reached any way start highlighted. */
 function onFocusIn(e: FocusEvent) {
   if (!isTv()) return;
+  // A page that focuses its search box by itself must not throw the keyboard up either.
+  if (e.target instanceof HTMLElement && e.target.matches(TEXT_ENTRY) && !isArmed(e.target) && !typing) arm(e.target);
   const dialog = openDialog();
   if (!dialog || !(e.target instanceof Node) || dialog.contains(e.target)) return;
   const first = reachable(dialog)[0];
   first?.focus({ preventScroll: true });
+}
+
+/** True only while startTyping refocuses a box, so that focus is not armed again. */
+let typing = false;
+
+function onFocusOut(e: FocusEvent) {
+  if (e.target instanceof HTMLElement) disarm(e.target);
 }
 
 let started = false;
@@ -158,6 +209,7 @@ export function initDpad(): void {
   // Capture phase: this runs before the page's own key handlers, so it can take an arrow they would otherwise use.
   window.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('focusin', onFocusIn);
+  document.addEventListener('focusout', onFocusOut);
   // The first load on the home page starts on the navigation, so the remote has somewhere to go.
   window.setTimeout(() => {
     if (!isTv() || window.location.pathname !== '/') return;

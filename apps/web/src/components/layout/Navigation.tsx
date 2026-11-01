@@ -103,11 +103,15 @@ function useFittingLinks(nav: React.RefObject<HTMLElement | null>, brand: React.
       const m = measure.current;
       // Phones use the tab bar instead of these links.
       if (window.innerWidth <= 860 || !m) { setFit(count); return; }
+      // Everything in on-screen pixels: a TV scales the page (zoom), and on-screen rects then differ from the
+      // layout sizes (clientWidth, offsetWidth, computed padding). Mixing the two let links spill under the logo.
+      const scale = bar.clientWidth ? bar.getBoundingClientRect().width / bar.clientWidth : 1;
       const widths = [...m.children].map(c => c.getBoundingClientRect().width);
       const cs = getComputedStyle(bar);
-      const gap = parseFloat(cs.columnGap) || 16;
-      const room = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - (brand.current?.offsetWidth ?? 0) - (tools.current?.offsetWidth ?? 0) - gap * 2;
-      const between = 18;
+      const gap = (parseFloat(cs.columnGap) || 16) * scale;
+      const room = bar.getBoundingClientRect().width - (parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)) * scale
+        - (brand.current?.getBoundingClientRect().width ?? 0) - (tools.current?.getBoundingClientRect().width ?? 0) - gap * 2;
+      const between = 18 * scale;
       // The real "More" button (label, chevron and padding), plus a little slack for rounding.
       const moreWidth = (bar.querySelector('.nav-more')?.getBoundingClientRect().width || 78) + 4;
       let used = moreWidth, n = 0;

@@ -1741,15 +1741,23 @@ describe('remote control in TV mode', () => {
     await page.keyboard.press('ArrowDown');
     expect(await focused()).toContain('Third film');
 
-    // Search: the arrows belong to the text box while it has focus.
+    // Search: reaching the box only highlights it (read-only, so a TV does not throw its keyboard up); OK opens it
+    // for typing; left and right then move in the text, and down leaves the box instead of trapping the remote.
     await page.goto(base + '/search');
+    await page.evaluate(() => document.documentElement.classList.add('tv'));
     const input = page.locator('input[type="search"]').first();
+    // The page focused the box itself before the test turned TV mode on; arrive at it again the way a remote would.
+    await input.evaluate(el => (el as HTMLInputElement).blur());
     await input.focus();
+    expect(await input.evaluate(el => (el as HTMLInputElement).readOnly)).toBe(true);
+    await page.keyboard.press('Enter');
+    expect(await input.evaluate(el => (el as HTMLInputElement).readOnly)).toBe(false);
     await page.keyboard.type('arrow');
     await page.keyboard.press('ArrowLeft');
+    expect(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute('type'))).toBe('search');
     await page.keyboard.press('ArrowDown');
     expect(await input.inputValue()).toBe('arrow');
-    expect(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute('type'))).toBe('search');
+    expect(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute('type'))).not.toBe('search');
 
     await page.evaluate(() => document.documentElement.classList.remove('tv'));
   });

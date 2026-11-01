@@ -32,9 +32,30 @@ function apply(on: boolean) {
 
 export function isLite(): boolean { return lite; }
 
+/** The width a TV lays the page out at: the desktop layout, at a size that reads well from the sofa. */
+export const TV_LAYOUT_WIDTH = 1280;
+
+/**
+ * Scale the whole page so a TV lays it out TV_LAYOUT_WIDTH wide, whatever width it reports. A 1080p Android TV's
+ * web view reports only 960 wide (it draws two pixels per CSS pixel), which squeezed the page into a tablet layout
+ * with everything doubled in size; a 4K or 1080p TV browser at one pixel each reports 1920 and looked tiny.
+ */
+export function tvZoom(viewportWidth: number): number {
+  if (!(viewportWidth > 0)) return 1;
+  return Math.round((viewportWidth / TV_LAYOUT_WIDTH) * 1000) / 1000;
+}
+
+function fitTv(): void {
+  document.documentElement.style.setProperty('--tv-zoom', String(tvZoom(window.innerWidth)));
+}
+
 export function initPerformanceMode(): void {
   // TVs are read from across the room: a larger interface there.
-  if (tvBrowser()) document.documentElement.classList.add('tv');
+  if (tvBrowser()) {
+    document.documentElement.classList.add('tv');
+    fitTv();
+    window.addEventListener('resize', fitTv);
+  }
   let forced: string | null = null;
   try { forced = localStorage.getItem('vv-lite'); } catch { /* none */ }
   if (forced === 'on' || forced === 'off') { apply(forced === 'on'); return; }

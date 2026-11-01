@@ -86,7 +86,11 @@ export default function Search() {
     setQuality(q => ({ ...q, [base.mediaType]: '' }));
   });
 
-  useEffect(() => { api.dashboard().then(setTrending).catch(() => {}); inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    api.dashboard().then(setTrending).catch(() => {});
+    // Not on a TV: focusing the box there throws the on-screen keyboard over the page before anyone asked.
+    if (!document.documentElement.classList.contains('tv')) inputRef.current?.focus();
+  }, []);
 
   // "/" jumps to the search box from anywhere on this page.
   useEffect(() => {
