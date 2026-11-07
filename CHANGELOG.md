@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Music: album track rows are one line again (the download and queue buttons had wrapped onto a second line) and fit phone screens; with the sidebar layout the music bar sits beside the sidebar instead of covering its account menu and bell.
+
 - Website: idle pages no longer redraw 60 times a second while downloads run (the bell ring and poster download dots now play a few times and stop); poster status badges stay readable on light artwork in every theme; movie and show grids line up with the page edges.
 
 - **Added.** Android TV app (`apps/android-tv`): install it on a Google TV or Android TV (such as a Sony Bravia) from `http://<server>:3000/download/virtuallyview-tv.apk`; it finds the server on the home network, opens the whole library full screen, works with the TV remote, and plays video in the TV's own player (HEVC, 4K, Dolby passthrough) with the server's converted copy as a fallback. Steps in docs/android-tv.md. The website itself now moves with a remote's arrow keys in TV browsers.
