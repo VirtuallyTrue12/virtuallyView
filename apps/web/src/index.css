@@ -578,6 +578,8 @@ a { color: inherit; text-decoration: none; }
   gap: var(--spacing-lg) var(--spacing-md);
   padding-bottom: var(--spacing-lg);
 }
+/* Cards fill their column, so the grid lines up with the page edges instead of leaving a ragged gap on the right. */
+.media-grid .media-card { width: 100%; min-width: 0; }
 
 /* ===== Rails ===== */
 
@@ -687,6 +689,8 @@ a { color: inherit; text-decoration: none; }
   right: 0.6rem;
   z-index: 2;
 }
+/* Sits on artwork: themes with a see-through surface made the label unreadable on light posters. */
+.media-card-badge .status-pill { background: rgba(0, 0, 0, 0.62); border-color: rgba(255, 255, 255, 0.14); color: #fff; }
 
 .media-card-info { padding: var(--spacing-sm) var(--spacing-xs) 0; }
 
@@ -5457,7 +5461,7 @@ html[data-theme='apple-tv-style'] .nav-link { padding: 0.35rem 0.55rem; font-siz
 /* ===== Download progress on posters ===== */
 .media-card-dl { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 22px 8px 8px; background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.82)); display: grid; gap: 6px; pointer-events: none; }
 .media-card-dl-label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 700; color: #fff; letter-spacing: 0.01em; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
-.media-card-dl-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 0 var(--color-accent); animation: vv-dl-pulse 1.6s ease-out infinite; }
+.media-card-dl-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 0 var(--color-accent); animation: vv-dl-pulse 1.6s ease-out 3; }
 .media-card-dl-track { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.22); overflow: hidden; }
 .media-card-dl-fill { height: 100%; border-radius: 2px; background: var(--color-accent); transition: width 0.8s ease; }
 .media-card-dl--importing .media-card-dl-fill { animation: vv-dl-shimmer 1.4s linear infinite; background: linear-gradient(90deg, var(--color-accent) 30%, #fff8 50%, var(--color-accent) 70%); background-size: 200% 100%; }
@@ -6207,7 +6211,7 @@ html.tv body { zoom: var(--tv-zoom, 1); }
 .nb { position: relative; margin-left: 8px; }
 .nb-button { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; transition: border-color 0.15s, color 0.15s; }
 .nb-button:hover, .nb-button[aria-expanded='true'] { border-color: var(--color-accent); color: var(--color-text-primary); }
-.nb-button.is-busy::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--color-accent); animation: nb-spin 1.1s linear infinite; }
+.nb-button.is-busy::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--color-accent); animation: nb-spin 1.1s linear 4; } /* not endless: it kept the page redrawing while downloads ran */
 @keyframes nb-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .nb-button.is-busy::after { animation: none; border-color: var(--color-accent); opacity: 0.5; } }
 .nb-count { position: absolute; top: -5px; right: -5px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--color-accent); color: var(--color-accent-contrast, #111); font-size: 0.68rem; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--color-background); }

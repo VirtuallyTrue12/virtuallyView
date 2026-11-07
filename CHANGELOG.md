@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Website: idle pages no longer redraw 60 times a second while downloads run (the bell ring and poster download dots now play a few times and stop); poster status badges stay readable on light artwork in every theme; movie and show grids line up with the page edges.
+
 - **Added.** Android TV app (`apps/android-tv`): install it on a Google TV or Android TV (such as a Sony Bravia) from `http://<server>:3000/download/virtuallyview-tv.apk`; it finds the server on the home network, opens the whole library full screen, works with the TV remote, and plays video in the TV's own player (HEVC, 4K, Dolby passthrough) with the server's converted copy as a fallback. Steps in docs/android-tv.md. The website itself now moves with a remote's arrow keys in TV browsers.
 - **Added.** Save to this device: movies, episodes and songs can be downloaded for watching offline (a phone-friendly 720p or 1080p MP4 with English audio and subtitles, prepared on the server). "On this device" lists them, plays them with no connection, and syncs progress later.
 - **Added.** Listen together (one code or link, everyone hears the same song in step; the host controls playback unless they let everyone) and Play on another device (hand music over to another of your open browsers or devices and control it from here).
