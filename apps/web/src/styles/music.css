@@ -1,0 +1,99 @@
+/* Music area: loaded after index.css so equal-specificity rules here win. */
+
+/* Home: artists as square art with a quiet card, aligned grid. */
+.music-page .media-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: var(--spacing-xl) var(--spacing-lg); }
+.music-page .media-card-artwork { aspect-ratio: 1; border-radius: var(--radius-large); box-shadow: var(--shadow-medium); }
+.music-page .media-card-artwork img { object-fit: cover; }
+.music-page .media-card-title { font-size: var(--text-md, 0.95rem); }
+
+/* Artist page: big art, calm header on a soft wash. */
+.artist-page .ah {
+  grid-template-columns: minmax(150px, 280px) minmax(0, 1fr);
+  gap: var(--spacing-xxl);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-large);
+  background: linear-gradient(140deg, var(--color-accent-soft), transparent 70%);
+  align-items: end;
+}
+.artist-page .ah-cover { border-radius: 50%; box-shadow: var(--shadow-large); }
+.artist-page .ah-title { font-family: var(--font-heading); font-weight: var(--heading-weight); }
+.artist-page .album-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: var(--spacing-lg); }
+.artist-page .album-card { background: transparent; border-color: transparent; padding: var(--spacing-sm); transition: transform var(--duration-fast) var(--easing-default), background var(--duration-fast); }
+.artist-page .album-card:hover, .artist-page .album-card:focus-visible { background: var(--color-surface); transform: translateY(-3px); }
+.artist-page .album-card-cover { border-radius: var(--radius-medium); box-shadow: var(--shadow-medium); }
+
+/* Album page: large cover, quiet table. Actions appear on hover/focus/playing. */
+.album-hero { grid-template-columns: minmax(150px, 232px) minmax(0, 1fr); gap: var(--spacing-xl); align-items: end; margin-bottom: var(--spacing-xl); }
+.album-hero-info { align-self: end; }
+.album-hero-cover { width: 100%; height: auto; border-radius: var(--radius-medium); box-shadow: var(--shadow-large); }
+.album-hero .detail-title { font-size: clamp(1.8rem, 4vw, 3rem); letter-spacing: -0.03em; }
+.album-track-row { border-radius: var(--radius-medium); padding: var(--spacing-sm) var(--spacing-md); min-height: 48px; border-bottom: 1px solid transparent; transition: background var(--duration-fast) var(--easing-default); }
+.album-track-num { flex: 0 0 2rem; text-align: center; }
+.album-track-row.is-active .album-track-title { color: var(--color-accent); font-weight: 600; }
+.album-track-row .offline-dl-wrap, .album-track-row .album-track-save { opacity: 0; transition: opacity var(--duration-fast); }
+.album-track-row:hover .offline-dl-wrap, .album-track-row:hover .album-track-save,
+.album-track-row:focus-within .offline-dl-wrap, .album-track-row:focus-within .album-track-save,
+.album-track-row.is-active .offline-dl-wrap, .album-track-row.is-active .album-track-save { opacity: 1; }
+.album-track-row .offline-dl-label { display: none; }
+.album-track-row .album-track-dur { order: 5; min-width: 3rem; text-align: right; }
+@media (hover: none) {
+  .album-track-row .offline-dl-wrap, .album-track-row .album-track-save { opacity: 0.8; }
+}
+
+/* Playlist rows share the same quiet look. */
+.playlist-track-row { border-radius: var(--radius-medium); transition: background var(--duration-fast) var(--easing-default); }
+
+/* Mini bar: softer, rounder controls; sits beside the sidebar (index.css handles left offset). */
+.mp { box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.28); }
+.mp-now img, .mp-now .mp-art { border-radius: var(--radius-small); box-shadow: var(--shadow-medium); }
+
+/* Now Playing: pill tabs, rounder queue rows, bigger art column. */
+.np-body { grid-template-columns: minmax(280px, 520px) minmax(0, 1fr); }
+.np-tabs { gap: var(--spacing-xs); border-bottom: 0; flex-wrap: wrap; }
+.np-tab { border: 0; border-radius: 999px; margin: 0; padding: 0.4rem 0.9rem; }
+.np-tab:hover { background: var(--color-surface); }
+.np-tab.is-active { background: var(--color-accent-soft); color: var(--color-accent); }
+.mp-queue-row { border-radius: var(--radius-medium); }
+.np-panel-body { scrollbar-width: thin; }
+
+/* Home hero and Made for you: theme-aware cards, aligned to the page edge. */
+.mhero { border-radius: var(--radius-large); }
+.mix-card { border-radius: var(--radius-large); transition: transform var(--duration-fast) var(--easing-default), background var(--duration-fast); }
+.mix-card:hover { transform: translateY(-3px); }
+.mix-cover { border-radius: var(--radius-medium); }
+.pl-cover { border-radius: var(--radius-large); }
+.pl-card, .pl-new { width: 168px; }
+@media (prefers-reduced-motion: reduce) { .mix-card { transition: none; } .mix-card:hover { transform: none; } }
+
+/* Now Playing: larger art, calmer tabs. */
+.np-art { border-radius: var(--radius-large); box-shadow: var(--shadow-large); }
+.np-title { font-family: var(--font-heading); font-weight: var(--heading-weight); letter-spacing: -0.02em; }
+
+@media (max-width: 720px) {
+  .music-page .media-grid, .artist-page .album-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md); }
+  .artist-page .ah { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: var(--spacing-md); gap: var(--spacing-lg); }
+  .artist-page .ah-cover { width: min(60vw, 220px); }
+  .artist-page .ah-chips, .artist-page .ah-actions, .artist-page .ah-stats { justify-content: center; }
+  .album-hero { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: var(--spacing-lg); }
+  .album-hero-cover { width: min(70vw, 260px); }
+  .album-hero .detail-meta, .album-hero .album-actions { justify-content: center; }
+  .album-track-row .album-track-quality { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .artist-page .album-card { transition: none; } }
+
+/* Playlist page rows and listen-together/devices use theme tokens (their old rules fell back to a fixed gold). */
+.playlist-track-row { min-height: 52px; }
+.playlist-track-row:hover { background: var(--color-surface-elevated); }
+.playlist-track-cover { border-radius: var(--radius-small); }
+.together-avatar { background: var(--color-accent); color: var(--color-on-accent, #1a1408); }
+.together-tag, .devices-chip { border-color: var(--color-border); }
+.devices-chip:hover { background: var(--color-surface); }
+.devices-chip.is-on { border-color: var(--color-accent); color: var(--color-accent); }
+.listen-join { max-width: 560px; }
+
+@media (max-width: 760px) {
+  .np-body { grid-template-columns: minmax(0, 1fr); }
+  .np-art { width: min(72vw, 300px); justify-self: center; }
+  .np-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .np-tab { flex: none; }
+}

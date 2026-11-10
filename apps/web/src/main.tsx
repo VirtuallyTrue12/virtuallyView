@@ -11,6 +11,7 @@ import { startTvReports } from './lib/tv-report';
 import './lib/tv-focus.css';
 import './styles/browse.css';
 import './styles/watch.css';
+import './styles/music.css';
 
 initPerformanceMode();
 initDpad();
