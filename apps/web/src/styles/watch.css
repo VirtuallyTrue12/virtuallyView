@@ -53,3 +53,15 @@
   .vp-controls { padding: 40px 10px 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .vp-btn, .episode-card, .season-tab { transition: none; } .vp-btn:active { transform: none; } }
+
+/* Meta: two rows. On phones the chip row scrolls sideways instead of wrapping into many lines. */
+.detail-meta { margin-bottom: var(--spacing-sm); }
+.detail-hero .thumb-btn { border-color: var(--color-border); background: var(--color-surface); }
+@media (max-width: 640px) {
+  .detail-meta { gap: var(--spacing-sm) var(--spacing-md); font-size: 0.88rem; }
+  .detail-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: calc(-1 * var(--page-gutter, 16px)); padding-right: var(--page-gutter, 16px); }
+  .detail-chips::-webkit-scrollbar { display: none; }
+  .detail-chips > * { flex: 0 0 auto; white-space: nowrap; }
+  .detail-info .genres { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .detail-info .genres span { flex: 0 0 auto; }
+}

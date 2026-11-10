@@ -158,9 +158,11 @@ export default function SeriesDetail() {
                 {series.seasons?.length ? <span>{series.seasons.filter(s => s.number > 0).length} seasons</span> : null}
                 {totalEpisodes > 0 && <span>{availableEpisodes}/{totalEpisodes} episodes</span>}
                 {series.rating ? <span className="rating"><SvgIcon name="star" size={14} /> {series.rating.toFixed(1)}</span> : null}
+                {series.certification && <span className="cert-badge">{series.certification}</span>}
+              </div>
+              <div className="detail-meta detail-chips">
                 <ScoreChips ratings={series.ratings} />
                 {series.quality && <span>{series.quality}</span>}
-                {series.certification && <span className="cert-badge">{series.certification}</span>}
                 {series.studio && <Link to={`/series?studio=${encodeURIComponent(series.studio)}`}>{series.studio}</Link>}
                 <StatusPill status={displayStatus} />
               </div>

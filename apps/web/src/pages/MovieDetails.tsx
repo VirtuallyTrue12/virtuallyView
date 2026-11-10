@@ -186,10 +186,12 @@ export default function MovieDetails() {
                 {movie.year && <span>{movie.year}</span>}
                 {movie.runtime && <span>{movie.runtime} min</span>}
                 {movie.rating ? <span className="rating"><SvgIcon name="star" size={14} /> {movie.rating.toFixed(1)}</span> : null}
+                {movie.certification && <span className="cert-badge">{movie.certification}</span>}
+              </div>
+              <div className="detail-meta detail-chips">
                 <ScoreChips ratings={movie.ratings} />
                 {movie.quality && <span>{movie.quality}</span>}
                 {movie.language && <span>{movie.language}</span>}
-                {movie.certification && <span className="cert-badge">{movie.certification}</span>}
                 {movie.studio && <Link to={`/movies?studio=${encodeURIComponent(movie.studio)}`}>{movie.studio}</Link>}
                 {movie.collection && <Link to={`/movies?collection=${encodeURIComponent(movie.collection)}`}>{movie.collection}</Link>}
               </div>
