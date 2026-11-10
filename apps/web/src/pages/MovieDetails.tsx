@@ -17,6 +17,7 @@ import { TitleQuality } from '../components/media/TitleQuality';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import DownloadButton from '../components/offline/DownloadButton';
 import { ScoreChips, ThumbRating } from '../components/media/RatingControls';
+import { RelatedVideos } from '../components/videos/RelatedVideos';
 
 const fmtClock = (sec: number) => {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
@@ -284,6 +285,7 @@ export default function MovieDetails() {
       )}
 
       <CastRow title="Cast" people={movie.cast ?? []} loading={castLoading} link inPage />
+      <RelatedVideos title={movie.title} year={movie.year} />
 
       {(movie.status === 'available' || movie.releaseDate || (movie.director && movie.director.length > 0)) && (
         <section className="page">

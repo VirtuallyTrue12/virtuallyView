@@ -132,8 +132,19 @@ export interface RadioPlace { name: string; code: string; stations: number }
 
 export interface VideoResult {
   id: string; title: string; channel: string; channelId?: string; durationSeconds: number; views: number;
-  published?: string; thumbnail?: string; description?: string;
+  published?: string; thumbnail?: string; description?: string; channelThumb?: string;
+  /** Where it was left (Continue watching and History). */
+  position?: number; duration?: number;
+  /** Only on the Saved list. */
+  saved?: SavedState;
 }
+export interface SavedState { status: 'ready' | 'queued' | 'downloading' | 'merging' | 'error' | 'cancelled' | 'missing'; percent: number; error?: string; sizeBytes?: number }
+export interface VideoChannel { id: string; name: string; avatar?: string; banner?: string; subscribers: number; description?: string; videoCount?: number; verified?: boolean }
+export interface VideoDetails extends VideoResult {
+  publishedText?: string; likes: number; subscribersText?: string; hasStream: boolean;
+  captions: Array<{ label: string; code: string }>; chapters: Array<{ start: number; title: string }>; related: VideoResult[];
+}
+export interface VideoState { position: number; later: boolean; saved: SavedState | null; video: VideoResult | null; subscribed: boolean }
 
 export interface EpisodeItem {
   download?: ItemDownload;
@@ -653,7 +664,25 @@ export const api = {
   deletePhotoAlbum: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/photo-albums/${encodeURIComponent(id)}`),
   videosStatus: () => getJSON<{ available: boolean }>('/api/videos/status'),
   videosSearch: (q: string, page = 1) => getJSON<{ videos: VideoResult[] }>(`/api/videos/search?q=${encodeURIComponent(q)}&page=${page}`),
-  video: (id: string) => getJSON<{ video: VideoResult; embed: string | null }>(`/api/videos/${encodeURIComponent(id)}`),
+  video: (id: string) => getJSON<{ video: VideoDetails; embed: string | null; stream: string | null; subscribed: boolean; library: { id: string; title: string; year?: number; href: string } | null }>(`/api/videos/${encodeURIComponent(id)}`),
+  videoState: (id: string) => getJSON<VideoState>(`/api/videos/${encodeURIComponent(id)}/state`),
+  videoChannelsSearch: (q: string) => getJSON<{ channels: VideoChannel[] }>(`/api/videos/search?type=channel&q=${encodeURIComponent(q)}`),
+  videosTrending: () => getJSON<{ videos: VideoResult[] }>('/api/videos/trending'),
+  videosPopular: () => getJSON<{ videos: VideoResult[] }>('/api/videos/popular'),
+  videosAbout: (title: string, year?: number, kind: 'movie' | 'series' = 'movie') => getJSON<{ videos: VideoResult[] }>(`/api/videos/about?title=${encodeURIComponent(title)}&kind=${kind}${year ? `&year=${year}` : ''}`),
+  videoChannel: (id: string, continuation?: string) => getJSON<{ channel?: VideoChannel; subscribed: boolean; videos: VideoResult[]; continuation?: string }>(`/api/videos/channels/${encodeURIComponent(id)}${continuation ? `?continuation=${encodeURIComponent(continuation)}` : ''}`),
+  videoSubscriptions: () => getJSON<{ channels: VideoChannel[] }>('/api/videos/subscriptions'),
+  videoSubscribe: (id: string) => postJSON<{ ok: boolean; channel: VideoChannel }>('/api/videos/subscriptions', { id }),
+  videoUnsubscribe: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/videos/subscriptions/${encodeURIComponent(id)}`),
+  videoFeed: () => getJSON<{ videos: VideoResult[]; failed: number; channels: number }>('/api/videos/feed'),
+  videoLater: () => getJSON<{ videos: VideoResult[] }>('/api/videos/later'),
+  videoAddLater: (id: string) => postJSON<{ ok: boolean }>('/api/videos/later', { id }),
+  videoRemoveLater: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/videos/later/${encodeURIComponent(id)}`),
+  videoContinue: () => getJSON<{ videos: VideoResult[] }>('/api/videos/continue'),
+  videoProgress: (id: string, position: number, duration: number) => postJSON<{ ok: boolean }>('/api/videos/progress', { id, position, duration }),
+  videoSaved: () => getJSON<{ videos: VideoResult[] }>('/api/videos/saved'),
+  videoSave: (id: string) => postJSON<{ ok: boolean; saved: SavedState }>('/api/videos/saved', { id }),
+  videoUnsave: (id: string) => requestJSON<{ ok: boolean; removedFile: boolean }>('DELETE', `/api/videos/saved/${encodeURIComponent(id)}`),
   videoHistory: () => getJSON<{ history: VideoResult[] }>('/api/videos/history/me'),
   videoWatched: (id: string) => postJSON<{ ok: boolean }>('/api/videos/history/watched', { id }),
   removeVideoHistory: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/videos/history/${encodeURIComponent(id)}`),

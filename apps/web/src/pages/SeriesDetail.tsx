@@ -16,6 +16,7 @@ import { api, type PersonInfo, type EpisodeItem, type MediaDescription, type Ser
 import { SvgIcon } from '../components/ui/SvgIcon';
 import DownloadButton from '../components/offline/DownloadButton';
 import { ScoreChips, ThumbRating } from '../components/media/RatingControls';
+import { RelatedVideos } from '../components/videos/RelatedVideos';
 
 export default function SeriesDetail() {
   const { id } = useParams<{ id: string }>();
@@ -229,6 +230,7 @@ export default function SeriesDetail() {
       )}
 
       <CastRow title="Cast" people={cast} loading={castLoading} link inPage />
+      <RelatedVideos title={series.title} year={series.year} kind="series" />
 
       {(ordered.length > 0 || episodesError) && (
         <section className="page">
