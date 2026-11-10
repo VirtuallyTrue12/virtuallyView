@@ -18,6 +18,7 @@ import './styles/watch.css';
 import './styles/music.css';
 import './styles/tools.css';
 import './styles/videos.css';
+import './styles/media.css';
 
 initPerformanceMode();
 initDpad();

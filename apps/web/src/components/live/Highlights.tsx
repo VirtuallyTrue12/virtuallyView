@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type LiveChannel, type LiveHighlight } from '../../lib/api';
+import { api, type LiveChannel, type LiveHighlight, type LiveProgramme } from '../../lib/api';
 import { ScrollRow } from '../ui/ScrollRow';
 import { SvgIcon } from '../ui/SvgIcon';
 
@@ -62,6 +62,34 @@ export function Highlights({ channels, playingId, onWatch }: { channels: Map<str
           </div>
         </ScrollRow>
       )}
+    </section>
+  );
+}
+
+/** The featured row at the top: what is on now on your favourite and recent channels, one press to watch. */
+export function OnNow({ items, playingId, onWatch }: { items: Array<{ channel: LiveChannel; now: LiveProgramme }>; playingId?: string | undefined; onWatch: (c: LiveChannel) => void }) {
+  if (items.length === 0) return null;
+  const at = Date.now();
+  return (
+    <section className="on-now" aria-label="On now">
+      <h2 className="on-now-title">On now</h2>
+      <ScrollRow className="on-now-row" label="on now">
+        <div className="on-now-cards">
+          {items.map(({ channel: c, now: p }) => (
+            <button key={c.id} type="button" className={`on-now-card${playingId === c.id ? ' is-on' : ''}`} onClick={() => onWatch(c)} aria-label={`${p.title} on ${c.name}`}>
+              <span className="on-now-art">
+                {c.logo ? <img src={c.logo} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="on-now-initial">{c.name.charAt(0)}</span>}
+                <span className="on-now-live"><i />{playingId === c.id ? 'Playing' : 'Live'}</span>
+              </span>
+              <span className="on-now-text">
+                <strong>{p.title}</strong>
+                <span>{c.name} · {Math.max(1, Math.round((p.stop - at) / 60_000))} min left</span>
+              </span>
+              <span className="on-now-bar" aria-hidden="true"><span style={{ width: `${Math.min(100, ((at - p.start) / (p.stop - p.start)) * 100)}%` }} /></span>
+            </button>
+          ))}
+        </div>
+      </ScrollRow>
     </section>
   );
 }
