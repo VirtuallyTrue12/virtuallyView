@@ -23,7 +23,8 @@
 .artist-page .album-card-cover { border-radius: var(--radius-medium); box-shadow: var(--shadow-medium); }
 
 /* Album page: large cover, quiet table. Actions appear on hover/focus/playing. */
-.album-hero { grid-template-columns: minmax(150px, 260px) minmax(0, 1fr); gap: var(--spacing-xxl); margin-bottom: var(--spacing-xl); }
+.album-hero { grid-template-columns: minmax(150px, 232px) minmax(0, 1fr); gap: var(--spacing-xl); align-items: end; margin-bottom: var(--spacing-xl); }
+.album-hero-info { align-self: end; }
 .album-hero-cover { width: 100%; height: auto; border-radius: var(--radius-medium); box-shadow: var(--shadow-large); }
 .album-hero .detail-title { font-size: clamp(1.8rem, 4vw, 3rem); letter-spacing: -0.03em; }
 .album-track-row { border-radius: var(--radius-medium); padding: var(--spacing-sm) var(--spacing-md); min-height: 48px; border-bottom: 1px solid transparent; transition: background var(--duration-fast) var(--easing-default); }
@@ -46,6 +47,24 @@
 .mp { box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.28); }
 .mp-now img, .mp-now .mp-art { border-radius: var(--radius-small); box-shadow: var(--shadow-medium); }
 
+/* Now Playing: pill tabs, rounder queue rows, bigger art column. */
+.np-body { grid-template-columns: minmax(280px, 520px) minmax(0, 1fr); }
+.np-tabs { gap: var(--spacing-xs); border-bottom: 0; flex-wrap: wrap; }
+.np-tab { border: 0; border-radius: 999px; margin: 0; padding: 0.4rem 0.9rem; }
+.np-tab:hover { background: var(--color-surface); }
+.np-tab.is-active { background: var(--color-accent-soft); color: var(--color-accent); }
+.mp-queue-row { border-radius: var(--radius-medium); }
+.np-panel-body { scrollbar-width: thin; }
+
+/* Home hero and Made for you: theme-aware cards, aligned to the page edge. */
+.mhero { border-radius: var(--radius-large); }
+.mix-card { border-radius: var(--radius-large); transition: transform var(--duration-fast) var(--easing-default), background var(--duration-fast); }
+.mix-card:hover { transform: translateY(-3px); }
+.mix-cover { border-radius: var(--radius-medium); }
+.pl-cover { border-radius: var(--radius-large); }
+.pl-card, .pl-new { width: 168px; }
+@media (prefers-reduced-motion: reduce) { .mix-card { transition: none; } .mix-card:hover { transform: none; } }
+
 /* Now Playing: larger art, calmer tabs. */
 .np-art { border-radius: var(--radius-large); box-shadow: var(--shadow-large); }
 .np-title { font-family: var(--font-heading); font-weight: var(--heading-weight); letter-spacing: -0.02em; }
@@ -61,3 +80,13 @@
   .album-track-row .album-track-quality { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .artist-page .album-card { transition: none; } }
+
+/* Playlist page rows and listen-together/devices use theme tokens (their old rules fell back to a fixed gold). */
+.playlist-track-row { min-height: 52px; }
+.playlist-track-row:hover { background: var(--color-surface-elevated); }
+.playlist-track-cover { border-radius: var(--radius-small); }
+.together-avatar { background: var(--color-accent); color: var(--color-on-accent, #1a1408); }
+.together-tag, .devices-chip { border-color: var(--color-border); }
+.devices-chip:hover { background: var(--color-surface); }
+.devices-chip.is-on { border-color: var(--color-accent); color: var(--color-accent); }
+.listen-join { max-width: 560px; }
