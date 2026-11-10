@@ -136,7 +136,7 @@ describe('first run and accounts', () => {
 describe('appearance', () => {
   it('applies a theme instantly and keeps it after a reload', async () => {
     await page.goto(base + '/themes');
-    await page.locator('.theme-tile', { hasText: 'Cyberpunk' }).getByRole('button', { name: /^Use/ }).click();
+    await page.locator('.theme-tile', { hasText: 'Synthwave' }).getByRole('button', { name: /^Use/ }).click();
     await page.waitForFunction(() => document.documentElement.dataset.theme === 'cyberpunk');
     await page.reload();
     await page.waitForSelector('.theme-tile');
