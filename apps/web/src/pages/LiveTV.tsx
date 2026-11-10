@@ -8,7 +8,8 @@ import { SvgIcon } from '../components/ui/SvgIcon';
 import { ScrollRow } from '../components/ui/ScrollRow';
 import { LivePlayer } from '../components/live/LivePlayer';
 import { GuideGrid } from '../components/live/GuideGrid';
-import { Highlights } from '../components/live/Highlights';
+import { Highlights, OnNow } from '../components/live/Highlights';
+import { Skeleton } from '../components/ui/Skeleton';
 
 interface Recording { id: string; title: string; channel: string; startedAt: string; endsAt: string; state: 'recording' | 'done' | 'failed' | 'stopped'; message?: string; sizeBytes: number }
 type View = 'favorites' | 'recent' | 'channels' | 'guide' | 'recordings';
@@ -73,7 +74,7 @@ function ChannelRow({ c, index, now, playing, fav, dead, onPlay, onFavorite }: {
         <span className="lv-logo">{c.logo ? <img src={c.logo} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span>{c.name.charAt(0)}</span>}</span>
         <span className="lv-text">
           <strong>{c.name}</strong>
-          <span>{now ? now.title : c.group ?? 'Live'}</span>
+          <span>{now ? <>{now.title}<em> · {Math.max(1, Math.round((now.stop - Date.now()) / 60_000))} min left</em></> : c.group?.split(';')[0] ?? 'Live'}</span>
           {now && <span className="lv-mini"><span style={{ width: `${pct}%` }} /></span>}
         </span>
         {dead && <Pill tone="bad">Offline</Pill>}
@@ -115,8 +116,9 @@ export default function LiveTV() {
   const load = useCallback(async () => {
     try {
       const { playlists: list } = await api.livePlaylists();
-      setPlaylists(list);
+      // Channels first, so the page never flashes "No channels match" between the two answers.
       if (list.length) { const r = await api.liveChannels(); setChannels(r.channels); setProblem(r.problems.join(' ')); } else setChannels([]);
+      setPlaylists(list);
     } catch (err) { setProblem((err as Error).message); setPlaylists(prev => prev ?? []); }
   }, []);
   const loadMe = useCallback(() => { api.liveMe().then(r => { setFavs(new Set(r.favorites)); setRecent(r.recent); setDead(new Set(r.dead)); }).catch(() => {}); }, []);
@@ -146,7 +148,13 @@ export default function LiveTV() {
 
   const guideIds = (view === 'guide' ? filtered.slice(0, 40) : visible.slice(0, 60)).filter(c => c.guide).map(c => c.id);
   const currentGuide = current?.guide ? [current.id] : [];
-  const guide = useGuide([...new Set([...guideIds, ...currentGuide])], view === 'guide' ? 6 : 3, view !== 'recordings');
+  // "On now": your favourites and recent channels; with neither yet, the first channels of the list.
+  const featured = useMemo(() => {
+    const mine = [...new Set([...favs, ...recent])].map(id => byId.get(id)).filter((c): c is LiveChannel => !!c?.guide && !dead.has(c.id));
+    return (mine.length || favs.size || recent.length ? mine : channels.filter(c => c.guide && !dead.has(c.id))).slice(0, 16);
+  }, [favs, recent, byId, channels, dead]);
+  const guide = useGuide([...new Set([...guideIds, ...currentGuide, ...featured.map(c => c.id)])], view === 'guide' ? 6 : 3, view !== 'recordings');
+  const onNow = featured.flatMap(c => { const n = nowNext(guide[c.id]).now; return n ? [{ channel: c, now: n }] : []; }).slice(0, 12);
   const hasAnyGuide = channels.some(c => c.guide);
 
   const play = useCallback((c: LiveChannel) => { setCurrent(c); }, []);
@@ -219,13 +227,13 @@ export default function LiveTV() {
   const cn = current ? nowNext(guide[current.id]) : { now: undefined, next: undefined };
 
   return (
-    <main data-dpad="own" className={`page lv-page${current ? ' has-player' : ''}${wide ? ' lv-wide' : ''}`}>
+    <main className={`page lv-page${current ? ' has-player' : ''}${wide ? ' lv-wide' : ''}`}>
       <PageHeader
         title="Live TV"
         sub={channels.length ? `${channels.length.toLocaleString()} channels${favs.size ? ` · ${favs.size} favorite${favs.size === 1 ? '' : 's'}` : ''}${dead.size ? ` · ${dead.size} offline` : ''}` : undefined}
         actions={isAdmin ? <>
-          <button type="button" className="btn btn-primary" onClick={() => setSources(true)}><SvgIcon name="plus" size={17} /> {empty ? 'Add channels' : 'Sources'}</button>
-          {!empty && <MoreMenu label="More for Live TV">
+          {!empty && playlists !== null && <button type="button" className="btn btn-secondary" onClick={() => setSources(true)}><SvgIcon name="list" size={17} /> Sources</button>}
+          {!empty && playlists !== null && <MoreMenu label="More for Live TV">
             <MenuItem icon="activity" label={checking ? `Checking… ${checking.done}/${checking.total}` : 'Check which channels work'} hint="Tests the channels shown and hides dead ones" disabled={!!checking || filtered.length === 0} onSelect={() => void checkChannels()} />
             <MenuItem icon="refresh" label="Reload channel lists" onSelect={() => void load()} />
           </MoreMenu>}
@@ -234,15 +242,22 @@ export default function LiveTV() {
 
       {note && <div className={`notice notice--${note.tone}`} role="status">{note.text}</div>}
       {problem && !empty && <div className="notice notice--err" role="alert">{problem}</div>}
-      {playlists === null && <div className="loading-state">Loading…</div>}
+      {playlists === null && (
+        <div className="lv-skel" role="status" aria-label="Loading channels">
+          <div className="lv-skel-row">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="lv-skel-card" />)}</div>
+          <Skeleton className="skeleton-line" style={{ width: 320, height: 36, margin: '28px 0 20px' }} />
+          {Array.from({ length: 6 }, (_, i) => <div key={i} className="lv-skel-item"><Skeleton className="lv-skel-logo" /><div><Skeleton className="skeleton-line" style={{ width: 180 }} /><Skeleton className="skeleton-line" style={{ width: 260, marginTop: 8, opacity: 0.6 }} /></div></div>)}
+        </div>
+      )}
       {empty && (
-        <EmptyState icon="radio" title="No channels yet" text={isAdmin ? 'Add an M3U playlist from your TV tuner box or provider, or start with a free public list. Only add streams you have the right to watch.' : 'An administrator needs to add a channel list first.'}
-          action={isAdmin ? <><button type="button" className="btn btn-primary" onClick={() => void api.addLivePlaylist('Free public channels (iptv-org)', PUBLIC_LIST).then(load).catch(err => setNote({ tone: 'err', text: (err as Error).message }))}>Add the free public list</button><button type="button" className="btn btn-secondary" onClick={() => setSources(true)}>Add my own playlist</button></> : undefined} />
+        <EmptyState icon="tv" title="No channels yet" text={isAdmin ? 'Add a channel playlist (M3U) from your tuner box or provider, or pick a free public list. Only add streams you have the right to watch.' : 'An administrator needs to add a channel playlist first.'}
+          action={isAdmin ? <button type="button" className="btn btn-primary" onClick={() => setSources(true)}><SvgIcon name="plus" size={17} /> Add a playlist</button> : undefined} />
       )}
 
       {playlists && playlists.length > 0 && (
         <div className="lv">
           <div className="lv-main">
+            {view !== 'recordings' && view !== 'guide' && <OnNow items={onNow} playingId={current?.id} onWatch={play} />}
             {view !== 'recordings' && <Highlights channels={byId} playingId={current?.id} onWatch={play} />}
             <div className="rq-toolbar">
               <Seg<View> label="Live TV views" value={view} onChange={setView} options={[
@@ -254,8 +269,8 @@ export default function LiveTV() {
 
             {view !== 'recordings' && groups.length > 0 && (
               <ScrollRow className="lv-chips" label="categories"><div className="lv-chips-inner" role="tablist" aria-label="Category">
-                <button type="button" role="tab" aria-selected={!group} className={`season-tab${!group ? ' is-active' : ''}`} onClick={() => setGroup('')}>All</button>
-                {groups.map(g => <button key={g} type="button" role="tab" aria-selected={group === g} className={`season-tab${group === g ? ' is-active' : ''}`} onClick={() => setGroup(group === g ? '' : g)}>{g}</button>)}
+                <button type="button" role="tab" aria-selected={!group} className={`md-chip${!group ? ' is-on' : ''}`} onClick={() => setGroup('')}>All</button>
+                {groups.map(g => <button key={g} type="button" role="tab" aria-selected={group === g} className={`md-chip${group === g ? ' is-on' : ''}`} onClick={() => setGroup(group === g ? '' : g)}>{g}</button>)}
               </div></ScrollRow>
             )}
             {view !== 'recordings' && dead.size > 0 && (

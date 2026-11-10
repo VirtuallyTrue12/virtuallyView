@@ -80,29 +80,32 @@ export function LivePlayer({ channel, number, now, next, favorite, onFavorite, o
       </div>
       <div className="lv-info">
         <div className="lv-title">
-          <span className="lv-num">{number}</span>
-          <div><strong>{channel.name}</strong><span>{channel.group ?? 'Live'}</span></div>
+          <span className="lv-logo lv-logo--player">{channel.logo ? <img src={channel.logo} alt="" referrerPolicy="no-referrer" /> : <span>{channel.name.charAt(0)}</span>}</span>
+          <div><strong>{channel.name}</strong><span>Channel {number}{channel.group ? ` · ${channel.group.split(';')[0]}` : ''}</span></div>
           {mode === 'live' && behind <= 20 && <span className="lv-live" title="You are watching the live edge"><i />LIVE</span>}
           {mode === 'live' && behind > 20 && <button type="button" className="lv-live lv-live--behind" onClick={goLive} title="Jump to what is on air now">{behind >= 90 ? `${Math.round(behind / 60)} min` : `${behind} s`} behind · Go live</button>}
           {mode === 'vod' && <span className="lv-live lv-live--vod" title="This stream is a recording, not a live broadcast">Recording</span>}
-          <button type="button" className="lv-x" onClick={onClose} aria-label="Close the player"><SvgIcon name="close" size={18} /></button>
+          <button type="button" className="icon-btn icon-btn--ghost lv-x" onClick={onClose} aria-label="Close the player"><SvgIcon name="close" size={18} /></button>
         </div>
-        {sporty && <p className="lv-hint">Free public sport channels usually replay classic events or highlights. A race weekend that is on right now is normally shown only by a paid broadcaster, through your own subscription or tuner box.</p>}
-        {now && (
+        {now ? (
           <div className="lv-now">
-            <div className="lv-now-row"><span className="ui-pill ui-pill--bad">Now</span><strong>{now.title}</strong><em>{clock(now.start)}–{clock(now.stop)}</em></div>
-            <div className="rq-bar"><div style={{ width: `${pct}%` }} /></div>
+            <span className="lv-eyebrow">Now · {clock(now.start)}–{clock(now.stop)}</span>
+            <strong className="lv-now-title">{now.title}</strong>
+            <div className="lv-progress" aria-hidden="true"><div style={{ width: `${pct}%` }} /></div>
             {now.desc && <p>{now.desc}</p>}
-            {next && <p className="lv-next"><span>Next</span> {next.title} <em>{clock(next.start)}</em></p>}
+            {next && <p className="lv-next"><span>Up next · {clock(next.start)}</span> {next.title}</p>}
           </div>
-        )}
+        ) : <p className="lv-noguide">No programme information for this channel.</p>}
+        {sporty && <p className="lv-hint">Free public sport channels usually replay classic events or highlights. A race weekend that is on right now is normally shown only by a paid broadcaster, through your own subscription or tuner box.</p>}
         <div className="lv-controls">
-          <button type="button" className="btn btn-secondary" onClick={() => onZap(-1)} aria-label="Previous channel" title="Previous channel (↑)"><SvgIcon name="chevron-up" size={18} /></button>
-          <button type="button" className="btn btn-secondary" onClick={() => onZap(1)} aria-label="Next channel" title="Next channel (↓)"><SvgIcon name="chevron-down" size={18} /></button>
-          <button type="button" className={`btn btn-secondary${favorite ? ' is-on' : ''}`} onClick={onFavorite} aria-pressed={favorite} aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'}><SvgIcon name={favorite ? 'heart' : 'heart-outline'} size={18} /></button>
-          {canPip && <button type="button" className="btn btn-secondary" onClick={() => { const el = video.current; if (!el) return; if (document.pictureInPictureElement) void document.exitPictureInPicture(); else void el.requestPictureInPicture().catch(() => undefined); }} aria-label="Keep watching in a small window" title="Small window"><SvgIcon name="pip" size={18} /></button>}
-          <button type="button" className="btn btn-secondary lv-wide-btn" onClick={onWide} aria-pressed={wide} aria-label={wide ? 'Make the player smaller' : 'Make the player bigger'} title={wide ? 'Smaller player' : 'Bigger player'}><SvgIcon name={wide ? 'minimize' : 'maximize'} size={18} /></button>
-          <button type="button" className="btn btn-secondary" onClick={onRecord}><span className="lv-rec" aria-hidden="true" /> Record</button>
+          <div className="lv-zap" role="group" aria-label="Change channel">
+            <button type="button" className="icon-btn" onClick={() => onZap(-1)} aria-label="Previous channel" data-tooltip="Previous channel"><SvgIcon name="chevron-up" size={18} /></button>
+            <button type="button" className="icon-btn" onClick={() => onZap(1)} aria-label="Next channel" data-tooltip="Next channel"><SvgIcon name="chevron-down" size={18} /></button>
+          </div>
+          <button type="button" className={`icon-btn${favorite ? ' is-on' : ''}`} onClick={onFavorite} aria-pressed={favorite} aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'}><SvgIcon name={favorite ? 'heart' : 'heart-outline'} size={18} /></button>
+          {canPip && <button type="button" className="icon-btn" onClick={() => { const el = video.current; if (!el) return; if (document.pictureInPictureElement) void document.exitPictureInPicture(); else void el.requestPictureInPicture().catch(() => undefined); }} aria-label="Keep watching in a small window" data-tooltip="Small window"><SvgIcon name="pip" size={18} /></button>}
+          <button type="button" className="icon-btn lv-wide-btn" onClick={onWide} aria-pressed={wide} aria-label={wide ? 'Make the player smaller' : 'Make the player bigger'} data-tooltip={wide ? 'Smaller player' : 'Bigger player'}><SvgIcon name={wide ? 'minimize' : 'maximize'} size={18} /></button>
+          <button type="button" className="btn btn-secondary lv-rec-btn" onClick={onRecord}><span className="lv-rec" aria-hidden="true" /> Record</button>
         </div>
       </div>
     </section>

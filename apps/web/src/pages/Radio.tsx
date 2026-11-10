@@ -5,6 +5,7 @@ import { ScrollRow } from '../components/ui/ScrollRow';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import { StationLogo } from '../components/radio/StationLogo';
 import { useRadio } from '../components/radio/RadioProvider';
+import { Skeleton } from '../components/ui/Skeleton';
 
 type View = 'browse' | 'favorites' | 'recent';
 const KEY = 'vv-radio-place';
@@ -16,26 +17,57 @@ function remembered(): { country: string; region: string } {
   return { country: /^[A-Z]{2}$/.test(fromBrowser) ? fromBrowser : 'US', region: '' };
 }
 
-function StationCard({ station, playing, favorite, onPlay, onFavorite }: { station: RadioStation; playing: boolean; favorite: boolean; onPlay: () => void; onFavorite: () => void }) {
+/** Equalizer bars: they move only while sound is actually coming out. */
+const Bars = ({ live }: { live: boolean }) => <span className={`rs-eq${live ? ' is-live' : ''}`} aria-hidden="true"><i /><i /><i /></span>;
+
+function StationCard({ station, playing, sounding, busy, favorite, onPlay, onFavorite }: { station: RadioStation; playing: boolean; sounding: boolean; busy: boolean; favorite: boolean; onPlay: () => void; onFavorite: () => void }) {
   const detail = [station.state, station.country].filter(Boolean).join(', ');
-  const meta = [station.language, station.codec && station.bitrate ? `${station.codec} ${station.bitrate} kbps` : station.codec].filter(Boolean).join(' · ');
+  const meta = [station.tags.slice(0, 2).join(', '), station.codec && station.bitrate ? `${station.bitrate} kbps` : ''].filter(Boolean).join(' · ');
   return (
     <li className={`rs${playing ? ' is-playing' : ''}`}>
-      <button type="button" className="rs-main" onClick={onPlay} aria-label={`${playing ? 'Playing' : 'Play'} ${station.name}`} aria-current={playing || undefined}>
-        <StationLogo station={station} />
-        <span className="rs-text">
-          <strong>{station.name}{station.kind === 'live' && <span className="rs-kind rs-kind--live" title="The broadcaster's own on-air stream">Live</span>}{station.kind === 'playlist' && <span className="rs-kind" title="A fan-made automatic playlist, not a live broadcast">Playlist</span>}</strong>
-          <span>{detail}{meta ? ` · ${meta}` : ''}</span>
-          {station.tags.length > 0 && <span className="rs-tags">{station.tags.join(' · ')}</span>}
+      <button type="button" className="rs-main" onClick={onPlay} aria-label={`${playing && busy ? 'Stop' : 'Play'} ${station.name}`} aria-current={playing || undefined}>
+        <span className="rs-art">
+          <StationLogo station={station} />
+          <span className="rs-play" aria-hidden="true">{playing ? (sounding ? <Bars live /> : <SvgIcon name="pause" size={18} />) : <SvgIcon name="play" size={18} />}</span>
+          {station.kind === 'playlist' && <span className="rs-kind" title="A fan-made automatic playlist, not a live broadcast">Playlist</span>}
         </span>
-        <span className="rs-play" aria-hidden="true">{playing ? <span className="rs-eq"><i /><i /><i /></span> : <SvgIcon name="play" size={16} />}</span>
+        <span className="rs-text">
+          <strong>{station.name}</strong>
+          <span>{detail || 'Worldwide'}</span>
+          {meta && <span className="rs-tags">{meta}</span>}
+        </span>
       </button>
       <button type="button" className={`rs-fav${favorite ? ' is-on' : ''}`} onClick={onFavorite} aria-pressed={favorite} aria-label={favorite ? `Remove ${station.name} from favorites` : `Add ${station.name} to favorites`}>
-        <SvgIcon name={favorite ? 'heart' : 'heart-outline'} size={18} />
+        <SvgIcon name={favorite ? 'heart' : 'heart-outline'} size={16} />
       </button>
     </li>
   );
 }
+
+/** A small sideways row (favourites, recent) on the Browse view. */
+function StationRow({ title, list, current, sounding, onPlay }: { title: string; list: RadioStation[]; current?: string | undefined; sounding: boolean; onPlay: (s: RadioStation) => void }) {
+  if (!list.length) return null;
+  return (
+    <section className="rd-row" aria-label={title}>
+      <h2 className="rd-row-title">{title}</h2>
+      <ScrollRow label={title.toLowerCase()} className="rd-row-track">
+        {list.map(s => (
+          // Named after the station only, so the grid's "Play …" buttons stay unique.
+          <button key={s.id} type="button" className={`rd-mini${current === s.id ? ' is-playing' : ''}`} onClick={() => onPlay(s)} aria-current={current === s.id || undefined}>
+            <span className="rs-art"><StationLogo station={s} />{current === s.id && <span className="rs-play" aria-hidden="true">{sounding ? <Bars live /> : <SvgIcon name="pause" size={16} />}</span>}</span>
+            <span className="rd-mini-name">{s.name}</span>
+          </button>
+        ))}
+      </ScrollRow>
+    </section>
+  );
+}
+
+const StationSkeletons = () => (
+  <ul className="rs-grid" role="status" aria-label="Finding stations">
+    {Array.from({ length: 12 }, (_, i) => <li key={i} className="rs rs--skel"><Skeleton className="rs-skel-art" /><Skeleton className="skeleton-line" style={{ width: '75%', margin: '12px 0 6px' }} /><Skeleton className="skeleton-line" style={{ width: '50%', opacity: 0.6 }} /></li>)}
+  </ul>
+);
 
 /** Internet radio: pick a country and region, a genre or a name, and press play. Favorites and recents follow the person. */
 export default function Radio() {
@@ -103,6 +135,10 @@ export default function Radio() {
   const hiddenPlaylists = view === 'browse' && liveOnly ? listed.filter(s => s.kind === 'playlist').length : 0;
   const shown = hiddenPlaylists ? listed.filter(s => s.kind !== 'playlist') : listed;
   const countryName = countries.find(c => c.code === place.country)?.name ?? '';
+  const playingId = radio.state !== 'idle' ? radio.station?.id : undefined;
+  const sounding = radio.state === 'playing';
+  const playOrStop = (s: RadioStation) => (radio.station?.id === s.id ? radio.toggle() : radio.play(s));
+  const filtersOn = !!(tag || typed || place.region);
   const where = place.country ? `${place.region ? `${place.region}, ` : ''}${countryName || place.country}` : 'the whole world';
 
   return (
@@ -150,27 +186,37 @@ export default function Radio() {
           </div>
           {tags.length > 0 && (
             <ScrollRow label="Genres" className="rd-tags">
-              <button type="button" className={`rd-chip${tag === '' ? ' is-on' : ''}`} onClick={() => setTag('')}>All styles</button>
+              <button type="button" className={`md-chip${tag === '' ? ' is-on' : ''}`} onClick={() => setTag('')}>All styles</button>
               {/* Pinned first regardless of rank: stations that simulcast a real terrestrial FM broadcast,
                   the same "fm" tag Radio Browser itself uses, easy to find without scrolling the genre list. */}
-              <button type="button" className={`rd-chip${tag === 'fm' ? ' is-on' : ''}`} onClick={() => setTag(tag === 'fm' ? '' : 'fm')}>FM stations</button>
-              {tags.filter(t => t.name !== 'fm').map(t => <button key={t.name} type="button" className={`rd-chip${tag === t.name ? ' is-on' : ''}`} onClick={() => setTag(tag === t.name ? '' : t.name)}>{t.name}</button>)}
+              <button type="button" className={`md-chip${tag === 'fm' ? ' is-on' : ''}`} onClick={() => setTag(tag === 'fm' ? '' : 'fm')}>FM stations</button>
+              {tags.filter(t => t.name !== 'fm').map(t => <button key={t.name} type="button" className={`md-chip${tag === t.name ? ' is-on' : ''}`} onClick={() => setTag(tag === t.name ? '' : t.name)}>{t.name}</button>)}
             </ScrollRow>
           )}
           {worldwide && <p className="ui-help">Searching every country.</p>}
         </>
       )}
 
-      {error && <div className="notice notice--err" role="alert">{error} <button type="button" className="mp-link" onClick={() => setPlace(p => ({ ...p }))}>Try again</button></div>}
-      {loading && shown.length === 0 && !error && <div className="loading-state">Finding stations…</div>}
+      {view === 'browse' && !query && !tag && (
+        <>
+          <StationRow title="Your favorites" list={mine.favorites} current={playingId} sounding={sounding} onPlay={playOrStop} />
+          <StationRow title="Recently played" list={mine.recent} current={playingId} sounding={sounding} onPlay={playOrStop} />
+        </>
+      )}
+      {view === 'browse' && shown.length > 0 && <h2 className="rd-row-title">{tag ? `${tag[0]!.toUpperCase()}${tag.slice(1)} stations` : query ? 'Matching stations' : `Stations in ${where}`}</h2>}
+
+      {error && <div className="notice notice--err rd-error" role="alert"><span>Could not reach the station directory. {error}</span> <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPlace(p => ({ ...p }))}>Retry</button></div>}
+      {loading && shown.length === 0 && !error && <StationSkeletons />}
       {!loading && !error && shown.length === 0 && (
         <EmptyState icon="radio"
           title={view === 'favorites' ? 'No favorites yet' : view === 'recent' ? 'Nothing played yet' : 'No stations match'}
-          text={view === 'favorites' ? 'Press the heart on a station to keep it here.' : view === 'recent' ? 'Stations you play show up here.' : 'Try another region or style, or clear the search.'} />
+          text={view === 'favorites' ? 'Press the heart on a station to keep it here.' : view === 'recent' ? 'Stations you play show up here.' : 'Try another region or style, or clear the search.'}
+          action={view !== 'browse' ? <button type="button" className="btn btn-primary" onClick={() => setView('browse')}>Browse stations</button>
+            : filtersOn ? <button type="button" className="btn btn-secondary" onClick={() => { setTag(''); setTyped(''); setPlace(p => ({ ...p, region: '' })); }}>Clear filters</button> : undefined} />
       )}
       {shown.length > 0 && (
         <ul className="rs-grid">
-          {shown.map(s => <StationCard key={s.id} station={s} playing={radio.station?.id === s.id && radio.state !== 'idle'} favorite={favIds.has(s.id)} onPlay={() => (radio.station?.id === s.id ? radio.toggle() : radio.play(s))} onFavorite={() => void toggleFav(s)} />)}
+          {shown.map(s => <StationCard key={s.id} station={s} playing={playingId === s.id} sounding={sounding} busy={radio.state === 'playing' || radio.state === 'loading'} favorite={favIds.has(s.id)} onPlay={() => playOrStop(s)} onFavorite={() => void toggleFav(s)} />)}
         </ul>
       )}
       {view === 'browse' && more && <div className="rd-more"><button type="button" className="btn btn-secondary" onClick={loadMore} disabled={loading}>{loading ? 'Loading…' : 'Show more stations'}</button></div>}
