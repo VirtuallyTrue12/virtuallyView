@@ -45,18 +45,25 @@ html.kids .nav-search {
   margin: 0 0 1.25rem;
   font-size: clamp(1.8rem, 5vw, 2.6rem);
   font-weight: 800;
-  color: #1b1b3a;
+  letter-spacing: -0.02em;
+  /* Theme text colour: a fixed dark navy vanished on every dark theme. */
+  color: var(--color-text-primary);
 }
 
-html.kids .kids-title,
-html.kids .kids-rail-title { color: #1b1b3a; }
-
-.kids-empty { font-size: 1.1rem; }
+.kids-empty {
+  max-width: 34rem;
+  padding: var(--spacing-xl);
+  border: 2px dashed var(--color-border);
+  border-radius: 22px;
+  font-size: 1.1rem;
+  color: var(--color-text-secondary);
+}
 
 .kids-rail { margin-bottom: 2.25rem; }
 
 .kids-rail-title {
   margin: 0 0 0.9rem;
+  color: var(--color-text-primary);
   font-size: 1.35rem;
   font-weight: 800;
 }
@@ -92,7 +99,7 @@ html.kids .kids-rail-title { color: #1b1b3a; }
   overflow: hidden;
   background: #ffd23f;
   box-shadow: 0 6px 0 rgba(27, 27, 58, 0.18);
-  transition: transform 0.15s ease;
+  transition: transform var(--duration-fast, 150ms) var(--easing-default, ease);
 }
 
 .kids-poster img {
@@ -137,4 +144,19 @@ html.kids .kids-rail-title { color: #1b1b3a; }
   display: block;
   height: 100%;
   background: #ff5d8f;
+}
+
+.kids-tile-name { color: var(--color-text-primary); }
+.kids-tile:hover .kids-tile-name,
+.kids-tile:focus-visible .kids-tile-name { color: var(--color-accent); }
+
+@media (max-width: 860px) {
+  .kids-home { padding-bottom: calc(var(--tabbar-h, 64px) + 2rem); }
+  .kids-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kids-poster { transition: none; }
+  .kids-tile:hover .kids-poster,
+  .kids-tile:focus-visible .kids-poster { transform: none; }
 }

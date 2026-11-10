@@ -43,7 +43,7 @@ export function ImportExisting({ kind, onImported }: { kind: Kind; onImported: (
 
   return (
     <>
-      <button type="button" className="btn btn-secondary" onClick={() => { setOpen(true); setResults(null); }}><SvgIcon name="folder" size={17} /> Import {found.length} found</button>
+      <button type="button" className="btn btn-secondary" onClick={() => { setOpen(true); setResults(null); }} aria-label={`Import ${found.length} found`}><SvgIcon name="upload" size={17} /> <span className="btn-label">Import {found.length} found</span></button>
       <Dialog open={open} onClose={() => { setOpen(false); if (results) load(); }} title={`Your existing ${many}`} wide>
         {results ? (
           <div className="ie">

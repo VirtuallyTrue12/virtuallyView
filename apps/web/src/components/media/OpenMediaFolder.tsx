@@ -65,7 +65,7 @@ export function OpenMediaFolder({ kind }: { kind: Kind }) {
 
   return (
     <>
-      <button type="button" className="btn btn-secondary btn-sm" onClick={load}><SvgIcon name="folder" size={15} /> Media folder</button>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={load} aria-label="Media folder"><SvgIcon name="folder" size={15} /> <span className="btn-label">Media folder</span></button>
       <Dialog open={open} onClose={() => setOpen(false)} title="Media folder">
         {error && <div className="notice notice--err" role="alert">{error}</div>}
         {!error && !info && <p className="dlg-help">Looking...</p>}

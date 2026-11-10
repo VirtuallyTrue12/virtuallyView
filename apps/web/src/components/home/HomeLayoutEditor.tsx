@@ -8,11 +8,12 @@ interface Props {
   /** Called with the new order and hidden flags after each change. */
   onSave: (rails: Rail[]) => void;
   onReset: () => void;
+  onDone: () => void;
   error: string | null;
 }
 
 /** A plain list: move each rail up or down, show or hide it, or go back to the default. */
-export function HomeLayoutEditor({ rails, onSave, onReset, error }: Props) {
+export function HomeLayoutEditor({ rails, onSave, onReset, onDone, error }: Props) {
   const move = (index: number, dir: -1 | 1) => {
     const target = index + dir;
     if (target < 0 || target >= rails.length) return;
@@ -72,6 +73,7 @@ export function HomeLayoutEditor({ rails, onSave, onReset, error }: Props) {
       </ol>
       {error && <div className="notice notice--err" role="alert">{error}</div>}
       <div className="dlg-actions">
+        <button type="button" className="btn btn-primary" onClick={onDone}>Done</button>
         <button type="button" className="btn btn-secondary" onClick={onReset}>Reset to default</button>
       </div>
     </div>

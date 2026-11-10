@@ -62,6 +62,9 @@
 .home-rails .rail { margin-top: var(--spacing-xl); }
 .home-rails .rail:first-of-type { margin-top: 0; }
 .home-rails .ranked-number { font-size: 6.5rem; }
+/* Snap points must respect the scroller's inner padding, or snapping scrolls the first card 8px past the title edge. */
+.home-rails .rail-scroll,
+.search-page .rail-scroll { scroll-padding-inline: var(--spacing-sm); }
 
 /* ===== Library pages ===== */
 .browse-library .lib-controls {
@@ -137,8 +140,14 @@
   .search-page .result-card { grid-template-columns: 72px 1fr; }
   .search-page .result-poster { width: 72px; height: 108px; }
   .browse-library .lib-controls { margin-inline: -0.5rem; padding: 0.5rem; border-radius: 0; }
+  /* Header actions on one row: the primary keeps its words, the rest become labelled icon buttons. */
+  .browse-library .lib-actions .btn-label { display: none; }
+  .browse-library .lib-actions .btn:not(:first-child) { flex: 0 0 44px; width: 44px; min-height: 44px; padding: 0; justify-content: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-dot::before { transition: none; }
 }
+
+/* Kids home loading: big rounded tiles like the real ones. */
+.kids-tiles .browse-skel-poster { border-radius: 22px; }

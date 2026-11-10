@@ -7,7 +7,7 @@ import { HomeLayoutEditor } from '../components/home/HomeLayoutEditor';
 import { Dialog } from '../components/ui/Dialog';
 import '../components/home/PersonalRails.css';
 import KidsHome from '../components/kids/KidsHome';
-import { LoadError, SkeletonRail } from '../components/home/Skeletons';
+import { LoadError, SkeletonGrid, SkeletonRail } from '../components/home/Skeletons';
 
 export default function Home() {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -64,7 +64,13 @@ export default function Home() {
   return (
     <div className="home">
       {error && <main className="page"><LoadError what="Home" message={error} onRetry={() => setAttempt(a => a + 1)} /></main>}
-      {!data && !error && (
+      {!data && !error && document.documentElement.classList.contains('kids') && (
+        <main className="kids-home" aria-busy="true" aria-label="Loading home">
+          <div className="skeleton browse-skel-heading" />
+          <SkeletonGrid count={6} className="kids-tiles" />
+        </main>
+      )}
+      {!data && !error && !document.documentElement.classList.contains('kids') && (
         <div aria-busy="true" aria-label="Loading home">
           <div className="hero browse-hero-skel" aria-hidden="true" />
           <main className="page"><SkeletonRail /><SkeletonRail /></main>
@@ -88,11 +94,9 @@ export default function Home() {
               rails={rails}
               onSave={next => void saveLayout(next)}
               onReset={() => void resetLayout()}
+              onDone={() => setEditing(false)}
               error={layoutError}
             />
-            <div className="dlg-actions">
-              <button type="button" className="btn btn-primary" onClick={() => setEditing(false)}>Done</button>
-            </div>
           </Dialog>
         </>
       )}
