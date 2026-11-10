@@ -99,3 +99,17 @@
   .chat-widget { max-height: min(70dvh, 560px); }
 }
 @media (prefers-reduced-motion: reduce) { .chat-widget { animation: none; } }
+
+/* Apps: the troubleshooting "show what is fine" toggle sits on the card's left edge, not centred */
+main.page:has(.ap-grid) .mp-link { display: block; margin: 0.6rem 0 0; padding: 0.3rem 0; text-align: left; }
+
+/* Diagnostics: cards and rows breathe on desktop and tighten on phones */
+.diagnostics-card { padding: var(--spacing-md) var(--spacing-lg); }
+.diagnostics-row { gap: var(--spacing-md); }
+.diagnostics-value { text-align: right; overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .diagnostics-grid { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-sm); }
+  .diagnostics-card { padding: var(--spacing-md); }
+  .diagnostics-row { align-items: flex-start; flex-wrap: wrap; row-gap: 0.15rem; }
+  .diagnostics-value { text-align: left; }
+}
