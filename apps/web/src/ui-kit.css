@@ -395,7 +395,7 @@
 .lv-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .lv-controls .btn { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 40px; }
 .lv-controls .btn.is-on { color: #ff6b81; border-color: rgba(255, 107, 129, 0.5); }
-.lv-rec { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ff4d4d; animation: lv-pulse 1.4s ease-in-out infinite; }
+.lv-rec { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ff4d4d; }
 @keyframes lv-pulse { 50% { opacity: 0.35; } }
 
 /* Guide */
@@ -598,7 +598,7 @@
 
 /* Live badge */
 .lv-live { display: inline-flex; align-items: center; gap: 0.35rem; flex: 0 0 auto; padding: 0.15rem 0.6rem; border: 1px solid color-mix(in srgb, #ff4d4d 55%, transparent); border-radius: 999px; background: rgba(255, 77, 77, 0.12); color: #ff8a8a; font: inherit; font-size: 0.72rem; font-weight: 750; letter-spacing: 0.06em; }
-.lv-live i { width: 7px; height: 7px; border-radius: 50%; background: #ff4d4d; animation: lv-pulse 1.4s ease-in-out infinite; }
+.lv-live i { width: 7px; height: 7px; border-radius: 50%; background: #ff4d4d; }
 button.lv-live--behind { cursor: pointer; letter-spacing: 0.02em; color: var(--color-text-primary); background: var(--color-accent-soft); border-color: var(--color-accent); }
 .lv-live--vod { color: var(--color-text-secondary); background: var(--color-surface-elevated); border-color: var(--color-border); }
 .lv-hint { margin: 0; padding: 0.55rem 0.75rem; border-radius: 10px; background: var(--color-surface-elevated); color: var(--color-text-secondary); font-size: 0.8rem; line-height: 1.5; }

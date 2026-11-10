@@ -6,12 +6,12 @@ import '../../ui-kit.css';
 /** The header every page opens with: big title, one quiet line, and the few actions people come for. */
 export function PageHeader({ title, sub, actions, icon }: { title: string; sub?: ReactNode; actions?: ReactNode; icon?: IconName }) {
   return (
-    <header className="lib-head">
+    <header className="lib-head page-header">
       <div className="lib-head-text">
-        <h1>{icon && <SvgIcon name={icon} size={28} className="ph-icon" />}{title}</h1>
-        {sub && <p className="lib-sub">{sub}</p>}
+        <h1 className="page-title">{icon && <SvgIcon name={icon} size={28} className="ph-icon" />}{title}</h1>
+        {sub && <p className="lib-sub page-subtitle">{sub}</p>}
       </div>
-      {actions && <div className="lib-actions">{actions}</div>}
+      {actions && <div className="lib-actions page-actions">{actions}</div>}
     </header>
   );
 }

@@ -41,7 +41,7 @@ export function Dialog({ open, onClose, title, children, wide }: { open: boolean
       <div ref={panel} tabIndex={-1} className={`dlg${wide ? ' dlg--wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <header className="dlg-head">
           <h2 className="dlg-title">{title}</h2>
-          <button type="button" className="mp-icon" onClick={onClose} aria-label="Close"><SvgIcon name="close" size={18} /></button>
+          <button type="button" className="icon-btn icon-btn--sm icon-btn--ghost" onClick={onClose} aria-label="Close"><SvgIcon name="close" size={18} /></button>
         </header>
         <div className="dlg-body">{children}</div>
       </div>
