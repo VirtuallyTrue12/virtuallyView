@@ -68,6 +68,34 @@
   .ph-heart { opacity: 1; width: 28px; height: 28px; top: 4px; right: 4px; }
   .ph-search { max-width: none; flex-basis: 100%; }
   .ph-albums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Lightbox bar: six icon buttons must fit beside the title on a 390px phone */
+  .pv-bar { gap: 0.3rem; padding: 0.5rem 0.6rem; }
+  .pv-btn { width: 38px; height: 38px; }
+  .pv-actions { gap: 0.2rem; flex-shrink: 0; }
+  .pv-title { min-width: 0; flex: 1; overflow: hidden; }
+  .pv-title strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ph-folders { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { .ph-open img { transition: none; } }
+
+/* Chat widget: a quiet floating button; the panel sits above the music bar and never past the top of the screen */
+.chat-fab {
+  width: 50px; height: 50px;
+  background: color-mix(in srgb, var(--color-surface-overlay) 92%, transparent);
+  border-color: color-mix(in srgb, var(--color-border) 80%, transparent);
+  box-shadow: var(--shadow-medium);
+}
+.chat-fab:hover { background: var(--color-surface-elevated); }
+.chat-fab:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 3px; }
+.chat-widget {
+  max-height: min(560px, calc(100dvh - var(--dock-bottom, 0px) - 48px));
+  border-radius: var(--radius-large);
+  background: var(--color-surface-overlay);
+}
+.chat-widget-header { padding: 0.9rem 1rem; border-bottom: 1px solid var(--color-border); }
+.chat-composer { padding: 0.75rem; border-top: 1px solid var(--color-border); gap: 0.5rem; }
+.chat-widget-close:focus-visible, .chat-suggestions .chip:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
+@media (max-width: 720px) {
+  .chat-widget { max-height: min(70dvh, 560px); }
+}
+@media (prefers-reduced-motion: reduce) { .chat-widget { animation: none; } }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import VideoPlayer from '../components/media/VideoPlayer';
+import { Link } from 'react-router-dom';
+import { EmptyState } from '../components/ui/Page';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import {
   deleteSaved, estimate, formatBytes, listSaved, localProgressFor, readFile, recordProgress, syncProgress, type SavedItem
@@ -149,16 +151,17 @@ export default function Offline() {
   }
 
   return (
-    <main className="offline-page">
+    <main className="page offline-page">
       <header className="offline-head">
         <div>
           <h1>On this device</h1>
           <p className="offline-sub">Saved downloads play here without a connection.</p>
         </div>
         {space && (
-          <p className="offline-space" aria-label="Storage">
-            {formatBytes(usedBytes)} used by downloads{freeBytes !== null ? ` · ${formatBytes(freeBytes)} free` : ''}
-          </p>
+          <div className="offline-space" aria-label="Storage">
+            <span>{formatBytes(usedBytes)} used by downloads{freeBytes !== null ? ` · ${formatBytes(freeBytes)} free` : ''}</span>
+            {space.quota > 0 && <span className="offline-meter" aria-hidden="true"><span style={{ width: `${Math.min(100, (space.usage / space.quota) * 100)}%` }} /></span>}
+          </div>
         )}
       </header>
 
@@ -167,13 +170,14 @@ export default function Offline() {
       )}
       {notice && <div className="notice notice--err" role="status">{notice}</div>}
 
-      {items === null && <p className="offline-empty">Loading...</p>}
+      {items === null && (
+        <ul className="offline-list" aria-label="Loading saved downloads">
+          {[0, 1, 2].map(i => <li key={i} className="offline-row" aria-hidden="true"><span className="offline-poster skeleton" /><span className="offline-meta"><span className="skeleton skeleton-line skeleton-line--short" /></span></li>)}
+        </ul>
+      )}
 
       {items !== null && items.length === 0 && (
-        <div className="offline-empty">
-          <p>Nothing is saved yet.</p>
-          <p>Open a movie, an episode or an album and tap Download.</p>
-        </div>
+        <EmptyState icon="download" title="Nothing is saved yet." text="Open a movie, an episode or an album and tap Download." action={<Link className="btn btn-primary" to="/movies">Browse movies</Link>} />
       )}
 
       {films.length > 0 && (
