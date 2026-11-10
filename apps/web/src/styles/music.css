@@ -1,0 +1,63 @@
+/* Music area: loaded after index.css so equal-specificity rules here win. */
+
+/* Home: artists as square art with a quiet card, aligned grid. */
+.music-page .media-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: var(--spacing-xl) var(--spacing-lg); }
+.music-page .media-card-artwork { aspect-ratio: 1; border-radius: var(--radius-large); box-shadow: var(--shadow-medium); }
+.music-page .media-card-artwork img { object-fit: cover; }
+.music-page .media-card-title { font-size: var(--text-md, 0.95rem); }
+
+/* Artist page: big art, calm header on a soft wash. */
+.artist-page .ah {
+  grid-template-columns: minmax(150px, 280px) minmax(0, 1fr);
+  gap: var(--spacing-xxl);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-large);
+  background: linear-gradient(140deg, var(--color-accent-soft), transparent 70%);
+  align-items: end;
+}
+.artist-page .ah-cover { border-radius: 50%; box-shadow: var(--shadow-large); }
+.artist-page .ah-title { font-family: var(--font-heading); font-weight: var(--heading-weight); }
+.artist-page .album-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: var(--spacing-lg); }
+.artist-page .album-card { background: transparent; border-color: transparent; padding: var(--spacing-sm); transition: transform var(--duration-fast) var(--easing-default), background var(--duration-fast); }
+.artist-page .album-card:hover, .artist-page .album-card:focus-visible { background: var(--color-surface); transform: translateY(-3px); }
+.artist-page .album-card-cover { border-radius: var(--radius-medium); box-shadow: var(--shadow-medium); }
+
+/* Album page: large cover, quiet table. Actions appear on hover/focus/playing. */
+.album-hero { grid-template-columns: minmax(150px, 260px) minmax(0, 1fr); gap: var(--spacing-xxl); margin-bottom: var(--spacing-xl); }
+.album-hero-cover { width: 100%; height: auto; border-radius: var(--radius-medium); box-shadow: var(--shadow-large); }
+.album-hero .detail-title { font-size: clamp(1.8rem, 4vw, 3rem); letter-spacing: -0.03em; }
+.album-track-row { border-radius: var(--radius-medium); padding: var(--spacing-sm) var(--spacing-md); min-height: 48px; border-bottom: 1px solid transparent; transition: background var(--duration-fast) var(--easing-default); }
+.album-track-num { flex: 0 0 2rem; text-align: center; }
+.album-track-row.is-active .album-track-title { color: var(--color-accent); font-weight: 600; }
+.album-track-row .offline-dl-wrap, .album-track-row .album-track-save { opacity: 0; transition: opacity var(--duration-fast); }
+.album-track-row:hover .offline-dl-wrap, .album-track-row:hover .album-track-save,
+.album-track-row:focus-within .offline-dl-wrap, .album-track-row:focus-within .album-track-save,
+.album-track-row.is-active .offline-dl-wrap, .album-track-row.is-active .album-track-save { opacity: 1; }
+.album-track-row .offline-dl-label { display: none; }
+.album-track-row .album-track-dur { order: 5; min-width: 3rem; text-align: right; }
+@media (hover: none) {
+  .album-track-row .offline-dl-wrap, .album-track-row .album-track-save { opacity: 0.8; }
+}
+
+/* Playlist rows share the same quiet look. */
+.playlist-track-row { border-radius: var(--radius-medium); transition: background var(--duration-fast) var(--easing-default); }
+
+/* Mini bar: softer, rounder controls; sits beside the sidebar (index.css handles left offset). */
+.mp { box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.28); }
+.mp-now img, .mp-now .mp-art { border-radius: var(--radius-small); box-shadow: var(--shadow-medium); }
+
+/* Now Playing: larger art, calmer tabs. */
+.np-art { border-radius: var(--radius-large); box-shadow: var(--shadow-large); }
+.np-title { font-family: var(--font-heading); font-weight: var(--heading-weight); letter-spacing: -0.02em; }
+
+@media (max-width: 720px) {
+  .music-page .media-grid, .artist-page .album-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md); }
+  .artist-page .ah { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: var(--spacing-md); gap: var(--spacing-lg); }
+  .artist-page .ah-cover { width: min(60vw, 220px); }
+  .artist-page .ah-chips, .artist-page .ah-actions, .artist-page .ah-stats { justify-content: center; }
+  .album-hero { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: var(--spacing-lg); }
+  .album-hero-cover { width: min(70vw, 260px); }
+  .album-hero .detail-meta, .album-hero .album-actions { justify-content: center; }
+  .album-track-row .album-track-quality { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .artist-page .album-card { transition: none; } }
