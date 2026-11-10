@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Whole interface refreshed: one shared design system (buttons, cards, rails, dialogs, menus, loading placeholders, empty and error states) on readable tokens for all 15 themes; cinematic home, movie and series pages with one clear Play/Resume action; tidy library grids with a sticky filter bar; music pages with one-line track rows and a cleaner Now Playing; settings as a list-to-detail on phones with save confirmations and in-page confirms for risky actions; sign-in over your own artwork; clearer Downloads, Stats, Photos and On this device pages; no endless decorative animations; TV remote reaches every button (including "…") and the first arrow press always works.
+
 - Music: album track rows are one line again (the download and queue buttons had wrapped onto a second line) and fit phone screens; with the sidebar layout the music bar sits beside the sidebar instead of covering its account menu and bell.
 
 - Website: idle pages no longer redraw 60 times a second while downloads run (the bell ring and poster download dots now play a few times and stop); poster status badges stay readable on light artwork in every theme; movie and show grids line up with the page edges.
