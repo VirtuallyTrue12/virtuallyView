@@ -12,7 +12,14 @@ import {
 import { cancelYoutubeJob, saveToVideosLibrary, WorkerOff, youtubeJobs, type YoutubeJob } from '../services/youtube.js';
 import { getAdapter } from '../services/registry.js';
 import { filterByRating } from '../services/parental.js';
+import { statfs } from 'node:fs/promises';
 import { serveMediaFile } from './stream.js';
+
+// A full disk once stopped every service, so saving refuses to start below this much free space.
+const MIN_FREE_BYTES = 5 * 1024 ** 3;
+async function freeBytes(dir: string): Promise<number> {
+  try { const s = await statfs(dir); return s.bavail * s.bsize; } catch { return Infinity; }
+}
 
 const fail = (error: unknown) => (error instanceof NotConfigured ? error.message : error instanceof Error ? error.message : 'The video service could not be reached.');
 
@@ -135,8 +142,11 @@ export default async function invidiousRoutes(server: FastifyInstance) {
     try {
       const video = knownVideo(id) ?? await videoInfo(id);
       if (!video) return reply.code(404).send({ message: 'Video not found.' });
-      addToList('saved', video);
-      if (!savedFile(id)) await saveToVideosLibrary(id, video.title, videosLibrary());
+      if (!savedFile(id)) {
+        if (await freeBytes(videosLibrary()) < MIN_FREE_BYTES) return reply.code(507).send({ error: 'disk_full', message: 'Not enough free disk space to save videos (under 5 GB left). Free some space and try again.' });
+        addToList('saved', video);
+        await saveToVideosLibrary(id, video.title, videosLibrary());
+      } else addToList('saved', video);
       return { ok: true, saved: savedState(id, await workerJobs()) };
     } catch (error) {
       if (error instanceof WorkerOff) {
