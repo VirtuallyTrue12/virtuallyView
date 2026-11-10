@@ -25,7 +25,10 @@
 .vd-rail-empty { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-sm) var(--spacing-md); margin: 0; padding: var(--spacing-lg); border-radius: var(--radius-large); border: 1px dashed var(--color-border); color: var(--color-text-secondary); font-size: var(--text-sm); }
 .vd-row { display: flex; overflow-x: auto; scrollbar-width: none; gap: var(--spacing-md); padding: var(--spacing-sm) var(--spacing-xs) var(--spacing-md); margin: calc(-1 * var(--spacing-sm)) calc(-1 * var(--spacing-xs)) 0; scroll-snap-type: x proximity; scroll-padding-inline: var(--spacing-xs); }
 .vd-rail .sr { position: relative; min-width: 0; }
+/* ui-kit.css (ScrollRow's own base) is not loaded on title pages, so the row carries what it needs. */
+.vd-rail .sr-arrow { position: absolute; z-index: 2; top: calc(var(--vd-card, 272px) * 9 / 32); display: grid; place-items: center; border-radius: 50%; border-style: solid; border-width: 1px; color: var(--color-text-primary); cursor: pointer; }
 .vd-row::-webkit-scrollbar { display: none; }
+@media (hover: none) { .vd-rail .sr-arrow { display: none; } }
 .vd-row > .vd-card { flex: 0 0 var(--vd-card); scroll-snap-align: start; }
 
 /* Video card: 16:9 picture, then channel picture + title, channel, views and age */
@@ -183,7 +186,8 @@ a.vd-watch-chan-link:hover strong { text-decoration: underline; text-underline-o
   .vd-chan-id .page-actions { justify-content: center; }
   .vd-chan-about { margin-inline: auto; }
   .vd-banner { aspect-ratio: 3.2 / 1; }
-  .vd-watch-bar { flex-direction: column; align-items: stretch; }
+  .vd-watch-bar { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+  .vd-watch-bar > * { min-width: 0; max-width: 100%; }
   .vd-watch-channel { justify-content: space-between; gap: var(--spacing-sm); }
   .vd-watch-chan-link { flex: 1 1 auto; }
   .vd-watch-channel .vd-sub-btn { flex: 0 0 auto; padding-inline: 0.9rem; }
