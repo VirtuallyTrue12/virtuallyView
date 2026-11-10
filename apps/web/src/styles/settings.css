@@ -1,0 +1,127 @@
+/* Settings, appearance, sign-in and first-run setup. */
+
+/* ---- Settings shell ---- */
+.st { grid-template-columns: 240px minmax(0, 1fr); }
+.st-nav-item { min-height: 40px; }
+.st-nav-item.is-active { box-shadow: inset 3px 0 0 var(--color-accent); }
+.st-titlebar { display: flex; align-items: center; gap: var(--spacing-md); margin: 0 0 var(--spacing-md); }
+.st-titlebar .st-title { margin: 0; font-size: 1.6rem; }
+.st-back { display: none; align-items: center; gap: 2px; padding: 0.45rem 0.7rem 0.45rem 0.35rem; border: 0; border-radius: 999px; background: var(--color-surface); color: var(--color-accent); font: inherit; font-weight: 600; cursor: pointer; }
+.st-back:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
+
+/* Grouped cards: title, one line of help, then rows. */
+.st .settings-section, .st .ts { backdrop-filter: none; padding: var(--spacing-lg); margin: 0 0 var(--spacing-md); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-large); }
+.st .settings-section .section-title { margin: 0 0 0.25rem; font-size: 1.1rem; font-weight: 650; letter-spacing: -0.01em; }
+.st .settings-section > .settings-help, .st .settings-section > p:first-of-type { color: var(--color-text-muted); font-size: 0.88rem; line-height: 1.5; max-width: 66ch; }
+.st .ui-field:last-child { padding-bottom: 0; }
+.st .ui-field:first-child { padding-top: 0.25rem; }
+.st .ui-field-text label { display: block; }
+.st .ui-field-text .ui-help { margin-top: 0.15rem; }
+.st .ui-card { transition: border-color var(--duration-fast, 150ms) var(--easing-default, ease); }
+.st .ui-card:hover { border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-border)); }
+.st-hits button { transition: border-color 150ms, transform 150ms; }
+.st-hits button:focus-visible, .st-suggest-item .btn:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
+.st-task { min-height: 140px; }
+@media (prefers-reduced-motion: reduce) { .st-task, .st-task:hover { transition: none; transform: none; } }
+
+/* Phone: the section list is the first screen, a section replaces it. */
+@media (max-width: 860px) {
+  .st { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-md); }
+  .st .st-nav { position: static; display: grid; max-height: none; overflow: visible; margin: 0; padding: 0; gap: 1rem; }
+  .st .st-nav-group { display: grid; gap: 2px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-large); padding: 0.4rem; }
+  .st .st-nav-group:first-child { display: none; }
+  .st .st-nav-label { display: block; padding: 0.5rem 0.75rem 0.25rem; }
+  .st .st-nav-item { min-height: 48px; width: 100%; border: 0; border-radius: 10px; padding: 0.6rem 0.75rem; white-space: normal; }
+  .st .st-nav-item.is-active { box-shadow: none; background: none; }
+  .st.st--detail .st-nav { display: none; }
+  .st:not(.st--detail) .st-body { display: none; }
+  .st-back { display: inline-flex; }
+  .st-titlebar .st-title { font-size: 1.3rem; }
+  .st .settings-section, .st .ts { padding: var(--spacing-md); }
+  .ui-field { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+  .ui-field-control { justify-content: flex-start; }
+  .st-search { min-width: 0; width: 100%; }
+  .st-history li { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---- Appearance gallery ---- */
+.theme-gallery { gap: 20px; }
+.theme-tile { position: relative; transition: transform 200ms var(--easing-default, ease), border-color 200ms, box-shadow 200ms; }
+.theme-tile:hover { transform: translateY(-2px); }
+.theme-tile.is-active { box-shadow: 0 0 0 2px var(--color-accent), var(--shadow-medium); }
+.theme-tile.is-active::after { content: 'Active'; position: absolute; top: 10px; right: 10px; padding: 2px 10px; border-radius: 999px; background: var(--color-accent); color: var(--color-on-accent, var(--color-background)); font-size: 0.72rem; font-weight: 700; }
+.theme-tile-actions { margin-top: auto; padding-top: 4px; }
+@media (max-width: 600px) { .theme-gallery { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .theme-tile, .theme-tile:hover { transition: none; transform: none; } }
+
+/* ---- Sign in: artwork backdrop, one centered card ---- */
+.login-screen { grid-template-columns: minmax(0, 1fr) minmax(360px, 460px); }
+.login-art { position: absolute; inset: 0; z-index: -1; background-size: cover; background-position: center 25%; animation: vv-login-in 600ms ease-out both; }
+@keyframes vv-login-in { from { opacity: 0; } to { opacity: 1; } }
+.login-strip-track { animation: none !important; }
+.login-art ~ .login-bg-scrim { background: linear-gradient(90deg, rgba(5, 6, 10, 0.88) 0%, rgba(5, 6, 10, 0.55) 55%, rgba(5, 6, 10, 0.88) 100%), linear-gradient(0deg, rgba(5, 6, 10, 0.7), transparent 40%); }
+.login-card { padding-inline: clamp(1rem, 4vw, 3rem); }
+.login-card::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, transparent, rgba(5, 6, 10, 0.72) 35%); pointer-events: none; }
+.login-form small, .login-stay small, .login-field span { color: var(--color-text-secondary); }
+.login-stay small { font-size: 0.82rem; }
+.login-form { background: color-mix(in srgb, var(--color-surface-overlay, var(--color-surface)) 90%, transparent); box-shadow: var(--shadow-large); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-radius: var(--radius-large); }
+.password-toggle { min-height: 36px; min-width: 52px; }
+.login-field .settings-input, .login-submit { min-height: 46px; }
+@media (max-width: 860px) {
+  .login-screen { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .login-brand { padding: 2rem 1.25rem 0.5rem; text-align: center; align-items: center; }
+  .login-facts, .login-brand-from { display: none; }
+  .login-brand h1 { font-size: 1.7rem; }
+  .login-card { padding-top: 0.5rem; }
+}
+@media (prefers-reduced-motion: reduce) { .login-art { animation: none; } }
+
+/* ---- First-run setup ---- */
+.onboarding-shell { background: radial-gradient(60% 50% at 50% 0%, var(--color-accent-soft), transparent 70%), var(--color-background); }
+.onboarding-card { max-width: 720px; padding: clamp(1.25rem, 4vw, 2.5rem); border-radius: var(--radius-large); box-shadow: var(--shadow-large); }
+.onboarding-progress { display: flex; gap: 6px; margin-bottom: 1rem; }
+.onboarding-progress i { flex: 1; height: 4px; border-radius: 4px; background: var(--color-surface-elevated); transition: background-color 250ms; }
+.onboarding-progress i.is-on { background: var(--color-accent); }
+.onboarding-step { font-size: 0.78rem; }
+.onboarding-actions .btn { min-height: 44px; }
+.onboarding-skip:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 3px; }
+@media (max-width: 600px) { .onboarding-shell { align-items: flex-start; padding: 1rem; } .onboarding-actions .btn { flex: 1 1 100%; } }
+
+/* ---- Danger zone ---- */
+.st-danger, .st-danger-box { border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border)); }
+.st .st-danger { background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface)); }
+.st-danger h3, .st-danger-box h4 { color: var(--color-danger); margin: 0 0 0.25rem; }
+.st-danger-box { display: grid; gap: 0.6rem; justify-items: start; margin: var(--spacing-md) 0; padding: var(--spacing-md); border: 1px solid; border-radius: var(--radius-medium); }
+.st-danger-box .notice { justify-self: stretch; }
+.st-danger-ask { font-size: 0.88rem; color: var(--color-text-secondary); }
+
+/* ---- 404 ---- */
+.nf-icon { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: var(--color-accent-soft); color: var(--color-accent); }
+.not-found h1 { font-size: clamp(1.5rem, 4vw, 2.2rem); letter-spacing: -0.02em; }
+.not-found p { margin: 0; max-width: 44ch; line-height: 1.55; }
+.nf-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: center; }
+.nf-actions .btn { min-height: 44px; display: inline-flex; align-items: center; gap: 0.4rem; }
+
+/* ---- Sign in with a code: big enough to read from a sofa ---- */
+.quick-connect { justify-items: center; text-align: center; width: 100%; max-width: 420px; margin-top: 1rem; border-top-color: var(--color-border); }
+.quick-connect-hint { font-size: 0.95rem; opacity: 1; color: var(--color-text-secondary); }
+.quick-connect-code { padding: 0.5rem 1.5rem; border-radius: var(--radius-large); background: var(--color-surface-overlay, var(--color-surface)); border: 1px solid var(--color-border); font-size: clamp(2.6rem, 8vw, 3.6rem); color: var(--color-text-primary); }
+.quick-connect .btn { min-height: 44px; }
+html.tv .quick-connect-code { font-size: 4rem; }
+
+/* ---- Account ---- */
+.ac-profile { background: var(--color-surface); box-shadow: none; }
+.ac-link { min-height: 64px; }
+.ac-link:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
+@media (max-width: 600px) { .ac-actions { width: 100%; } .ac-actions > * { flex: 1 1 auto; justify-content: center; } }
+
+/* ---- Theme creator: controls on the left, live preview stays in view ---- */
+.creator-preview .tsc, .creator-sticky .tp { border-radius: var(--radius-large); box-shadow: var(--shadow-medium); }
+.creator-sticky .theme-tile-actions .btn { min-height: 44px; }
+
+/* Artwork is always dark behind the sign-in, whatever the theme brightness. */
+html[data-mode='light'] .login-art ~ .login-bg-scrim { background: linear-gradient(90deg, rgba(5, 6, 10, 0.88) 0%, rgba(5, 6, 10, 0.55) 55%, rgba(5, 6, 10, 0.88) 100%), linear-gradient(0deg, rgba(5, 6, 10, 0.7), transparent 40%); }
+.login-screen:has(.login-art) .login-brand { color: #fff; }
+.login-screen:has(.login-art) .login-brand-sub, .login-screen:has(.login-art) .login-facts li, .login-screen:has(.login-art) .login-brand-from { color: rgba(255, 255, 255, 0.82); }
+.login-screen:has(.login-art) .login-brand-from span { color: #fff; }
+.ac-cols .users-add .btn { white-space: nowrap; }

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, Pill, Section } from '../components/ui/Page';
 import { SvgIcon } from '../components/ui/SvgIcon';
+import { toast } from '../components/ui/Toast';
 import { api, type AuthSession, type AuthUser } from '../lib/api';
 import { Avatar } from '../components/ui/Avatar';
 import QuickConnectApprove from '../components/settings/QuickConnectApprove';
@@ -35,7 +36,7 @@ export default function Account() {
       await api.changePassword(current, next);
       setCurrent('');
       setNext('');
-      setNote({ tone: 'ok', text: 'Password changed. Your other devices were signed out.' });
+      toast('Password changed. Your other devices were signed out.');
       await load();
     } catch (err) {
       setNote({ tone: 'err', text: (err as Error).message });
@@ -61,7 +62,7 @@ export default function Account() {
     setBusy('others');
     try {
       const r = await api.revokeOtherSessions();
-      setNote({ tone: 'ok', text: r.signedOut ? `Signed out ${r.signedOut} other device${r.signedOut === 1 ? '' : 's'}.` : 'No other devices were signed in.' });
+      toast(r.signedOut ? `Signed out ${r.signedOut} other device${r.signedOut === 1 ? '' : 's'}.` : 'No other devices were signed in.');
       await load();
     } catch (err) {
       setNote({ tone: 'err', text: (err as Error).message });

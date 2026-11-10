@@ -54,10 +54,10 @@ export default function QuickConnectSignIn({ onSignedIn }: Props) {
         <>
           <p className="quick-connect-hint">On a device that is already signed in, open Account and enter this code under Sign in another device.</p>
           <div className="quick-connect-code" aria-live="polite" aria-label={`Code ${code.split('').join(' ')}`}>{code.slice(0, 3)} {code.slice(3)}</div>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={cancel}>Cancel</button>
+          <button type="button" className="btn btn-secondary" onClick={cancel}>Cancel</button>
         </>
       ) : (
-        <button type="button" className="btn btn-secondary btn-sm" onClick={start}>Sign in with a code</button>
+        <button type="button" className="btn btn-secondary" onClick={start}>Sign in with a code</button>
       )}
       {error && <div className="notice notice--err" role="alert">{error}</div>}
     </div>

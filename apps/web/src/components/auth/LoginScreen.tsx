@@ -65,13 +65,17 @@ export default function LoginScreen({ auth, onAuthenticated, onRetry, loading, r
   return (
     <div className="login-screen">
       <div className="login-screen-bg" aria-hidden="true" />
-      <div className="login-strips" aria-hidden="true">
-        {[1, 2, 3, 1, 2, 3].map((n, row) => (
-          <div className="login-strip" key={row}>
-            <div className="login-strip-track" style={{ backgroundImage: `url(/filmstrip-${n}.webp)` }} />
-          </div>
-        ))}
-      </div>
+      {backdrop?.backdrop ? (
+        <div className="login-art" aria-hidden="true" style={{ backgroundImage: `url(${backdrop.backdrop.replace("/original/", "/w1280/")})` }} />
+      ) : (
+        <div className="login-strips" aria-hidden="true">
+          {[1, 2, 3, 1, 2, 3].map((n, row) => (
+            <div className="login-strip" key={row}>
+              <div className="login-strip-track" style={{ backgroundImage: `url(/filmstrip-${n}.webp)` }} />
+            </div>
+          ))}
+        </div>
+      )}
       <div className="login-bg-scrim" aria-hidden="true" />
 
       <aside className="login-brand">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type AuthSession, type AuthUser } from '../../lib/api';
+import { toast } from '../ui/Toast';
 import { MyProfile, ProfileAccounts } from './ProfileSettings';
 
 /**
@@ -21,6 +22,7 @@ export default function UsersPanel() {
   const [role, setRole] = useState<'admin' | 'user'>('user');
   const [resetFor, setResetFor] = useState<string | null>(null);
   const [resetPw, setResetPw] = useState('');
+  const [removing, setRemoving] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AuthSession[]>([]);
 
   const loadSessions = useCallback(async () => {
@@ -128,7 +130,7 @@ export default function UsersPanel() {
     try {
       const result = await api.deleteUserAccount(user.id);
       setUsers(result.users);
-      setNotice({ tone: 'ok', text: `${user.username} was removed.` });
+      toast(`${user.username} was removed.`);
     } catch (err) {
       setNotice({ tone: 'err', text: (err as Error).message });
     } finally {
@@ -198,15 +200,6 @@ export default function UsersPanel() {
                     >
                       Reset password
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      disabled={busy === user.id || me?.id === user.id}
-                      title={me?.id === user.id ? 'You cannot remove yourself' : 'Remove this account'}
-                      onClick={() => void removeUser(user)}
-                    >
-                      Remove
-                    </button>
                   </span>
                   {resetFor === user.id && (
                     <span className="users-reset">
@@ -218,6 +211,31 @@ export default function UsersPanel() {
               ))}
             </ul>
           </section>
+
+          {users.some(u => u.id !== me?.id) && (
+            <section className="settings-section st-danger" aria-label="Danger zone">
+              <h3>Danger zone</h3>
+              <p className="settings-help">Removing an account deletes that person's profile, history and lists. It cannot be undone.</p>
+              <ul className="users-list">
+                {users.filter(u => u.id !== me?.id).map(user => (
+                  <li key={user.id} className="users-row">
+                    <span className="users-name">{user.username}</span>
+                    <span className="users-actions">
+                      {removing === user.id ? (
+                        <>
+                          <span className="st-danger-ask">Remove {user.username} for good?</span>
+                          <button type="button" className="btn btn-danger btn-sm" disabled={busy === user.id} onClick={() => { void removeUser(user); setRemoving(null); }}>Yes, remove</button>
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setRemoving(null)}>Cancel</button>
+                        </>
+                      ) : (
+                        <button type="button" className="btn btn-secondary btn-sm" disabled={busy === user.id} onClick={() => setRemoving(user.id)}>Remove account</button>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <ProfileAccounts users={users} onChanged={setUsers} />
           {me && <MyProfile me={me} onChanged={setMe} />}

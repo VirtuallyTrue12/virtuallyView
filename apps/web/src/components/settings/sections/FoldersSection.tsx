@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type ServerSettings } from '../../../lib/api';
+import { toast } from '../../ui/Toast';
 
 type Roots = ServerSettings['mediaRoots'];
 const LABEL: Record<keyof Roots, string> = { movies: 'Movies', tv: 'TV shows', music: 'Music', staging: 'Downloads (staging)' };
@@ -24,7 +25,7 @@ export default function FoldersSection({ settings, onSaved }: { settings: Server
     try {
       const updated = await api.saveServerSettings({ mediaRoots: { [key]: draft[key].trim() } as Roots, confirm: phrase });
       onSaved(updated); setDraft({ ...updated.mediaRoots }); setPhrase('');
-      setMsg({ tone: 'ok', text: 'Folder updated. New files are read from the new place.' });
+      toast('Folder updated. New files are read from the new place.');
     } catch (err) { setMsg({ tone: 'err', text: (err as Error).message ?? 'Could not save the folder.' }); } finally { setSaving(false); }
   };
 

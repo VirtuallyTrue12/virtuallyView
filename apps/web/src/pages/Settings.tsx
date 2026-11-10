@@ -68,7 +68,7 @@ export default function Settings() {
           </div>
         }
       />
-      <div className="st">
+      <div className={`st${wanted && current !== 'home' ? ' st--detail' : ''}`}>
         <nav className="st-nav" aria-label="Settings sections">
           {groups.map(g => (
             <div className="st-nav-group" key={g}>
@@ -96,7 +96,12 @@ export default function Settings() {
             </div>
           ) : (
             <>
-              {current !== 'home' && <h2 className="st-title">{info.label}</h2>}
+              {current !== 'home' && (
+                <div className="st-titlebar">
+                  <button type="button" className="st-back" onClick={() => go('home')}><SvgIcon name="chevron-left" size={18} /> Settings</button>
+                  <h2 className="st-title">{info.label}</h2>
+                </div>
+              )}
               {current === 'home' && <SettingsHome go={go} />}
               {current === 'library' && (<><FoldersSection settings={settings} onSaved={setSettings} /><DefaultQuality settings={settings} onSaved={setSettings} /><DownloadsFix settings={settings} onSaved={setSettings} /></>)}
               {current === 'sources' && <IndexersPanel />}
