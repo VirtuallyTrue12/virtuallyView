@@ -16,8 +16,9 @@
 .hero-backdrop--placeholder { background: linear-gradient(160deg, var(--color-surface-elevated), var(--color-surface)); }
 .hero-overlay {
   background:
-    linear-gradient(90deg, var(--color-scrim, rgba(0, 0, 0, 0.55)) 0%, transparent 62%),
-    linear-gradient(180deg, transparent 35%, color-mix(in srgb, var(--color-background) 70%, transparent) 78%, var(--color-background) 100%);
+    /* Bottom fade listed first so it sits on top: the hero melts into the page with no seam. */
+    linear-gradient(180deg, transparent 35%, color-mix(in srgb, var(--color-background) 70%, transparent) 78%, var(--color-background) 100%),
+    linear-gradient(90deg, var(--color-scrim, rgba(0, 0, 0, 0.55)) 0%, transparent 62%);
 }
 .hero-content {
   width: 100%;
@@ -53,7 +54,8 @@
 .hero-dot.is-active::before { width: 20px; background: #fff; }
 
 /* Placeholder while the dashboard loads: same band as the real hero. */
-.browse-hero-skel { background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-background) 100%); }
+.browse-hero-skel { background: linear-gradient(180deg, var(--color-surface-elevated) 0%, var(--color-background) 100%); }
+.home-rails .browse-skel-rail:first-of-type, .browse-skel-rail:first-child { margin-top: 0; }
 
 /* ===== Home rails ===== */
 .home-rails { padding-top: var(--spacing-md); }
