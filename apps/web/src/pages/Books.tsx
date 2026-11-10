@@ -82,8 +82,8 @@ export default function Books() {
   const chips: Array<[Format, string]> = [['all', 'All'], ['pdf', 'PDF'], ['epub', 'EPUB'], ['comic', 'Comics'], ['other', 'Other']];
 
   return (
-    <main className="page">
-      <PageHeader title="Books" sub={all === null ? 'Loading…' : empty ? undefined : `${all.length.toLocaleString()} books and comics${favs.size ? ` · ${favs.size} favorite${favs.size === 1 ? '' : 's'}` : ''}`} actions={<OpenMediaFolder kind="books" />} />
+    <main className="page tools-page">
+      <PageHeader title="Books" sub={all === null ? 'Loading…' : empty ? '0 books and comics' : `${all.length.toLocaleString()} books and comics${favs.size ? ` · ${favs.size} favorite${favs.size === 1 ? '' : 's'}` : ''}`} actions={<OpenMediaFolder kind="books" />} />
       {error && !empty && <div className="notice notice--err" role="alert">{error}</div>}
       {empty && <EmptyState icon="book" title="No books yet" text={<>Put PDF, EPUB or comic files in the folder mounted at <code>/media/books</code> (folders are fine) and they show up here. Files are only read, never changed.</>} action={<a className="btn btn-secondary" href="https://github.com/VirtuallyTrue12/virtuallyView/blob/main/docs/features.md" target="_blank" rel="noreferrer">How to add a book folder</a>} />}
 

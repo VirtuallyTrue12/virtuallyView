@@ -12,7 +12,7 @@ export default function Activity() {
   }, []);
 
   return (
-    <main className="page">
+    <main className="page tools-page">
 
       <BackButton to="/" label="Home" />
       <div className="page-head">

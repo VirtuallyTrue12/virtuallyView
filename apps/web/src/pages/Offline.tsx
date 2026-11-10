@@ -151,7 +151,7 @@ export default function Offline() {
   }
 
   return (
-    <main className="page offline-page">
+    <main className="page offline-page tools-page">
       <header className="offline-head">
         <div>
           <h1>On this device</h1>

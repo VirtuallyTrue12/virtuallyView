@@ -80,7 +80,7 @@ export default function HomeLabApps() {
 
   const connected = apps?.filter(a => a.connected).length ?? 0;
   return (
-    <main className="page">
+    <main className="page tools-page">
       <PageHeader title="Apps" sub={apps ? `${connected} of ${apps.length} connected. Each keeps its own interface; this page links to it.` : undefined}
         actions={<a className="btn btn-secondary" href="#apps-health"><SvgIcon name="wrench" size={17} /> Check health</a>} />
       {error && <div className="notice notice--err" role="alert">{error}</div>}

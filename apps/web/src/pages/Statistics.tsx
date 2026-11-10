@@ -120,7 +120,7 @@ export default function Statistics() {
   if (insights.length === 0) insights.push({ tone: 'ok', text: 'Nothing needs your attention.' });
 
   return (
-    <main className="page">
+    <main className="page tools-page">
       <PageHeader title="Statistics" sub="Your library at a glance" actions={<><Link to={`/music/year/${new Date().getFullYear()}`} className="btn btn-secondary">Your year in review</Link><button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}><SvgIcon name="refresh" size={17} /> Refresh</button></>} />
 
       <div className="ui-stats">

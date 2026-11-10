@@ -81,7 +81,7 @@ export default function Wiki() {
 
   if (status?.configured && status.healthy) {
     return (
-      <main className="page wiki-page">
+      <main className="page wiki-page tools-page">
         <PageHeader title="Wiki" sub={<>Offline reading from your own Kiwix library <Pill tone="ok">Connected</Pill></>}
           actions={<>
             <a className="btn btn-secondary" href={readerUrl} target="_blank" rel="noreferrer noopener"><SvgIcon name="external" size={17} /> Open in a new tab</a>
@@ -97,7 +97,7 @@ export default function Wiki() {
   }
 
   return (
-    <main className="page">
+    <main className="page tools-page">
       <PageHeader title="Wiki" sub="Wikipedia and other reference libraries that work without the internet" />
       {status?.configured && !status.healthy && (
         <div className="notice notice--err" role="alert">Could not reach {status.url}. Check that it is running and the address is correct.</div>

@@ -22,14 +22,16 @@
 .dl .rq-actions .btn:focus-visible,
 .dl .rq-actions .more-trigger:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
 @media (max-width: 720px) {
-  .dl { grid-template-columns: 60px minmax(0, 1fr); padding: 0.9rem; gap: 0.7rem 0.9rem; }
-  .dl .rq-poster, .dl-art { width: 60px; }
-  .dl .rq-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; width: 100%; }
-  .dl .rq-actions .btn { flex: 1 1 auto; justify-content: center; }
-  .dl .rq-actions .more-trigger { flex: 0 0 40px; }
-  .rq-toolbar .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-  .rq-toolbar .seg-btn { padding: 0.45rem 0.7rem; font-size: 0.86rem; white-space: nowrap; }
-  .dl-line span + span::before { margin-right: 0.6rem; }
+  main.page .dl { grid-template-columns: 60px minmax(0, 1fr) auto; padding: 0.9rem; gap: 0.6rem 0.8rem; align-items: start; }
+  main.page .dl .rq-poster, main.page .dl .dl-art { width: 60px; }
+  main.page .dl .rq-actions { grid-column: auto; min-width: 0; width: auto; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.4rem; justify-content: flex-end; }
+  main.page .dl .rq-actions .btn { min-height: 40px; }
+  main.page .dl .rq-actions .dl-pause { width: 40px; padding: 0; justify-content: center; }
+  main.page .dl-btn-text { display: none; }
+  main.page .dl-line span + span::before { margin-right: 0.6rem; }
+  main.page .dl .rq-actions .btn-primary { padding: 0 0.7rem; }
+  main.page .rq-toolbar .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  main.page .rq-toolbar .seg-btn { padding: 0.45rem 0.7rem; font-size: 0.86rem; white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .dl { transition: none; } }
 
@@ -113,3 +115,11 @@ main.page:has(.ap-grid) .mp-link { display: block; margin: 0.6rem 0 0; padding: 
   .diagnostics-row { align-items: flex-start; flex-wrap: wrap; row-gap: 0.15rem; }
   .diagnostics-value { text-align: left; }
 }
+
+/* Clear the floating AI button and the bottom tab bar on pages in this area */
+@media (max-width: 720px) {
+  .tools-page { padding-bottom: calc(var(--tabbar-h, 64px) + 96px); }
+  .chat-fab { width: 40px; height: 40px; }
+}
+/* Downloads: the warning count reads on light surfaces too (mixes toward text so the contrast holds in every theme) */
+main.page:has(.dl-list) .ui-stat--warn .ui-stat-value { color: color-mix(in srgb, var(--color-warning) 62%, var(--color-text-primary)); }

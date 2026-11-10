@@ -130,7 +130,7 @@ export default function Photos() {
   const count = all?.length ?? 0;
 
   return (
-    <main className="page ph-page">
+    <main className="page ph-page tools-page">
       <PageHeader
         title="Photos"
         sub={all === null ? 'Loading…' : empty ? undefined : `${count.toLocaleString()} photos${favs.size ? ` · ${favs.size} favorite${favs.size === 1 ? '' : 's'}` : ''}${albums.length ? ` · ${albums.length} album${albums.length === 1 ? '' : 's'}` : ''}`}
