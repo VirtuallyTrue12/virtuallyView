@@ -54,12 +54,12 @@ export function MoreMenu({ label = 'More options', children }: { label?: string;
   }, [open, reposition]);
 
   return (
-    <div className="more" data-dpad="own">
+    <div className="more">
       <button ref={trigger} type="button" className="btn btn-secondary more-trigger" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(v => !v)} aria-label={label} title={label}>
         <SvgIcon name="more" size={22} />
       </button>
       {open && createPortal(
-        <div ref={menu} className={`more-menu more-menu--portal${place || phone() ? '' : ' is-measuring'}`} role="menu" aria-label={label}
+        <div ref={menu} className={`more-menu more-menu--portal${place || phone() ? '' : ' is-measuring'}`} role="menu" aria-label={label} data-dpad="own"
           style={place && !phone() ? { top: place.top, left: place.left, transformOrigin: place.origin } : undefined}>
           <CloseMenu.Provider value={() => setOpen(false)}>{children}</CloseMenu.Provider>
         </div>,

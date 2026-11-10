@@ -1761,4 +1761,25 @@ describe('remote control in TV mode', () => {
 
     await page.evaluate(() => document.documentElement.classList.remove('tv'));
   });
+
+  it('the "More" button on a title page is a normal remote target, and its open menu takes up and down', async () => {
+    await page.route('**/api/movies/radarr-777', r => r.fulfill(json({ id: 'radarr-777', title: 'Remote Reel', status: 'available', year: 2020 })));
+    await page.goto(base + '/movies/radarr-777');
+    await page.getByRole('button', { name: 'More for this movie' }).waitFor();
+    await page.evaluate(() => { document.documentElement.classList.add('tv'); (document.activeElement as HTMLElement | null)?.blur(); });
+    // A fresh page: the first press already lands somewhere.
+    await page.keyboard.press('ArrowDown');
+    expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true);
+    // Along the action row, the remote reaches the three-dots button.
+    await page.evaluate(() => (document.querySelector('.detail-actions button, .hero-actions button, .btn-primary') as HTMLElement).focus());
+    const label = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '');
+    for (let i = 0; i < 10 && (await label()) !== 'More for this movie'; i++) await page.keyboard.press('ArrowRight');
+    expect(await label()).toBe('More for this movie');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.more-menu [role="menuitem"]');
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('role'))).toBe('menuitem');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => document.documentElement.classList.remove('tv'));
+    await page.unroute('**/api/movies/radarr-777');
+  });
 });

@@ -173,6 +173,8 @@ select option { background: var(--color-background); color: var(--color-text-pri
 @media (max-width: 860px) { :root { --media-card-width: 140px; } }
 
 /* ---------- Rails and sideways rows ---------- */
+/* Snap points respect the scroller's inner padding, so the first card lines up with the rail title. */
+.rail-scroll { scroll-padding-inline: var(--spacing-sm); }
 .rail-head { align-items: center; gap: var(--spacing-md); }
 .rail-title { font-size: var(--text-xl); line-height: 1.2; }
 .rail-arrow {
@@ -367,6 +369,14 @@ select option { background: var(--color-background); color: var(--color-text-pri
 .side-link:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: -2px; }
 .sidebar-group { color: var(--color-text-muted); font-size: var(--text-xs); letter-spacing: 0.02em; }
 .sidebar-foot { border-top-color: var(--color-border); }
+/* Laptop screens: every link and the account menu fit without scrolling the sidebar. */
+@media (max-height: 860px) {
+  .sidebar { padding-top: 14px; gap: 1px; }
+  .sidebar-brand { padding-bottom: 8px; }
+  .side-link { padding-top: 4px; padding-bottom: 4px; font-size: 0.9rem; }
+  .sidebar-group { margin: 8px 12px 2px; }
+  .sidebar-foot { padding-top: 8px; }
+}
 
 /* ---------- Phone tab bar ---------- */
 @media (max-width: 860px) {
@@ -415,3 +425,6 @@ body.has-music-bar { padding-bottom: calc(var(--dock-bottom, 88px) + var(--spaci
 html.tv .media-card-link:focus-visible { outline: none; transform: none; box-shadow: none; }
 html.tv .media-card-link:focus-visible .media-card { transform: scale(1.05); }
 html.tv .media-card-link:focus-visible .media-card-artwork { box-shadow: 0 0 0 3px var(--color-background), 0 0 0 6px var(--color-border-focus), var(--shadow-large); }
+
+/* Lite mode (no blur) gives bars a solid fill; it must be the theme's own colour, or light themes got a dark top bar with dark text. */
+html.lite .nav, html.lite .toast, html.lite .tabs { background-color: var(--color-background) !important; }
