@@ -127,6 +127,9 @@ export default function OnboardingWizard({ onDone }: { onDone: () => void }) {
   return (
     <div className="onboarding-shell">
       <div className="onboarding-card">
+        <div className="onboarding-progress" aria-hidden="true">
+          {(['welcome', 'services', 'folders', 'done'] as Step[]).map((k, i, all) => <i key={k} className={i <= all.indexOf(step) ? 'is-on' : ''} />)}
+        </div>
         <span className="onboarding-step">
           Step {step === 'welcome' ? 1 : step === 'services' ? 2 : step === 'folders' ? 3 : 4} of 4 · {STEP_LABELS[step]}
         </span>
