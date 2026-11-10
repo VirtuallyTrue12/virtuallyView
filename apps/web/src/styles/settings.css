@@ -118,3 +118,10 @@ html.tv .quick-connect-code { font-size: 4rem; }
 /* ---- Theme creator: controls on the left, live preview stays in view ---- */
 .creator-preview .tsc, .creator-sticky .tp { border-radius: var(--radius-large); box-shadow: var(--shadow-medium); }
 .creator-sticky .theme-tile-actions .btn { min-height: 44px; }
+
+/* Artwork is always dark behind the sign-in, whatever the theme brightness. */
+html[data-mode='light'] .login-art ~ .login-bg-scrim { background: linear-gradient(90deg, rgba(5, 6, 10, 0.88) 0%, rgba(5, 6, 10, 0.55) 55%, rgba(5, 6, 10, 0.88) 100%), linear-gradient(0deg, rgba(5, 6, 10, 0.7), transparent 40%); }
+.login-screen:has(.login-art) .login-brand { color: #fff; }
+.login-screen:has(.login-art) .login-brand-sub, .login-screen:has(.login-art) .login-facts li, .login-screen:has(.login-art) .login-brand-from { color: rgba(255, 255, 255, 0.82); }
+.login-screen:has(.login-art) .login-brand-from span { color: #fff; }
+.ac-cols .users-add .btn { white-space: nowrap; }
