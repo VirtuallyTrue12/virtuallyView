@@ -35,6 +35,13 @@ export default function SeriesDetail() {
   const [removing, setRemoving] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
 
+  // On a TV the remote needs somewhere to start: the primary action (an open "More" menu would otherwise swallow the first key).
+  const loaded = !!series;
+  useEffect(() => {
+    if (!loaded || !document.documentElement.classList.contains('tv')) return;
+    document.querySelector<HTMLElement>('.detail-hero .hero-actions .btn-primary:not([disabled])')?.focus({ preventScroll: true });
+  }, [loaded]);
+
   useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
 
   useEffect(() => {
@@ -98,7 +105,7 @@ export default function SeriesDetail() {
   }
 
   if (!series) {
-    return <main className="page"><div className="loading-state">Loading series...</div></main>;
+    return <main className="detail"><div className="watch-skel" role="status" aria-label="Loading show"><div className="skeleton watch-skel-poster" /><div className="watch-skel-lines"><div className="skeleton skeleton-line" style={{ height: 40, width: '60%' }} /><div className="skeleton skeleton-line skeleton-line--short" /><div className="skeleton skeleton-line skeleton-line--full" /><div className="skeleton skeleton-line skeleton-line--full" /></div></div></main>;
   }
 
   const isSonarr = /^sonarr-/.test(series.id);
@@ -155,12 +162,14 @@ export default function SeriesDetail() {
 
               <div className="detail-meta">
                 {series.year && <span>{series.year}</span>}
-                {series.seasons?.length ? <span>{series.seasons.filter(s => s.number > 0).length} seasons</span> : null}
+                {series.seasons?.length ? <span>{series.seasons.filter(s => s.number > 0).length} {series.seasons.filter(s => s.number > 0).length === 1 ? 'season' : 'seasons'}</span> : null}
                 {totalEpisodes > 0 && <span>{availableEpisodes}/{totalEpisodes} episodes</span>}
                 {series.rating ? <span className="rating"><SvgIcon name="star" size={14} /> {series.rating.toFixed(1)}</span> : null}
+                {series.certification && <span className="cert-badge">{series.certification}</span>}
+              </div>
+              <div className="detail-meta detail-chips">
                 <ScoreChips ratings={series.ratings} />
                 {series.quality && <span>{series.quality}</span>}
-                {series.certification && <span className="cert-badge">{series.certification}</span>}
                 {series.studio && <Link to={`/series?studio=${encodeURIComponent(series.studio)}`}>{series.studio}</Link>}
                 <StatusPill status={displayStatus} />
               </div>
@@ -187,6 +196,7 @@ export default function SeriesDetail() {
                     {episodesLoading ? 'Loading episodes...' : episodesError ? 'Episodes unavailable' : 'No episodes downloaded'}
                   </button>
                 )}
+                <div className="hero-secondary">
                 <FavoriteButton mediaType="series" mediaId={series.id} initial={series.favorite} />
                 <ThumbRating mediaType="series" mediaId={series.id} initial={series.myThumb} />
                 {isAdmin && (
@@ -202,6 +212,7 @@ export default function SeriesDetail() {
                     <MenuItem icon="trash" label="Remove show" danger onSelect={() => setDialog('remove')} />
                   </MoreMenu>
                 )}
+                </div>
                 {notice && <div className={`notice notice--${notice.tone}`}>{notice.text}</div>}
               </div>
             </div>
@@ -266,9 +277,12 @@ export default function SeriesDetail() {
                   <div className="episode-card-body">
                     <span className="episode-card-title">{episode.title}</span>
                     <span className="episode-card-sub">
-                      {episode.hasFile ? '' : isArriving(episode.download) ? `${itemDownloadLabel(episode.download)} · ` : 'Not downloaded · '}
-                      {episode.airDate ?? ''}{episode.runtime ? ` · ${episode.runtime} min` : ''}
-                      {progress > 0 ? ` · ${progress}% watched` : ''}
+                      {[
+                        episode.hasFile ? '' : isArriving(episode.download) ? itemDownloadLabel(episode.download) : 'Not downloaded',
+                        episode.airDate ?? '',
+                        episode.runtime ? `${episode.runtime} min` : '',
+                        progress > 0 ? `${progress}% watched` : ''
+                      ].filter(Boolean).join(' · ')}
                     </span>
                     {episode.overview && <span className="episode-card-overview">{episode.overview}</span>}
                   </div>
