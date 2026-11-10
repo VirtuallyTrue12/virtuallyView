@@ -109,7 +109,8 @@ export default function VideoWatch() {
   const related = details?.related ?? [];
   const chapters = (details?.chapters ?? []).map((c, i, all) => ({ ...c, end: all[i + 1]?.start ?? (video.durationSeconds || c.start + 1) }));
   const captions = (details?.captions ?? []).map(c => ({ src: `/api/videos/${encodeURIComponent(id)}/captions?label=${encodeURIComponent(c.label)}`, label: c.label, srclang: c.code || 'en' }));
-  const meta = [views(video.views), details?.publishedText ?? age(video.published), details?.likes ? `${views(details.likes).replace(' views', '')} likes` : ''].filter(Boolean).join(' · ');
+  // The instance's own "3 days ago" text comes in its own language, so the age is worked out here.
+  const meta = [views(video.views), age(video.published), details?.likes ? `${views(details.likes).replace(' views', '')} likes` : ''].filter(Boolean).join(' · ');
 
   const seek = (t: number) => {
     const el = document.querySelector<HTMLVideoElement>('.vd-player video');
@@ -164,6 +165,8 @@ export default function VideoWatch() {
                 subtitles={captions}
                 chapters={chapters}
                 onProgress={onProgress}
+                // The instance's stream can be refused upstream; its own player usually still gets through.
+                {...(online?.embed && !local ? { onError: () => setEmbedMode(true) } : {})}
                 {...(related[0] ? { next: { label: related[0].title, onSelect: () => navigate(watchPath(related[0]!.id)) } } : {})}
               />
             ) : (

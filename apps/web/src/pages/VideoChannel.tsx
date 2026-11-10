@@ -54,9 +54,9 @@ export default function VideoChannel() {
     <main className="page vd-page vd-channel-page">
       <BackButton to="/videos" label="Back to Videos" />
       <header className="vd-chan-head">
-        <div className="vd-banner" aria-hidden="true">
-          {channel?.banner && bannerOk && <img src={channel.banner} alt="" onError={() => setBannerOk(false)} />}
-        </div>
+        {channel?.banner && bannerOk && (
+          <div className="vd-banner" aria-hidden="true"><img src={channel.banner} alt="" onError={() => setBannerOk(false)} /></div>
+        )}
         <div className="vd-chan-id">
           {channel ? <ChannelAvatar src={channel.avatar} name={channel.name} size={104} /> : <Skeleton className="vd-skel-avatar" />}
           <div className="vd-chan-text">

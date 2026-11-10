@@ -9,7 +9,7 @@ export function RelatedVideos({ title, year, kind = 'movie' }: { title: string; 
   useEffect(() => {
     let alive = true;
     setVideos([]);
-    if (title) api.videosAbout(title, year, kind).then(r => { if (alive) setVideos(r.videos); }).catch(() => undefined);
+    if (title) api.videosAbout(title, year, kind).then(r => { if (alive) setVideos(Array.isArray(r.videos) ? r.videos : []); }).catch(() => undefined);
     return () => { alive = false; };
   }, [title, year, kind]);
   if (videos.length === 0) return null;

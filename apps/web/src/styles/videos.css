@@ -23,7 +23,9 @@
 .vd-rail .rail-head { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); margin-bottom: var(--spacing-sm); }
 .vd-rail-aside { display: flex; align-items: center; gap: var(--spacing-sm); }
 .vd-rail-empty { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-sm) var(--spacing-md); margin: 0; padding: var(--spacing-lg); border-radius: var(--radius-large); border: 1px dashed var(--color-border); color: var(--color-text-secondary); font-size: var(--text-sm); }
-.vd-row { gap: var(--spacing-md); padding: var(--spacing-sm) var(--spacing-xs) var(--spacing-md); margin: calc(-1 * var(--spacing-sm)) calc(-1 * var(--spacing-xs)) 0; scroll-snap-type: x proximity; scroll-padding-inline: var(--spacing-xs); }
+.vd-row { display: flex; overflow-x: auto; scrollbar-width: none; gap: var(--spacing-md); padding: var(--spacing-sm) var(--spacing-xs) var(--spacing-md); margin: calc(-1 * var(--spacing-sm)) calc(-1 * var(--spacing-xs)) 0; scroll-snap-type: x proximity; scroll-padding-inline: var(--spacing-xs); }
+.vd-rail .sr { position: relative; min-width: 0; }
+.vd-row::-webkit-scrollbar { display: none; }
 .vd-row > .vd-card { flex: 0 0 var(--vd-card); scroll-snap-align: start; }
 
 /* Video card: 16:9 picture, then channel picture + title, channel, views and age */
@@ -182,8 +184,11 @@ a.vd-watch-chan-link:hover strong { text-decoration: underline; text-underline-o
   .vd-chan-about { margin-inline: auto; }
   .vd-banner { aspect-ratio: 3.2 / 1; }
   .vd-watch-bar { flex-direction: column; align-items: stretch; }
-  .vd-watch-channel { justify-content: space-between; }
-  .vd-watch-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .vd-watch-channel { justify-content: space-between; gap: var(--spacing-sm); }
+  .vd-watch-chan-link { flex: 1 1 auto; }
+  .vd-watch-channel .vd-sub-btn { flex: 0 0 auto; padding-inline: 0.9rem; }
+  .vd-watch-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vd-watch-actions .btn { min-width: 0; justify-content: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .vd-desc { padding: var(--spacing-md); }
   .vd-card--row { grid-template-columns: 148px minmax(0, 1fr); }
   .vd-grid { gap: var(--spacing-lg); }

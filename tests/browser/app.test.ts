@@ -1189,44 +1189,106 @@ describe('radio, one-press repair and live highlights', () => {
 
 describe('Videos (Invidious)', () => {
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const video = { id: 'dQw4w9WgXcQ', title: 'A great video about virtuallyView', channel: 'A Channel', channelId: 'UC' + 'a'.repeat(22), durationSeconds: 213, views: 12_345, published: '2026-11-01T00:00:00Z' };
+  const details = { ...video, likes: 10, hasStream: false, captions: [], chapters: [], related: [] };
+  const state = (over: Record<string, unknown> = {}) => ({ position: 0, later: false, saved: null, video: null, subscribed: false, ...over });
+  afterEach(async () => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
 
   it('says how to turn it on when the video service is off, and keeps local history reachable anyway', async () => {
-    const savedVideo = { id: 'dQw4w9WgXcQ', title: 'Watched earlier', channel: 'A Channel', durationSeconds: 60, views: 1 };
     await page.route('**/api/videos/status', r => r.fulfill(json({ available: false })));
-    await page.route('**/api/videos/history/me', r => r.fulfill(json({ history: [savedVideo] })));
+    await page.route('**/api/videos/history/me', r => r.fulfill(json({ history: [{ ...video, title: 'Watched earlier' }] })));
     await page.goto(base + '/videos');
     await page.getByText('Not turned on yet').waitFor();
     await page.getByText(/docker compose --profile invidious up -d/).waitFor();
-    await page.getByRole('radio', { name: /History/ }).click();
-    await page.getByRole('button', { name: `Play ${savedVideo.title}` }).waitFor();
+    await page.getByRole('region', { name: 'History' }).getByRole('link', { name: 'Play Watched earlier' }).waitFor();
     expect(errors).toEqual([]);
   });
 
   it('searches, plays a video in an embedded player, and keeps it in history until removed', async () => {
-    const video = { id: 'dQw4w9WgXcQ', title: 'A great video about virtuallyView', channel: 'A Channel', durationSeconds: 213, views: 12_345, thumbnail: 'http://x/thumb.jpg' };
     let history = [] as typeof video[];
     const watched: string[] = [];
     await page.route('**/api/videos/status', r => r.fulfill(json({ available: true })));
     await page.route('**/api/videos/search**', r => r.fulfill(json({ videos: [video] })));
     await page.route('**/api/videos/history/me', r => r.fulfill(json({ history })));
-    await page.route(`**/api/videos/${video.id}`, r => r.fulfill(json({ video, embed: `http://invidious.local/embed/${video.id}?local=true` })));
+    await page.route(`**/api/videos/${video.id}`, r => r.fulfill(json({ video: details, embed: `http://invidious.local/embed/${video.id}?local=true`, stream: null, subscribed: false, library: null })));
+    await page.route(`**/api/videos/${video.id}/state`, r => r.fulfill(json(state())));
     await page.route('**/api/videos/history/watched', r => { watched.push(r.request().postDataJSON().id); history = [video]; return r.fulfill(json({ ok: true })); });
     await page.route(`**/api/videos/history/${video.id}`, r => { history = []; return r.fulfill(json({ ok: true })); });
     await page.route('**/api/videos/*/thumbnail', r => r.fulfill({ status: 404 }));
     await page.goto(base + '/videos');
     await page.getByPlaceholder('Search YouTube').fill('virtuallyview');
-    await page.getByRole('button', { name: `Play ${video.title}` }).waitFor();
-    await page.getByRole('button', { name: `Play ${video.title}` }).click();
+    await page.getByRole('link', { name: `Play ${video.title}` }).click();
     // Its own page (a real, linkable URL), not a popup over the search results.
     await page.waitForURL(`**/videos/watch/${video.id}`);
-    expect(await page.locator('.vid-player iframe').getAttribute('src')).toBe(`http://invidious.local/embed/${video.id}?local=true`);
+    expect(await page.locator('.vd-player iframe').getAttribute('src')).toBe(`http://invidious.local/embed/${video.id}?local=true`);
     await page.waitForTimeout(150);
     expect(watched).toEqual([video.id]);
-    await page.getByRole('button', { name: 'Back' }).click();
-    await page.getByRole('radio', { name: /History/ }).click();
-    await page.getByRole('button', { name: `Play ${video.title}` }).waitFor();
-    await page.getByRole('button', { name: `Remove ${video.title} from history` }).click();
-    await page.getByText('Nothing watched yet').waitFor();
+    await page.getByRole('button', { name: 'Back to Videos' }).click();
+    await page.getByPlaceholder('Search YouTube').fill('');
+    const rail = page.getByRole('region', { name: 'History' });
+    await rail.getByRole('link', { name: `Play ${video.title}` }).waitFor();
+    await rail.getByRole('button', { name: `Remove ${video.title} from history` }).click();
+    await page.getByText('Videos you play are kept here').waitFor();
+    expect(errors).toEqual([]);
+  });
+
+  it('subscribes to a channel from search, and its new uploads show up in the Subscriptions rail', async () => {
+    const channel = { id: video.channelId, name: 'A Channel', subscribers: 12_000 };
+    let subscribed = false;
+    await page.route('**/api/videos/status', r => r.fulfill(json({ available: true })));
+    await page.route('**/api/videos/search**', r => r.fulfill(json(r.request().url().includes('type=channel') ? { channels: [channel] } : { videos: [] })));
+    await page.route('**/api/videos/subscriptions', r => {
+      if (r.request().method() === 'POST') { expect(r.request().postDataJSON()).toEqual({ id: channel.id }); subscribed = true; return r.fulfill(json({ ok: true, channel })); }
+      return r.fulfill(json({ channels: subscribed ? [channel] : [] }));
+    });
+    await page.route('**/api/videos/feed', r => r.fulfill(json(subscribed ? { videos: [{ ...video, title: 'Brand new upload' }], failed: 0, channels: 1 } : { videos: [], failed: 0, channels: 0 })));
+    await page.route('**/api/videos/*/thumbnail', r => r.fulfill({ status: 404 }));
+    await page.goto(base + '/videos');
+    await page.getByText('Subscribe to channels to see their new videos here.').waitFor();
+    await page.getByPlaceholder('Search YouTube').fill('a channel');
+    await page.getByRole('radio', { name: 'Channels' }).click();
+    await page.getByRole('button', { name: 'Subscribe to A Channel' }).click();
+    await page.getByRole('button', { name: 'Unsubscribe from A Channel' }).waitFor();
+    await page.getByRole('button', { name: 'Clear search' }).click();
+    await page.getByRole('region', { name: 'Subscriptions' }).getByRole('link', { name: 'Play Brand new upload' }).waitFor();
+    await page.getByRole('region', { name: 'Your channels' }).getByRole('link', { name: /A Channel/ }).waitFor();
+    expect(errors).toEqual([]);
+  });
+
+  it('saves a video to the library with progress, plays the saved copy, and deleting it removes it', async () => {
+    let saved: Record<string, unknown> | null = null;
+    let polls = 0;
+    let deleted = false;
+    await page.route('**/api/videos/status', r => r.fulfill(json({ available: true })));
+    await page.route(`**/api/videos/${video.id}`, r => r.fulfill(json({ video: details, embed: `http://invidious.local/embed/${video.id}?local=true`, stream: null, subscribed: false, library: { id: 'radarr-1', title: 'Film', href: '/movies/radarr-1' } })));
+    await page.route(`**/api/videos/${video.id}/state`, r => {
+      if (saved && saved.status === 'downloading' && ++polls > 0) saved = { status: 'ready', percent: 100, sizeBytes: 1000 };
+      return r.fulfill(json(state({ saved })));
+    });
+    await page.route('**/api/videos/history/watched', r => r.fulfill(json({ ok: true })));
+    await page.route('**/api/videos/progress', r => r.fulfill(json({ ok: true })));
+    await page.route('**/api/videos/saved', r => {
+      if (r.request().method() === 'POST') { saved = { status: 'downloading', percent: 40 }; return r.fulfill(json({ ok: true, saved })); }
+      return r.fulfill(json({ videos: saved ? [{ ...video, saved }] : [] }));
+    });
+    await page.route(`**/api/videos/saved/${video.id}`, r => { deleted = true; saved = null; return r.fulfill(json({ ok: true, removedFile: true })); });
+    await page.route(`**/api/videos/saved/${video.id}/file`, r => r.fulfill({ status: 404 }));
+    await page.route('**/api/videos/*/thumbnail', r => r.fulfill({ status: 404 }));
+    await page.goto(base + `/videos/watch/${video.id}`);
+    // A link to the film the video is about.
+    expect(await page.getByRole('link', { name: 'In your library' }).getAttribute('href')).toBe('/movies/radarr-1');
+    await page.getByRole('button', { name: 'Save to library' }).click();
+    await page.getByRole('button', { name: /Stop saving/ }).waitFor();
+    await page.getByRole('button', { name: 'Delete saved copy' }).waitFor({ timeout: 8000 });
+    await page.reload();
+    await page.waitForFunction(id => document.querySelector('.vd-player video')?.getAttribute('src') === `/api/videos/saved/${id}/file`, video.id);
+    await page.getByText('Playing your saved copy').waitFor();
+    await page.goto(base + '/videos');
+    await page.getByRole('region', { name: 'Saved' }).getByRole('link', { name: `Play ${video.title}` }).waitFor();
+    page.once('dialog', d => void d.accept());
+    await page.getByRole('region', { name: 'Saved' }).getByRole('button', { name: `Remove ${video.title} from Saved` }).click();
+    await page.getByRole('region', { name: 'Saved' }).waitFor({ state: 'detached' });
+    expect(deleted).toBe(true);
     expect(errors).toEqual([]);
   });
 });
