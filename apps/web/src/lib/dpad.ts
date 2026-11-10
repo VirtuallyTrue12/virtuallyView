@@ -135,7 +135,9 @@ function onKeyDown(e: KeyboardEvent) {
   // Areas with their own arrow keys (the video player, carousels that handle them) keep them while focus is in them.
   if (ownZone(active)) return;
   if (!active || active === document.body) {
-    if (ownZone(document.querySelector('[data-dpad="own"]'))) return;
+    // A page-level area with its own keys (the video player) takes them; a small one in a pinned bar (the music
+    // bar's seek slider) or an open menu must not swallow the first press on every other page.
+    if ([...document.querySelectorAll('[data-dpad="own"]')].some(z => !isFixed(z))) return;
   }
   if (moveFocus(dir)) {
     // Stop the page's own arrow handling (a rail that scrolls) from also reacting.

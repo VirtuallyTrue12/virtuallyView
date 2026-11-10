@@ -44,7 +44,7 @@
   --button-transform: none;
   --button-weight: 600;
   --button-tracking: normal;
-  --card-hover: translateY(-8px) scale(1.03);
+  --card-hover: translateY(-4px);
 
   --duration-fast: 140ms;
   --duration-normal: 220ms;
@@ -53,6 +53,21 @@
 
   --media-card-width: 210px;
   --media-card-ratio: 0.667;
+
+  /* Layout and type scale (foundation). Pages use these instead of fixed numbers. */
+  --page-gutter: clamp(16px, 4.2vw, 64px);
+  --page-max: 1680px;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: clamp(2rem, 3.4vw, 2.75rem);
+  /* Text on an accent fill; themes.css corrects themes where the computed pick is unreadable. */
+  --color-on-accent: var(--color-accent-contrast, #101014);
+  /* Dark wash over artwork so white text stays readable in every theme. */
+  --color-scrim: rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
 
@@ -3305,7 +3320,6 @@ select.settings-input option:hover {
 *:focus-visible {
   outline: 2px solid var(--color-border-focus);
   outline-offset: 2px;
-  border-radius: var(--radius-small);
 }
 
 a:focus-visible,
@@ -3525,8 +3539,6 @@ button:focus-visible {
   aspect-ratio: 16384 / 400;
   background-size: 25% 100%;
   background-repeat: repeat-x;
-  animation: vv-strip-left 160s linear infinite;
-  will-change: transform;
 }
 
 .login-strip:nth-child(even) .login-strip-track {
@@ -6082,7 +6094,7 @@ body.has-viz-stage { overflow: hidden; }
 }
 .rs-kind { display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 6px; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; vertical-align: 2px; color: var(--color-text-muted); border: 1px solid var(--color-border); }
 .rs-kind--live { color: #fff; border-color: transparent; background: #d93a3a; }
-.rs-kind--live::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: #fff; vertical-align: 1px; animation: live-dot 1.6s ease-in-out infinite; }
+.rs-kind--live::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: #fff; vertical-align: 1px; }
 @keyframes live-dot { 50% { opacity: 0.3; } }
 .rd-live { align-self: end; padding-bottom: 6px; }
 

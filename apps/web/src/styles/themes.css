@@ -1,0 +1,35 @@
+/* Per-theme corrections the token files cannot express.
+   Theme colours arrive as inline styles on <html>, so a colour that must win over them needs !important;
+   new tokens (not in tokens.json) need no !important. */
+
+/* Light themes: native controls, scrollbars and pickers drawn light. */
+html[data-theme='light'], html[data-theme='glassmorphism'], html[data-theme='minimalism'], html[data-theme='paper'] {
+  color-scheme: light;
+  --color-scrim: rgba(10, 12, 20, 0.5);
+  --scrollbar-thumb: rgba(60, 64, 80, 0.32);
+  --scrollbar-thumb-hover: rgba(60, 64, 80, 0.55);
+}
+
+/* The engine picks white text for these mid-bright accents; dark text reads far better (≥ 5:1). */
+html[data-theme='cosmic'] { --color-accent-contrast: #0d0a1f !important; }
+html[data-theme='cyberpunk'] { --color-accent-contrast: #0b0710 !important; }
+html[data-theme='prime-video-style'] { --color-accent-contrast: #061019 !important; }
+html[data-theme='netflix-style'] { --color-accent-contrast: #ffffff !important; }
+
+/* Apple TV style: Mac-app sidebar with system-blue icons. */
+html[data-theme='apple-tv-style'] { --sidebar-icon: #2f8bff; }
+html[data-theme='apple-tv-style'] .sidebar { background: #262628; background-image: linear-gradient(180deg, #2c2c2f, #232325); }
+
+/* Glass: the frosted look stays on bars and panels only; cards stay flat so scrolling is smooth. */
+html[data-theme='glassmorphism'] .nav, html[data-theme='glassmorphism'] .tabs { border-color: rgba(20, 32, 56, 0.1); }
+html[data-theme='glassmorphism'] .media-card-artwork, html[data-theme='glassmorphism'] .btn-secondary { border-color: rgba(20, 32, 56, 0.12); }
+
+/* Mono: terminal look keeps square corners on controls too. */
+html[data-theme='mono'] .nav-link, html[data-theme='mono'] .icon-btn { border-radius: var(--radius-small); }
+
+/* Paper and minimalism: flat print feel, no glow on buttons. */
+html[data-theme='paper'] .btn-primary:hover, html[data-theme='minimalism'] .btn-primary:hover { box-shadow: none; filter: brightness(1.12); }
+
+/* Prime style keeps its white-on-blue Play button, on a blue deep enough for white text (5:1). */
+html[data-theme='prime-video-style'] .btn-primary { background: #0b6fc4; border-color: #0b6fc4; color: #ffffff; }
+html[data-theme='prime-video-style'] .btn-primary:hover { background: #0a62ad; }

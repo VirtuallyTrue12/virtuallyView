@@ -5,7 +5,7 @@ html.tv :focus {
 }
 
 html.tv :focus-visible {
-  outline: 3px solid var(--color-accent, #d4a24e);
+  outline: 3px solid var(--color-border-focus, #d4a24e);
   outline-offset: 4px;
   border-radius: 10px;
   transition: transform 0.15s ease, outline-color 0.15s ease;
@@ -16,7 +16,7 @@ html.tv a:focus-visible,
 html.tv button:focus-visible,
 html.tv [tabindex]:focus-visible {
   transform: scale(1.04);
-  box-shadow: 0 0 0 6px rgba(212, 162, 78, 0.18);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
 
 /* Text boxes keep a plain ring: they do not need to grow. */
