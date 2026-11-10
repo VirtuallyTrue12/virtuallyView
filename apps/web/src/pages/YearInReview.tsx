@@ -46,7 +46,7 @@ export default function YearInReview() {
 
   if (!valid) {
     return (
-      <main className="page yr-page">
+      <main className="page yr-page tools-page">
         <BackButton to="/music" label="Music" />
         <div className="empty-state">Pick a year from 2000 to 2100.</div>
       </main>

@@ -13,6 +13,7 @@ import './lib/tv-focus.css';
 import './styles/browse.css';
 import './styles/watch.css';
 import './styles/music.css';
+import './styles/tools.css';
 
 initPerformanceMode();
 initDpad();

@@ -124,7 +124,7 @@ export default function Diagnostics() {
   };
 
   return (
-    <main className="page diagnostics-page">
+    <main className="page diagnostics-page tools-page">
       <BackButton to="/" label="Home" />
       <style>{`
         .diagnostics-page .page-head { flex-wrap: wrap; gap: 12px; }

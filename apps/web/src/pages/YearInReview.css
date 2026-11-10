@@ -132,3 +132,9 @@
 .yr-share {
   font-size: 1rem;
 }
+
+/* Phones: story cards no longer fill 70% of the screen each; the hero stays tall enough to read as a cover */
+@media (max-width: 720px) {
+  .yr-card { min-height: 0; padding: var(--spacing-lg) var(--spacing-md); }
+  .yr-card--hero { min-height: 300px; }
+}

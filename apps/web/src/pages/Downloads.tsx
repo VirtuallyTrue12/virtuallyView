@@ -130,7 +130,7 @@ export default function Downloads() {
   });
 
   return (
-    <main className="page">
+    <main className="page tools-page">
       <PageHeader
         title="Downloads"
         sub={loading ? undefined : items.length === 0 ? 'Nothing downloading' : `${running.length} downloading${running.length ? ` at ${rate(totalRate)}` : ''}${paused.length ? ` · ${paused.length} paused` : ''}${attention.length ? ` · ${attention.length} need attention` : ''}`}
@@ -236,8 +236,8 @@ function DownloadRow({ item, entry, busy, onPause, onResume, onRemove, onDeleteF
       <div className="rq-actions">
         {libraryTo && <Link className="btn btn-primary" to={libraryTo}><SvgIcon name="play" size={16} /> Open</Link>}
         {(item.status === 'failed' || item.status === 'stalled') && <SearchAgain label={item.status === 'stalled' ? 'Try another release' : 'Retry'} run={() => api.retryDownload(item.id)} small={false} />}
-        {showPause && <button className="btn btn-secondary" type="button" onClick={onPause} disabled={busy}><SvgIcon name="pause" size={16} /> Pause</button>}
-        {showResume && <button className="btn btn-secondary" type="button" onClick={onResume} disabled={busy}><SvgIcon name="play" size={16} /> Resume</button>}
+        {showPause && <button className="btn btn-secondary dl-pause" type="button" onClick={onPause} disabled={busy} aria-label="Pause"><SvgIcon name="pause" size={16} /><span className="dl-btn-text">Pause</span></button>}
+        {showResume && <button className="btn btn-secondary dl-pause" type="button" onClick={onResume} disabled={busy} aria-label="Resume"><SvgIcon name="play" size={16} /><span className="dl-btn-text">Resume</span></button>}
         {(showRemove || showDeleteFiles) && (
           <MoreMenu label={`More for ${item.title}`}>
             {showRemove && <MenuItem icon="close" label="Remove from list" hint="Keeps the files" onSelect={onRemove} />}
