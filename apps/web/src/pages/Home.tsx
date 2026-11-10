@@ -7,6 +7,7 @@ import { HomeLayoutEditor } from '../components/home/HomeLayoutEditor';
 import { Dialog } from '../components/ui/Dialog';
 import '../components/home/PersonalRails.css';
 import KidsHome from '../components/kids/KidsHome';
+import { LoadError, SkeletonRail } from '../components/home/Skeletons';
 
 export default function Home() {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -21,8 +22,10 @@ export default function Home() {
     setRails(json.rails);
   };
 
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
+    setError(null);
     api.dashboard()
       .then(json => {
         if (!cancelled) applyDashboard(json);
@@ -33,7 +36,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   // Save the new order and hidden flags. The page follows the change at once; a failed save puts it back.
   const saveLayout = async (next: Rail[]) => {
@@ -60,13 +63,18 @@ export default function Home() {
 
   return (
     <div className="home">
-      {error && <div className="loading-state">Dashboard could not be loaded: {error}</div>}
-      {!data && !error && <div className="loading-state">Loading dashboard...</div>}
+      {error && <main className="page"><LoadError what="Home" message={error} onRetry={() => setAttempt(a => a + 1)} /></main>}
+      {!data && !error && (
+        <div aria-busy="true" aria-label="Loading home">
+          <div className="hero browse-hero-skel" aria-hidden="true" />
+          <main className="page"><SkeletonRail /><SkeletonRail /></main>
+        </div>
+      )}
       {data?.kids && <KidsHome rails={data.rails} />}
       {data && !data.kids && (
         <>
           <Hero items={data.heroCandidates ?? [data.hero]} />
-          <main className="page">
+          <main className="page home-rails">
             <SetupChecklist />
             {rails.filter(rail => !rail.hidden).map(rail => (
               <MediaRail key={rail.id} rail={rail} />

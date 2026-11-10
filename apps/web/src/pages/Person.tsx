@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { BackButton } from '../components/layout/BackButton';
 import { MediaCard } from '../components/media/MediaCard';
 import { api, type ApiError, type MediaItem } from '../lib/api';
+import { SkeletonGrid } from '../components/home/Skeletons';
 
 type Person = { name: string; photo?: string; bio?: string; url?: string; titles: Array<MediaItem & { role: string }> };
 
@@ -23,7 +24,12 @@ export default function PersonPage() {
     <main className="page">
       <BackButton to="/movies" label="Movies" />
       {error && <div className="empty-state">{error}</div>}
-      {!person && !error && <div className="loading-state">Loading...</div>}
+      {!person && !error && (
+        <div aria-busy="true">
+          <div className="person-head"><div className="person-photo skeleton" /><div className="browse-skel-person"><div className="skeleton browse-skel-heading" /><div className="skeleton skeleton-line" /><div className="skeleton skeleton-line skeleton-line--short" /></div></div>
+          <SkeletonGrid count={6} />
+        </div>
+      )}
       {person && (
         <>
           <div className="person-head">
@@ -38,7 +44,7 @@ export default function PersonPage() {
           {person.titles.length === 0 ? (
             <p className="settings-help">No title in your library lists them yet. Open a film's page to load its cast and it will show up here.</p>
           ) : (
-            <div className="media-grid">
+            <div className="media-grid browse-grid">
               {person.titles.map(t => <MediaCard key={t.id} item={t} showStatus to={`/movies/${t.id}`} />)}
             </div>
           )}

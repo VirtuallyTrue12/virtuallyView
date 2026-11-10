@@ -8,6 +8,7 @@ import { SvgIcon } from '../components/ui/SvgIcon';
 import { ScanButton } from '../components/media/ScanButton';
 import { OpenMediaFolder } from '../components/media/OpenMediaFolder';
 import { LibraryControls, useLibraryView } from '../components/media/LibraryControls';
+import { LoadError, SkeletonGrid } from '../components/home/Skeletons';
 
 export default function Series() {
   const navigate = useNavigate();
@@ -22,15 +23,18 @@ export default function Series() {
     if (pick) navigate(`/series/${pick.id}`);
   };
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setError(null);
     api.series()
       .then(setItems)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  };
+  useEffect(load, []);
 
   return (
-    <main className="page">
+    <main className="page browse-library">
 
       <PageHeader
         title="TV shows"
@@ -43,8 +47,8 @@ export default function Series() {
         </>}
       />
 
-      {loading && <div className="loading-state">Loading TV shows...</div>}
-      {error && <div className="loading-state">Could not load TV shows: {error}</div>}
+      {loading && <SkeletonGrid />}
+      {error && <LoadError what="TV shows" message={error} onRetry={load} />}
       {!loading && !error && items.length === 0 && (
         <EmptyState icon="tv" title="No TV shows yet" text="Request a show and every episode is searched, downloaded and filed for you. Or connect an existing TV service." action={<button className="btn btn-primary" type="button" onClick={() => navigate('/search')}>Find a show</button>} />
       )}
@@ -53,10 +57,12 @@ export default function Series() {
         <LibraryControls view={lib.view} setView={lib.setView} genres={lib.genres} studios={lib.studios} studioLabel="Network" letters={lib.letters} total={items.length} shown={lib.shown.length} onSurprise={surprise} />
       )}
 
-      {!loading && !error && items.length > 0 && lib.shown.length === 0 && <div className="empty-state">Nothing matches these filters.</div>}
+      {!loading && !error && items.length > 0 && lib.shown.length === 0 && (
+        <EmptyState icon="search" title="Nothing matches these filters" action={<button className="btn btn-secondary" type="button" onClick={() => lib.setView(v => ({ ...v, query: '', state: 'all', genre: '', letter: '', studio: '', collection: '' }))}>Clear filters</button>} />
+      )}
 
       {!loading && !error && lib.shown.length > 0 && (
-        <div className="media-grid">
+        <div className="media-grid browse-grid">
           {lib.shown.map(item => (
             <MediaCard key={item.id} item={item} showStatus progress={item.watchProgress} to={`/series/${item.id}`} />
           ))}

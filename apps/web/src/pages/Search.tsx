@@ -9,6 +9,7 @@ import { addRecentSearch, clearRecentSearches, getRecentSearches, removeRecentSe
 import { useRequester } from '../lib/useRequester';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import { VoiceSearchButton, getSpeechRecognition } from '../components/search/VoiceSearchButton';
+import { LoadError, SkeletonGrid, SkeletonRail } from '../components/home/Skeletons';
 
 type Filter = 'all' | 'library' | 'movie' | 'series' | 'artist' | 'track';
 const FILTERS: Array<{ key: Filter; label: string }> = [
@@ -63,6 +64,7 @@ export default function Search() {
   const [data, setData] = useState<SearchAll | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   const [recent, setRecent] = useState<string[]>(() => getRecentSearches());
   const [trending, setTrending] = useState<Dashboard | null>(null);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
@@ -132,7 +134,7 @@ export default function Search() {
       })
       .catch(err => { if (version.current === mine) setError((err as Error).message); })
       .finally(() => { if (version.current === mine) setLoading(false); });
-  }, [active, setParams]);
+  }, [active, setParams, retry]);
 
   // Autocomplete (library titles + Wikipedia), quick and separate from the full search.
   useEffect(() => {
@@ -231,7 +233,8 @@ export default function Search() {
 
       {notice && <div role="status" className={`notice notice--${notice.tone}`}>{notice.text}</div>}
       {loading && <div className="search-progress" role="progressbar" aria-label="Searching" />}
-      {error && <div className="error-state" role="alert">Search failed: {error}</div>}
+      {error && <LoadError what="Results" message={error} onRetry={() => setRetry(n => n + 1)} />}
+      {loading && !data && <SkeletonGrid count={6} />}
 
       {browsing && (
         <div className="search-trending">
@@ -253,7 +256,7 @@ export default function Search() {
           )}
           <p className="search-hint">Search finds titles in your library and anything you can request. Paste a song name to add its artist.</p>
           {trending?.rails.filter(r => r.kind !== 'download').map(rail => <MediaRail key={rail.id} rail={rail} />)}
-          {!trending && <div className="loading-state">Loading what is trending…</div>}
+          {!trending && <><SkeletonRail /><SkeletonRail /></>}
         </div>
       )}
 
@@ -269,7 +272,7 @@ export default function Search() {
           <div className="rail-head"><h2 className="rail-title">In your library</h2>
             {filter === 'all' && counts.library > 12 && <button className="btn btn-secondary btn-sm" type="button" onClick={() => setFilter('library')}>Show all {counts.library}</button>}
           </div>
-          <div className="media-grid">
+          <div className="media-grid browse-grid">
             {cap(data.library, 'library').map(i => (
               <MediaCard key={i.id} item={{ id: i.id, title: i.title, ...(i.year ? { year: i.year } : {}), type: i.type, ...(i.status ? { status: i.status } : {}), artwork: i.poster ? { poster: i.poster } : {} } as MediaItem} showStatus to={libraryHref(i)} />
             ))}

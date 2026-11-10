@@ -10,6 +10,7 @@ import { useRequester } from '../lib/useRequester';
 import { humanName } from '../lib/integration-names';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import { ReleasePicker } from '../components/media/ReleasePicker';
+import { LoadError, SkeletonList } from '../components/home/Skeletons';
 
 type Filter = 'all' | 'active' | 'attention' | 'done';
 const inFilter = (item: RequestItem, f: Filter) =>
@@ -195,8 +196,8 @@ export default function Requests() {
       <SubNav label="Requests and downloads" items={[{ to: '/search', label: 'Find', icon: 'search' }, { to: '/requests', label: 'Requests', icon: 'list', badge: activeCount }, { to: '/downloads', label: 'Downloads', icon: 'download' }]} />
 
       {notice && <div className={`notice notice--${notice.tone}`} role="status">{notice.text}</div>}
-      {loading && <div className="loading-state">Loading requests...</div>}
-      {error && <div className="loading-state">Could not load requests: {error}</div>}
+      {loading && <SkeletonList />}
+      {error && <LoadError what="Requests" message={error} onRetry={() => void load()} />}
       {!loading && !error && items.length === 0 && <RequestsEmpty onRequest={() => navigate('/search')} />}
 
       {!loading && !error && items.length > 0 && (
