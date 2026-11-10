@@ -98,7 +98,7 @@ export default function SeriesDetail() {
   }
 
   if (!series) {
-    return <main className="page"><div className="loading-state">Loading series...</div></main>;
+    return <main className="detail"><div className="watch-skel" role="status" aria-label="Loading show"><div className="skeleton watch-skel-poster" /><div className="watch-skel-lines"><div className="skeleton skeleton-line" style={{ height: 40, width: '60%' }} /><div className="skeleton skeleton-line skeleton-line--short" /><div className="skeleton skeleton-line skeleton-line--full" /><div className="skeleton skeleton-line skeleton-line--full" /></div></div></main>;
   }
 
   const isSonarr = /^sonarr-/.test(series.id);
@@ -187,6 +187,7 @@ export default function SeriesDetail() {
                     {episodesLoading ? 'Loading episodes...' : episodesError ? 'Episodes unavailable' : 'No episodes downloaded'}
                   </button>
                 )}
+                <div className="hero-secondary">
                 <FavoriteButton mediaType="series" mediaId={series.id} initial={series.favorite} />
                 <ThumbRating mediaType="series" mediaId={series.id} initial={series.myThumb} />
                 {isAdmin && (
@@ -202,6 +203,7 @@ export default function SeriesDetail() {
                     <MenuItem icon="trash" label="Remove show" danger onSelect={() => setDialog('remove')} />
                   </MoreMenu>
                 )}
+                </div>
                 {notice && <div className={`notice notice--${notice.tone}`}>{notice.text}</div>}
               </div>
             </div>

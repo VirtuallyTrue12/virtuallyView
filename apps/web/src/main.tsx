@@ -9,6 +9,7 @@ import { registerServiceWorker, startInstallCapture } from './lib/pwa';
 import { initDpad } from './lib/dpad';
 import { startTvReports } from './lib/tv-report';
 import './lib/tv-focus.css';
+import './styles/watch.css';
 
 initPerformanceMode();
 initDpad();

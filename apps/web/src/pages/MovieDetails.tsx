@@ -18,6 +18,11 @@ import { SvgIcon } from '../components/ui/SvgIcon';
 import DownloadButton from '../components/offline/DownloadButton';
 import { ScoreChips, ThumbRating } from '../components/media/RatingControls';
 
+const fmtClock = (sec: number) => {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+};
+
 export default function MovieDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -96,7 +101,7 @@ export default function MovieDetails() {
   }
 
   if (!movie) {
-    return <main className="page"><div className="loading-state">Loading movie...</div></main>;
+    return <main className="detail"><div className="watch-skel" role="status" aria-label="Loading movie"><div className="skeleton watch-skel-poster" /><div className="watch-skel-lines"><div className="skeleton skeleton-line" style={{ height: 40, width: '60%' }} /><div className="skeleton skeleton-line skeleton-line--short" /><div className="skeleton skeleton-line skeleton-line--full" /><div className="skeleton skeleton-line skeleton-line--full" /></div></div></main>;
   }
 
   const similar = library
@@ -201,7 +206,7 @@ export default function MovieDetails() {
               <div className="hero-actions">
                 {movie.status === 'available' && (
                   <button className="btn btn-primary btn-lg" type="button" onClick={() => navigate(`/movies/${movie.id}/play`)}>
-                    <SvgIcon name="play" size={18} /> {watchProgress ? 'Resume' : 'Play'}
+                    <SvgIcon name="play" size={18} /> {watchProgress ? `Resume at ${fmtClock(watchProgress.positionSeconds)}` : 'Play'}
                   </button>
                 )}
                 {(movie.status === 'missing' || movie.status === 'requested') && <QualitySelect mediaType="movie" value={quality} onChange={setQuality} compact />}
@@ -210,6 +215,7 @@ export default function MovieDetails() {
                     <SvgIcon name={movie.status === 'requested' ? 'check' : 'plus'} size={18} /> {requestBusy ? 'Looking it up…' : movie.status === 'requested' ? 'Requested' : 'Request'}
                   </button>
                 )}
+                <div className="hero-secondary">
                 <FavoriteButton mediaType="movie" mediaId={movie.id} initial={(movie as { favorite?: boolean }).favorite} />
                 {movie.status === 'available' && (
                   <DownloadButton kind="movie" id={movie.id} title={movie.title} subtitle={movie.year ? String(movie.year) : undefined} posterUrl={movie.artwork?.poster} durationSeconds={movie.runtime ? movie.runtime * 60 : null} />
@@ -225,6 +231,7 @@ export default function MovieDetails() {
                   {isAdmin && <><MenuDivider /><MenuItem icon="trash" label={inLibrary ? 'Delete movie' : 'Remove title'} danger onSelect={() => setDialog('remove')} /></>}
                   {!isAdmin && movie.status !== 'available' && <MenuItem icon="info" label="Nothing else here yet" hint="Ask an administrator for more options" onSelect={() => undefined} disabled />}
                 </MoreMenu>
+                </div>
               </div>
               {movie.warnings?.map(warning => (
                 <div key={warning.code + warning.message} className="notice notice--err title-warning" role="alert">

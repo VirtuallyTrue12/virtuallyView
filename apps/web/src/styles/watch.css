@@ -1,0 +1,55 @@
+/* Watch area: title pages, episode list, player chrome. Loaded after index.css. */
+
+/* Title page hero: taller, with a side scrim so text stays readable on any artwork */
+.detail-hero { min-height: min(82vh, 760px); }
+.detail-overlay {
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.35) 55%, transparent 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.55) 60%, var(--color-background) 98%);
+}
+.detail-body { max-width: var(--page-max, 1280px); padding: 0 var(--page-gutter, var(--spacing-xxl)) var(--spacing-xxl); }
+.detail-title { font-size: clamp(2rem, 5vw, 3.8rem); }
+.detail-info { max-width: 680px; }
+.detail-overview { max-width: 60ch; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* One obvious primary action; the rest sit together in a quiet group */
+.detail-hero .hero-actions { align-items: center; gap: var(--spacing-md); margin-top: var(--spacing-md); }
+.detail-hero .hero-actions > .btn-primary { min-width: 160px; justify-content: center; }
+.hero-secondary { display: flex; align-items: center; gap: var(--spacing-sm); flex-wrap: wrap; }
+
+/* Loading skeleton shaped like the hero */
+.watch-skel { display: flex; gap: var(--spacing-xl); align-items: flex-end; max-width: var(--page-max, 1280px); margin: 0 auto; padding: 120px var(--page-gutter, var(--spacing-xxl)) var(--spacing-xxl); min-height: 60vh; }
+.watch-skel-poster { width: min(280px, 30vw); aspect-ratio: 0.667; border-radius: var(--radius-large); flex: 0 0 auto; }
+.watch-skel-lines { flex: 1; display: flex; flex-direction: column; gap: var(--spacing-md); }
+
+/* Episodes: a list with thumbnails on wide screens, cards on phones */
+.season-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.season-tabs::-webkit-scrollbar { display: none; }
+.season-tab { flex: 0 0 auto; transition: background var(--duration-fast) var(--easing-default), border-color var(--duration-fast) var(--easing-default); }
+.season-tab:focus-visible, .episode-card:focus-visible { outline: 2px solid var(--color-border-focus, var(--color-accent)); outline-offset: 2px; }
+.season-tab.is-active { color: var(--color-on-accent, var(--color-accent-contrast, #111)); }
+@media (min-width: 760px) {
+  .episode-grid { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-sm); }
+  .episode-card { flex-direction: row; align-items: stretch; transition: border-color var(--duration-fast) var(--easing-default), background var(--duration-fast) var(--easing-default); }
+  .episode-card:hover:not(:disabled) { transform: none; background: var(--color-surface-elevated); }
+  .episode-card-art { flex: 0 0 240px; aspect-ratio: 16 / 9; }
+  .episode-card-body { padding: var(--spacing-md); justify-content: center; padding-right: 96px; }
+  .episode-card-overview { -webkit-line-clamp: 2; }
+}
+
+/* Player chrome */
+.vp-controls { padding-top: 64px; background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.55) 40%, rgba(0, 0, 0, 0.9)); }
+.vp-bar-tip { font-variant-numeric: tabular-nums; font-weight: 600; padding: 3px 9px; }
+.vp-btn { transition: background var(--duration-fast) var(--easing-default), transform var(--duration-fast) var(--easing-default); }
+.vp-btn:active { transform: scale(0.94); }
+.vp-btn:focus-visible, .vp-menu-item:focus-visible { outline: 2px solid var(--color-border-focus, var(--color-accent)); outline-offset: 1px; }
+.vp-menu { border-radius: var(--radius-medium); box-shadow: var(--shadow-large); }
+@media (max-width: 640px) {
+  .detail-hero { min-height: 0; padding-top: var(--spacing-xl); }
+  .detail-main { flex-direction: column; align-items: flex-start; }
+  .detail-poster { width: 140px; }
+  .detail-hero .hero-actions > .btn-primary { flex: 1 1 100%; }
+  .watch-skel { flex-direction: column; align-items: flex-start; padding-top: 80px; }
+  .vp-controls { padding: 40px 10px 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .vp-btn, .episode-card, .season-tab { transition: none; } .vp-btn:active { transform: none; } }
