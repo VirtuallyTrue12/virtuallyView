@@ -90,3 +90,10 @@
 .devices-chip:hover { background: var(--color-surface); }
 .devices-chip.is-on { border-color: var(--color-accent); color: var(--color-accent); }
 .listen-join { max-width: 560px; }
+
+@media (max-width: 760px) {
+  .np-body { grid-template-columns: minmax(0, 1fr); }
+  .np-art { width: min(72vw, 300px); justify-self: center; }
+  .np-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .np-tab { flex: none; }
+}
