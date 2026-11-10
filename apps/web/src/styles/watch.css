@@ -65,3 +65,40 @@
   .detail-info .genres { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .detail-info .genres span { flex: 0 0 auto; }
 }
+
+/* Episode rows: the save button sits inside the row, bottom right */
+.episode-wrap > .episode-search { margin-top: var(--spacing-xs); }
+@media (min-width: 760px) {
+  .episode-wrap > .offline-dl-wrap { position: absolute; right: 12px; bottom: 12px; }
+}
+@media (max-width: 759px) { .episode-wrap > .offline-dl-wrap { margin-top: var(--spacing-xs); } }
+
+/* Live guide: the now-line sits at the channel column's real width */
+.gg-prog:focus-visible, .gg-chan:focus-visible { outline: 2px solid var(--color-border-focus, var(--color-accent)); outline-offset: -2px; }
+.gg-prog.is-live strong { color: var(--color-text-primary); }
+.gg-prog.is-live::before { content: 'Now'; font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-accent); }
+.gg-now { background: var(--color-danger, #ff4d4d); }
+@media (max-width: 640px) { .gg-now { transform: translateX(-70px); } }
+
+/* Phones: edge-aligned hero and compact episode rows with a small thumbnail */
+@media (max-width: 759px) {
+  .detail-body, .watch-skel { padding-left: 16px; padding-right: 16px; }
+  .episode-grid { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-sm); }
+  .episode-card { flex-direction: row; }
+  .episode-card-art { flex: 0 0 128px; aspect-ratio: 16 / 9; align-self: flex-start; }
+  .episode-card-play { width: 32px; height: 32px; }
+  .episode-card-body { padding: 10px 40px 10px 12px; min-width: 0; }
+  .episode-card-overview { -webkit-line-clamp: 2; }
+}
+.detail-main, .detail-info { min-width: 0; }
+@media (max-width: 640px) { .detail-info { width: 100%; } }
+
+/* Keep the scrim dark behind the text in light themes; fade to the page colour only at the very bottom */
+.detail-overlay {
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.35) 55%, transparent 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.7) 78%, var(--color-background) 100%);
+}
+.detail-body { padding-bottom: calc(var(--spacing-xxl) + 24px); }
+.detail-hero .genres span { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.25); }
+.detail-hero .more > button { color: #fff; background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.28); }

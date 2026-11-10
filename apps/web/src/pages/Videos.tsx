@@ -73,7 +73,7 @@ export default function Videos() {
       <PageHeader
         icon="youtube"
         title="Videos"
-        sub="Search happens through your server; playing a video connects your browser straight to the video service (the one bundled here, on your own network, or a public instance if you chose one) so it can send you the stream. Your watch history is kept only in this server's own database."
+        sub="Search through your server. Your watch history stays on this server."
         actions={<Seg<View> label="Videos view" value={view} onChange={setView} options={[{ value: 'search', label: 'Search' }, { value: 'history', label: 'History', count: history.length }]} />}
       />
       {view === 'search' && (
@@ -94,7 +94,7 @@ export default function Videos() {
       {!(view === 'search' && off) && !loading && shown.length === 0 && !error && (
         <EmptyState icon={view === 'history' ? 'clock' : 'search'}
           title={view === 'history' ? 'Nothing watched yet' : query ? 'No videos match' : 'Search for something to watch'}
-          text={view === 'history' ? 'Videos you play here are kept so you can find them again.' : 'Try a different word.'} />
+          text={view === 'history' ? 'Videos you play here are kept so you can find them again.' : query ? 'Try a different word.' : 'Type a title or a channel name above.'} />
       )}
       {shown.length > 0 && (
         <ul className="vid-grid">

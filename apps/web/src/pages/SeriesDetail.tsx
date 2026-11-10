@@ -35,6 +35,13 @@ export default function SeriesDetail() {
   const [removing, setRemoving] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
 
+  // On a TV the remote needs somewhere to start: the primary action (an open "More" menu would otherwise swallow the first key).
+  const loaded = !!series;
+  useEffect(() => {
+    if (!loaded || !document.documentElement.classList.contains('tv')) return;
+    document.querySelector<HTMLElement>('.detail-hero .hero-actions .btn-primary:not([disabled])')?.focus({ preventScroll: true });
+  }, [loaded]);
+
   useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
 
   useEffect(() => {
@@ -155,7 +162,7 @@ export default function SeriesDetail() {
 
               <div className="detail-meta">
                 {series.year && <span>{series.year}</span>}
-                {series.seasons?.length ? <span>{series.seasons.filter(s => s.number > 0).length} seasons</span> : null}
+                {series.seasons?.length ? <span>{series.seasons.filter(s => s.number > 0).length} {series.seasons.filter(s => s.number > 0).length === 1 ? 'season' : 'seasons'}</span> : null}
                 {totalEpisodes > 0 && <span>{availableEpisodes}/{totalEpisodes} episodes</span>}
                 {series.rating ? <span className="rating"><SvgIcon name="star" size={14} /> {series.rating.toFixed(1)}</span> : null}
                 {series.certification && <span className="cert-badge">{series.certification}</span>}
@@ -270,9 +277,12 @@ export default function SeriesDetail() {
                   <div className="episode-card-body">
                     <span className="episode-card-title">{episode.title}</span>
                     <span className="episode-card-sub">
-                      {episode.hasFile ? '' : isArriving(episode.download) ? `${itemDownloadLabel(episode.download)} · ` : 'Not downloaded · '}
-                      {episode.airDate ?? ''}{episode.runtime ? ` · ${episode.runtime} min` : ''}
-                      {progress > 0 ? ` · ${progress}% watched` : ''}
+                      {[
+                        episode.hasFile ? '' : isArriving(episode.download) ? itemDownloadLabel(episode.download) : 'Not downloaded',
+                        episode.airDate ?? '',
+                        episode.runtime ? `${episode.runtime} min` : '',
+                        progress > 0 ? `${progress}% watched` : ''
+                      ].filter(Boolean).join(' · ')}
                     </span>
                     {episode.overview && <span className="episode-card-overview">{episode.overview}</span>}
                   </div>

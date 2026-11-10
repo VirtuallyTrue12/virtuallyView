@@ -49,6 +49,13 @@ export default function MovieDetails() {
   // Stable, or the file-details panel refetched on every re-render of this page.
   const loadInfo = useCallback(() => api.mediaInfo(id ?? ''), [id]);
 
+  // On a TV the remote needs somewhere to start: the primary action (an open "More" menu would otherwise swallow the first key).
+  const loaded = !!movie;
+  useEffect(() => {
+    if (!loaded || !document.documentElement.classList.contains('tv')) return;
+    document.querySelector<HTMLElement>('.detail-hero .hero-actions .btn-primary:not([disabled])')?.focus({ preventScroll: true });
+  }, [loaded]);
+
   useEffect(() => { api.authStatus().then(st => setIsAdmin(st.user?.role === 'admin')).catch(() => {}); }, []);
 
   useEffect(() => {
