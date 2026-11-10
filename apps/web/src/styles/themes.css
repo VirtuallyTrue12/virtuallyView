@@ -29,3 +29,7 @@ html[data-theme='mono'] .nav-link, html[data-theme='mono'] .icon-btn { border-ra
 
 /* Paper and minimalism: flat print feel, no glow on buttons. */
 html[data-theme='paper'] .btn-primary:hover, html[data-theme='minimalism'] .btn-primary:hover { box-shadow: none; filter: brightness(1.12); }
+
+/* Prime style keeps its white-on-blue Play button, on a blue deep enough for white text (5:1). */
+html[data-theme='prime-video-style'] .btn-primary { background: #0b6fc4; border-color: #0b6fc4; color: #ffffff; }
+html[data-theme='prime-video-style'] .btn-primary:hover { background: #0a62ad; }
