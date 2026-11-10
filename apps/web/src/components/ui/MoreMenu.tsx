@@ -49,9 +49,15 @@ export function MoreMenu({ label = 'More options', children }: { label?: string;
     document.addEventListener('keydown', key);
     window.addEventListener('resize', reposition);
     window.addEventListener('scroll', reposition, true);
-    menu.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus({ preventScroll: true });
     return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', key); window.removeEventListener('resize', reposition); window.removeEventListener('scroll', reposition, true); };
   }, [open, reposition]);
+
+  // Focus the first item once the menu is placed: while it is still being measured it is hidden and cannot take focus,
+  // which left a TV remote on the button with no way into the menu.
+  const placed = place !== null;
+  useEffect(() => {
+    if (open && (placed || phone())) menu.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus({ preventScroll: true });
+  }, [open, placed]);
 
   return (
     <div className="more">

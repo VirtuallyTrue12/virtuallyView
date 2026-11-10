@@ -1770,11 +1770,14 @@ describe('remote control in TV mode', () => {
     // A fresh page: the first press already lands somewhere.
     await page.keyboard.press('ArrowDown');
     expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true);
-    // Along the action row, the remote reaches the three-dots button.
-    await page.evaluate(() => (document.querySelector('.detail-actions button, .hero-actions button, .btn-primary') as HTMLElement).focus());
-    const label = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '');
-    for (let i = 0; i < 10 && (await label()) !== 'More for this movie'; i++) await page.keyboard.press('ArrowRight');
-    expect(await label()).toBe('More for this movie');
+    // From the control just before it in the action row, Right reaches the three-dots button.
+    await page.evaluate(() => {
+      const more = document.querySelector('.hero-actions .more')!;
+      const before = [...document.querySelectorAll<HTMLElement>('.hero-actions button')].filter(b => !more.contains(b) && (b.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING));
+      before[before.length - 1]!.focus();
+    });
+    await page.keyboard.press('ArrowRight');
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('More for this movie');
     await page.keyboard.press('Enter');
     await page.waitForSelector('.more-menu [role="menuitem"]');
     expect(await page.evaluate(() => document.activeElement?.getAttribute('role'))).toBe('menuitem');
