@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, type ServerSettings } from '../../../lib/api';
 import { Field, Switch } from '../../ui/Page';
+import { toast } from '../../ui/Toast';
 
 /** The download doctor's on/off switch, with what it does in plain words. */
 export default function DownloadsFix({ settings, onSaved }: { settings: ServerSettings | null; onSaved: (s: ServerSettings) => void }) {
@@ -10,7 +11,7 @@ export default function DownloadsFix({ settings, onSaved }: { settings: ServerSe
   const on = settings?.autoFixDownloads !== false;
   const save = async (value: boolean) => {
     setMsg(null);
-    try { onSaved(await api.saveServerSettings({ autoFixDownloads: value })); setMsg({ tone: 'ok', text: value ? 'Stuck downloads will be replaced automatically.' : 'Stuck downloads are left alone. You can still fix them from Downloads.' }); }
+    try { onSaved(await api.saveServerSettings({ autoFixDownloads: value })); toast(value ? 'Stuck downloads will be replaced automatically.' : 'Stuck downloads are left alone. You can still fix them from Downloads.'); }
     catch (err) { setMsg({ tone: 'err', text: (err as Error).message }); }
   };
   const searchNow = async () => {

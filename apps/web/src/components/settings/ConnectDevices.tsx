@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type HostAddresses, type ServerSettings } from '../../lib/api';
+import { toast } from '../ui/Toast';
 
 /** Everything an admin needs to get a phone, TV or laptop signed in. */
 export default function ConnectDevices({ settings, onSaved }: { settings: ServerSettings | null; onSaved: (s: ServerSettings) => void }) {
@@ -30,7 +31,7 @@ export default function ConnectDevices({ settings, onSaved }: { settings: Server
     setNote(null);
     try {
       onSaved(await api.saveServerSettings(patch));
-      setNote({ tone: 'ok', text: okText });
+      toast(okText);
     } catch (err) {
       setNote({ tone: 'err', text: (err as Error).message });
     } finally {

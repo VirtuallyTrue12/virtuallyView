@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, type ServerSettings } from '../../lib/api';
+import { toast } from '../ui/Toast';
 
 /** Who can request what: optional approval by an administrator and a per-person limit. */
 export default function RequestRules({ settings, onSaved }: { settings: ServerSettings | null; onSaved: (s: ServerSettings) => void }) {
@@ -8,7 +9,7 @@ export default function RequestRules({ settings, onSaved }: { settings: ServerSe
 
   const save = async (patch: Partial<typeof rules>) => {
     setNote(null);
-    try { onSaved(await api.saveServerSettings({ requests: { ...rules, ...patch } })); setNote({ tone: 'ok', text: 'Saved.' }); }
+    try { onSaved(await api.saveServerSettings({ requests: { ...rules, ...patch } })); toast('Saved.'); }
     catch (e) { setNote({ tone: 'err', text: (e as Error).message }); }
   };
 

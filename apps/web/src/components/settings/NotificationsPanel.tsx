@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type NotificationChannel, type ServerSettings } from '../../lib/api';
 import { desktopNotificationsEnabled, setDesktopNotifications } from '../../lib/desktop-notifications';
+import { toast } from '../ui/Toast';
 
 type Kind = NotificationChannel['kind'];
 const KINDS: Array<{ kind: Kind; label: string; fields: Array<{ key: string; label: string; placeholder?: string; secret?: boolean }> }> = [
@@ -29,13 +30,13 @@ export default function NotificationsPanel({ settings, onSaved }: { settings: Se
 
   const save = async () => {
     setNote(null);
-    try { onSaved(await api.saveServerSettings({ notifications: { channels } })); setNote({ tone: 'ok', text: 'Saved.' }); }
+    try { onSaved(await api.saveServerSettings({ notifications: { channels } })); toast('Saved.'); }
     catch (e) { setNote({ tone: 'err', text: (e as Error).message }); }
   };
 
   const test = async (c: NotificationChannel) => {
     setTesting(c.id); setNote(null);
-    try { await api.testChannel(c); setNote({ tone: 'ok', text: `${c.name}: test message sent.` }); }
+    try { await api.testChannel(c); toast(`${c.name}: test message sent.`); }
     catch (e) { setNote({ tone: 'err', text: `${c.name}: ${(e as Error).message}` }); }
     finally { setTesting(null); }
   };

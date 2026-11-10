@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../../lib/api';
+import { toast } from '../ui/Toast';
 
 /** Type the code a TV or phone is showing to sign that device in as you. */
 export default function QuickConnectApprove() {
@@ -14,7 +15,7 @@ export default function QuickConnectApprove() {
     try {
       const result = await api.quickConnectApprove(code.replace(/\s/g, ''));
       setCode('');
-      setNote({ tone: 'ok', text: `Signed in ${result.device}. It stays signed in for 30 days.` });
+      toast(`Signed in ${result.device}. It stays signed in for 30 days.`);
     } catch (err) {
       setNote({ tone: 'err', text: (err as Error).message });
     } finally {

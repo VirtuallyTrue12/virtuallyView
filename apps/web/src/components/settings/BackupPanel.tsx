@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { toast } from '../ui/Toast';
 import { api, type BackupInfo, type ServerSettings } from '../../lib/api';
 
 const size = (b: number) => (b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
@@ -17,7 +18,7 @@ export default function BackupPanel({ settings, onSaved }: { settings: ServerSet
 
   const create = async () => {
     setBusy('create'); setNote(null);
-    try { const r = await api.createBackup(); setBackups(r.backups); setNote({ tone: 'ok', text: `Created ${r.backup.name}.` }); }
+    try { const r = await api.createBackup(); setBackups(r.backups); toast(`Created ${r.backup.name}.`); }
     catch (e) { setNote({ tone: 'err', text: (e as Error).message }); }
     finally { setBusy(null); }
   };
@@ -49,11 +50,14 @@ export default function BackupPanel({ settings, onSaved }: { settings: ServerSet
       </label>
       <div className="settings-row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <button className="btn btn-primary btn-sm" type="button" onClick={() => void create()} disabled={busy === 'create'}>{busy === 'create' ? 'Creating...' : 'Back up now'}</button>
-        <input ref={fileRef} type="file" accept=".gz,.tar.gz,application/gzip" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { setConfirm({ file: f }); setTyped(''); } }} />
-        <button className="btn btn-secondary btn-sm" type="button" onClick={() => fileRef.current?.click()}>Restore from a file</button>
       </div>
       {note && <div className={`notice notice--${note.tone}`} role="status">{note.text}</div>}
 
+      <div className="st-danger-box">
+        <h4>Danger zone</h4>
+        <p className="settings-help">Restoring replaces everything on this server with the contents of a backup.</p>
+        <input ref={fileRef} type="file" accept=".gz,.tar.gz,application/gzip" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { setConfirm({ file: f }); setTyped(''); } }} />
+        <button className="btn btn-secondary btn-sm" type="button" onClick={() => fileRef.current?.click()}>Restore from a file</button>
       {confirm && (
         <div className="notice notice--err" role="alert">
           <p style={{ margin: '0 0 8px' }}>Restoring replaces the current accounts, history and settings with {confirm.file ? `"${confirm.file.name}"` : `"${confirm.name}"`}. A safety backup of the current data is made first, then the server restarts.</p>
@@ -64,6 +68,7 @@ export default function BackupPanel({ settings, onSaved }: { settings: ServerSet
           </div>
         </div>
       )}
+      </div>
 
       <ul className="users-list">
         {backups.map(b => (

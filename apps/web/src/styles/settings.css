@@ -61,7 +61,10 @@
 .login-strip-track { animation: none !important; }
 .login-art ~ .login-bg-scrim { background: linear-gradient(90deg, rgba(5, 6, 10, 0.88) 0%, rgba(5, 6, 10, 0.55) 55%, rgba(5, 6, 10, 0.88) 100%), linear-gradient(0deg, rgba(5, 6, 10, 0.7), transparent 40%); }
 .login-card { padding-inline: clamp(1rem, 4vw, 3rem); }
-.login-form { background: color-mix(in srgb, var(--color-surface) 82%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-radius: var(--radius-large); }
+.login-card::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, transparent, rgba(5, 6, 10, 0.72) 35%); pointer-events: none; }
+.login-form small, .login-stay small, .login-field span { color: var(--color-text-secondary); }
+.login-stay small { font-size: 0.82rem; }
+.login-form { background: color-mix(in srgb, var(--color-surface-overlay, var(--color-surface)) 90%, transparent); box-shadow: var(--shadow-large); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-radius: var(--radius-large); }
 .password-toggle { min-height: 36px; min-width: 52px; }
 .login-field .settings-input, .login-submit { min-height: 46px; }
 @media (max-width: 860px) {
@@ -83,3 +86,11 @@
 .onboarding-actions .btn { min-height: 44px; }
 .onboarding-skip:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 3px; }
 @media (max-width: 600px) { .onboarding-shell { align-items: flex-start; padding: 1rem; } .onboarding-actions .btn { flex: 1 1 100%; } }
+
+/* ---- Danger zone ---- */
+.st-danger, .st-danger-box { border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border)); }
+.st .st-danger { background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface)); }
+.st-danger h3, .st-danger-box h4 { color: var(--color-danger); margin: 0 0 0.25rem; }
+.st-danger-box { display: grid; gap: 0.6rem; justify-items: start; margin: var(--spacing-md) 0; padding: var(--spacing-md); border: 1px solid; border-radius: var(--radius-medium); }
+.st-danger-box .notice { justify-self: stretch; }
+.st-danger-ask { font-size: 0.88rem; color: var(--color-text-secondary); }

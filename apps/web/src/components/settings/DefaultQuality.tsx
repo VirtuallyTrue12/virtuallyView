@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type ServerSettings } from '../../lib/api';
+import { toast } from '../ui/Toast';
 
 const KINDS = [
   { key: 'movie', label: 'Movies' },
@@ -24,7 +25,7 @@ export default function DefaultQuality({ settings, onSaved }: { settings: Server
     setNote(null);
     try {
       onSaved(await api.saveServerSettings({ defaultQuality: { ...(settings?.defaultQuality ?? { movie: '', series: '', artist: '' }), [kind]: name } as NonNullable<ServerSettings['defaultQuality']> }));
-      setNote({ tone: 'ok', text: 'Default quality saved.' });
+      toast('Default quality saved.');
     } catch (err) {
       setNote({ tone: 'err', text: (err as Error).message });
     }
