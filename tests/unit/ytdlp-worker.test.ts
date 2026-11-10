@@ -8,6 +8,8 @@ import { join } from 'node:path';
 const root = mkdtempSync(join(tmpdir(), 'vv-yt-'));
 const library = join(root, 'music');
 process.env.YTDLP_LIBRARY = library;
+const videosLibrary = join(root, 'videos');
+process.env.YTDLP_VIDEOS_LIBRARY = videosLibrary;
 mkdirSync(library, { recursive: true });
 
 // A stand-in for yt-dlp that behaves like the real one closely enough to test everything around it.
@@ -75,6 +77,14 @@ describe('YouTube worker: what it will and will not do', () => {
     for (const bad of [library, join(library, 'Queen'), join(library, 'Queen', 'Albums'), join(library, '..', 'etc', 'Concerts'), join(library, 'Queen', 'Concerts', '..', '..', '..', 'x'), '/etc', '', 'Queen/Concerts']) {
       expect(worker.safeDestination(bad)).toBeNull();
     }
+  });
+
+  it('saves into the videos library itself, by video id, and nowhere inside or around it', () => {
+    expect(worker.isVideosLibrary(videosLibrary)).toBe(true);
+    expect(worker.isVideosLibrary(`${videosLibrary}/`)).toBe(true);
+    for (const bad of [join(videosLibrary, 'x'), join(videosLibrary, '..'), root, '', undefined]) expect(worker.isVideosLibrary(bad)).toBe(false);
+    const args = worker.downloadArgs('9PSo4PjbDbs', videosLibrary, undefined, '9PSo4PjbDbs');
+    expect(args[args.indexOf('-o') + 1]).toBe('9PSo4PjbDbs.%(ext)s');
   });
 
   it('builds a download for a video id only, capped at 1080p and preferring files any browser plays', () => {

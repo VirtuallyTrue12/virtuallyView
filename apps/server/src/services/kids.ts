@@ -8,8 +8,9 @@ const KIDS_BLOCKED = [
   '/api/setup', '/api/system', '/api/indexers', '/api/backup', '/api/kiwix/config', '/api/library'
 ];
 
-/** Starting a search, a specials lookup or a file replacement for a title (this is how a download is asked for). */
-const KIDS_BLOCKED_ACTION = /^\/api\/(movies|series|artists)\/[^/]+\/(search|specials|replace-file)$/;
+/** Starting a search, a specials lookup or a file replacement for a title (this is how a download is asked for),
+ * or saving a video into the videos library (also a download). */
+const KIDS_BLOCKED_ACTION = /^\/api\/((movies|series|artists)\/[^/]+\/(search|specials|replace-file)|videos\/saved)$/;
 
 /** True when a Kids profile must be refused this request. Other profiles are never affected. */
 export function kidsBlocked(isKid: boolean, method: string, path: string): boolean {

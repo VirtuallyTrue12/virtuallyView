@@ -399,6 +399,8 @@ services:
       - ${MUSIC_DIR:-media-music}:/media/music:ro
       - ${PHOTOS_DIR:-media-photos}:/media/photos:ro
       - ${BOOKS_DIR:-media-books}:/media/books:ro
+      # Videos saved from the Videos section (written by the ytdlp service). Read-write so removing one deletes its file.
+      - ${VIDEOS_DIR:-media-videos}:/media/videos
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/ready >/dev/null || exit 1"]
       interval: 10s
@@ -736,6 +738,8 @@ services:
       - ${MUSIC_DIR:-media-music}:/media/music
       # TV specials found on video sites are saved into the show's Season 00 folder.
       - ${TV_DIR:-media-tv}:/media/tv
+      # Videos saved from the Videos section, one file per video.
+      - ${VIDEOS_DIR:-media-videos}:/media/videos
     restart: unless-stopped
 
   # Optional automatic updates for the containers above (only the ones
@@ -783,6 +787,7 @@ volumes:
   media-music:
   media-photos:
   media-books:
+  media-videos:
   downloads:
   app-data:
   ollama-data:

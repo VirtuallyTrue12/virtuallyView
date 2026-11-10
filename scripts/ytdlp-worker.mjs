@@ -19,6 +19,8 @@ import { fileURLToPath } from 'node:url';
 const PORT = Number(process.env.YTDLP_PORT ?? 8098);
 const LIBRARY = path.resolve(process.env.YTDLP_LIBRARY ?? '/media/music');
 const TV_LIBRARY = path.resolve(process.env.YTDLP_TV_LIBRARY ?? '/media/tv');
+// Videos saved from the Videos section: one flat folder, each file named by its video id.
+const VIDEOS_LIBRARY = path.resolve(process.env.YTDLP_VIDEOS_LIBRARY ?? '/media/videos');
 // Where TV specials may come from (they are often on these sites rather than on torrent indexers).
 const SPECIAL_HOSTS = /^(www\.)?(youtube\.com|youtu\.be|dailymotion\.com|dai\.ly|vimeo\.com|player\.vimeo\.com|archive\.org)$/i;
 const TOKEN_FILE = process.env.YTDLP_TOKEN_FILE ?? '/secrets/ytdlp';
@@ -37,6 +39,11 @@ export function safeDestination(dir) {
   // <artist>/<Concerts|Videos>[/...]
   if (relative.length < 2 || !['Concerts', 'Videos'].includes(relative[1])) return null;
   return resolved;
+}
+
+/** The videos library itself (saved videos sit directly in it, named by id), nothing inside or outside it. */
+export function isVideosLibrary(dir) {
+  return typeof dir === 'string' && !!dir && path.resolve(dir) === VIDEOS_LIBRARY;
 }
 
 /** A show's specials folder: "<Show>/Season 00" (or "Specials") inside the TV library, nowhere else. */
@@ -209,12 +216,13 @@ function start() {
       }
       if (req.method === 'POST' && url.pathname === '/download') {
         const { id, dir, title } = await readBody(req);
-        const destination = safeDestination(dir);
+        const library = isVideosLibrary(dir);
+        const destination = library ? VIDEOS_LIBRARY : safeDestination(dir);
         if (!VIDEO_ID.test(String(id ?? ''))) return send(res, 400, { error: 'That is not a YouTube video id.' });
         if (!destination) return send(res, 400, { error: 'That folder is not inside an artist\'s Concerts or Videos folder.' });
         const existing = [...jobs.values()].find(j => j.videoId === id && j.dir === destination && ['queued', 'downloading', 'merging'].includes(j.status));
         if (existing) return send(res, 200, publicJob(existing));
-        const job = { id: randomUUID(), videoId: id, title: String(title ?? '').slice(0, 200), dir: destination, status: 'queued', percent: 0, createdAt: new Date().toISOString() };
+        const job = { id: randomUUID(), videoId: id, title: String(title ?? '').slice(0, 200), dir: destination, ...(library ? { name: id } : {}), status: 'queued', percent: 0, createdAt: new Date().toISOString() };
         jobs.set(job.id, job);
         while (jobs.size > 60) jobs.delete(jobs.keys().next().value);
         queue.push(job);

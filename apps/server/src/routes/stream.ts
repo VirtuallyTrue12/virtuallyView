@@ -51,7 +51,7 @@ function isServable(filePath: string | null | undefined): filePath is string {
 }
 
 /** Serve one media file with HTTP range support so seeking stays instant. */
-function serveMediaFile(
+export function serveMediaFile(
   request: FastifyRequest,
   reply: FastifyReply,
   filePath: string

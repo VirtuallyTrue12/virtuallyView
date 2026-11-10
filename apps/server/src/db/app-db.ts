@@ -145,6 +145,23 @@ function open(): DatabaseSync {
       PRIMARY KEY (user_id, video_id)
     );
 
+    -- Videos section, per person: channels they follow, and their Watch later and Saved (downloaded) lists.
+    CREATE TABLE IF NOT EXISTS video_subscriptions (
+      user_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      snapshot TEXT NOT NULL,
+      at TEXT NOT NULL,
+      PRIMARY KEY (user_id, channel_id)
+    );
+    CREATE TABLE IF NOT EXISTS video_lists (
+      user_id TEXT NOT NULL,
+      list TEXT NOT NULL,
+      video_id TEXT NOT NULL,
+      snapshot TEXT NOT NULL,
+      at TEXT NOT NULL,
+      PRIMARY KEY (user_id, list, video_id)
+    );
+
     CREATE TABLE IF NOT EXISTS live_health (
       channel_id TEXT PRIMARY KEY,
       ok INTEGER NOT NULL,
@@ -288,6 +305,10 @@ function open(): DatabaseSync {
   }
   if (!(db.prepare('PRAGMA table_info(watch_progress)').all() as Array<{ name: string }>).some(c => c.name === 'context')) {
     db.exec('ALTER TABLE watch_progress ADD COLUMN context TEXT');
+  }
+  // Where each video was left, for Continue watching in the Videos section.
+  if (!(db.prepare('PRAGMA table_info(video_history)').all() as Array<{ name: string }>).some(c => c.name === 'position')) {
+    db.exec('ALTER TABLE video_history ADD COLUMN position REAL NOT NULL DEFAULT 0; ALTER TABLE video_history ADD COLUMN duration REAL NOT NULL DEFAULT 0;');
   }
   // Thumbs up / down on a title (1, -1, or 0 for none), kept on the user's flags row.
   if (!(db.prepare('PRAGMA table_info(user_flags)').all() as Array<{ name: string }>).some(c => c.name === 'thumb')) {

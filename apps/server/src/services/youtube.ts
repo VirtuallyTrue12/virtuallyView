@@ -105,6 +105,11 @@ export async function downloadFromYoutube(
   return { job, artist: resolved.artist, created: resolved.created, kind };
 }
 
+/** Save one video into the videos library (see services/video-lists), as "<id>.mp4". */
+export async function saveToVideosLibrary(id: string, title: string, dir: string): Promise<YoutubeJob> {
+  return call<YoutubeJob>('POST', '/download', { id, dir, title }, 15_000);
+}
+
 /** Fetch a TV special from a video site into the show's specials folder (see services/specials). */
 export async function fetchSpecial(source: string, dir: string, name: string): Promise<YoutubeJob> {
   return call<YoutubeJob>('POST', '/special', { source, dir, name }, 15_000);

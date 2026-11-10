@@ -161,7 +161,7 @@ describe('Kids profiles', () => {
       ['GET', '/api/requests'], ['POST', '/api/requests'], ['GET', '/api/downloads'], ['POST', '/api/downloads/abc/retry'],
       ['GET', '/api/settings/overview'], ['GET', '/api/server-settings'], ['GET', '/api/diagnostics'], ['GET', '/api/apps'],
       ['GET', '/api/integrations'], ['GET', '/api/system/storage'], ['POST', '/api/movies/m1/search'],
-      ['POST', '/api/series/s1/specials'], ['POST', '/api/artists/a1/search']
+      ['POST', '/api/series/s1/specials'], ['POST', '/api/artists/a1/search'], ['POST', '/api/videos/saved']
     ];
     for (const [method, path] of blocked) expect(kidsBlocked(true, method, path), `${method} ${path}`).toBe(true);
   });
@@ -169,7 +169,7 @@ describe('Kids profiles', () => {
   test('a Kids profile keeps its home, titles, progress and profile switching', () => {
     const open: Array<[string, string]> = [
       ['GET', '/api/dashboard'], ['GET', '/api/movies'], ['GET', '/api/series'], ['GET', '/api/auth/status'],
-      ['POST', '/api/profiles/switch'], ['PUT', '/api/profiles/me'], ['GET', '/api/music']
+      ['POST', '/api/profiles/switch'], ['PUT', '/api/profiles/me'], ['GET', '/api/music'], ['GET', '/api/videos/saved']
     ];
     for (const [method, path] of open) expect(kidsBlocked(true, method, path), `${method} ${path}`).toBe(false);
   });
