@@ -6,8 +6,8 @@ import { DATA_DIR } from '../lib/paths.js';
 import { resolveBinary } from './transcode.js';
 
 // Record a live channel to a file you can watch later. The stream is copied,
-// not re-encoded, so it costs almost no CPU. Nothing is scheduled: a
-// recording starts when asked and stops after the chosen minutes or on demand.
+// not re-encoded, so it costs almost no CPU. A recording starts when
+// asked (or when recording-scheduler.ts says so) and stops after the chosen minutes or on demand.
 
 export interface Recording {
   id: string;
@@ -21,6 +21,7 @@ export interface Recording {
 }
 
 const DIR = process.env.RECORDINGS_DIR ? resolve(process.env.RECORDINGS_DIR) : resolve(DATA_DIR, 'recordings');
+export const recordingsDir = () => DIR;
 const INDEX = resolve(DIR, 'index.json');
 const MAX_CONCURRENT = 3;
 const active = new Map<string, ChildProcess>();
@@ -47,17 +48,19 @@ export function listRecordings(): Array<Recording & { sizeBytes: number }> {
   }).reverse();
 }
 
+export const recordingState = (id: string): Recording['state'] | undefined => load().find(r => r.id === id)?.state;
+
 export function recordingFile(id: string): string | null {
   const r = load().find(item => item.id === id);
   const file = r ? resolve(DIR, r.file) : '';
   return r && existsSync(file) ? file : null;
 }
 
-export function startRecording(url: string, channel: string, minutes: number): { ok: true; recording: Recording } | { ok: false; message: string } {
+export function startRecording(url: string, channel: string, minutes: number, title?: string): { ok: true; recording: Recording } | { ok: false; message: string } {
   const ffmpeg = resolveBinary('ffmpeg');
   if (!ffmpeg) return { ok: false, message: 'Recording needs ffmpeg, which is not installed.' };
   if (!/^https?:\/\//i.test(url)) return { ok: false, message: 'Only http and https streams can be recorded.' };
-  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 480) return { ok: false, message: 'Choose between 1 and 480 minutes.' };
+  if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 480) return { ok: false, message: 'Choose between 1 and 480 minutes.' };
   if (active.size >= MAX_CONCURRENT) return { ok: false, message: `${MAX_CONCURRENT} recordings are already running.` };
   const id = randomBytes(6).toString('hex');
   const now = new Date();
@@ -66,7 +69,7 @@ export function startRecording(url: string, channel: string, minutes: number): {
   const file = `${safe}-${stamp}-${id.slice(0, 4)}.mp4`;
   mkdirSync(DIR, { recursive: true });
   const recording: Recording = {
-    id, title: `${channel} ${now.toISOString().slice(0, 16).replace('T', ' ')}`, channel,
+    id, title: title || `${channel} ${now.toISOString().slice(0, 16).replace('T', ' ')}`, channel,
     startedAt: now.toISOString(), endsAt: new Date(now.getTime() + minutes * 60_000).toISOString(), state: 'recording', file
   };
   save([...load(), recording]);

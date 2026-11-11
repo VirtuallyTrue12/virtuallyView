@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { addSeries, cancelSchedule, deleteSeries, listSchedule, listSeries, matchSeries, MAX_PARALLEL, schedule, startScheduler, tick } from '../services/recording-scheduler.js';
 import { Readable } from 'node:stream';
 import { addPlaylist, channelById, channelsFor, guideSources, knownChannel, listPlaylists, removePlaylist, rewriteHls, verifyRelay } from '../services/live-tv.js';
 import { liveHighlights } from '../services/live-highlights.js';
@@ -44,7 +45,33 @@ export default async function liveRoutes(server: FastifyInstance) {
   // What is on: now and next (and more) for the channels asked about, from the playlist's program guide.
   server.get<{ Querystring: { channels?: string; hours?: string } }>('/api/live/guide', async request => {
     const ids = [...new Set((request.query.channels ?? '').split(',').filter(Boolean))].slice(0, 150);
-    const hours = Math.min(Math.max(Number(request.query.hours) || 3, 1), 24);
+    return loadGuide(ids, Math.min(Math.max(Number(request.query.hours) || 3, 1), 24));
+  });
+
+  // Scheduled recordings and series rules. Kids profiles are blocked in services/kids.ts; deleting a recorded file stays admin-only.
+  server.get('/api/live/schedule', async () => ({ items: listSchedule(), series: listSeries(), max: MAX_PARALLEL }));
+  server.post<{ Body: { channelId?: string; start?: number; stop?: number; title?: string; sub?: string; series?: boolean | 'any' } }>('/api/live/schedule', async (request, reply) => {
+    const b = request.body ?? {};
+    const channel = await channelById(String(b.channelId ?? ''));
+    if (!channel) return reply.code(404).send({ message: 'That channel was taken out of its playlist. Pick another one.' });
+    const title = String(b.title ?? '').trim().slice(0, 160);
+    if (!title || !Number.isFinite(b.start) || !Number.isFinite(b.stop)) return reply.code(400).send({ message: 'Choose a programme from the guide.' });
+    const rule = b.series ? addSeries(title, b.series === 'any' ? null : channel.id, b.series === 'any' ? null : channel.name) : null;
+    const result = schedule({ channelId: channel.id, channel: channel.name, start: Number(b.start), stop: Number(b.stop), title, sub: b.sub ? String(b.sub).slice(0, 160) : undefined }, Date.now(), rule?.id ?? null);
+    if (!result.ok && !rule) return reply.code(400).send({ message: result.message });
+    void tick();
+    return { ok: true, item: result.ok ? result.row : null, series: rule };
+  });
+  server.delete<{ Params: { id: string } }>('/api/live/schedule/:id', async (request, reply) =>
+    cancelSchedule(request.params.id) ? { ok: true } : reply.code(404).send({ message: 'That recording is not scheduled.' }));
+  server.delete<{ Params: { id: string } }>('/api/live/series/:id', async (request, reply) =>
+    deleteSeries(request.params.id) ? { ok: true } : reply.code(404).send({ message: 'That rule was not found.' }));
+  startScheduler(async () => {
+    const ids = listSeries().flatMap(s => s.channel_id ? [s.channel_id] : []);
+    if (ids.length) await loadGuide([...new Set(ids)], 24);
+  });
+
+  async function loadGuide(ids: string[], hours: number) {
     const now = Date.now();
     const wanted: Array<{ id: string; tvgId: string; name: string; urls: string[] }> = [];
     const fallbacks = new Set<string>();
@@ -71,8 +98,9 @@ export default async function liveRoutes(server: FastifyInstance) {
       const list = w.urls.flatMap(u => programmesFor(u, w.tvgId, now - 30 * 60_000, now + hours * 3_600_000, fallbacks.has(u) ? w.name : undefined));
       if (list.length) programmes[w.id] = list.sort((a, b) => a.start - b.start).slice(0, 40);
     }
+    matchSeries(programmes, id => knownChannel(id)?.name ?? '', now);
     return { ready, now, programmes };
-  });
+  }
 
   // The big matches and races on now and soon, and which of your channels show them.
   server.get<{ Querystring: { country?: string } }>('/api/live/highlights', async request => {

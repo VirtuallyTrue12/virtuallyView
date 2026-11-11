@@ -51,6 +51,29 @@ function open(): DatabaseSync {
       created_at TEXT NOT NULL
     );
 
+    -- Scheduled recordings from the Live TV guide, and the series rules that add more of them.
+    CREATE TABLE IF NOT EXISTS rec_schedule (
+      id TEXT PRIMARY KEY,
+      channel_id TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      title TEXT NOT NULL,
+      sub TEXT,
+      prog_start INTEGER NOT NULL,
+      prog_stop INTEGER NOT NULL,
+      series_id TEXT,
+      state TEXT NOT NULL DEFAULT 'scheduled',
+      message TEXT,
+      recording_id TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS rec_series (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      channel_id TEXT,
+      channel TEXT,
+      created_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS notification_reads (
       user_id TEXT NOT NULL,
       notification_id INTEGER NOT NULL,

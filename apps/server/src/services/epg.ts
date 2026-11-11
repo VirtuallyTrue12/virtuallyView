@@ -5,7 +5,7 @@ import { outboundFetch } from './outbound.js';
  * Program guide for Live TV, from ordinary XMLTV files. A guide is read once, kept for a few hours,
  * and only the programmes that matter (a day-and-a-half window, for channels that exist) are kept.
  */
-export interface Programme { start: number; stop: number; title: string; desc?: string }
+export interface Programme { start: number; stop: number; title: string; sub?: string; desc?: string }
 
 const TTL_MS = 3 * 3_600_000;
 const MAX_BYTES = 120 * 1024 * 1024;
@@ -65,8 +65,9 @@ export function parseXmltv(xml: string, wanted: Set<string> | null, from: number
     // Some guides pad gaps with placeholder entries; they carry no information.
     if (!title || /^\s*(no data|no information|no programme information|to be announced)\s*$/i.test(decode(title))) continue;
     const desc = /<desc\b[^>]*>([\s\S]*?)<\/desc>/.exec(m[2]!)?.[1];
+    const sub = /<sub-title\b[^>]*>([\s\S]*?)<\/sub-title>/.exec(m[2]!)?.[1];
     const list = out.get(channel) ?? [];
-    list.push({ start, stop, title: decode(title).slice(0, 160), ...(desc ? { desc: decode(desc).slice(0, 400) } : {}) });
+    list.push({ start, stop, title: decode(title).slice(0, 160), ...(sub ? { sub: decode(sub).slice(0, 160) } : {}), ...(desc ? { desc: decode(desc).slice(0, 400) } : {}) });
     out.set(channel, list);
   }
   for (const list of out.values()) list.sort((a, b) => a.start - b.start);

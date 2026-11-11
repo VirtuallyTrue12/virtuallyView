@@ -5,7 +5,7 @@
 const KIDS_BLOCKED = [
   '/api/requests', '/api/downloads', '/api/diagnostics', '/api/apps', '/api/troubleshoot',
   '/api/settings', '/api/server-settings', '/api/integrations', '/api/services', '/api/onboarding',
-  '/api/setup', '/api/system', '/api/indexers', '/api/backup', '/api/kiwix/config', '/api/library'
+  '/api/setup', '/api/system', '/api/indexers', '/api/backup', '/api/kiwix/config', '/api/library', '/api/live/schedule', '/api/live/series'
 ];
 
 /** Starting a search, a specials lookup or a file replacement for a title (this is how a download is asked for),
