@@ -48,7 +48,7 @@ beforeAll(async () => {
   browser = await chromium.launch();
   ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['clipboard-read', 'clipboard-write'] });
   // The test server has several profiles; "Who's watching?" counts as answered unless a test clears this.
-  await ctx.addInitScript(() => sessionStorage.setItem('vv-profile-picked', '1'));
+  await ctx.addInitScript(() => { try { sessionStorage.setItem('vv-profile-picked', '1'); } catch { /* sandboxed frames (the video embed) have no storage */ } });
   page = await ctx.newPage();
   page.on('pageerror', e => errors.push(e.message));
 }, 120_000);
@@ -1747,13 +1747,13 @@ describe('For you rail and the opening profile picker (mocked APIs)', () => {
     await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
     await page.route('**/api/profiles', r => r.fulfill(json({ profiles, currentId: 'u-sam' })));
     await page.route('**/api/dashboard', r => r.fulfill(json({ hero: null, heroCandidates: [], rails: [forYou] })));
-    await page.addInitScript(() => sessionStorage.removeItem('vv-profile-picked'));
+    await page.addInitScript(() => { try { sessionStorage.removeItem('vv-profile-picked'); } catch { /* sandboxed frame */ } });
     await page.goto(base + '/');
   };
   afterEach(async () => {
     await page.unrouteAll({ behavior: 'ignoreErrors' });
     // The clearing script outlives the test: put the flag back for the tests after this one.
-    await page.addInitScript(() => sessionStorage.setItem('vv-profile-picked', '1'));
+    await page.addInitScript(() => { try { sessionStorage.setItem('vv-profile-picked', '1'); } catch { /* sandboxed frame */ } });
   });
 
   it('mixes movies, music and videos with a type badge and a reason on each card', async () => {
