@@ -7,7 +7,7 @@ import { videoHistory, subscriptionFeed } from './invidious.js';
 import { subscriptions } from './video-lists.js';
 
 const TTL_MS = 5 * 60_000;
-const cache = new Map<string, { at: number; items: ForYouItem[] }>();
+const cache = new Map<string, { at: number; ttl: number; items: ForYouItem[] }>();
 
 interface Inputs {
   /** Movies and shows in the library, already filtered by this viewer's age limit. */
@@ -25,12 +25,16 @@ const withTimeout = <T>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
 export async function forYouRail(input: Inputs): Promise<Array<{ id: string; title: string; kind: 'foryou'; items: ForYouItem[] }>> {
   const user = currentUserId();
   const hit = cache.get(user);
-  const items = hit && Date.now() - hit.at < TTL_MS ? hit.items : await build(input);
-  cache.set(user, { at: Date.now(), items });
+  if (hit && Date.now() - hit.at < hit.ttl) return hit.items.length ? [{ id: 'for-you', title: 'For you', kind: 'foryou', items: hit.items }] : [];
+  const late = { feed: false };
+  const items = await build(input, late);
+  // A slow video server: try again soon, when its videos are cached, instead of hiding them for five minutes.
+  cache.set(user, { at: Date.now(), ttl: late.feed ? 20_000 : TTL_MS, items });
   return items.length ? [{ id: 'for-you', title: 'For you', kind: 'foryou', items }] : [];
 }
 
-async function build({ titles, artists, anchorEvents, signals, kid }: Inputs): Promise<ForYouItem[]> {
+// `late.feed` is set when the video feed is still loading in the background (it fills the feed cache for next time).
+async function build({ titles, artists, anchorEvents, signals, kid }: Inputs, late: { feed: boolean }): Promise<ForYouItem[]> {
   const byId = new Map(titles.map(t => [t.id, t]));
   const playable = titles.filter(t => t.status === 'available');
 
@@ -67,8 +71,9 @@ async function build({ titles, artists, anchorEvents, signals, kid }: Inputs): P
     for (const v of history) if (v.channelId) channels.add(v.channelId);
     if (channels.size) {
       const seen = new Set(history.map(v => v.id));
-      const feed = await withTimeout(subscriptionFeed([...channels].slice(0, 8)), 2500, { videos: [], failed: 0 });
-      for (const v of feed.videos) {
+      const feed = await withTimeout(subscriptionFeed([...channels].slice(0, 8)), 2500, null);
+      if (!feed) late.feed = true;
+      for (const v of feed?.videos ?? []) {
         if (seen.has(v.id)) continue;
         groups.video.push({
           id: v.id, kind: 'video', title: v.title, type: 'video', artwork: { poster: v.thumbnail },

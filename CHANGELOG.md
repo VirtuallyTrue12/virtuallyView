@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Home: a "For you" row that mixes movies, shows, music and videos from what this profile watches, listens to and subscribes to, each with a reason ("Because you watched...", "New from..."); hideable in the layout editor, not shown to Kids. "Who's watching?" now opens the app once per browser session when there are two or more profiles (focus on the last one used); shared links still open where they point.
+
 - Videos play in HD (up to 1080p, H.264 + AAC joined by the server without re-encoding) in the app's own player, with a quality picker (Auto, 1080p, 720p, 480p, 360p) and working seek; the instance's player is only a fallback. Channel pictures load: the server fetches them from YouTube's image hosts itself (allow-listed hosts, images only, 2 MB cap, cached for a week).
 
 - Storage planner (Settings > Storage, admins): free space per folder, what is using it, the 20 biggest titles, and titles everyone has finished and left alone for a while, with Delete files (through Radarr/Sonarr, after a confirm). Manual grabs that would not fit are refused, requests are refused when the disk is nearly full, and admins get a low-space alert at most once a day.
