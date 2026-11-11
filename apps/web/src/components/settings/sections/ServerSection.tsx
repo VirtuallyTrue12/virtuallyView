@@ -9,6 +9,8 @@ export default function ServerSection({ settings, onSaved, version }: { settings
   const [name, setName] = useState('');
   const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const [changes, setChanges] = useState<SettingsChange[] | null>(null);
+  const [video, setVideo] = useState<{ converter: string; tonemap: 'gpu' | 'cpu' | null } | null>(null);
+  useEffect(() => { api.videoHardware().then(setVideo).catch(() => undefined); }, []);
   useEffect(() => { if (settings) setName(settings.serverName); }, [settings]);
   useEffect(() => { api.settingsHistory().then(r => setChanges(r.changes)).catch(() => setChanges([])); }, [settings?.updatedAt]);
 
@@ -51,6 +53,11 @@ export default function ServerSection({ settings, onSaved, version }: { settings
       </div>
       <div className="settings-section">
         <h3 className="section-title">About</h3>
+        {video && (
+          <p className="ui-help" data-testid="video-hardware">
+            Video conversion: {video.converter}. HDR tone mapping: {video.tonemap === 'gpu' ? 'on the graphics chip' : video.tonemap === 'cpu' ? 'on the processor' : 'not available'}.
+          </p>
+        )}
         <p className="ui-help">virtuallyView {version || '…'}. Open source (MIT), self-hosted, no tracking and no cloud account. It sits on top of the media services it sets up for you; trailers come from YouTube and everything else plays from your own files.</p>
         <p className="st-links"><a href="https://github.com/VirtuallyTrue12/virtuallyView" target="_blank" rel="noreferrer">Project on GitHub</a><a href="https://github.com/VirtuallyTrue12/virtuallyView/tree/main/docs" target="_blank" rel="noreferrer">Documentation</a><a href="https://github.com/VirtuallyTrue12/virtuallyView/issues" target="_blank" rel="noreferrer">Report a problem</a></p>
       </div>

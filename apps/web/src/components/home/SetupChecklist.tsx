@@ -34,7 +34,7 @@ export function SetupChecklist() {
     }
   };
 
-  if (!status || status.complete || hidden) return null;
+  if (!status?.items || status.complete || hidden) return null;
 
   const done = status.items.filter(i => i.ok).length;
   return (

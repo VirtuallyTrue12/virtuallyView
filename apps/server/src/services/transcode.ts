@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -33,6 +33,10 @@ export interface MediaProbe {
   videoCopyOk?: boolean;
   /** ffprobe's pixel format for the video stream, such as yuv420p or yuv420p10le. */
   videoPixFmt?: string | null;
+  /** HDR transfer of the video: PQ (HDR10, Dolby Vision 8.1) or HLG; null for SDR. */
+  hdr?: 'pq' | 'hlg' | null;
+  /** The first frame carries mastering-display data (what tonemap_vaapi needs). */
+  hdrMastering?: boolean;
   audioTracks?: AudioTrack[];
   subtitleStreams?: SubtitleStream[];
   chapters?: Chapter[];
@@ -102,6 +106,64 @@ export function vaapiDevice(): string | null {
   return vaapi;
 }
 
+let filters: Set<string> | undefined;
+/** Whether this ffmpeg build has a filter (tonemap_vaapi, zscale...). Checked once. */
+export function ffmpegHasFilter(name: string): boolean {
+  if (!filters) {
+    const ffmpeg = resolveBinary('ffmpeg');
+    const out = ffmpeg ? String(spawnSync(ffmpeg, ['-hide_banner', '-filters'], { encoding: 'utf8', timeout: 15_000 }).stdout ?? '') : '';
+    filters = new Set(out.split('\n').map(line => line.trim().split(/\s+/)[1]).filter(Boolean));
+  }
+  return filters.has(name);
+}
+
+/**
+ * How an HDR source is brought down to the SDR (8-bit BT.709) picture every conversion produces, so it does
+ * not look grey and washed out. tonemap_vaapi runs on the graphics chip but only takes HDR10 (PQ) with
+ * mastering-display data and refuses anything else; the zscale/tonemap chain on the CPU takes PQ and HLG.
+ */
+export function tonemapMode(hdr: TranscodeOptions['hdr'], mastering: boolean | undefined, hw: string | null): 'vaapi' | 'cpu' | null {
+  if (!hdr) return null;
+  if (hw && hdr === 'pq' && mastering && ffmpegHasFilter('tonemap_vaapi')) return 'vaapi';
+  return ffmpegHasFilter('zscale') && ffmpegHasFilter('tonemap') ? 'cpu' : null;
+}
+
+/** What the server converts video with, for the admin's Settings page. */
+export function videoHardwareReport(): { converter: string; tonemap: 'gpu' | 'cpu' | null } {
+  const hw = vaapiDevice();
+  let vendor = '';
+  try { if (hw) vendor = readFileSync(`/sys/class/drm/${path.basename(hw)}/device/vendor`, 'utf8').trim(); } catch { /* no sysfs */ }
+  const chip = vendor === '0x8086' ? 'Intel graphics' : vendor === '0x1002' ? 'AMD graphics' : 'Graphics chip';
+  return { converter: hw ? `${chip} (VA-API)` : 'Processor only', tonemap: hw && ffmpegHasFilter('tonemap_vaapi') ? 'gpu' : tonemapMode('hlg', false, null) && 'cpu' };
+}
+
+const cpuTonemap = (pixFmt: string) =>
+  `zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=${pixFmt}`;
+
+/**
+ * The picture's filter chain for a re-encode, and whether the GPU decodes it too. With a VA-API device the
+ * file is decoded on the GPU and stays there through scaling and encoding. A codec the GPU cannot decode
+ * (MPEG-4, VC-1 on some chips) is decoded by ffmpeg on the CPU instead, by itself, for that file:
+ * `format=nv12|p010|vaapi,hwupload` takes either kind of frame. The CPU tone-mapping chain needs frames in
+ * memory, so it decodes on the CPU and uploads after.
+ */
+function videoChain(hw: string | null, height: number, tonemap: 'vaapi' | 'cpu' | null): { hwDecode: boolean; vf: string | null } {
+  const size = height > 0 ? `w=-2:h=${height}:` : '';
+  if (hw) {
+    const upload = tonemap === 'cpu' ? `${cpuTonemap('nv12')},hwupload` : 'format=nv12|p010|vaapi,hwupload';
+    const tm = tonemap === 'vaapi' ? ',tonemap_vaapi=format=nv12:t=bt709:m=bt709:p=bt709' : '';
+    // format=nv12 turns a 10-bit picture into the 8-bit one h264_vaapi takes.
+    return { hwDecode: tonemap !== 'cpu', vf: `${upload}${tm},scale_vaapi=${size}format=nv12` };
+  }
+  const parts = [tonemap ? cpuTonemap('yuv420p') : '', height > 0 ? `scale=-2:${height}` : ''].filter(Boolean);
+  return { hwDecode: false, vf: parts.length ? parts.join(',') : null };
+}
+
+const hwInput = (device: string, decode: boolean) => [
+  '-init_hw_device', `vaapi=va:${device}`, '-filter_hw_device', 'va',
+  ...(decode ? ['-hwaccel', 'vaapi', '-hwaccel_output_format', 'vaapi', '-hwaccel_device', 'va'] : [])
+];
+
 const probeCache = new Map<string, { key: string; value: MediaProbe }>();
 
 function inferFromExtension(filePath: string): MediaProbe {
@@ -117,7 +179,7 @@ function inferFromExtension(filePath: string): MediaProbe {
   };
 }
 
-type ProbeStreams = Pick<MediaProbe, 'videoCodec' | 'audioCodec' | 'durationSeconds' | 'width' | 'height' | 'bitrate' | 'videoCopyOk' | 'videoPixFmt' | 'audioTracks' | 'subtitleStreams' | 'chapters'>;
+type ProbeStreams = Pick<MediaProbe, 'videoCodec' | 'audioCodec' | 'durationSeconds' | 'width' | 'height' | 'bitrate' | 'videoCopyOk' | 'videoPixFmt' | 'hdr' | 'hdrMastering' | 'audioTracks' | 'subtitleStreams' | 'chapters'>;
 
 function runProbe(ffprobe: string, filePath: string): Promise<ProbeStreams | null> {
   return new Promise(resolve => {
@@ -134,6 +196,8 @@ function runProbe(ffprobe: string, filePath: string): Promise<ProbeStreams | nul
       '-show_streams',
       '-show_format',
       '-show_chapters',
+      // The first frame of each stream, for HDR mastering data that only lives in the frames.
+      '-show_frames', '-read_intervals', '%+#1',
       filePath
     ], { stdio: ['ignore', 'pipe', 'ignore'] });
     const timer = setTimeout(() => { child.kill('SIGKILL'); finish(null); }, 8000);
@@ -143,10 +207,10 @@ function runProbe(ffprobe: string, filePath: string): Promise<ProbeStreams | nul
       clearTimeout(timer);
       try {
         type RawStream = {
-          codec_type?: string; codec_name?: string; width?: number; height?: number; pix_fmt?: string; profile?: string; channels?: number;
+          codec_type?: string; codec_name?: string; width?: number; height?: number; pix_fmt?: string; profile?: string; channels?: number; color_transfer?: string;
           tags?: { language?: string; title?: string }; disposition?: { attached_pic?: number };
         };
-        const parsed = JSON.parse(stdout) as { streams?: RawStream[]; format?: { duration?: string; bit_rate?: string }; chapters?: Array<{ start_time?: string; end_time?: string; tags?: { title?: string } }> };
+        const parsed = JSON.parse(stdout) as { streams?: RawStream[]; frames?: Array<{ media_type?: string; side_data_list?: Array<{ side_data_type?: string }> }>; format?: { duration?: string; bit_rate?: string }; chapters?: Array<{ start_time?: string; end_time?: string; tags?: { title?: string } }> };
         const streams = parsed.streams ?? [];
         const video = streams.find(stream => stream.codec_type === 'video' && !stream.disposition?.attached_pic);
         const audio = streams.filter(stream => stream.codec_type === 'audio');
@@ -162,6 +226,8 @@ function runProbe(ffprobe: string, filePath: string): Promise<ProbeStreams | nul
           bitrate: Number.isFinite(bitrate) ? bitrate : null,
           videoCopyOk: video?.codec_name === 'h264' && video.pix_fmt === 'yuv420p',
           videoPixFmt: video?.pix_fmt ?? null,
+          hdr: video?.color_transfer === 'smpte2084' ? 'pq' : video?.color_transfer === 'arib-std-b67' ? 'hlg' : null,
+          hdrMastering: (parsed.frames ?? []).some(f => f.media_type === 'video' && (f.side_data_list ?? []).some(d => d.side_data_type === 'Mastering display metadata')),
           chapters: (parsed.chapters ?? []).map((c, i) => ({ start: Number(c.start_time) || 0, end: Number(c.end_time) || 0, title: c.tags?.title ?? `Chapter ${i + 1}` })).filter(c => c.end > c.start),
           audioTracks: audio.map((a, index) => ({
             index, codec: a.codec_name ?? 'unknown', language: a.tags?.language ?? 'und',
@@ -220,6 +286,8 @@ export async function probeMedia(filePath: string): Promise<MediaProbe> {
         sizeBytes,
         videoCopyOk: streams.videoCopyOk === true,
         videoPixFmt: streams.videoPixFmt ?? null,
+        hdr: streams.hdr ?? null,
+        hdrMastering: streams.hdrMastering === true,
         audioTracks: streams.audioTracks ?? [],
         subtitleStreams: streams.subtitleStreams ?? [],
         chapters: streams.chapters ?? []
@@ -262,6 +330,9 @@ export interface TranscodeOptions {
   sourceHeight?: number;
   /** Source bitrate (bits a second): the re-encode needs no more than about twice it (HEVC to H.264). */
   sourceBitrate?: number;
+  /** HDR source (see MediaProbe.hdr): the SDR re-encode is tone mapped. */
+  hdr?: 'pq' | 'hlg';
+  hdrMastering?: boolean;
 }
 
 /** Peak bitrate for a software re-encode at this height: CRF alone lets complex scenes spike, which
@@ -289,8 +360,11 @@ function encodeArgs(options: TranscodeOptions): string[] {
   const target = asked || capped;
   const scale = target > 0;
   options = { ...options, height: target || undefined };
+  const { hw, tonemap, vf } = videoPlan(options);
   if (burn !== undefined) {
-    const overlay = `[0:v:0][0:s:${burn}]overlay${scale ? `,scale=-2:${Math.round(options.height as number)}` : ''}[v]`;
+    // Burned-in subtitles are drawn on the CPU; an HDR picture is tone mapped before they go on top.
+    const base = tonemap ? `[0:v:0]${cpuTonemap('yuv420p')}[base];[base]` : '[0:v:0]';
+    const overlay = `${base}[0:s:${burn}]overlay${scale ? `,scale=-2:${Math.round(options.height as number)}` : ''}[v]`;
     args.push('-filter_complex', overlay, '-map', '[v]', '-map', `0:a:${audio}?`);
   } else {
     args.push('-map', '0:v:0', '-map', `0:a:${audio}?`);
@@ -302,14 +376,12 @@ function encodeArgs(options: TranscodeOptions): string[] {
   // perfectly fine on their own. Nothing here uses chapter markers from the transcoded stream itself
   // (the player reads them separately, from ffprobe on the source file), so they are dropped.
   args.push('-map_chapters', '-1');
-  const hw = !copying && burn === undefined ? vaapiDevice() : null;
   if (copying) {
     args.push('-c:v', 'copy');
   } else if (hw) {
     const [maxrate, bufsize] = rateCap(target || options.sourceHeight || 1080, options.sourceBitrate);
-    // Decoded on the CPU (any codec works), then scaled and encoded on the GPU (see hwInputArgs).
-    args.push('-vf', `format=nv12,hwupload${scale ? `,scale_vaapi=w=-2:h=${Math.round(options.height as number)}` : ''}`,
-      '-c:v', 'h264_vaapi', '-qp', scale ? '25' : '23', '-maxrate', maxrate, '-bufsize', bufsize, '-profile:v', 'high',
+    // Decoded, scaled and encoded on the GPU (see videoChain).
+    args.push('-vf', vf as string, '-c:v', 'h264_vaapi', '-qp', scale ? '25' : '23', '-maxrate', maxrate, '-bufsize', bufsize, '-profile:v', 'high',
       '-force_key_frames', 'expr:gte(t,n_forced*2)');
   } else {
     const [maxrate, bufsize] = rateCap(target || options.sourceHeight || 1080, options.sourceBitrate);
@@ -327,18 +399,26 @@ function encodeArgs(options: TranscodeOptions): string[] {
       // own GOP, fixes that, and also sets the pace of the HLS segments below.
       '-force_key_frames', 'expr:gte(t,n_forced*2)'
     );
-    if (scale && burn === undefined) args.push('-vf', `scale=-2:${Math.round(options.height as number)}`);
+    if (vf && burn === undefined) args.push('-vf', vf);
   }
   args.push('-c:a', 'aac', '-b:a', '160k', '-ac', '2');
   return args;
 }
 
-/** Opens the GPU for the encoder when the video will be re-encoded there. */
-function hwInputArgs(options: TranscodeOptions): string[] {
+/** The GPU (when there is one and the picture is re-encoded without burned-in subtitles), tone mapping and filters.
+ * `options.height` is the final target height, already capped. */
+function videoPlan(options: TranscodeOptions): { hw: string | null; tonemap: 'vaapi' | 'cpu' | null; hwDecode: boolean; vf: string | null } {
   const burn = Number.isInteger(options.burn) && (options.burn ?? -1) >= 0;
   const copying = !!options.copyVideo && !(options.height && options.height > 0) && !burn;
-  const device = !copying && !burn ? vaapiDevice() : null;
-  return device ? ['-init_hw_device', `vaapi=va:${device}`, '-filter_hw_device', 'va'] : [];
+  const hw = !copying && !burn ? vaapiDevice() : null;
+  const tonemap = copying ? null : tonemapMode(options.hdr, options.hdrMastering, hw);
+  return { hw, tonemap, ...videoChain(hw, Math.round(options.height ?? 0), tonemap) };
+}
+
+/** Opens the GPU for decoding and encoding when the video will be re-encoded there. */
+function hwInputArgs(options: TranscodeOptions): string[] {
+  const { hw, hwDecode } = videoPlan(options);
+  return hw ? hwInput(hw, hwDecode) : [];
 }
 
 export function ffmpegTranscodeArgs(filePath: string, startSeconds = 0, options: TranscodeOptions = {}): string[] {
@@ -440,6 +520,9 @@ export interface FileOutputOptions {
   audioCodec?: string | null;
   /** VA-API device path when the GPU encodes the picture (see vaapiDevice). */
   vaapi?: string | null;
+  /** HDR source: tone mapped to SDR (see TranscodeOptions). */
+  hdr?: 'pq' | 'hlg' | null;
+  hdrMastering?: boolean;
 }
 
 /**
@@ -461,13 +544,13 @@ export function ffmpegFileArgs(input: string, output: string, options: FileOutpu
     const height = Math.min(target, options.sourceHeight && options.sourceHeight > 0 ? options.sourceHeight : target);
     const scale = !options.sourceHeight || options.sourceHeight > height;
     const hw = options.vaapi ?? null;
-    if (hw) args.push('-init_hw_device', `vaapi=va:${hw}`, '-filter_hw_device', 'va');
+    const { hwDecode, vf } = videoChain(hw, scale ? height : 0, tonemapMode(options.hdr ?? undefined, options.hdrMastering, hw));
+    if (hw) args.push(...hwInput(hw, hwDecode));
     args.push('-i', input, '-map', '0:v:0', '-map', `0:a:${audio}?`, '-sn', '-dn', '-map_chapters', '-1');
+    if (vf) args.push('-vf', vf);
     if (hw) {
-      args.push('-vf', `format=nv12,hwupload${scale ? `,scale_vaapi=w=-2:h=${height}` : ''}`,
-        '-c:v', 'h264_vaapi', '-qp', options.quality === 'high' ? '21' : '23', '-profile:v', 'high');
+      args.push('-c:v', 'h264_vaapi', '-qp', options.quality === 'high' ? '21' : '23', '-profile:v', 'high');
     } else {
-      if (scale) args.push('-vf', `scale=-2:${height}`);
       args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', options.quality === 'high' ? '21' : '23',
         '-profile:v', 'high', '-pix_fmt', 'yuv420p');
     }
