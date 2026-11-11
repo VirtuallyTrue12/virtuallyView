@@ -103,10 +103,15 @@ export function longestSharedRun(a: number[], b: number[]): SharedRun | null {
         best = { aStart: runStart, aEnd: last + 1, bStart: runStart - shift, bEnd: last + 1 - shift };
       }
     };
+    let prevMatch = false;
     for (let i = from; i < to; i++) {
       const x = a[i]!, y = b[i - shift]!;
-      if (x < 0 || y < 0 || popcount((x ^ y) >>> 0) > MATCH_BITS) continue;
-      if (runStart < 0 || i - last > MAX_GAP) { close(); runStart = i; hits = 0; }
+      const match = x >= 0 && y >= 0 && popcount((x ^ y) >>> 0) <= MATCH_BITS;
+      // Two matching frames in a row: a lone chance match would stretch the run's edges.
+      const pair = match && prevMatch;
+      prevMatch = match;
+      if (!pair) continue;
+      if (runStart < 0 || i - last > MAX_GAP) { close(); runStart = i - 1; hits = 1; }
       last = i; hits++;
     }
     close();

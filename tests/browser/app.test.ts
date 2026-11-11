@@ -4,7 +4,7 @@
  * (npx playwright install chromium).
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -309,6 +309,28 @@ describe('pull subtitles', () => {
     await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
     await page.getByText('No subtitle files found for this title').waitFor();
     expect(await page.locator('.vp-menu').innerText()).not.toContain('STALE EPISODE 1 RESULT');
+    expect(errors).toEqual([]);
+  });
+});
+
+describe('skip intro', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('shows Skip intro inside the detected intro and jumps past its end', async () => {
+    const video = readFileSync(resolve(root, 'tests/browser/fixtures/tiny-20s.webm'));
+    await page.route('**/api/movies/radarr-530', r => r.fulfill(json({ id: 'radarr-530', title: 'Skip Test', status: 'available' })));
+    await page.route('**/api/stream/radarr-530/info', r => r.fulfill(json({ playable: true, transcodingAvailable: false, durationSeconds: 20, container: 'webm', videoCodec: 'vp9', audioCodec: null, reason: null, segments: { intro: { start: 0, end: 12 } } })));
+    await page.route('**/api/progress/movie/radarr-530', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await page.route('**/api/stream/radarr-530/subtitles', r => r.fulfill(json({ subtitles: [] })));
+    await page.route('**/api/stream/radarr-530/trickplay', r => r.fulfill(json({ state: 'unavailable' })));
+    await page.route('**/api/stream/radarr-530', r => r.fulfill({ status: 200, contentType: 'video/webm', body: video }));
+
+    await page.goto(base + '/movies/radarr-530/play');
+    const skip = page.getByRole('button', { name: 'Skip intro' });
+    await skip.waitFor();
+    await skip.click();
+    await page.waitForFunction(() => (document.querySelector('video')?.currentTime ?? 0) >= 11.9);
+    await skip.waitFor({ state: 'detached' });
     expect(errors).toEqual([]);
   });
 });
