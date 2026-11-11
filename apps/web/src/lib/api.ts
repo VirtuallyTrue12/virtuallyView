@@ -228,6 +228,17 @@ export interface StorageReport {
   computedAt: string;
 }
 
+export interface StoragePlanTitle { id: string; title: string; kind: 'movie' | 'series'; year?: number; bytes: number; quality: string }
+export interface StoragePlan {
+  disks: Array<{ name: string; path: string; totalBytes: number; freeBytes: number; usedBytes: number }>;
+  categories: Array<{ id: string; label: string; bytes: number }>;
+  biggest: Array<StoragePlanTitle & { watched: boolean }>;
+  suggestions: Array<StoragePlanTitle & { lastWatched: string | null }>;
+  days: number;
+  scannedAt: string | null;
+  scanning: boolean;
+}
+
 export interface MediaPlaybackInfo {
   playable: boolean;
   container: string;
@@ -789,6 +800,8 @@ export const api = {
       return r.json() as Promise<{ users: AuthUser[] }>;
     });
   },
+  storagePlan: (days: number) => getJSON<StoragePlan>(`/api/system/storage/plan?days=${days}`),
+  storageDelete: (id: string) => postJSON<{ success: boolean; message: string }>('/api/system/storage/delete', { id }),
   systemStorage: () => getJSON<StorageReport>('/api/system/storage'),
   hostAddresses: () => getJSON<HostAddresses>('/api/system/addresses'),
   mediaInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/${encodeURIComponent(id)}/info${codecQuery()}`),

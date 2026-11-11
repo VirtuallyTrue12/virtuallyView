@@ -19,6 +19,7 @@ import './styles/music.css';
 import './styles/tools.css';
 import './styles/videos.css';
 import './styles/media.css';
+import './styles/storage.css';
 
 initPerformanceMode();
 initDpad();

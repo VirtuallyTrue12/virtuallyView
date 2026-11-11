@@ -1,12 +1,13 @@
 import type { IconName } from '../ui/SvgIcon';
 
-export type SectionId = 'home' | 'library' | 'sources' | 'services' | 'people' | 'notifications' | 'appearance' | 'network' | 'backup' | 'ai' | 'health' | 'server';
+export type SectionId = 'home' | 'library' | 'sources' | 'storage' | 'services' | 'people' | 'notifications' | 'appearance' | 'network' | 'backup' | 'ai' | 'health' | 'server';
 
 export interface SectionInfo { id: SectionId; label: string; icon: IconName; blurb: string; group: string; adminOnly: boolean }
 
 export const SECTIONS: SectionInfo[] = [
   { id: 'home', label: 'Overview', icon: 'home', blurb: 'What is working, and what to do next.', group: 'Start', adminOnly: true },
   { id: 'library', label: 'Library and quality', icon: 'folder', blurb: 'Where files live and the quality requests ask for.', group: 'Your library', adminOnly: true },
+  { id: 'storage', label: 'Storage', icon: 'hdd', blurb: 'Free space, what uses it, and what you could delete.', group: 'Your library', adminOnly: true },
   { id: 'sources', label: 'Search sources', icon: 'search', blurb: 'Where downloads are found.', group: 'Your library', adminOnly: true },
   { id: 'services', label: 'Services', icon: 'server', blurb: 'The apps that run your movies, shows and music.', group: 'Your library', adminOnly: true },
   { id: 'people', label: 'People and requests', icon: 'users', blurb: 'Accounts, who may request what, and sign-in.', group: 'People', adminOnly: true },
@@ -29,6 +30,7 @@ export const SEARCH_INDEX: Array<{ section: SectionId; label: string; words: str
   { section: 'library', label: 'Movie, TV and music folders', words: 'folder path media root staging download location disk' },
   { section: 'library', label: 'Default download quality', words: 'quality 1080p 4k hd flac lossless profile standard' },
   { section: 'library', label: 'Replace dead or stuck downloads automatically', words: 'stuck stalled dead download seeders replace fix retry blocklist import failed' },
+  { section: 'storage', label: 'Free space and what is using it', words: 'storage disk space full free delete size biggest cleanup gb' },
   { section: 'sources', label: 'Add search sources (indexers)', words: 'indexer torrent usenet prowlarr public private tracker source' },
   { section: 'services', label: 'Connect Radarr, Sonarr, Lidarr, qBittorrent', words: 'radarr sonarr lidarr prowlarr bazarr qbittorrent nzbget api key connect start stop' },
   { section: 'people', label: 'Add or remove people', words: 'user account invite family admin password role remove age limit rating' },

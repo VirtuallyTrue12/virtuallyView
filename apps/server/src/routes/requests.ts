@@ -69,7 +69,7 @@ export default async function requestsRoutes(server: FastifyInstance) {
       const body = request.body ?? {};
       const result = await createRequest(body);
       if (!result.ok) {
-        reply.code(result.code === 'ambiguous' || result.code === 'invalid_selection' || result.code === 'unreleased' ? 409 : result.code === 'limit' ? 429 : 400);
+        reply.code(result.code === 'ambiguous' || result.code === 'invalid_selection' || result.code === 'unreleased' ? 409 : result.code === 'limit' ? 429 : result.code === 'no_space' ? 507 : 400);
         return result;
       }
       return result;

@@ -2,6 +2,7 @@ import type { ProwlarrAdapter, ProwlarrRelease, QBittorrentAdapter } from '@virt
 import { getAdapter } from './registry.js';
 import { releaseQualityLabel, cleanReleaseName } from './names.js';
 import { classifyMusicVideo } from './music-videos.js';
+import { downloadsFree, spaceCheck } from './storage-planner.js';
 
 /** Downloads picked by hand stay out of Radarr/Sonarr/Lidarr, under this qBittorrent category. */
 export const MANUAL_CATEGORY = 'vv-manual';
@@ -100,6 +101,8 @@ export async function grabRelease(id: string, fileAs: FileAs = 'auto'): Promise<
   const entry = cache.get(id);
   if (!entry || Date.now() - entry.at > TTL_MS) return { success: false, message: 'That search is too old. Search again.', filesUnder: null };
   const { release } = entry;
+  const room = spaceCheck(await downloadsFree(), release.size);
+  if (!room.ok) return { success: false, message: room.message, filesUnder: null };
   const detected = classifyMusicVideo(release.title);
   const filesUnder = fileAs === 'concert' ? 'Concerts' : fileAs === 'video' ? 'Videos' : fileAs === 'none' ? null : detected;
   const category = filesUnder === 'Concerts' ? CONCERT_CATEGORY : filesUnder === 'Videos' ? VIDEO_CATEGORY : MANUAL_CATEGORY;

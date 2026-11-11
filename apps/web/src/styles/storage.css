@@ -1,0 +1,17 @@
+/* Settings, Storage */
+.sto .ui-section-title { margin-top: var(--spacing-lg); }
+.sto-disks, .sto-cats, .sto-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--spacing-md); }
+.sto-disks { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.sto-disk { display: grid; gap: var(--spacing-xs); padding: var(--spacing-md); border-radius: var(--radius-medium); background: var(--color-surface); }
+.sto-row { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); flex-wrap: wrap; }
+.sto-bar { height: 8px; border-radius: var(--radius-small); background: var(--color-surface-elevated); overflow: hidden; }
+.sto-bar--thin { height: 4px; }
+.sto-bar > div { height: 100%; background: var(--color-accent); }
+.sto-bar > div.is-low { background: var(--color-danger); }
+.sto-list li { display: flex; align-items: center; gap: var(--spacing-md); padding: var(--spacing-sm) 0; border-bottom: 1px solid var(--color-surface-elevated); }
+.sto-name { flex: 1; min-width: 0; display: grid; }
+.sto-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sto-name em { font-style: normal; color: var(--color-text-secondary); font-size: var(--text-sm); }
+.sto-size { font-variant-numeric: tabular-nums; }
+.sto-actions { display: flex; justify-content: flex-end; gap: var(--spacing-sm); margin-top: var(--spacing-md); flex-wrap: wrap; }
+@media (max-width: 600px) { .sto-list li { flex-wrap: wrap; } }

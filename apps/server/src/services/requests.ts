@@ -11,6 +11,7 @@ import { getAdapter } from './registry.js';
 import { createDownload, updateDownload } from './downloads.js';
 import { actOnDownload, getDownloads } from './real-downloads.js';
 import { all as dbAll, run as dbRun, transaction as dbTransaction } from '../db/app-db.js';
+import { downloadsFree, spaceCheck } from './storage-planner.js';
 
 export type RequestStatus =
   | 'pending'
@@ -390,6 +391,9 @@ export async function createRequest(input: CreateRequestInput): Promise<CreateRe
   if (input.selectedProviderId !== undefined && (typeof input.selectedProviderId !== 'string' || !input.selectedProviderId.trim())) {
     return { ok: false, message: 'Selected provider ID must be a non-empty string.' };
   }
+  // The size is not known yet, so only a disk that is nearly full stops a request.
+  const room = spaceCheck(await downloadsFree(), 0);
+  if (!room.ok) return { ok: false, code: 'no_space', message: room.message };
   const actor = currentActor();
   const rules = getServerSettings().requests;
   if (actor.role === 'user' && rules.limit > 0) {

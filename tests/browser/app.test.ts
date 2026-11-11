@@ -1848,3 +1848,37 @@ describe('remote control in TV mode', () => {
     await page.unroute('**/api/movies/radarr-777');
   });
 });
+
+describe('settings: storage planner (mocked APIs)', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const plan = {
+    disks: [{ name: 'Movies', path: '/media/movies', totalBytes: 2e12, freeBytes: 12e9, usedBytes: 2e12 - 12e9 }],
+    categories: [{ id: 'movies', label: 'Movies', bytes: 8e11 }, { id: 'tv', label: 'TV shows', bytes: 3e11 }],
+    biggest: [{ id: 'radarr-1', title: 'Huge Remux', kind: 'movie', bytes: 3e10, quality: 'Remux-2160p', watched: true }],
+    suggestions: [{ id: 'radarr-1', title: 'Huge Remux', kind: 'movie', bytes: 3e10, quality: 'Remux-2160p', lastWatched: '2026-01-01T00:00:00.000Z' }],
+    days: 90, scannedAt: '2026-11-11T00:00:00.000Z', scanning: false
+  };
+
+  afterEach(async () => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
+
+  it('shows free space, usage and suggestions, and deletes only after the confirm names the title and size', async () => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-admin', username: 'Admin', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    await page.route('**/api/system/storage/plan*', r => r.fulfill(json(plan)));
+    const deletes: unknown[] = [];
+    await page.route('**/api/system/storage/delete', r => { deletes.push(r.request().postDataJSON()); return r.fulfill(json({ success: true, message: 'Removed.' })); });
+
+    await page.goto(base + '/settings?s=storage');
+    await page.getByText('12.0 GB free of 2.0 TB').waitFor();
+    await page.getByText('TV shows').waitFor();
+    await page.getByRole('button', { name: 'Delete files for Huge Remux' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Delete files?' });
+    await dialog.getByText(/30 GB/).waitFor();
+    expect(deletes).toHaveLength(0);
+    await dialog.getByRole('button', { name: 'Delete Huge Remux' }).click();
+    await dialog.waitFor({ state: 'detached' });
+    expect(deletes).toEqual([{ id: 'radarr-1' }]);
+  });
+});

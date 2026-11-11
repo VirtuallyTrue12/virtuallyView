@@ -66,6 +66,7 @@ import { startAutoBackup } from './services/backup.js';
 import { startAiDigest } from './services/ai-digest.js';
 import { startAutoUpdate } from './services/auto-update.js';
 import { startDownloadDoctor } from './services/download-doctor.js';
+import { startStoragePlanner } from './services/storage-planner.js';
 import { startNewArrivalWatch } from './services/new-arrivals.js';
 import { startBacklogSearch } from './services/backlog-search.js';
 import { startAutoHeal } from './services/auto-repair.js';
@@ -577,6 +578,7 @@ const start = async () => {
   startAiDigest();
   startAutoUpdate();
   startDownloadDoctor();
+  startStoragePlanner();
   startNewArrivalWatch();
   startBacklogSearch();
   startAutoHeal();

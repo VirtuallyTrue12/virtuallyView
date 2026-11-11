@@ -57,7 +57,7 @@ async function directoryExists(target: string): Promise<boolean> {
  * entry cap so a huge or network-mounted library can never block the request
  * indefinitely; a partial result is reported via `truncated`.
  */
-async function measureRoot(root: string): Promise<{ bytes: number; files: number; truncated: boolean }> {
+export async function measureRoot(root: string): Promise<{ bytes: number; files: number; truncated: boolean }> {
   const deadline = Date.now() + SCAN_BUDGET_MS;
   let bytes = 0;
   let files = 0;

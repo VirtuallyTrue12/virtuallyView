@@ -8,6 +8,7 @@ import SettingsHome from '../components/settings/SettingsHome';
 import ServicesSection from '../components/settings/sections/ServicesSection';
 import DownloadsFix from '../components/settings/sections/DownloadsFix';
 import FoldersSection from '../components/settings/sections/FoldersSection';
+import StorageSection from '../components/settings/sections/StorageSection';
 import NetworkSection from '../components/settings/sections/NetworkSection';
 import AiSection from '../components/settings/sections/AiSection';
 import ServerSection from '../components/settings/sections/ServerSection';
@@ -104,6 +105,7 @@ export default function Settings() {
               )}
               {current === 'home' && <SettingsHome go={go} />}
               {current === 'library' && (<><FoldersSection settings={settings} onSaved={setSettings} /><DefaultQuality settings={settings} onSaved={setSettings} /><DownloadsFix settings={settings} onSaved={setSettings} /></>)}
+              {current === 'storage' && <StorageSection />}
               {current === 'sources' && <IndexersPanel />}
               {current === 'services' && <ServicesSection />}
               {current === 'people' && (<><UsersPanel /><RequestRules settings={settings} onSaved={setSettings} /></>)}

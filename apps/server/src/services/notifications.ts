@@ -12,6 +12,7 @@ export const EVENTS = [
   { key: 'library.new-episode', label: 'A new episode of a show you watch' },
   { key: 'library.new-release', label: 'A new album by an artist you follow' },
   { key: 'user.signup', label: 'Someone created an account' },
+  { key: 'storage.low', label: 'The disk is running low on space' },
   { key: 'backup', label: 'A backup finished or failed' },
   { key: 'downloads.fixed', label: 'A dead or unmatched download was replaced' },
   { key: 'system.updated', label: 'The apps were updated to their latest versions' },
@@ -67,6 +68,7 @@ export function linkFor(type: string, link: string): string {
   if (type.startsWith('request.') || type === 'ai.digest') return '/requests';
   if (type.startsWith('downloads.')) return '/downloads';
   if (type === 'user.signup') return '/settings?cat=people';
+  if (type === 'storage.low') return '/settings?s=storage';
   if (type === 'backup') return '/settings?cat=backup';
   if (type.startsWith('system.')) return '/settings?cat=server';
   return '/activity';

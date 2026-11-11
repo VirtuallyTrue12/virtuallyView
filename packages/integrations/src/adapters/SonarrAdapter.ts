@@ -116,7 +116,7 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
       network?: string;
       certification?: string;
       images?: Array<{ coverType: string; url: string; remoteUrl?: string }>;
-      statistics?: { episodeFileCount?: number; seasonCount?: number };
+      statistics?: { episodeFileCount?: number; seasonCount?: number; sizeOnDisk?: number };
       seasons?: Array<{ seasonNumber?: number; statistics?: { totalEpisodeCount?: number; episodeFileCount?: number } }>;
       added?: string;
     }>;
@@ -155,6 +155,7 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
             })),
           seasonCount: s.statistics?.seasonCount,
           episodeFileCount: s.statistics?.episodeFileCount,
+          sizeOnDisk: s.statistics?.sizeOnDisk ?? 0,
           createdAt: s.added ? new Date(s.added) : new Date(),
           updatedAt: s.added ? new Date(s.added) : new Date()
         };
