@@ -28,3 +28,6 @@
 @media (prefers-reduced-motion: reduce) {
   .search-page .sx-row { transition: none; }
 }
+
+/* The page has its own clear button; hide the browser's second one. */
+.search-input::-webkit-search-cancel-button { display: none; }

@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Search: one box finds everything, grouped into In your library, Music, People, Live TV, Radio, Videos, Channels and Available to request, filled in as each source answers (results appear as you type). Searching an actor or director lists them and their films in your library. Arrow keys move through every result; Live TV results tune straight to the channel.
+
 - Home: a "For you" row that mixes movies, shows, music and videos from what this profile watches, listens to and subscribes to, each with a reason ("Because you watched...", "New from..."); hideable in the layout editor, not shown to Kids. "Who's watching?" now opens the app once per browser session when there are two or more profiles (focus on the last one used); shared links still open where they point.
 
 - Videos play in HD (up to 1080p, H.264 + AAC joined by the server without re-encoding) in the app's own player, with a quality picker (Auto, 1080p, 720p, 480p, 360p) and working seek; the instance's player is only a fallback. Channel pictures load: the server fetches them from YouTube's image hosts itself (allow-listed hosts, images only, 2 MB cap, cached for a week).
