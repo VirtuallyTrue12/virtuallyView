@@ -1293,6 +1293,36 @@ describe('Videos (Invidious)', () => {
   });
 });
 
+describe('Videos in HD', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const video = { id: 'aqz-KE-bpKQ', title: 'An HD video', channel: 'A Channel', channelId: 'UC' + 'b'.repeat(22), durationSeconds: 635, views: 5, published: '2026-11-01T00:00:00Z' };
+  afterEach(async () => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
+
+  it('plays the joined HD stream in the app player and offers Auto, 1080p, 720p, 480p and 360p', async () => {
+    const hd: string[] = [];
+    await page.route('**/api/videos/status', r => r.fulfill(json({ available: true })));
+    await page.route(`**/api/videos/${video.id}`, r => r.fulfill(json({
+      video: { ...video, likes: 0, hasStream: true, hdHeights: [1080, 720, 480, 360, 240], captions: [], chapters: [], related: [] },
+      embed: `http://invidious.local/embed/${video.id}?local=true`, stream: `http://invidious.local/latest_version?id=${video.id}&itag=18`, subscribed: false, library: null
+    })));
+    await page.route(`**/api/videos/${video.id}/state`, r => r.fulfill(json({ position: 0, later: false, saved: null, video: null, subscribed: false })));
+    await page.route('**/api/videos/history/watched', r => r.fulfill(json({ ok: true })));
+    await page.route('**/api/videos/progress', r => r.fulfill(json({ ok: true })));
+    // Held open: the player waits for data instead of failing over to the embedded player.
+    await page.route(`**/api/videos/${video.id}/hd**`, r => { hd.push(r.request().url()); return new Promise(() => undefined); });
+    await page.goto(base + `/videos/watch/${video.id}`);
+    await page.waitForFunction(() => /\/hd\?auto=\d+&start=0/.test(document.querySelector('.vd-player video')?.getAttribute('src') ?? ''));
+    expect(await page.getByRole('button', { name: 'Higher quality' }).count()).toBe(0);
+    await page.locator('.vd-player').getByRole('button', { name: 'Settings' }).click();
+    const items = await page.locator('.vp-menu--settings .vp-menu-item').allInnerTexts();
+    expect(items.slice(0, 5)).toEqual(['Auto', '1080p', '720p', '480p', '360p']);
+    await page.getByRole('menuitem', { name: '480p' }).click();
+    await page.waitForFunction(() => /height=480/.test(document.querySelector('.vd-player video')?.getAttribute('src') ?? ''));
+    expect(await page.locator('.vd-player iframe').count()).toBe(0);
+    expect(errors).toEqual([]);
+  });
+});
+
 describe('New for You home rail', () => {
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   const show = { id: 'sonarr-901', title: 'Newly Aired Show', type: 'series', year: 2026, status: 'available', artwork: {}, href: '/series/sonarr-901' };

@@ -3,7 +3,7 @@
 Search and watch YouTube through **Invidious**, an open-source private front end: no ads, no account, and Google never sees your browser. Open **Videos** in the top bar.
 
 - **Search** looks up videos through the video service and shows them as a grid.
-- Press one to **play** it in an embedded player.
+- Press one to **play** it in this app's own player, in HD up to 1080p. The server joins the video's separate picture and sound without re-encoding them. Pick **Auto**, 1080p, 720p, 480p or 360p in the player's settings; Auto goes by your screen size. If the stream fails, the video service's own player takes over.
 - **History** remembers what you played, kept only in this server's own database — nothing about your history is sent anywhere. History stays usable even while the video service itself is off.
 
 ## Turning it on
@@ -46,6 +46,7 @@ When Videos is turned on, movie and TV trailer lookups (on the Home hero and tit
 ## Privacy, precisely
 
 - **Search** goes through your server (the browser never talks to the video service or YouTube for it).
-- **Playing** a video connects your browser directly to the video service, so it can send you the stream. That is the bundled instance on your own network by default, or the public instance you chose.
+- **Playing** a video in HD goes through your server, which reads it from the video service. The 360p fallback and the embedded player connect your browser directly to the video service. That is the bundled instance on your own network by default, or the public instance you chose.
+- **Channel pictures** are fetched by your server from YouTube's image hosts (`yt3.ggpht.com`, `yt3.googleusercontent.com`, `i.ytimg.com` only, images only, up to 2 MB) and kept for a week in its data folder. Your browser never contacts them.
 - **History** never leaves this server; it is not sent to Invidious, YouTube, or anywhere else.
 - The embedded player is sandboxed (`allow-scripts allow-same-origin allow-presentation allow-popups`, no referrer sent) so a compromised or malicious instance cannot reach outside its own frame.
