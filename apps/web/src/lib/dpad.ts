@@ -1,3 +1,5 @@
+import { tick } from './remote-sound';
+
 /**
  * Remote-control navigation for TV browsers and the Android TV app (`html.tv`).
  *
@@ -40,6 +42,9 @@ export function nearestInDirection<T>(from: Box, candidates: Candidate<T>[], dir
 }
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+// Links and buttons marked tabindex=-1 are duplicates of another control (a card's title link): not remote stops.
+// The row scroll arrows are skipped too: focus already scrolls a row as the remote moves along it.
+const SKIP = '[tabindex="-1"], .sr-arrow';
 const TEXT_ENTRY = 'input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="password"], input[type="number"], input[type="tel"], textarea, select, [contenteditable="true"]';
 
 const isTv = () => document.documentElement.classList.contains('tv');
@@ -55,21 +60,30 @@ function visible(el: HTMLElement): boolean {
   if (el.closest('[hidden], [aria-hidden="true"]')) return false;
   const r = el.getBoundingClientRect();
   if (r.width <= 0 || r.height <= 0) return false;
-  // Within a screen of the viewport either way: far-off items are not "next".
-  return r.bottom > -window.innerHeight && r.top < window.innerHeight * 2 && r.right > -window.innerWidth && r.left < window.innerWidth * 2;
+  // Within a screen of the viewport either way: far-off items are not "next". A sideways scrolling row is the
+  // exception: its cards sit far to the right until focus scrolls them in.
+  const sideways = r.right > -window.innerWidth && r.left < window.innerWidth * 2 || inRow(el);
+  return r.bottom > -window.innerHeight && r.top < window.innerHeight * 2 && sideways;
+}
+
+function inRow(el: HTMLElement): boolean {
+  for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+    if (n.scrollWidth > n.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(n).overflowX)) return true;
+  }
+  return false;
 }
 
 /** Focusable controls the remote can reach right now, skipping containers that hold other controls. */
 function reachable(scope: ParentNode): HTMLElement[] {
-  const all = [...scope.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(el => visible(el) && !ownZone(el));
+  const all = [...scope.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(el => visible(el) && !ownZone(el) && !el.matches(SKIP));
   return all.filter(el => !all.some(other => other !== el && el.contains(other)));
 }
 
-/** Inside something fixed to the screen (checked up to the page root). */
+/** Inside something fixed to the screen (checked up to the page root). Sticky parts of a page (the guide's channel column) are page content. */
 function isFixed(el: Element): boolean {
   for (let n: Element | null = el; n && n !== document.body; n = n.parentElement) {
     const position = getComputedStyle(n).position;
-    if (position === 'fixed' || position === 'sticky') return true;
+    if (position === 'fixed' || (position === 'sticky' && !n.closest('main'))) return true;
   }
   return false;
 }
@@ -93,6 +107,7 @@ export function moveFocus(dir: Direction): boolean {
     const first = candidates.sort((a, b) => boxOf(a).top - boxOf(b).top || boxOf(a).left - boxOf(b).left)[0];
     if (!first) return false;
     first.focus({ preventScroll: true });
+    tick();
     first.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     return true;
   }
@@ -104,6 +119,7 @@ export function moveFocus(dir: Direction): boolean {
   const target = nearestInDirection(boxOf(active), inPage.map(toBox), dir)
     ?? (inPage.length !== candidates.length ? nearestInDirection(boxOf(active), candidates.map(toBox), dir) : null);
   if (!target) return false;
+  tick();
   arm(target);
   target.focus({ preventScroll: true });
   target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -114,8 +130,13 @@ function onKeyDown(e: KeyboardEvent) {
   if (!isTv() || e.altKey || e.ctrlKey || e.metaKey) return;
   const active = document.activeElement as HTMLElement | null;
   // Escape (the remote's Back on some TVs) closes an open dialog. Backspace is left to text boxes.
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' || e.key === 'GoBack' || e.key === 'BrowserBack') {
+    if (!e.isTrusted) return; // back() sends a fake Escape to the page's own handlers
+    // Typing in a box: Escape leaves the box (highlighted again) instead of going back a page.
+    if (e.key === 'Escape' && active?.matches(TEXT_ENTRY) && !isArmed(active)) { active.blur(); active.focus({ preventScroll: true }); e.preventDefault(); return; }
     if (back()) e.preventDefault();
+    // Nothing open: a keyboard's Escape goes back a page like the remote's Back does (a TV browser does it by itself).
+    else if (e.key === 'Escape' && !ownZone(active) && window.location.pathname !== '/' && window.history.length > 1) window.history.back();
     return;
   }
   // OK on a highlighted text box opens the keyboard; until then the box is only highlighted (see arm()).
@@ -128,7 +149,15 @@ function onKeyDown(e: KeyboardEvent) {
   if (!dir) return;
   if (active && active.matches(TEXT_ENTRY) && !isArmed(active)) {
     // Typing: left and right move inside the text; up and down leave the box, so the remote never gets stuck.
-    if (dir === 'left' || dir === 'right') return;
+    if (dir === 'left' || dir === 'right') {
+      // At the end of the text, Right leaves the box (to the Show button beside a password); at the start, Left does.
+      const f = active as HTMLInputElement;
+      const at = f.selectionStart;
+      const edge = at === null || (f.selectionEnd === at && (dir === 'right' ? at === f.value.length : at === 0));
+      if (!edge || !moveFocus(dir)) return;
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
     if (moveFocus(dir)) { e.preventDefault(); e.stopPropagation(); }
     return;
   }
@@ -150,7 +179,11 @@ function onKeyDown(e: KeyboardEvent) {
 export function back(): boolean {
   const close = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"] button[aria-label="Close"]');
   if (close) { close.click(); return true; }
-  return false;
+  // Menus and dialogs without a Close button all close on Escape: send it to them.
+  const open = [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"], [role="menu"], [aria-haspopup][aria-expanded="true"]')].find(el => !ownZone(el));
+  if (!open) return false;
+  (document.activeElement && document.activeElement !== document.body ? document.activeElement : document).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  return true;
 }
 
 /**
@@ -200,6 +233,24 @@ let typing = false;
 
 function onFocusOut(e: FocusEvent) {
   if (e.target instanceof HTMLElement) disarm(e.target);
+}
+
+/**
+ * After a page change, put focus on the first control of the page when it was lost (the card that was clicked is
+ * gone). Focus left on the navigation bar stays there. Pages load lazily, so it tries for about two seconds.
+ */
+export function settleFocus(): void {
+  if (!isTv()) return;
+  let tries = 0;
+  const attempt = () => {
+    const active = document.activeElement;
+    if (active && active !== document.body && document.contains(active)) return;
+    const main = document.querySelector('main');
+    const first = main && reachable(main).sort((x, y) => boxOf(x).top - boxOf(y).top || boxOf(x).left - boxOf(y).left)[0];
+    if (first) { first.focus({ preventScroll: true }); first.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
+    if (++tries < 14) window.setTimeout(attempt, 150);
+  };
+  window.setTimeout(attempt, 150);
 }
 
 let started = false;

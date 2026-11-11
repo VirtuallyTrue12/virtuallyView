@@ -13,6 +13,7 @@ import { ratingAllowed } from '../services/parental.js';
 import { parseByteRange } from '../lib/byte-range.js';
 import { currentActor } from '../services/user-context.js';
 import { trickplayFor } from '../services/trickplay.js';
+import { queueCredits, segmentsFor } from '../services/segments.js';
 import { acquireConversion, CONVERSION_MAX_MS } from '../lib/limits.js';
 
 type Streamable = Media & { streamUrl?: string; fileInfo?: { path?: string; size?: number } };
@@ -101,8 +102,10 @@ export function serveMediaFile(
 type CodecQuery = { hevc?: string; hevc10?: string };
 const codecsOf = (q: CodecQuery | undefined): ClientCodecs => ({ hevc: q?.hevc === '1', hevc10: q?.hevc10 === '1' });
 
-async function mediaInfoFor(filePath: string, caps: ClientCodecs = {}) {
+async function mediaInfoFor(filePath: string, caps: ClientCodecs = {}, withSegments = false) {
   const probe = await probeMedia(filePath);
+  // Skip intro / credits times come from the cache only; a missing credits check runs later in the background.
+  if (withSegments) queueCredits(filePath);
   return {
     playable: playableFor(probe, caps),
     container: probe.container,
@@ -117,7 +120,8 @@ async function mediaInfoFor(filePath: string, caps: ClientCodecs = {}) {
     sizeBytes: probe.sizeBytes ?? null,
     audioTracks: probe.audioTracks ?? [],
     subtitleStreams: probe.subtitleStreams ?? [],
-    chapters: probe.chapters ?? []
+    chapters: probe.chapters ?? [],
+    segments: withSegments ? segmentsFor(filePath) : {}
   };
 }
 
@@ -176,7 +180,8 @@ async function transcodeOptionsFor(filePath: string, query: TranscodeQuery): Pro
     // to the keyframe gap (10 s in some Blu-ray files, confirmed by matching frames). Any other start converts.
     copyVideo: probe.videoCopyOk === true && start === 0,
     ...(probe.height ? { sourceHeight: probe.height } : {}),
-    ...(probe.bitrate ? { sourceBitrate: probe.bitrate } : {})
+    ...(probe.bitrate ? { sourceBitrate: probe.bitrate } : {}),
+    ...(probe.hdr ? { hdr: probe.hdr, hdrMastering: probe.hdrMastering } : {})
   };
   const burn = Number(query.burn);
   if (query.burn !== undefined && Number.isInteger(burn) && probe.subtitleStreams?.[burn] && !probe.subtitleStreams[burn]?.text) {
@@ -525,7 +530,7 @@ export default async function streamRoutes(server: FastifyInstance) {
     if (!isServable(filePath)) {
       return reply.code(404).send({ error: 'not_found', message: 'This episode has no playable file on the server yet.' });
     }
-    return mediaInfoFor(filePath, codecsOf(request.query));
+    return mediaInfoFor(filePath, codecsOf(request.query), true);
   });
 
   server.get<{ Params: { id: string }; Querystring: TranscodeQuery }>(
@@ -559,7 +564,7 @@ export default async function streamRoutes(server: FastifyInstance) {
     if (!isServable(filePath)) {
       return reply.code(404).send({ error: 'not_found', message: 'No local file is available for this item yet.' });
     }
-    return mediaInfoFor(filePath, codecsOf(request.query));
+    return mediaInfoFor(filePath, codecsOf(request.query), !request.params.id.startsWith('musicvideo-'));
   });
 
   server.get<{ Params: { id: string }; Querystring: TranscodeQuery }>(

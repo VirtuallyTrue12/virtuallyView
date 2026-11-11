@@ -5,6 +5,7 @@ import { hostAddresses } from '../services/stream-token.js';
 import { disks, forgetTitle, getPlan, SUGGEST_DAYS } from '../services/storage-planner.js';
 import { removeTitle } from '../services/remove-title.js';
 import { getAdapter } from '../services/registry.js';
+import { videoHardwareReport } from '../services/transcode.js';
 
 /**
  * Server/device storage facts. The Statistics page reads real folder sizes and
@@ -14,6 +15,12 @@ import { getAdapter } from '../services/registry.js';
 export default async function systemRoutes(server: FastifyInstance) {
   // The addresses this computer has on the home network (and Tailscale), for opening the dashboard on a phone or TV.
   server.get('/api/system/addresses', async () => hostAddresses());
+
+  // Which chip converts video and whether HDR is tone mapped, for the admin's Settings page.
+  server.get('/api/system/video', async (_request, reply) => {
+    if (currentActor().role === 'user') return reply.code(403).send({ error: 'forbidden', message: 'Only an administrator can see this.' });
+    return videoHardwareReport();
+  });
 
   server.get('/api/system/storage', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');

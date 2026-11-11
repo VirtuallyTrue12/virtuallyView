@@ -146,6 +146,7 @@ export default function Player() {
             imageSubtitles={imageSubtitleLabels(playback)}
             sourceHeight={playback?.height ?? null}
             chapters={playback?.chapters ?? []}
+            segments={playback?.segments}
             poster={movie.artwork?.backdrop}
             title={movie.title}
             subtitles={subtitles}

@@ -10,7 +10,7 @@ const KIDS_BLOCKED = [
 
 /** Starting a search, a specials lookup or a file replacement for a title (this is how a download is asked for),
  * or saving a video into the videos library (also a download). */
-const KIDS_BLOCKED_ACTION = /^\/api\/((movies|series|artists)\/[^/]+\/(search|specials|replace-file)|videos\/saved)$/;
+const KIDS_BLOCKED_ACTION = /^\/api\/((movies|series|artists)\/[^/]+\/(search|specials|replace-file|detect-intros)|videos\/saved)$/;
 
 /** True when a Kids profile must be refused this request. Other profiles are never affected. */
 export function kidsBlocked(isKid: boolean, method: string, path: string): boolean {

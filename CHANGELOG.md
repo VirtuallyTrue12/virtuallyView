@@ -2,6 +2,14 @@
 
 ## 0.4.0
 
+- TV remote: Left from the first programme in the Live TV guide goes to its channel; the password Show button and Radio genre chips are reachable; Videos and Radio rows no longer stop on scroll arrows or duplicate links; Back closes a dialog or menu before leaving the page; after a page change focus lands on the page instead of nowhere. A quiet tick and soft glow on each move (Settings > Appearance > Remote sounds; silent while something plays).
+
+- Skip intro and Skip credits: the server finds each season's shared theme tune by comparing episodes' audio, and the credits from chapters or the black stretch at the end, in the background at low priority. The player shows Skip intro, Skip credits or Next episode (focused on TV, so OK skips). Admins can run it from a series' More menu; new episodes are checked automatically. It can be turned off in the player settings.
+
+- Video conversion runs fully on the graphics chip (decode, resize and encode with VA-API), falling back to the processor per file for codecs the chip can't decode. HDR10 and HLG films are tone mapped to normal colour instead of looking washed out. Settings > Server shows which chip converts video.
+
+- No more black screens while moving around: going back to Home, Movies, TV shows, Music or a details page shows what was there at once while it refreshes, and a page that crashes now shows "Something went wrong" with Try again and Go back, with the top bar still there.
+
 - Videos: only an administrator can save a video to the server (it uses disk); others keep Watch later and subscriptions, and can still delete what they saved before.
 
 - Synthwave theme: recoloured to a purple night with an orange and magenta sunset glow and gold focus rings.

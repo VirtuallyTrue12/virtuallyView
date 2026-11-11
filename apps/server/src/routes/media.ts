@@ -1,5 +1,6 @@
 import { currentActor } from '../services/user-context.js';
 import { fetchMissingSpecials } from '../services/specials.js';
+import { detectSeries } from '../services/segments.js';
 import type { FastifyInstance } from 'fastify';
 import type { Media } from '@virtuallyview/types';
 import type { RadarrAdapter, SonarrAdapter } from '@virtuallyview/integrations';
@@ -230,6 +231,17 @@ export default async function mediaRoutes(server: FastifyInstance) {
     if (!/^sonarr-\d+$/.test(request.params.id)) return { success: false, message: 'Unknown show id.' };
     return fetchMissingSpecials(request.params.id);
   }));
+  // Skip intro / credits: compare the show's episodes in the background. Admin only, since it reads every file.
+  server.post<{ Params: { id: string } }>('/api/series/:id/detect-intros', (request, reply) => {
+    if (currentActor().role === 'user') return reply.code(403).send({ success: false, message: 'Only an administrator can do this.' });
+    return answer(reply, async () => {
+      if (!/^sonarr-\d+$/.test(request.params.id)) return { success: false, message: 'Unknown show id.' };
+      const count = await detectSeries(request.params.id);
+      return count
+        ? { success: true, message: `Looking for intros and credits in ${count} episode${count === 1 ? '' : 's'}. Skip buttons appear as each one is done.` }
+        : { success: false, message: 'This show has no downloaded episodes yet.' };
+    });
+  });
   server.post<{ Params: { id: string } }>('/api/artists/:id/search', (request, reply) => answer(reply, () => retryArtist(request.params.id)));
 
   // Wrong or mislabeled file: blocklist that release, delete the file, search again.

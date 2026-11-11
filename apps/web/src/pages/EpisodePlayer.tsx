@@ -180,6 +180,7 @@ export default function EpisodePlayer() {
             imageSubtitles={imageSubtitleLabels(playback)}
             sourceHeight={playback?.height ?? null}
             chapters={playback?.chapters ?? []}
+            segments={playback?.segments}
             isEpisode
             poster={series?.artwork?.backdrop}
             title={title}

@@ -4,7 +4,7 @@
  * (npx playwright install chromium).
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -214,6 +214,16 @@ describe('notifications and backup', () => {
   });
 });
 
+describe('video conversion hardware', () => {
+  it('tells the administrator which chip converts video and where HDR is tone mapped', async () => {
+    await page.route('**/api/system/video', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ converter: 'Intel graphics (VA-API)', tonemap: 'gpu' }) }));
+    await page.goto(base + '/settings?cat=server');
+    await page.getByTestId('video-hardware').getByText('Video conversion: Intel graphics (VA-API). HDR tone mapping: on the graphics chip.').waitFor();
+    await page.unroute('**/api/system/video');
+    expect(errors).toEqual([]);
+  });
+});
+
 describe('empty library pages', () => {
   it('render without errors and without a wall of nothing', async () => {
     for (const path of ['/movies', '/series', '/music', '/requests', '/downloads', '/search']) {
@@ -309,6 +319,33 @@ describe('pull subtitles', () => {
     await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
     await page.getByText('No subtitle files found for this title').waitFor();
     expect(await page.locator('.vp-menu').innerText()).not.toContain('STALE EPISODE 1 RESULT');
+    expect(errors).toEqual([]);
+  });
+});
+
+describe('skip intro', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('shows Skip intro inside the detected intro and jumps past its end', async () => {
+    const video = readFileSync(resolve(root, 'tests/browser/fixtures/tiny-20s.webm'));
+    await page.route('**/api/movies/radarr-530', r => r.fulfill(json({ id: 'radarr-530', title: 'Skip Test', status: 'available' })));
+    await page.route('**/api/stream/radarr-530/info', r => r.fulfill(json({ playable: true, transcodingAvailable: false, durationSeconds: 20, container: 'webm', videoCodec: 'vp9', audioCodec: null, reason: null, segments: { intro: { start: 0, end: 12 } } })));
+    await page.route('**/api/progress/movie/radarr-530', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await page.route('**/api/stream/radarr-530/subtitles', r => r.fulfill(json({ subtitles: [] })));
+    await page.route('**/api/stream/radarr-530/trickplay', r => r.fulfill(json({ state: 'unavailable' })));
+    await page.route('**/api/stream/radarr-530', r => {
+      // Answer byte ranges like the real server, so the browser can seek in the clip.
+      const m = /bytes=(\d+)-(\d*)/.exec(r.request().headers()['range'] ?? '');
+      const start = m ? Number(m[1]) : 0, end = m?.[2] ? Number(m[2]) : video.length - 1;
+      return r.fulfill({ status: m ? 206 : 200, contentType: 'video/webm', headers: { 'Accept-Ranges': 'bytes', ...(m ? { 'Content-Range': `bytes ${start}-${end}/${video.length}` } : {}) }, body: video.subarray(start, end + 1) });
+    });
+
+    await page.goto(base + '/movies/radarr-530/play');
+    const skip = page.getByRole('button', { name: 'Skip intro' });
+    await skip.waitFor();
+    await skip.click();
+    await page.waitForFunction(() => (document.querySelector('video')?.currentTime ?? 0) >= 11.9);
+    await skip.waitFor({ state: 'detached' });
     expect(errors).toEqual([]);
   });
 });
@@ -1880,5 +1917,102 @@ describe('settings: storage planner (mocked APIs)', () => {
     await dialog.getByRole('button', { name: 'Delete Huge Remux' }).click();
     await dialog.waitFor({ state: 'detached' });
     expect(deletes).toEqual([{ id: 'radarr-1' }]);
+  });
+});
+
+describe('going back to a page', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const film = { id: 'radarr-902', title: 'Instant Return', year: 2002, type: 'movie', status: 'available', runtime: 90, artwork: {} };
+  afterEach(async () => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
+
+  it('shows what it showed before at once, not a blank screen, while it refreshes', async () => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    await page.route('**/api/dashboard', r => r.fulfill(json({ hero: null, heroCandidates: [], rails: [] })));
+    await page.route('**/api/movies', r => r.fulfill(json([film])));
+    await page.goto(base + '/movies');
+    await page.getByText('Instant Return').first().waitFor();
+    // From now on the server is slow: the page must not wait for it.
+    await page.route('**/api/movies', r => setTimeout(() => void r.fulfill(json([film])).catch(() => undefined), 5000));
+    await page.locator('nav a', { hasText: 'Home' }).first().click();
+    await page.waitForURL(base + '/');
+    await page.locator('.browse-library').waitFor({ state: 'detached' });
+    await page.goBack();
+    await page.getByText('Instant Return').first().waitFor({ timeout: 1500 });
+  });
+
+  it('a page that crashes keeps the top bar and offers a way back, instead of a black screen', async () => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    // A broken answer (director should be a list of people) makes the details page throw.
+    await page.route('**/api/movies/radarr-903', r => r.fulfill(json({ id: 'radarr-903', title: 'Broken', type: 'movie', status: 'available', artwork: {}, director: [null] })));
+    await page.goto(base + '/movies/radarr-903');
+    await page.getByText('Something went wrong on this page').waitFor();
+    expect(await page.locator('nav').count()).toBeGreaterThan(0);
+    errors.length = 0;
+  });
+});
+
+describe('remote control: guide, password and page changes', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const tv = () => page.evaluate(() => document.documentElement.classList.add('tv'));
+  const label = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute('aria-label') ?? (document.activeElement as HTMLElement | null)?.textContent?.trim() ?? 'BODY');
+
+  it('Left from the first programme goes to its channel cell, not the page tabs', async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    const now = Date.now();
+    await page.route('**/api/live/playlists', r => r.fulfill(json({ playlists: [{ id: 'p', name: 'P', url: 'http://x' }] })));
+    await page.route('**/api/live/channels', r => r.fulfill(json({ channels: [{ id: 'c1', name: 'Alpha TV', playlist: 'p', guide: true }, { id: 'c2', name: 'Beta TV', playlist: 'p', guide: true }], problems: [] })));
+    await page.route('**/api/live/me', r => r.fulfill(json({ favorites: [], recent: [], dead: [] })));
+    await page.route('**/api/live/guide**', r => r.fulfill(json({ ready: true, now, programmes: {
+      c1: [{ start: now - 600_000, stop: now + 3_000_000, title: 'Alpha show' }],
+      c2: [{ start: now - 600_000, stop: now + 3_000_000, title: 'Beta show' }]
+    } })));
+    await page.goto(base + '/live');
+    await page.getByRole('radio', { name: 'Guide' }).click();
+    await page.locator('.gg-prog').first().waitFor();
+    await tv();
+    await page.locator('.gg-row').nth(1).locator('.gg-prog').first().focus();
+    await page.keyboard.press('ArrowLeft');
+    expect(await page.evaluate(() => (document.activeElement as HTMLElement).closest('.gg-row')?.querySelector('.gg-chan') === document.activeElement)).toBe(true);
+    expect(await label()).toContain('Beta TV');
+    await page.evaluate(() => document.documentElement.classList.remove('tv'));
+  });
+
+  it('the password Show button is reachable with Right from the box, even while typing', async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    const ctx2 = await page.context().browser()!.newContext();
+    const anon = await ctx2.newPage();
+    try {
+      await anon.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, authenticated: false })));
+      await anon.goto(base + '/');
+      await anon.locator('.password-toggle').first().waitFor();
+      await anon.evaluate(() => document.documentElement.classList.add('tv'));
+      const pw = anon.locator('.password-field input').first();
+      await pw.focus();
+      await anon.keyboard.press('Enter'); // OK opens it for typing
+      await anon.keyboard.type('abc');
+      await anon.keyboard.press('ArrowRight'); // caret is at the end: Right leaves the box
+      expect(await anon.evaluate(() => (document.activeElement as HTMLElement).className)).toContain('password-toggle');
+    } finally { await ctx2.close(); }
+  });
+
+  it('after a page change focus lands on the new page, not on <body>', async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await page.route('**/api/dashboard', r => r.fulfill(json({ kids: false, hero: null, heroCandidates: [], rails: [
+      { id: 'a', title: 'Rail', items: [{ id: 'radarr-5', title: 'Opens next', type: 'movie', year: 2014, artwork: {} }] }] })));
+    await page.route('**/api/movies/radarr-5', r => r.fulfill(json({ id: 'radarr-5', title: 'Opens next', status: 'available', year: 2020 })));
+    await page.goto(base + '/');
+    await page.locator('a.media-card-link').first().waitFor();
+    await tv();
+    await page.locator('a.media-card-link').first().focus();
+    await page.keyboard.press('Enter');
+    await page.waitForURL('**/movies/radarr-5');
+    await page.waitForFunction(() => document.activeElement && document.activeElement !== document.body && !!document.activeElement.closest('main'));
+    await page.evaluate(() => document.documentElement.classList.remove('tv'));
   });
 });

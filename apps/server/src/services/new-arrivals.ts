@@ -5,6 +5,7 @@ import { all, get, run } from '../db/app-db.js';
 import { DATA_DIR } from '../lib/paths.js';
 import { getAdapter } from './registry.js';
 import { getRequests } from './requests.js';
+import { detectSeries } from './segments.js';
 import { notify } from './notifications.js';
 import { listUsers } from './auth.js';
 
@@ -275,6 +276,8 @@ async function runCheck(): Promise<void> {
 
   for (const n of result.notices) {
     recordArrival(n);
+    // New episodes: find their intro and credits in the background (already-checked files are skipped).
+    if (n.type === 'library.new-episode') void detectSeries(n.mediaId).catch(() => undefined);
     for (const [userId, f] of follows) {
       const wanted = n.type === 'library.new-episode' ? f.series.has(n.mediaId) : f.artists.has(n.mediaId);
       if (!wanted) continue;

@@ -12,8 +12,9 @@ import { LoadError, SkeletonGrid } from '../components/home/Skeletons';
 
 export default function Movies() {
   const navigate = useNavigate();
-  const [items, setItems] = useState<MediaItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [cached] = useState(() => api.cached.movies());
+  const [items, setItems] = useState<MediaItem[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
 
   const lib = useLibraryView(items, 'movies');
@@ -24,14 +25,14 @@ export default function Movies() {
   };
 
   const load = () => {
-    setLoading(true);
+    if (!cached) setLoading(true);
     setError(null);
     api.movies()
       .then(setItems)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   };
-  useEffect(load, []);
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <main className="page browse-library">

@@ -4,6 +4,7 @@ import ProfilePicker from './components/profiles/ProfilePicker';
 import { MobileTabs } from './components/layout/MobileTabs';
 import { UpdateBanner } from './components/layout/UpdateBanner';
 import { Navigation } from './components/layout/Navigation';
+import { PageErrorBoundary } from './components/layout/PageErrorBoundary';
 import CommandPalette from './components/layout/CommandPalette';
 import { Toaster, toast } from './components/ui/Toast';
 import { accelerationTip } from './lib/perf';
@@ -53,6 +54,7 @@ import { api, type AuthUser } from './lib/api';
 
 type AuthState = { enabled: boolean; setupRequired: boolean; authenticated: boolean; user?: AuthUser | null };
 import { paintCachedTheme, syncTheme } from './lib/appearance';
+import { settleFocus } from './lib/dpad';
 import { MusicProvider } from './components/media/MusicProvider';
 import { RadioProvider } from './components/radio/RadioProvider';
 
@@ -81,6 +83,8 @@ export default function App() {
       setAuthLoading(false);
     }
   };
+  // Remote: after a page change, focus must not be left on nothing.
+  useEffect(() => { settleFocus(); }, [pathname]);
   useEffect(() => { const tip = accelerationTip(); if (tip) window.setTimeout(() => toast(tip, { tone: 'info', ms: 15000 }), 3000); }, []);
   useEffect(() => {
     void loadAuth();
@@ -205,6 +209,7 @@ export default function App() {
       {offline && <OfflineBanner />}
       <UpdateBanner />
       <Navigation user={auth.user} onSignOut={() => void signOut()} onRefresh={() => setRefreshKey(key => key + 1)} />
+      <PageErrorBoundary resetKey={pathname}>
       <Suspense fallback={<div className="loading-state">Loading...</div>}>
       <Routes key={refreshKey}>
         <Route path="/" element={offline ? <Navigate to="/offline" replace /> : <Home />} />
@@ -248,6 +253,7 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       </Suspense>
+      </PageErrorBoundary>
       <footer className="app-footer">
         <span>virtuallyView</span>
         <span><Link to="/requests">Requests</Link> · <Link to="/downloads">Downloads</Link> · <Link to="/settings">Settings</Link></span>

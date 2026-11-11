@@ -21,8 +21,8 @@ import { RelatedVideos } from '../components/videos/RelatedVideos';
 export default function SeriesDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [series, setSeries] = useState<SeriesItem | null>(null);
-  const [library, setLibrary] = useState<SeriesItem[]>([]);
+  const [series, setSeries] = useState<SeriesItem | null>(() => (id && api.cached.serie(id)) || null);
+  const [library, setLibrary] = useState<SeriesItem[]>(() => api.cached.series() ?? []);
   const [error, setError] = useState<string | null>(null);
   const [description, setDescription] = useState<MediaDescription | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);
@@ -113,6 +113,9 @@ export default function SeriesDetail() {
   const showStory = !!description?.description && description.source !== 'library' && description.description.trim() !== (series.overview ?? '').trim();
   const searchMissing = async () => {
     try { const r = await api.searchSeries(series.id); setNotice({ tone: r.success ? 'ok' : 'err', text: r.message }); } catch (err) { setNotice({ tone: 'err', text: (err as Error).message }); }
+  };
+  const detectIntros = async () => {
+    try { const r = await api.detectIntros(series.id); setNotice({ tone: r.success ? 'ok' : 'err', text: r.message }); } catch (err) { setNotice({ tone: 'err', text: (err as Error).message }); }
   };
   const removeSeries = async (deleteFiles: boolean) => {
     setRemoving(true);
@@ -209,6 +212,7 @@ export default function SeriesDetail() {
                       <MenuItem icon="search" label="Search for missing episodes" onSelect={() => void searchMissing()} />
                     )}
                     {isSonarr && <MenuItem icon="sliders-h" label="Download quality and checks" onSelect={() => setDialog('checks')} />}
+                    {isSonarr && availableEpisodes > 0 && <MenuItem icon="next" label="Detect intros and credits" onSelect={() => void detectIntros()} />}
                     <MenuDivider />
                     <MenuItem icon="trash" label="Remove show" danger onSelect={() => setDialog('remove')} />
                   </MoreMenu>

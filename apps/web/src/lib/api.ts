@@ -254,6 +254,8 @@ export interface MediaPlaybackInfo {
   audioTracks?: Array<{ index: number; codec: string; language: string; title: string; channels: number | null }>;
   subtitleStreams?: Array<{ index: number; codec: string; language: string; title: string; text: boolean }>;
   chapters?: Array<{ start: number; end: number; title: string }>;
+  /** Intro and credits found by the server's background detector. */
+  segments?: { intro?: { start: number; end: number }; credits?: { start: number } };
 }
 
 export type Rail = {
@@ -574,6 +576,8 @@ export class ApiError extends Error {
 }
 
 async function requestJSON<T>(method: string, path: string, body?: unknown): Promise<T> {
+  // Another account or profile must never see the last one's pages.
+  if (method !== 'GET' && /^\/api\/(auth\/|profiles\/switch)/.test(path)) lastGet.clear();
   const res = await fetch(path, {
     method,
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
@@ -607,9 +611,17 @@ function codecQuery(): string {
   return codecCache;
 }
 
+// The last answer per GET path, so a page you go back to paints at once (no blank screen) while it refreshes.
+const lastGet = new Map<string, unknown>();
 function getJSON<T>(path: string): Promise<T> {
-  return requestJSON<T>('GET', path);
+  return requestJSON<T>('GET', path).then(value => {
+    lastGet.delete(path);
+    lastGet.set(path, value);
+    if (lastGet.size > 80) lastGet.delete(lastGet.keys().next().value as string);
+    return value;
+  });
 }
+const peek = <T,>(path: string) => lastGet.get(path) as T | undefined;
 
 function postJSON<T>(path: string, body?: unknown): Promise<T> {
   return requestJSON<T>('POST', path, body);
@@ -663,6 +675,16 @@ export interface SettingsOverview {
 export interface TroubleCheck { id: string; area: string; label: string; status: 'ok' | 'warn' | 'fail' | 'skipped'; detail: string; fixes: string[]; restart?: string }
 
 export const api = {
+  /** What a page showed last time, for an instant first paint; undefined until loaded once. */
+  cached: {
+    dashboard: () => peek<Dashboard>('/api/dashboard'),
+    movies: () => peek<MediaItem[]>('/api/movies'),
+    movie: (id: string) => peek<MediaItem>(`/api/movies/${encodeURIComponent(id)}`),
+    series: () => peek<SeriesItem[]>('/api/series'),
+    serie: (id: string) => peek<SeriesItem>(`/api/series/${encodeURIComponent(id)}`),
+    artists: () => peek<MediaItem[]>('/api/artists'),
+    playlists: () => peek<PlaylistItem[]>('/api/playlists')
+  },
   troubleshoot: () => getJSON<{ checkedAt: string; checks: TroubleCheck[]; summary: { ok: number; warn: number; fail: number } }>('/api/troubleshoot'),
   photosAll: () => getJSON<{ items: PhotoEntry[]; truncated: boolean }>('/api/photos/all'),
   photosFolder: (dir: string) => getJSON<PhotoFolder>(`/api/photos?dir=${encodeURIComponent(dir)}`),
@@ -756,6 +778,7 @@ export const api = {
   signup: (username: string, password: string, stayLoggedIn?: boolean) => postJSON<AuthStatus>('/api/auth/signup', { username, password, stayLoggedIn }),
   setupRepair: () => postJSON<{ ok: boolean; partial: boolean; log: string[] }>('/api/setup/repair'),
   searchMovie: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/movies/${encodeURIComponent(id)}/search`),
+  detectIntros: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/series/${encodeURIComponent(id)}/detect-intros`, {}),
   findSpecials: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/series/${encodeURIComponent(id)}/specials`, {}),
   searchSeries: (id: string, episodeId?: string, label?: string) => postJSON<{ success: boolean; message: string }>(`/api/series/${encodeURIComponent(id)}/search`, episodeId ? { episodeId, label } : {}),
   searchArtist: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/artists/${encodeURIComponent(id)}/search`),
@@ -804,6 +827,7 @@ export const api = {
   storageDelete: (id: string) => postJSON<{ success: boolean; message: string }>('/api/system/storage/delete', { id }),
   systemStorage: () => getJSON<StorageReport>('/api/system/storage'),
   hostAddresses: () => getJSON<HostAddresses>('/api/system/addresses'),
+  videoHardware: () => getJSON<{ converter: string; tonemap: 'gpu' | 'cpu' | null }>('/api/system/video'),
   mediaInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/${encodeURIComponent(id)}/info${codecQuery()}`),
   episodeInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/episode/${encodeURIComponent(id)}/info${codecQuery()}`),
   dashboard: () => getJSON<Dashboard>('/api/dashboard'),
