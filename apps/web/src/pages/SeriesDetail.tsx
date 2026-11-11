@@ -114,6 +114,9 @@ export default function SeriesDetail() {
   const searchMissing = async () => {
     try { const r = await api.searchSeries(series.id); setNotice({ tone: r.success ? 'ok' : 'err', text: r.message }); } catch (err) { setNotice({ tone: 'err', text: (err as Error).message }); }
   };
+  const detectIntros = async () => {
+    try { const r = await api.detectIntros(series.id); setNotice({ tone: r.success ? 'ok' : 'err', text: r.message }); } catch (err) { setNotice({ tone: 'err', text: (err as Error).message }); }
+  };
   const removeSeries = async (deleteFiles: boolean) => {
     setRemoving(true);
     try { await api.deleteSeries(series.id, deleteFiles); setDialog(null); navigate('/series'); } catch (err) { setDialog(null); setNotice({ tone: 'err', text: (err as Error).message }); setRemoving(false); }
@@ -209,6 +212,7 @@ export default function SeriesDetail() {
                       <MenuItem icon="search" label="Search for missing episodes" onSelect={() => void searchMissing()} />
                     )}
                     {isSonarr && <MenuItem icon="sliders-h" label="Download quality and checks" onSelect={() => setDialog('checks')} />}
+                    {isSonarr && availableEpisodes > 0 && <MenuItem icon="next" label="Detect intros and credits" onSelect={() => void detectIntros()} />}
                     <MenuDivider />
                     <MenuItem icon="trash" label="Remove show" danger onSelect={() => setDialog('remove')} />
                   </MoreMenu>

@@ -8,7 +8,7 @@ import { probeMedia, resolveBinary } from './transcode.js';
 // The preview strip reads the whole file, usually right as playback starts: idle disk priority keeps it
 // from competing with the read the viewer is actually waiting on (nice alone only lowers CPU priority).
 const IONICE = ['/usr/bin/ionice', '/bin/ionice'].find(p => existsSync(p));
-const LOW_PRIORITY = IONICE ? [IONICE, '-c3', 'nice', '-n', '15'] : ['nice', '-n', '15'];
+export const LOW_PRIORITY = IONICE ? [IONICE, '-c3', 'nice', '-n', '15'] : ['nice', '-n', '15'];
 
 // Preview thumbnails on the seek bar: one small picture every INTERVAL seconds,
 // packed into a single sprite image made once per file by ffmpeg and cached.

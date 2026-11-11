@@ -243,6 +243,8 @@ export interface MediaPlaybackInfo {
   audioTracks?: Array<{ index: number; codec: string; language: string; title: string; channels: number | null }>;
   subtitleStreams?: Array<{ index: number; codec: string; language: string; title: string; text: boolean }>;
   chapters?: Array<{ start: number; end: number; title: string }>;
+  /** Intro and credits found by the server's background detector. */
+  segments?: { intro?: { start: number; end: number }; credits?: { start: number } };
 }
 
 export type Rail = {
@@ -745,6 +747,7 @@ export const api = {
   signup: (username: string, password: string, stayLoggedIn?: boolean) => postJSON<AuthStatus>('/api/auth/signup', { username, password, stayLoggedIn }),
   setupRepair: () => postJSON<{ ok: boolean; partial: boolean; log: string[] }>('/api/setup/repair'),
   searchMovie: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/movies/${encodeURIComponent(id)}/search`),
+  detectIntros: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/series/${encodeURIComponent(id)}/detect-intros`, {}),
   findSpecials: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/series/${encodeURIComponent(id)}/specials`, {}),
   searchSeries: (id: string, episodeId?: string, label?: string) => postJSON<{ success: boolean; message: string }>(`/api/series/${encodeURIComponent(id)}/search`, episodeId ? { episodeId, label } : {}),
   searchArtist: (id: string) => postJSON<{ success: boolean; message: string }>(`/api/artists/${encodeURIComponent(id)}/search`),
