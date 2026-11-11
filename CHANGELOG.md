@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Radio: "Live radio only" now shows real broadcasters only (stations with presenters and news, such as All India Radio, Vividh Bharati, BBC, NPR and LBC), picked from the most-played stations in each country. Fan-made automatic playlists no longer slip through.
+
 - Year in review is now a full-screen story: hours watched and listened, how that compares with last year, top artists, songs, films, series and video channels with pictures, genres, your busiest day and hour, your longest binge, and the first and last thing of the year. Move through it by tapping, swiping, with the arrow keys or with the TV remote; pick any year that has data; cards with nothing to show are hidden. Save as image makes a picture of the summary on your device. A Home card appears in December and January.
 
 - Watch together now stays in step: play, pause, seek and speed reach everyone; small drift is evened out by speeding up or slowing down slightly, and big drift seeks. If one person is buffering, everyone waits ("Waiting for Sam...") and starts again together. It works for films, episodes and Videos, and adds chat, quick reactions that float over the video, a member list, handing over host, and a Leave button. Kids profiles can only join titles their rating allows.
