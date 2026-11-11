@@ -2434,8 +2434,8 @@ describe('year in review', () => {
 
   it('shows the real empty state from the server when the viewer has no history', async () => {
     await page.unroute('**/api/review/*');
-    await page.goto(`${base}/music/year/2026`);
-    await page.getByText(/Nothing to look back on for 2026/).waitFor();
+    await page.goto(`${base}/music/year/2003`);
+    await page.getByText(/Nothing to look back on for 2003/).waitFor();
   });
 
   it.skipIf(!shots)('screenshots every card', async () => {
