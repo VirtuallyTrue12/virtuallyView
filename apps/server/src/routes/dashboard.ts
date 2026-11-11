@@ -10,6 +10,7 @@ import { currentActor } from '../services/user-context.js';
 import { lastWatchedSeries } from '../services/progress.js';
 import { newForYouRails } from '../services/new-for-you.js';
 import { flagsForLibrary } from '../services/user-flags.js';
+import { forYouRail } from '../services/for-you.js';
 import { savedHomeLayout } from '../services/home-layout.js';
 import { applyHomeLayout, pickAnchors, similarTitles, topHousehold } from '../services/home-rails.js';
 import type { SonarrAdapter } from '@virtuallyview/integrations';
@@ -197,6 +198,7 @@ export default async function dashboardRoutes(server: FastifyInstance) {
       ...(continueItems.length ? [{ id: 'continue-watching', title: 'Continue Watching', items: continueItems.slice(0, 12) }] : []),
       ...(nextUp.length ? [{ id: 'next-up', title: 'Next Up', items: nextUp }] : []),
       ...newForYouRails(byId, artists.map(a => a.id)),
+      ...await forYouRail({ titles: libraryTitles, artists, anchorEvents, signals, kid: false }),
       ...(top10.length >= 3 ? [{ id: 'top-10', title: 'Top 10 in Your Home', items: withStream(top10), kind: 'ranked' }] : []),
       ...becauseRails,
       { id: 'trending-movies', title: 'Trending Movies', href: '/movies', items: withStream(byRating(movies, 10)) },

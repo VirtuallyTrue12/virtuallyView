@@ -10,6 +10,8 @@ type Props = {
   showStatus?: boolean;
   progress?: number;
   to?: string;
+  /** Small type label on the artwork, used where kinds are mixed. */
+  typeBadge?: string;
 };
 
 /**
@@ -21,7 +23,7 @@ type Props = {
  * artwork. The preview is deliberately opt-in per gesture: it only appears
  * after the pointer has been resting on the tile, never on a quick swipe.
  */
-export function MediaCard({ item, showStatus = false, progress, to }: Props) {
+export function MediaCard({ item, showStatus = false, progress, to, typeBadge }: Props) {
   const [broken, setBroken] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
@@ -109,6 +111,7 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
             }}
           />
         )}
+        {typeBadge && <span className="media-card-type">{typeBadge}</span>}
         {showStatus && item.status && !activeDownload && (
           <div className="media-card-badge"><StatusPill status={displayStatus} /></div>
         )}
@@ -145,7 +148,7 @@ export function MediaCard({ item, showStatus = false, progress, to }: Props) {
       <div className="media-card-info">
         <h3 className="media-card-title" title={item.title}>{item.title}</h3>
         <p className="media-card-sub">
-          {[item.year, item.quality].filter(Boolean).join(' · ')}
+          {item.reason ?? [item.year, item.quality].filter(Boolean).join(' · ')}
         </p>
       </div>
     </article>

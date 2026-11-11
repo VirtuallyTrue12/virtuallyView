@@ -23,6 +23,8 @@ export interface MediaItem {
   totalTrackCount?: number;
   sizeOnDisk?: number;
   watchProgress?: number;
+  /** Why a "For you" card is shown. */
+  reason?: string;
   createdAt?: string;
   favorite?: boolean;
   watched?: boolean;
@@ -261,7 +263,7 @@ export interface MediaPlaybackInfo {
 export type Rail = {
   id: string;
   title: string;
-  kind?: 'media' | 'download' | 'ranked';
+  kind?: 'media' | 'download' | 'ranked' | 'foryou';
   href?: string;
   /** Set by the server when the viewer has hidden this rail (the home editor still lists it). */
   hidden?: boolean;

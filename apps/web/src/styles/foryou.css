@@ -1,0 +1,8 @@
+/* Home, For you rail */
+.media-card-type {
+  position: absolute; top: var(--spacing-xs); left: var(--spacing-xs); z-index: 1;
+  padding: 2px var(--spacing-xs); border-radius: var(--radius-small);
+  background: var(--color-scrim); color: var(--color-text-primary);
+  font-size: var(--text-xs); font-weight: 600; line-height: 1.4;
+}
+.media-card-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

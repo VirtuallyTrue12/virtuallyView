@@ -15,6 +15,8 @@ interface Prompt { profile: ProfileSummary; needs: 'pin' | 'password'; passwordA
  */
 export default function ProfilePicker() {
   const [profiles, setProfiles] = useState<ProfileSummary[] | null>(null);
+  // The profile this device used last: the remote's focus starts there.
+  const [currentId, setCurrentId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -23,7 +25,7 @@ export default function ProfilePicker() {
   useEffect(() => {
     let cancelled = false;
     api.profiles()
-      .then(result => { if (!cancelled) setProfiles(result.profiles); })
+      .then(result => { if (!cancelled) { setProfiles(result.profiles); setCurrentId(result.currentId); } })
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
   }, []);
@@ -76,11 +78,12 @@ export default function ProfilePicker() {
       )}
       {profiles && profiles.length > 0 && (
         <ul className="picker-grid" aria-label="Profiles">
-          {profiles.map(profile => (
+          {profiles.map((profile, i) => (
             <li key={profile.id}>
               <button
                 type="button"
                 className="picker-profile"
+                autoFocus={currentId ? profile.id === currentId : i === 0}
                 disabled={busy !== null}
                 onClick={() => void choose(profile)}
                 aria-label={`${profile.name}${profile.isKid ? ', Kids profile' : ''}${profile.hasPin ? ', PIN needed' : ''}`}

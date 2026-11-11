@@ -20,6 +20,7 @@ import './styles/tools.css';
 import './styles/videos.css';
 import './styles/media.css';
 import './styles/storage.css';
+import './styles/foryou.css';
 
 initPerformanceMode();
 initDpad();

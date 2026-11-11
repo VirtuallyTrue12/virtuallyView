@@ -47,6 +47,8 @@ beforeAll(async () => {
   await waitFor(`${base}/api/health`);
   browser = await chromium.launch();
   ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['clipboard-read', 'clipboard-write'] });
+  // The test server has several profiles; "Who's watching?" counts as answered unless a test clears this.
+  await ctx.addInitScript(() => sessionStorage.setItem('vv-profile-picked', '1'));
   page = await ctx.newPage();
   page.on('pageerror', e => errors.push(e.message));
 }, 120_000);
@@ -1720,6 +1722,56 @@ describe('profiles and Kids mode (mocked APIs)', () => {
     await page.locator('.user-menu-button').click();
     expect(await page.getByRole('menuitem', { name: 'Switch profile' }).count()).toBe(1);
     await page.keyboard.press('Escape');
+  });
+});
+
+describe('For you rail and the opening profile picker (mocked APIs)', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const me = { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } };
+  const profile = (id: string, name: string) => ({ id, name, avatar: me.profileAvatar, hasPin: false, isKid: false });
+  const forYou = { id: 'for-you', title: 'For you', kind: 'foryou', items: [
+    { id: 'radarr-1', title: 'Heat', type: 'movie', artwork: {}, reason: 'Because you watched Collateral' },
+    { id: 'lidarr-2', title: 'Daft Punk', type: 'artist', artwork: {}, reason: 'More from Daft Punk' },
+    { id: 'abcdefghijk', title: 'Cool Video', type: 'video', artwork: {}, href: '/videos/watch/abcdefghijk', reason: 'New from Some Channel' }
+  ] };
+
+  const open = async (profiles: ReturnType<typeof profile>[]) => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: me })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    await page.route('**/api/profiles', r => r.fulfill(json({ profiles, currentId: 'u-sam' })));
+    await page.route('**/api/dashboard', r => r.fulfill(json({ hero: null, heroCandidates: [], rails: [forYou] })));
+    await page.addInitScript(() => sessionStorage.removeItem('vv-profile-picked'));
+    await page.goto(base + '/');
+  };
+  afterEach(async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    // The clearing script outlives the test: put the flag back for the tests after this one.
+    await page.addInitScript(() => sessionStorage.setItem('vv-profile-picked', '1'));
+  });
+
+  it('mixes movies, music and videos with a type badge and a reason on each card', async () => {
+    await open([profile('u-parent', 'Parent')]);
+    await page.getByRole('region', { name: 'For you' }).waitFor();
+    const cards = page.getByRole('region', { name: 'For you' }).locator('.media-card');
+    expect(await cards.count()).toBe(3);
+    expect(await cards.allTextContents()).toEqual([
+      expect.stringContaining('MovieHeatBecause you watched Collateral'),
+      expect.stringContaining('MusicDaft PunkMore from Daft Punk'),
+      expect.stringContaining('VideoCool VideoNew from Some Channel')
+    ]);
+    expect(await page.locator('a[href="/videos/watch/abcdefghijk"]').count()).toBe(1);
+  });
+
+  it('asks who is watching on open with two profiles, focus on the last-used one, but never with one', async () => {
+    await open([profile('u-parent', 'Parent'), profile('u-sam', 'Sam')]);
+    await page.getByRole('heading', { name: /who.s watching/i }).waitFor();
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toMatch(/^Sam/);
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await open([profile('u-parent', 'Parent')]);
+    await page.getByRole('region', { name: 'For you' }).waitFor();
+    expect(await page.getByRole('heading', { name: /who.s watching/i }).count()).toBe(0);
   });
 });
 

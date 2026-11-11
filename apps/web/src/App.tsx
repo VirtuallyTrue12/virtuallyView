@@ -58,12 +58,12 @@ import { settleFocus } from './lib/dpad';
 import { MusicProvider } from './components/media/MusicProvider';
 import { RadioProvider } from './components/radio/RadioProvider';
 
+const PICKED_KEY = 'vv-profile-picked';
+
 export default function App() {
   const authedRef = useRef(false);
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  // Set after a fresh sign-in, so a household with two or more profiles is offered the picker once.
-  const [pickerOnEntry, setPickerOnEntry] = useState(false);
   // Bumping this remounts the current page, so it loads its data again.
   const [refreshKey, setRefreshKey] = useState(0);
   const [auth, setAuth] = useState<{ enabled: boolean; setupRequired: boolean; authenticated: boolean; user?: AuthUser | null } | null>(null);
@@ -138,18 +138,21 @@ export default function App() {
     document.documentElement.classList.toggle('kids', kid);
   }, [kid]);
 
-  // After signing in (not on a page load), offer the picker when two or more profiles are shown.
+  // On app open, a household with two or more profiles is asked "Who's watching?" once per browser session.
   useEffect(() => {
-    if (!pickerOnEntry || !auth?.authenticated || onboarding.loading || onboarding.required) return;
-    setPickerOnEntry(false);
+    if (!auth?.authenticated || onboarding.loading || onboarding.required) return;
+    try {
+      if (sessionStorage.getItem(PICKED_KEY)) return;
+      sessionStorage.setItem(PICKED_KEY, '1');
+    } catch { return; }
     api.profiles()
       .then(result => { if (result.profiles.length >= 2) navigate('/profiles', { replace: true }); })
       .catch(() => { /* no picker: the home page still works */ });
-  }, [pickerOnEntry, auth?.authenticated, onboarding.loading, onboarding.required, navigate]);
+  }, [auth?.authenticated, onboarding.loading, onboarding.required, navigate]);
 
   const signedIn = (next: AuthState) => {
+    try { sessionStorage.removeItem(PICKED_KEY); } catch { /* the picker may then be skipped */ }
     setAuth(next);
-    setPickerOnEntry(true);
   };
 
   const signOut = async () => {

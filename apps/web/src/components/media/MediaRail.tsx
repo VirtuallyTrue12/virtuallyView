@@ -6,6 +6,8 @@ import type { Rail, DownloadItem, MediaItem } from '../../lib/api';
 import { SvgIcon } from '../ui/SvgIcon';
 import { RankedCard } from '../home/RankedCard';
 
+const TYPE_LABEL: Record<string, string> = { movie: 'Movie', series: 'TV show', artist: 'Music', video: 'Video' };
+
 export function MediaRail({ rail }: { rail: Rail }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -70,7 +72,8 @@ export function MediaRail({ rail }: { rail: Rail }) {
             <MediaCard
               key={item.id}
               item={item as MediaItem}
-              showStatus
+              showStatus={rail.kind !== 'foryou'}
+              typeBadge={rail.kind === 'foryou' ? TYPE_LABEL[(item as MediaItem).type ?? ''] : undefined}
               progress={(item as MediaItem).watchProgress}
               to={(item as MediaItem & { href?: string }).href ?? detailPath(item as MediaItem)}
             />
