@@ -21,8 +21,8 @@ import { RelatedVideos } from '../components/videos/RelatedVideos';
 export default function SeriesDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [series, setSeries] = useState<SeriesItem | null>(null);
-  const [library, setLibrary] = useState<SeriesItem[]>([]);
+  const [series, setSeries] = useState<SeriesItem | null>(() => (id && api.cached.serie(id)) || null);
+  const [library, setLibrary] = useState<SeriesItem[]>(() => api.cached.series() ?? []);
   const [error, setError] = useState<string | null>(null);
   const [description, setDescription] = useState<MediaDescription | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);

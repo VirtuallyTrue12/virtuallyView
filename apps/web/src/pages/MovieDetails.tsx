@@ -27,8 +27,8 @@ const fmtClock = (sec: number) => {
 export default function MovieDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [movie, setMovie] = useState<MediaItem | null>(null);
-  const [library, setLibrary] = useState<MediaItem[]>([]);
+  const [movie, setMovie] = useState<MediaItem | null>(() => (id && api.cached.movie(id)) || null);
+  const [library, setLibrary] = useState<MediaItem[]>(() => api.cached.movies() ?? []);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const requester = useRequester(outcome => {

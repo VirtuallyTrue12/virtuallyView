@@ -1848,3 +1848,40 @@ describe('remote control in TV mode', () => {
     await page.unroute('**/api/movies/radarr-777');
   });
 });
+
+describe('going back to a page', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const film = { id: 'radarr-902', title: 'Instant Return', year: 2002, type: 'movie', status: 'available', runtime: 90, artwork: {} };
+  afterEach(async () => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
+
+  it('shows what it showed before at once, not a blank screen, while it refreshes', async () => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    await page.route('**/api/dashboard', r => r.fulfill(json({ hero: null, heroCandidates: [], rails: [] })));
+    await page.route('**/api/movies', r => r.fulfill(json([film])));
+    await page.goto(base + '/movies');
+    await page.getByText('Instant Return').first().waitFor();
+    // From now on the server is slow: the page must not wait for it.
+    await page.route('**/api/movies', r => setTimeout(() => void r.fulfill(json([film])).catch(() => undefined), 5000));
+    await page.locator('nav a', { hasText: 'Home' }).first().click();
+    await page.waitForURL(base + '/');
+    await page.locator('.browse-library').waitFor({ state: 'detached' });
+    await page.goBack();
+    await page.getByText('Instant Return').first().waitFor({ timeout: 1500 });
+  });
+
+  it('a page that crashes keeps the top bar and offers a way back, instead of a black screen', async () => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    // A broken answer (director should be a list of people) makes the details page throw.
+    await page.route('**/api/movies/radarr-903', r => r.fulfill(json({ id: 'radarr-903', title: 'Broken', type: 'movie', status: 'available', artwork: {}, director: [null] })));
+    await page.goto(base + '/movies/radarr-903');
+    await page.getByText('Something went wrong on this page').waitFor();
+    expect(await page.locator('nav').count()).toBeGreaterThan(0);
+    errors.length = 0;
+  });
+});

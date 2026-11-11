@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- No more black screens while moving around: going back to Home, Movies, TV shows, Music or a details page shows what was there at once while it refreshes, and a page that crashes now shows "Something went wrong" with Try again and Go back, with the top bar still there.
+
 - Videos: only an administrator can save a video to the server (it uses disk); others keep Watch later and subscriptions, and can still delete what they saved before.
 
 - Synthwave theme: recoloured to a purple night with an orange and magenta sunset glow and gold focus rings.

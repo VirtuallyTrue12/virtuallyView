@@ -10,9 +10,9 @@ import KidsHome from '../components/kids/KidsHome';
 import { LoadError, SkeletonGrid, SkeletonRail } from '../components/home/Skeletons';
 
 export default function Home() {
-  const [data, setData] = useState<Dashboard | null>(null);
+  const [data, setData] = useState<Dashboard | null>(() => api.cached.dashboard() ?? null);
   // The rails in the viewer's order, hidden ones included, so the editor can list them.
-  const [rails, setRails] = useState<Rail[]>([]);
+  const [rails, setRails] = useState<Rail[]>(() => api.cached.dashboard()?.rails ?? []);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [layoutError, setLayoutError] = useState<string | null>(null);

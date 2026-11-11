@@ -12,8 +12,9 @@ import { LoadError, SkeletonGrid } from '../components/home/Skeletons';
 
 export default function Series() {
   const navigate = useNavigate();
-  const [items, setItems] = useState<SeriesItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [cached] = useState(() => api.cached.series());
+  const [items, setItems] = useState<SeriesItem[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
 
   const lib = useLibraryView(items, 'series');
@@ -24,14 +25,14 @@ export default function Series() {
   };
 
   const load = () => {
-    setLoading(true);
+    if (!cached) setLoading(true);
     setError(null);
     api.series()
       .then(setItems)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   };
-  useEffect(load, []);
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <main className="page browse-library">
