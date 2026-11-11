@@ -1871,7 +1871,7 @@ describe('settings: storage planner (mocked APIs)', () => {
     await page.route('**/api/system/storage/delete', r => { deletes.push(r.request().postDataJSON()); return r.fulfill(json({ success: true, message: 'Removed.' })); });
 
     await page.goto(base + '/settings?s=storage');
-    await page.getByText('12.0 GB free of 2.0 TB').waitFor();
+    await page.getByText('12 GB free of 2.0 TB').waitFor();
     await page.getByText('TV shows').waitFor();
     await page.getByRole('button', { name: 'Delete files for Huge Remux' }).click();
     const dialog = page.getByRole('dialog', { name: 'Delete files?' });
