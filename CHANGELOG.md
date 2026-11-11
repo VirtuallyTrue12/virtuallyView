@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Storage planner (Settings > Storage, admins): free space per folder, what is using it, the 20 biggest titles, and titles everyone has finished and left alone for a while, with Delete files (through Radarr/Sonarr, after a confirm). Manual grabs that would not fit are refused, requests are refused when the disk is nearly full, and admins get a low-space alert at most once a day.
+
 - TV remote: Left from the first programme in the Live TV guide goes to its channel; the password Show button and Radio genre chips are reachable; Videos and Radio rows no longer stop on scroll arrows or duplicate links; Back closes a dialog or menu before leaving the page; after a page change focus lands on the page instead of nowhere. A quiet tick and soft glow on each move (Settings > Appearance > Remote sounds; silent while something plays).
 
 - Skip intro and Skip credits: the server finds each season's shared theme tune by comparing episodes' audio, and the credits from chapters or the black stretch at the end, in the background at low priority. The player shows Skip intro, Skip credits or Next episode (focused on TV, so OK skips). Admins can run it from a series' More menu; new episodes are checked automatically. It can be turned off in the player settings.
