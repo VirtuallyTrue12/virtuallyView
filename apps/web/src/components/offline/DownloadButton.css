@@ -33,3 +33,15 @@
 .offline-dl-message { font-size: 0.8rem; color: var(--color-text-muted, #8e8e93); }
 .offline-album { min-height: 40px; }
 .offline-album.is-busy { opacity: 0.75; }
+
+/* Quality choice, season download and queue progress. */
+.offline-quality { display: flex; flex-direction: column; gap: var(--spacing-xs, 6px); margin-top: var(--spacing-xs, 6px); max-width: 100%; }
+.offline-quality .btn { justify-content: flex-start; text-align: left; white-space: normal; }
+.offline-season { display: flex; flex-direction: column; gap: var(--spacing-sm, 8px); margin: var(--spacing-sm, 8px) 0; }
+.offline-season-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm, 8px); }
+.offline-season-actions .btn.is-on { border-color: var(--color-accent); color: var(--color-accent); }
+.offline-queue { display: flex; flex-direction: column; gap: var(--spacing-xs, 6px); padding: var(--spacing-sm, 10px) var(--spacing-md, 14px); border: 1px solid var(--color-border); border-radius: var(--radius-medium); background: var(--color-surface-elevated, transparent); }
+.offline-queue-line { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-sm, 8px); flex-wrap: wrap; font-size: 0.9rem; }
+.offline-queue-bar { height: 6px; border-radius: 3px; background: var(--color-border); overflow: hidden; }
+.offline-queue-bar > span { display: block; height: 100%; background: var(--color-accent); transition: width 0.3s ease; }
+@media (prefers-reduced-motion: reduce) { .offline-queue-bar > span { transition: none; } }

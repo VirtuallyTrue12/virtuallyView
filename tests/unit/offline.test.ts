@@ -172,7 +172,7 @@ describe('progress parser', () => {
 });
 
 describe('sweep', () => {
-  it('removes a finished job nobody fetched within a day, keeps a fetched one for a week, and clears old orphan files', async () => {
+  it('removes a prepared copy a day after it finished, and clears old orphan files', async () => {
     spawnMode.mode = 'ok';
     const first = await offline.prepareOfflineJob('alice', { kind: 'movie', id: 'radarr-1' });
     expect(first.ok).toBe(true);
@@ -186,21 +186,30 @@ describe('sweep', () => {
     expect(offline.getOfflineJob('alice', first.job.id)).toBeNull();
     expect(existsSync(file)).toBe(false);
 
-    spawnMode.mode = 'ok';
-    const second = await offline.prepareOfflineJob('alice', { kind: 'movie', id: 'radarr-2' });
-    if (!second.ok) throw new Error('expected a job');
-    await until(() => offline.getOfflineJob('alice', second.job.id)?.status === 'ready');
-    offline.markFetched(second.job);
-    expect(offline.sweepOfflineFiles(Date.now() + 25 * 3_600_000)).toBe(0);
-    expect(offline.getOfflineJob('alice', second.job.id)).not.toBeNull();
-    expect(offline.sweepOfflineFiles(Date.now() + 8 * 24 * 3_600_000)).toBeGreaterThan(0);
-
     const orphan = path.join(process.env.VV_DATA_DIR!, 'offline', 'old-leftover.mp4');
     writeFileSync(orphan, 'old');
-    const eightDaysAgo = (Date.now() - 8 * 24 * 3_600_000) / 1000;
-    utimesSync(orphan, eightDaysAgo, eightDaysAgo);
+    const twoDaysAgo = (Date.now() - 2 * 24 * 3_600_000) / 1000;
+    utimesSync(orphan, twoDaysAgo, twoDaysAgo);
     offline.sweepOfflineFiles();
     expect(readdirSync(path.join(process.env.VV_DATA_DIR!, 'offline'))).not.toContain('old-leftover.mp4');
+  });
+});
+
+describe('shared copies and quality', () => {
+  it('a second account asking for the same item reuses the first conversion', async () => {
+    const a = await offline.prepareOfflineJob('alice', { kind: 'movie', id: 'radarr-1', quality: 'small' });
+    const b = await offline.prepareOfflineJob('bob', { kind: 'movie', id: 'radarr-1', quality: 'small' });
+    if (!a.ok || !b.ok) throw new Error('expected jobs');
+    expect(b.job.id).toBe(a.job.id);
+    expect(offline.getOfflineJob('bob', a.job.id)?.quality).toBe('small');
+    expect(offline.getOfflineJob('carol', a.job.id)).toBeNull();
+  });
+
+  it('small is 480p with a lower quality target and audio rate', () => {
+    const args = transcode.ffmpegFileArgs('/m.mkv', '/o', { kind: 'video', quality: 'small', sourceHeight: 1080 });
+    expect(args.join(' ')).toMatch(/scale[^ ]*480/);
+    expect(args).toContain('28');
+    expect(args).toContain('96k');
   });
 });
 

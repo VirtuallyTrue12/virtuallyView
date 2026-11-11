@@ -9,7 +9,7 @@ import {
 } from '../services/offline-jobs.js';
 
 const KINDS = new Set<OfflineKind>(['movie', 'episode', 'track']);
-const QUALITIES = new Set<OfflineQuality>(['standard', 'high']);
+const QUALITIES = new Set<OfflineQuality>(['small', 'standard', 'high']);
 const JOB_ID_RE = /^[a-f0-9]{32}$/;
 
 /** Downloads for offline use: start a conversion, poll it, then fetch the finished file. */

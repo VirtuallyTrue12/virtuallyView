@@ -2,6 +2,8 @@
 // File System (or Cache Storage where OPFS is missing), and watch progress made offline waits in IndexedDB
 // until the phone is back online. Nothing here needs the server to read what is already saved.
 
+import type { OfflineQuality } from './offline-plan';
+
 export type OfflineKind = 'movie' | 'episode' | 'track';
 
 export interface SavedItem {
@@ -17,6 +19,7 @@ export interface SavedItem {
   vttName?: string;
   seriesId?: string;
   durationSeconds?: number | null;
+  quality?: OfflineQuality;
 }
 
 export interface LocalProgress {
@@ -79,7 +82,7 @@ async function putSaved(item: SavedItem): Promise<void> {
   await req((await store(ITEMS, 'readwrite')).put(item));
 }
 
-/** The offline key for one item. A movie or episode is saved once; quality is always the standard copy. */
+/** The offline key for one item. A movie or episode is saved once, at the quality it was saved in. */
 export const keyFor = (kind: OfflineKind, id: string) => `${kind}:${id}`;
 
 // -- Files ---------------------------------------------------------------------
@@ -180,6 +183,14 @@ export async function estimate(): Promise<{ usage: number; quota: number } | nul
   }
 }
 
+/** A plain warning when `bytes` would not fit in what the browser lets this site keep, otherwise null. */
+export async function spaceWarning(bytes: number | null): Promise<string | null> {
+  const e = await estimate();
+  if (!e || !bytes) return null;
+  const free = e.quota - e.usage;
+  return bytes > free ? `This needs about ${formatBytes(bytes)} but only ${formatBytes(Math.max(0, free))} is free on this device. Delete something or pick Smaller.` : null;
+}
+
 /** Saves one item's index entry (the file and subtitles are already on the device). */
 export async function saveIndex(item: SavedItem): Promise<void> {
   await putSaved(item);
@@ -238,13 +249,15 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /** Asks the server to convert the item, waits for it, then copies the file and subtitles onto this device. */
 export async function saveForOffline(
-  meta: { kind: OfflineKind; id: string; title: string; subtitle?: string; posterUrl?: string; seriesId?: string; durationSeconds?: number | null },
+  meta: { kind: OfflineKind; id: string; title: string; subtitle?: string; posterUrl?: string; seriesId?: string; durationSeconds?: number | null; quality?: OfflineQuality },
   onPhase: (state: SavePhase) => void
 ): Promise<SavedItem> {
+  // Asked for on the first download, so the browser is less likely to clear saved films under storage pressure.
+  void persist();
   const prep = await fetch('/api/offline/prepare', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind: meta.kind, id: meta.id, quality: 'standard' })
+    body: JSON.stringify({ kind: meta.kind, id: meta.id, quality: meta.quality ?? 'standard' })
   });
   const started = (await prep.json().catch(() => ({}))) as Partial<PrepareResponse> & { message?: string };
   if (!prep.ok || !started.jobId) throw new Error(started.message ?? 'This could not be saved right now.');
@@ -291,10 +304,10 @@ export async function saveForOffline(
     size, savedAt: Date.now(), fileName,
     ...(vttName ? { vttName } : {}),
     ...(meta.seriesId ? { seriesId: meta.seriesId } : {}),
-    durationSeconds: meta.durationSeconds ?? null
+    durationSeconds: meta.durationSeconds ?? null,
+    ...(meta.kind !== 'track' ? { quality: meta.quality ?? 'standard' } : {})
   };
   await putSaved(item);
-  void persist();
   return item;
 }
 

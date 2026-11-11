@@ -48,6 +48,7 @@ const Diagnostics = lazy(() => import('./pages/Diagnostics'));
 const Activity = lazy(() => import('./pages/Activity'));
 const Offline = lazy(() => import('./pages/Offline'));
 import { useOfflineMode } from './lib/offline-status';
+import { useAutoDownloads } from './lib/offline-auto';
 import { OfflineBanner } from './components/offline/OfflineBanner';
 import NotFound from './pages/NotFound';
 import { api, type AuthUser } from './lib/api';
@@ -134,6 +135,7 @@ export default function App() {
 
   // A Kids profile gets the bright top bar: a class on <html> that kids.css keys off.
   const kid = auth?.authenticated === true && auth.user?.isKid === true;
+  useAutoDownloads(auth?.authenticated === true);
   useEffect(() => {
     document.documentElement.classList.toggle('kids', kid);
   }, [kid]);

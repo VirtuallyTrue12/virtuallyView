@@ -526,8 +526,8 @@ export function pickAudioIndex(tracks: AudioTrack[], requested?: number): number
 export interface FileOutputOptions {
   /** 'video' writes an H.264/AAC MP4 with picture; 'audio' writes an AAC (or copied MP3/AAC) M4A. */
   kind: 'video' | 'audio';
-  /** standard = 720p, high = 1080p; never taller than the source. */
-  quality?: 'standard' | 'high';
+  /** small = 480p, standard = 720p, high = 1080p; never taller than the source. */
+  quality?: 'small' | 'standard' | 'high';
   /** Zero-based audio track among the audio streams. */
   audio?: number;
   sourceHeight?: number | null;
@@ -554,7 +554,8 @@ export function ffmpegFileArgs(input: string, output: string, options: FileOutpu
     args.push('-i', input, '-map', '0:a:0', '-vn');
     args.push(...(copy ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '256k']));
   } else {
-    const target = options.quality === 'high' ? 1080 : 720;
+    const target = options.quality === 'high' ? 1080 : options.quality === 'small' ? 480 : 720;
+    const q = options.quality === 'high' ? '21' : options.quality === 'small' ? '28' : '23';
     // Never upscale: a 480p source stays 480p, and 1080p is only used when the source is that tall.
     const height = Math.min(target, options.sourceHeight && options.sourceHeight > 0 ? options.sourceHeight : target);
     const scale = !options.sourceHeight || options.sourceHeight > height;
@@ -564,12 +565,12 @@ export function ffmpegFileArgs(input: string, output: string, options: FileOutpu
     args.push('-i', input, '-map', '0:v:0', '-map', `0:a:${audio}?`, '-sn', '-dn', '-map_chapters', '-1');
     if (vf) args.push('-vf', vf);
     if (hw) {
-      args.push('-c:v', 'h264_vaapi', '-qp', options.quality === 'high' ? '21' : '23', '-profile:v', 'high');
+      args.push('-c:v', 'h264_vaapi', '-qp', q, '-profile:v', 'high');
     } else {
-      args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', options.quality === 'high' ? '21' : '23',
+      args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', q,
         '-profile:v', 'high', '-pix_fmt', 'yuv420p');
     }
-    args.push('-c:a', 'aac', '-b:a', '160k', '-ac', '2');
+    args.push('-c:a', 'aac', '-b:a', options.quality === 'small' ? '96k' : '160k', '-ac', '2');
   }
   args.push('-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', '-f', 'mp4', output);
   return args;

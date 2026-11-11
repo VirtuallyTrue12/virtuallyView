@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { SvgIcon } from '../ui/SvgIcon';
 import {
-  deleteSaved, getSaved, keyFor, saveForOffline, type OfflineKind, type SavePhase
+  deleteSaved, getSaved, keyFor, saveForOffline, spaceWarning, type OfflineKind, type SavePhase
 } from '../../lib/offline-store';
+import { estimateBytes, rememberQuality, type OfflineQuality } from '../../lib/offline-plan';
+import QualityPicker from './QualityPicker';
 import './DownloadButton.css';
 
 type Meta = { kind: OfflineKind; id: string; title: string; subtitle?: string; posterUrl?: string; seriesId?: string; durationSeconds?: number | null };
@@ -34,6 +36,7 @@ export default function DownloadButton(props: Props) {
   const [percent, setPercent] = useState(0);
   const [askRemove, setAskRemove] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +49,7 @@ export default function DownloadButton(props: Props) {
 
   const activate = async () => {
     if (busy) return;
+    if (picking) { setPicking(false); return; }
     if (saved) {
       if (!askRemove) { setAskRemove(true); return; }
       setAskRemove(false);
@@ -56,10 +60,19 @@ export default function DownloadButton(props: Props) {
     }
     if (navigator.onLine === false) { setPhase('error'); setMessage('Connect to the server to save this.'); return; }
     setMessage(null);
+    // Songs have one copy; films and episodes ask which quality first.
+    if (kind === 'track') await start('standard'); else setPicking(true);
+  };
+
+  const start = async (quality: OfflineQuality) => {
+    setPicking(false);
+    rememberQuality(quality);
+    const warning = await spaceWarning(estimateBytes(durationSeconds, quality));
+    if (warning) { setPhase('error'); setMessage(warning); return; }
     setPhase('preparing');
     setPercent(0);
     try {
-      await saveForOffline({ kind, id, title, subtitle, posterUrl, seriesId, durationSeconds }, show);
+      await saveForOffline({ kind, id, title, subtitle, posterUrl, seriesId, durationSeconds, quality }, show);
       setSaved(true);
       setPhase('saved');
     } catch (err) {
@@ -96,6 +109,7 @@ export default function DownloadButton(props: Props) {
       ) : (
         <button type="button" className={className} aria-label={aria} aria-busy={busy} onClick={() => void activate()}>{content}</button>
       )}
+      {picking && <QualityPicker seconds={durationSeconds ?? null} onPick={q => void start(q)} />}
       {message && <span className="offline-dl-message" role="status">{message}</span>}
     </span>
   );

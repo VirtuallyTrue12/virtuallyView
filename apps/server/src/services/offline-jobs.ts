@@ -19,13 +19,15 @@ import {
  */
 
 export type OfflineKind = 'movie' | 'episode' | 'track';
-export type OfflineQuality = 'standard' | 'high';
+export type OfflineQuality = 'small' | 'standard' | 'high';
 export type OfflineStatus = 'queued' | 'preparing' | 'ready' | 'failed';
 
 export interface OfflineJob {
   id: string;
   key: string;
   userId: string;
+  /** Everyone who asked for this copy: one conversion is shared, each account still only sees its own jobs. */
+  users: Set<string>;
   kind: OfflineKind;
   mediaId: string;
   quality: OfflineQuality;
@@ -46,7 +48,6 @@ export interface OfflineJob {
 /** One account may have this many jobs waiting or converting at once. */
 export const MAX_ACTIVE_PER_USER = 3;
 const DAY_MS = 24 * 3_600_000;
-const WEEK_MS = 7 * DAY_MS;
 const jobs = new Map<string, OfflineJob>();
 
 export function offlineDir(): string {
@@ -77,27 +78,26 @@ export function progressPercent(text: string, durationSeconds: number | null): n
 }
 
 /**
- * Removes jobs and files that are no longer needed: a finished job nobody fetched within a day, and any
- * file older than a week. Exported for tests (called with a fake "now"). Returns how many were removed.
+ * Removes prepared copies a day after they finished (they are shared between devices for that long), and
+ * any file older than a day. Exported for tests (called with a fake "now"). Returns how many were removed.
  */
 export function sweepOfflineFiles(now = Date.now()): number {
   let removed = 0;
   for (const job of [...jobs.values()]) {
     if (job.status === 'queued' || job.status === 'preparing') continue;
     const finishedAt = job.finishedAt ?? job.startedAt;
-    const unfetched = job.fetchedAt === undefined && now - finishedAt > DAY_MS;
-    if (unfetched || now - finishedAt > WEEK_MS) {
+    if (now - finishedAt > DAY_MS) {
       removeJobFiles(job);
       jobs.delete(job.id);
       removed++;
     }
   }
-  // Anything left in the folder that is a week old (for example from a job lost in a restart) goes too.
+  // Anything left in the folder that is a day old (for example from a job lost in a restart) goes too.
   const dir = offlineDir();
   for (const name of readdirSync(dir)) {
     const file = path.join(dir, name);
     try {
-      if (statSync(file).mtimeMs < now - WEEK_MS) { rmSync(file, { force: true }); removed++; }
+      if (statSync(file).mtimeMs < now - DAY_MS) { rmSync(file, { force: true }); removed++; }
     } catch { /* already gone */ }
   }
   return removed;
@@ -140,8 +140,9 @@ export async function resolveOfflineInput(kind: OfflineKind, id: string): Promis
   return { ok: true, input: { path: filePath, probe: await probeMedia(filePath) } };
 }
 
-const keyFor = (userId: string, kind: OfflineKind, mediaId: string, quality: OfflineQuality, audio?: number) =>
-  createHash('sha256').update([userId, kind, mediaId, quality, audio ?? 'default'].join('|')).digest('hex').slice(0, 32);
+// The key leaves the account out on purpose, so a whole season prepared for one device is reused by the next.
+const keyFor = (kind: OfflineKind, mediaId: string, quality: OfflineQuality, audio?: number) =>
+  createHash('sha256').update([kind, mediaId, quality, audio ?? 'default'].join('|')).digest('hex').slice(0, 32);
 
 const isActive = (job: OfflineJob) => job.status === 'queued' || job.status === 'preparing';
 
@@ -154,17 +155,17 @@ export type PrepareResult = { ok: true; job: OfflineJob } | { ok: false; status:
  */
 export async function prepareOfflineJob(userId: string, request: PrepareRequest): Promise<PrepareResult> {
   if (!resolveBinary('ffmpeg')) return { ok: false, status: 503, message: 'Saving for offline needs ffmpeg on the server.' };
-  const quality: OfflineQuality = request.quality === 'high' ? 'high' : 'standard';
+  const quality: OfflineQuality = request.quality === 'high' || request.quality === 'small' ? request.quality : 'standard';
   const audio = Number.isInteger(request.audio) && (request.audio ?? -1) >= 0 ? request.audio : undefined;
   const found = await resolveOfflineInput(request.kind, request.id);
   if (!found.ok) return found;
 
-  const key = keyFor(userId, request.kind, request.id, quality, audio);
+  const key = keyFor(request.kind, request.id, quality, audio);
   const fileName = fileFor(key, request.kind);
-  const existing = [...jobs.values()].find(j => j.userId === userId && j.key === key && j.status !== 'failed');
-  if (existing) return { ok: true, job: existing };
+  const existing = [...jobs.values()].find(j => j.key === key && j.status !== 'failed');
+  if (existing) { existing.users.add(userId); return { ok: true, job: existing }; }
 
-  const base = { userId, key, kind: request.kind, mediaId: request.id, quality, audio, percent: 0, fileName, durationSeconds: found.input.probe.durationSeconds ?? null };
+  const base = { userId, users: new Set([userId]), key, kind: request.kind, mediaId: request.id, quality, audio, percent: 0, fileName, durationSeconds: found.input.probe.durationSeconds ?? null };
   const onDisk = path.join(offlineDir(), fileName);
   if (existsSync(onDisk)) {
     const job: OfflineJob = { ...base, id: randomBytes(16).toString('hex'), status: 'ready', percent: 100, size: statSync(onDisk).size,
@@ -173,7 +174,7 @@ export async function prepareOfflineJob(userId: string, request: PrepareRequest)
     return { ok: true, job };
   }
 
-  const active = [...jobs.values()].filter(j => j.userId === userId && isActive(j)).length;
+  const active = [...jobs.values()].filter(j => j.users.has(userId) && isActive(j)).length;
   if (active >= MAX_ACTIVE_PER_USER) {
     return { ok: false, status: 429, message: `You already have ${MAX_ACTIVE_PER_USER} downloads being prepared. Wait for one to finish, then try again.` };
   }
@@ -187,7 +188,7 @@ export async function prepareOfflineJob(userId: string, request: PrepareRequest)
 /** The job only if this account started it. Anyone else gets nothing, not even "forbidden". */
 export function getOfflineJob(userId: string, jobId: string): OfflineJob | null {
   const job = jobs.get(jobId);
-  return job && job.userId === userId ? job : null;
+  return job && job.users.has(userId) ? job : null;
 }
 
 /** The job's file path, when it is ready and still on disk. */
@@ -261,11 +262,13 @@ function finish(job: OfflineJob, ok: boolean, message?: string): void {
 
 /** Converts the input, waiting for a free conversion slot first. Runs in the background. */
 async function runJob(job: OfflineJob, input: OfflineInput): Promise<void> {
-  let release = acquireConversion(job.userId);
-  while (!release) {
-    await wait(2_000);
+  // One offline conversion at a time, and only when the server-wide conversion limit has room.
+  let release: (() => void) | null = null;
+  for (;;) {
+    if (![...jobs.values()].some(j => j.status === 'preparing')) release = acquireConversion(job.userId);
+    if (release) break;
+    await wait(1_000);
     if (!jobs.has(job.id)) return;
-    release = acquireConversion(job.userId);
   }
   job.release = release;
   job.status = 'preparing';
@@ -323,6 +326,7 @@ export function jobView(job: OfflineJob) {
     jobId: job.id,
     status: job.status,
     percent: job.percent,
+    quality: job.quality,
     ...(job.size !== undefined ? { size: job.size } : {}),
     hasSubtitles: job.hasSubtitles,
     ...(job.message ? { message: job.message } : {})

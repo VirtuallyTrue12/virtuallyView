@@ -1861,7 +1861,6 @@ describe('save to this device (offline downloads)', () => {
     await page.route('**/api/movies', r => r.fulfill(json([film])));
     await page.route('**/api/movies/radarr-901', r => r.fulfill(json(film)));
     let polls = 0;
-    await page.route('**/api/offline/prepare', r => r.fulfill(json({ jobId: 'job901', status: 'queued', percent: 0, hasSubtitles: false })));
     await page.route('**/api/offline/jobs/job901', r => {
       polls++;
       r.fulfill(json(polls < 2
@@ -1870,11 +1869,23 @@ describe('save to this device (offline downloads)', () => {
     });
     await page.route('**/api/offline/file/job901', r => r.fulfill({ status: 200, contentType: 'video/mp4', body: fakeMp4 }));
 
+    let asked = '';
+    await page.route('**/api/offline/prepare', r => { asked = r.request().postData() ?? ''; return r.fulfill(json({ jobId: 'job901', status: 'queued', percent: 0, hasSubtitles: false })); });
+
     await page.goto(base + '/movies/radarr-901');
     await page.getByRole('button', { name: 'Download Offline Reel to this device' }).click();
+    // The quality picker shows a size guess for a 90 minute film (480p is about 580 MB) and Standard is the default.
+    const picker = page.getByRole('group', { name: 'Choose quality' });
+    await picker.getByRole('button', { name: /^Smaller \(480p, about 5\d\d MB\)$/ }).waitFor();
+    await picker.getByRole('button', { name: /^High \(1080p, about/ }).waitFor();
+    expect(await picker.getByRole('button', { name: /^Standard/ }).getAttribute('class')).toContain('btn-primary');
+    await picker.getByRole('button', { name: /^Smaller/ }).click();
     await page.getByText('Preparing 40%').waitFor();
     await page.getByText('Saved ✓').waitFor();
     expect(polls).toBeGreaterThanOrEqual(2);
+    expect(JSON.parse(asked).quality).toBe('small');
+    // The choice is remembered for next time.
+    expect(await page.evaluate(() => localStorage.getItem('vv-offline-quality'))).toBe('small');
   });
 
   it('the saved movie is listed on On this device', async () => {
@@ -1911,6 +1922,57 @@ describe('save to this device (offline downloads)', () => {
     await page.getByRole('button', { name: 'Delete Offline Reel' }).click();
     await page.getByText('Nothing is saved yet.').waitFor();
     expect(await page.locator('.offline-title', { hasText: 'Offline Reel' }).count()).toBe(0);
+  });
+});
+
+describe('downloading a whole season', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const show = { id: 'sonarr-7', title: 'Tiny Show', year: 2020, type: 'series', status: 'available', artwork: {}, seasons: [{ number: 1, episodes: 3, availableEpisodes: 3 }] };
+  const episodes = [1, 2, 3].map(n => ({ id: `ep-${n}`, seriesId: 'sonarr-7', seasonNumber: 1, episodeNumber: n, title: `Pilot ${n}`, runtime: 30, hasFile: true, watched: false }));
+
+  afterEach(async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
+
+  it('asks for a quality, shows overall progress, and pauses and resumes', async () => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    await page.route('**/api/series', r => r.fulfill(json([show])));
+    await page.route('**/api/series/sonarr-7', r => r.fulfill(json(show)));
+    await page.route('**/api/series/sonarr-7/episodes', r => r.fulfill(json({ seriesId: 'sonarr-7', episodes })));
+    const asked: string[] = [];
+    await page.route('**/api/offline/prepare', r => {
+      const body = JSON.parse(r.request().postData() ?? '{}');
+      asked.push(`${body.id}:${body.quality}`);
+      return r.fulfill(json({ jobId: `job-${body.id}`, status: 'preparing', percent: 10, hasSubtitles: false }));
+    });
+    await page.route('**/api/offline/jobs/*', r => r.fulfill(json({ jobId: r.request().url().split('/').pop(), status: 'ready', percent: 100, size: 20, hasSubtitles: false })));
+    await page.route('**/api/offline/file/*', r => r.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.from('tiny episode bytes') }));
+
+    await page.goto(base + '/series/sonarr-7');
+    await page.getByRole('button', { name: 'Download season 1' }).click();
+    // Three 30 minute episodes: 480p is about 1.5 hours of video at the small bitrate.
+    await page.getByRole('group', { name: 'Choose quality' }).getByRole('button', { name: /^Smaller \(480p, about \d+ MB\)$/ }).waitFor();
+    await page.getByRole('group', { name: 'Choose quality' }).getByRole('button', { name: /^Standard/ }).click();
+    await page.getByText(/^Saving 1 of 3/).waitFor();
+    await page.getByRole('button', { name: 'Pause' }).click();
+    await page.getByText('Paused at 1 of 3').waitFor();
+    expect(asked).toEqual(['ep-1:standard']);
+    await page.getByRole('button', { name: 'Resume' }).click();
+    await page.getByText('3 of 3 saved to this device').waitFor();
+    expect(asked).toEqual(['ep-1:standard', 'ep-2:standard', 'ep-3:standard']);
+    expect(await page.getByRole('progressbar', { name: 'Overall progress' }).getAttribute('aria-valuenow')).toBe('100');
+
+    // Cleaned up so later tests start with an empty device.
+    await page.goto(base + '/offline');
+    await page.locator('.offline-title', { hasText: 'Pilot 1' }).waitFor();
+    for (const n of [1, 2, 3]) {
+      await page.getByRole('button', { name: `Delete Pilot ${n}` }).click();
+      await page.getByRole('button', { name: `Delete Pilot ${n}` }).click();
+    }
+    await page.getByText('Nothing is saved yet.').waitFor();
   });
 });
 

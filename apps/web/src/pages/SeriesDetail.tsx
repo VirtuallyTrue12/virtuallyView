@@ -15,6 +15,7 @@ import { FavoriteButton } from '../components/media/UserFlagButtons';
 import { api, type PersonInfo, type EpisodeItem, type MediaDescription, type SeriesItem } from '../lib/api';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import DownloadButton from '../components/offline/DownloadButton';
+import DownloadSeason from '../components/offline/DownloadSeason';
 import { ScoreChips, ThumbRating } from '../components/media/RatingControls';
 import { HeroBackdrop } from '../components/media/HeroBackdrop';
 import { whereYouLeftOff } from '../lib/details';
@@ -256,6 +257,7 @@ export default function SeriesDetail() {
               >{n === 0 ? 'Specials' : `Season ${n}`}</button>
             ))}
           </div>
+          <DownloadSeason seriesId={series.id} seriesTitle={series.title} seasonLabel={season === 0 ? 'Specials' : `Season ${season}`} episodes={seasonEpisodes} />
           {seasonEpisodes.some(e => !e.hasFile) && (
             <div className="episode-search">
               {season === 0

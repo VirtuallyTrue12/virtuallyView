@@ -6,6 +6,8 @@ import { SvgIcon } from '../components/ui/SvgIcon';
 import {
   deleteSaved, estimate, formatBytes, listSaved, localProgressFor, readFile, recordProgress, syncProgress, type SavedItem
 } from '../lib/offline-store';
+import { QueueStatus } from '../components/offline/DownloadSeason';
+import { QUALITY_INFO } from '../lib/offline-plan';
 import './Offline.css';
 
 interface VideoPlaying { item: SavedItem; videoUrl: string; vttUrl?: string; startAt: number }
@@ -23,6 +25,7 @@ export default function Offline() {
   const [track, setTrack] = useState<TrackPlaying | null>(null);
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [watched, setWatched] = useState<string[]>([]);
   const lastPosition = useRef<{ position: number; duration: number } | null>(null);
   const lastSaved = useRef(0);
 
@@ -31,6 +34,14 @@ export default function Offline() {
       const list = await listSaved();
       setItems(list);
       setSpace(await estimate());
+      // Watched here means played through (90% or more) on this device.
+      const done: string[] = [];
+      for (const item of list) {
+        if (item.kind === 'track') continue;
+        const p = await localProgressFor(item.kind, item.id).catch(() => undefined);
+        if (p && p.durationSeconds > 0 && p.positionSeconds >= p.durationSeconds * 0.9) done.push(item.key);
+      }
+      setWatched(done);
       const next: Record<string, string> = {};
       for (const item of list) if (item.posterBlob) next[item.key] = URL.createObjectURL(item.posterBlob);
       setPosters(prev => { Object.values(prev).forEach(URL.revokeObjectURL); return next; });
@@ -128,6 +139,11 @@ export default function Offline() {
     await load();
   };
 
+  const deleteWatched = async () => {
+    for (const key of watched) await deleteSaved(key);
+    await load();
+  };
+
   const nowSong = track ? songs[track.index] : undefined;
 
   if (video) {
@@ -168,6 +184,13 @@ export default function Offline() {
       {smallQuota && (
         <p className="offline-note">This browser only keeps about {formatBytes(space!.quota)} for this site, so save fewer films at a time.</p>
       )}
+      <QueueStatus />
+      {watched.length > 0 && (
+        <p className="offline-note">
+          {watched.length} {watched.length === 1 ? 'item' : 'items'} already watched.{' '}
+          <button type="button" className="btn btn-secondary" onClick={() => void deleteWatched()}>Delete watched</button>
+        </p>
+      )}
       {notice && <div className="notice notice--err" role="status">{notice}</div>}
 
       {items === null && (
@@ -191,7 +214,7 @@ export default function Offline() {
                 </div>
                 <div className="offline-meta">
                   <span className="offline-title">{item.title}</span>
-                  <span className="offline-sub">{[item.subtitle, formatBytes(item.size)].filter(Boolean).join(' · ')}</span>
+                  <span className="offline-sub">{[item.subtitle, item.quality ? QUALITY_INFO[item.quality].label : '', formatBytes(item.size)].filter(Boolean).join(' · ')}</span>
                 </div>
                 <div className="offline-actions">
                   <button type="button" className="btn btn-primary" onClick={() => void playVideo(item)} aria-label={`Play ${item.title}`}>
