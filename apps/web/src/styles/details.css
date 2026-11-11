@@ -1,0 +1,21 @@
+/* Title pages: hero backdrop fade, where you left off, person page, theme preview bar. */
+.detail-backdrop--poster { filter: blur(28px) saturate(1.2); transform: scale(1.25); }
+.detail-backdrop--fade { opacity: 0; transition: opacity 200ms ease-out; }
+.detail-backdrop--fade.is-ready { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .detail-backdrop--fade { transition: none; } }
+
+.where-left { margin: var(--spacing-md) 0 0; display: flex; flex-direction: column; gap: 2px; }
+.where-left strong { font-size: 1.1rem; }
+
+.person-missing { display: flex; flex-direction: column; max-width: 640px; margin: 0; padding: 0; }
+.person-missing li { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); list-style: none; padding: var(--spacing-sm) 0; border-bottom: 1px solid var(--color-border); }
+.person-open { margin-top: var(--spacing-xs); }
+
+.preview-bar {
+  position: fixed; left: 50%; bottom: var(--spacing-lg); transform: translateX(-50%); z-index: 90;
+  display: flex; align-items: center; gap: var(--spacing-md); flex-wrap: wrap; justify-content: center;
+  max-width: calc(100vw - 32px); padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--color-surface-overlay, var(--color-surface)); color: var(--color-text-primary);
+  border: 1px solid var(--color-border); border-radius: var(--radius-large); box-shadow: var(--shadow-medium);
+  backdrop-filter: blur(12px);
+}

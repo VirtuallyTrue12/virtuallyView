@@ -140,7 +140,7 @@ describe('first run and accounts', () => {
 describe('appearance', () => {
   it('applies a theme instantly and keeps it after a reload', async () => {
     await page.goto(base + '/themes');
-    await page.locator('.theme-tile', { hasText: 'Synthwave' }).getByRole('button', { name: /^Use/ }).click();
+    await page.locator('.theme-tile', { has: page.getByRole('heading', { name: 'Synthwave', exact: true }) }).getByRole('button', { name: /^Use/ }).click();
     await page.waitForFunction(() => document.documentElement.dataset.theme === 'cyberpunk');
     await page.reload();
     await page.waitForSelector('.theme-tile');
@@ -2157,5 +2157,55 @@ describe('one search box finds everything', () => {
     await library.getByText('Scarface').waitFor();
     expect(await library.getByText('Heat').count()).toBeGreaterThan(0);
     expect(errors).toEqual([]);
+  });
+});
+
+describe('details pages and theme preview', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const admin = { enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } };
+  const baseRoutes = async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json(admin)));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+  };
+  afterEach(async () => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
+
+  it('the series page puts "where you left off" first, with Resume', async () => {
+    await baseRoutes();
+    await page.route('**/api/series', r => r.fulfill(json([])));
+    await page.route('**/api/series/sonarr-1', r => r.fulfill(json({ id: 'sonarr-1', title: 'Long Show', type: 'series', status: 'available', artwork: {}, seasons: [] })));
+    await page.route('**/api/series/sonarr-1/cast', r => r.fulfill(json({ cast: [] })));
+    await page.route('**/api/series/sonarr-1/episodes', r => r.fulfill(json({ episodes: [
+      { id: 'e24', seriesId: 'sonarr-1', seasonNumber: 2, episodeNumber: 4, title: 'Done', hasFile: true, runtime: 40, watched: true },
+      { id: 'e25', seriesId: 'sonarr-1', seasonNumber: 2, episodeNumber: 5, title: 'Half way', hasFile: true, runtime: 40, watchProgress: 42 },
+      { id: 'e26', seriesId: 'sonarr-1', seasonNumber: 2, episodeNumber: 6, title: 'Later', hasFile: true, runtime: 40 }
+    ] })));
+    await page.goto(base + '/series/sonarr-1');
+    await page.getByText('S2 E5 · 23 min left').waitFor();
+    expect(await page.getByRole('button', { name: /Resume S2 E5/ }).count()).toBe(1);
+  });
+
+  const themes = [
+    { id: 'default', name: 'Default', description: 'd', author: 'a', version: '1', active: true, mode: 'dark', custom: false, cssVars: { '--color-background': '#101010' } },
+    { id: 'synthwave-light', name: 'Synthwave Light', description: 'd', author: 'a', version: '1', active: false, mode: 'light', custom: false, cssVars: { '--color-background': '#f3edff' } }
+  ];
+  const bg = () => page.evaluate(() => document.documentElement.style.getPropertyValue('--color-background'));
+
+  it('lists Synthwave Light, Preview shows it, and Cancel puts the old theme back', async () => {
+    await baseRoutes();
+    await page.route('**/api/themes', r => r.fulfill(json(themes)));
+    await page.route(/\/api\/themes\/[a-z-]+$/, r => r.fulfill(json(themes.find(x => r.request().url().endsWith(x.id)) ?? themes[0])));
+    await page.goto(base + '/themes');
+    const tile = page.locator('.theme-tile', { hasText: 'Synthwave Light' });
+    await tile.waitFor();
+    await tile.getByRole('button', { name: 'Preview' }).click();
+    await page.getByText('Previewing Synthwave Light').waitFor();
+    expect(await bg()).toBe('#f3edff');
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByText('Previewing Synthwave Light').waitFor({ state: 'detached' });
+    expect(await bg()).not.toBe('#f3edff');
+    expect(await page.evaluate(() => localStorage.getItem('vv-appearance') ?? '')).not.toContain('synthwave-light');
   });
 });

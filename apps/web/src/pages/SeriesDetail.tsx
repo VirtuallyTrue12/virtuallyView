@@ -16,6 +16,8 @@ import { api, type PersonInfo, type EpisodeItem, type MediaDescription, type Ser
 import { SvgIcon } from '../components/ui/SvgIcon';
 import DownloadButton from '../components/offline/DownloadButton';
 import { ScoreChips, ThumbRating } from '../components/media/RatingControls';
+import { HeroBackdrop } from '../components/media/HeroBackdrop';
+import { whereYouLeftOff } from '../lib/details';
 import { RelatedVideos } from '../components/videos/RelatedVideos';
 
 export default function SeriesDetail() {
@@ -139,18 +141,15 @@ export default function SeriesDetail() {
 
   const playable = ordered.filter(e => e.hasFile);
   // Continue where the viewer left off: first partly-watched, else first unwatched.
-  const resumeEpisode = playable.find(e => (e.watchProgress ?? 0) > 0 && (e.watchProgress ?? 0) < 96);
-  const nextEpisode = resumeEpisode ?? playable.find(e => (e.watchProgress ?? 0) < 96) ?? playable[0];
+  const where = whereYouLeftOff(episodes);
+  const nextEpisode = where?.episode;
+  const tag = nextEpisode ? `S${nextEpisode.seasonNumber} E${nextEpisode.episodeNumber}` : '';
   const seasonEpisodes = ordered.filter(e => e.seasonNumber === season);
 
   return (
     <main className="detail">
       <section className="detail-hero">
-        {series.artwork?.backdrop ? (
-          <img className="detail-backdrop" src={series.artwork.backdrop} alt="" />
-        ) : (
-          <div className="detail-backdrop detail-backdrop--placeholder" />
-        )}
+        <HeroBackdrop backdrop={series.artwork?.backdrop} poster={series.artwork?.poster} />
         <div className="detail-overlay" aria-hidden="true" />
 
         <div className="detail-body">
@@ -189,11 +188,16 @@ export default function SeriesDetail() {
                 <DownloadPanel mediaId={series.id} available={totalEpisodes > 0 && availableEpisodes >= totalEpisodes} />
               )}
 
+              {where && (
+                <p className="where-left" aria-live="polite">
+                  <strong>{where.kind === 'resume' ? `${tag} · ${where.minutesLeft} min left` : where.kind === 'next' ? `Next: ${tag}` : `Start with ${tag}`}</strong>
+                  <span>{where.episode.title}</span>
+                </p>
+              )}
               <div className="hero-actions">
                 {nextEpisode ? (
                   <button className="btn btn-primary btn-lg" type="button" onClick={() => watch(nextEpisode)}>
-                    <SvgIcon name="play" size={18} /> {resumeEpisode ? 'Resume' : (nextEpisode.watchProgress ?? 0) >= 96 || playable[0] === nextEpisode ? 'Play' : 'Play next'}
-                    {' '}S{nextEpisode.seasonNumber}E{nextEpisode.episodeNumber}
+                    <SvgIcon name="play" size={18} /> {where?.kind === 'resume' ? 'Resume' : 'Play'} {tag}
                   </button>
                 ) : (
                   <button className="btn btn-primary btn-lg" type="button" disabled title={episodesError ?? 'No episodes are downloaded yet'}>

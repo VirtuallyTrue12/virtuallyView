@@ -22,6 +22,7 @@ import './styles/media.css';
 import './styles/storage.css';
 import './styles/foryou.css';
 import './styles/search-everything.css';
+import './styles/details.css';
 
 initPerformanceMode();
 initDpad();
