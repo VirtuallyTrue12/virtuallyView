@@ -2381,3 +2381,78 @@ describe('scheduled recording from the guide', () => {
     expect(await page.locator('.gg-rec').count()).toBe(0);
   });
 });
+
+describe('year in review', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const base2026 = {
+    year: 2026, empty: false, totals: { plays: 40, films: 3, episodes: 9, videos: 2 },
+    hours: { listened: 12.5, watched: 20, videos: 1, total: 33.5 },
+    topArtists: [{ name: 'Alpha', plays: 20, image: null }], topSongs: [{ title: 'Anthem', artist: 'Alpha', plays: 9 }],
+    musicGenres: [{ name: 'Pop', plays: 30 }], topFilms: [{ title: 'Big Film', poster: null, finishedAt: '2026-02-01T20:00:00Z' }],
+    topShows: [{ title: 'Long Show', poster: null, episodes: 7 }], topChannels: [{ name: 'Chan', image: null, videos: 2 }],
+    watchGenres: [{ name: 'Drama', count: 3 }], busiest: { weekday: 5, hour: 21, weekdays: [1, 2, 3, 4, 5, 9, 2], hours: Array(24).fill(0) },
+    binge: { title: 'Long Show', episodes: 5, day: '2026-03-07' }, first: { kind: 'song', title: 'Anthem by Alpha', at: '2026-01-02T08:00:00Z' },
+    last: { kind: 'film', title: 'Big Film', at: '2026-11-20T22:00:00Z' }, previous: { year: 2025, hours: 20 }
+  };
+  const emptyYear = (year: number) => ({ ...base2026, year, empty: true, totals: { plays: 0, films: 0, episodes: 0, videos: 0 }, hours: { listened: 0, watched: 0, videos: 0, total: 0 }, previous: null });
+  const shots = process.env.YIR_SHOTS;
+
+  const open = async (year: number) => {
+    await page.route('**/api/review/*', r => {
+      const y = Number(new URL(r.request().url()).pathname.split('/').pop());
+      return r.fulfill(json({ review: y === 2026 ? base2026 : emptyYear(y), years: [2026, 2025] }));
+    });
+    await page.goto(`${base}/music/year/${year}`);
+    await page.getByRole('region', { name: /in review/ }).waitFor();
+  };
+
+  it('moves through the cards with the keyboard and saves an image', async () => {
+    await open(2026);
+    await page.locator('.yr-stage').focus();
+    await page.getByRole('region', { name: 'Your year', exact: true }).waitFor();
+    await page.keyboard.press('ArrowRight');
+    await page.getByRole('region', { name: 'Time well spent' }).waitFor();
+    await page.keyboard.press('Enter');
+    await page.getByRole('region', { name: 'Versus 2025' }).waitFor();
+    await page.keyboard.press('ArrowLeft');
+    await page.getByRole('region', { name: 'Time well spent' }).waitFor();
+    for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight');
+    await page.getByRole('region', { name: 'Your year, in short' }).waitFor();
+    if (shots) await page.screenshot({ path: `${shots}/summary.png` });
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Save as image' }).click();
+    expect((await download).suggestedFilename()).toBe('my-2026-in-review.png');
+  });
+
+  it('switches year with the picker and shows a friendly card for a year with nothing', async () => {
+    await open(2026);
+    await page.getByLabel('Year', { exact: true }).selectOption('2025');
+    await page.waitForURL('**/music/year/2025');
+    await page.getByText(/Nothing to look back on for 2025/).waitFor();
+    expect(await page.getByText(/^0 h$/).count()).toBe(0);
+  });
+
+  it('shows the real empty state from the server when the viewer has no history', async () => {
+    await page.unroute('**/api/review/*');
+    await page.goto(`${base}/music/year/2026`);
+    await page.getByText(/Nothing to look back on for 2026/).waitFor();
+  });
+
+  it.skipIf(!shots)('screenshots every card', async () => {
+    await open(2026);
+    try {
+      for (const [w, h] of [[1280, 800], [390, 844], [1920, 1080]] as const) {
+        await page.setViewportSize({ width: w, height: h });
+        await page.goto(`${base}/music/year/2026`);
+        await page.locator('.yr-stage').focus();
+        for (let i = 0; i < 14; i++) {
+          await page.waitForTimeout(450);
+          await page.screenshot({ path: `${shots}/${w}-${String(i).padStart(2, '0')}.png` });
+          await page.keyboard.press('ArrowRight');
+        }
+      }
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 800 });
+    }
+  });
+});

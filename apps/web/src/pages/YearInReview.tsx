@@ -174,7 +174,7 @@ export default function YearInReview() {
         {!review.empty && <p className="yr-sub">Tap, swipe or press the right arrow to begin.</p>}
       </>
     ) };
-    if (review.empty) return [hero, { id: 'empty', label: 'Nothing yet', body: (
+    if (review.empty) return [{ id: 'empty', label: `Your ${review.year}`, body: (
       <>
         <p className="yr-lead">Nothing to look back on for {review.year} yet.</p>
         <p className="yr-sub">Play some music, finish a film or watch a video, and this page fills in. Try another year above.</p>
