@@ -558,6 +558,19 @@ export interface SearchAll {
   tracks: Array<{ title: string; artist: string; year?: number }>;
 }
 
+export type SearchSourceName = 'library' | 'people' | 'live' | 'radio' | 'videos' | 'channels' | 'request';
+export interface SearchPerson { name: string; photo?: string; titles: Array<{ id: string; title: string; year?: number; type: string; status?: string; poster?: string }> }
+/** What each source of the one search box returns; a source that failed or timed out has no entry. */
+export interface SearchSources {
+  library: { library: SearchAll['library'] };
+  people: { people: SearchPerson[] };
+  live: { channels: Array<{ id: string; name: string; logo?: string; group?: string }>; total: number };
+  radio: { stations: RadioStation[] };
+  videos: { videos: VideoResult[] };
+  channels: { channels: VideoChannel[] };
+  request: Pick<SearchAll, 'movies' | 'series' | 'artists' | 'tracks'>;
+}
+
 export interface Indexer { id: number; name: string; protocol: string; privacy: string; enabled: boolean; definitionName: string; failingUntil?: string }
 export interface IndexerDefinition { definitionName: string; name: string; protocol: string; privacy: string; language: string; description: string; adult?: boolean }
 export interface SetupStatus { items: Array<{ id: string; label: string; ok: boolean; detail: string; href: string }>; complete: boolean }
@@ -883,6 +896,24 @@ export const api = {
   search: (q: string) => getJSON<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`),
   searchDetect: (q: string) => getJSON<SearchDetection>(`/api/search/detect?q=${encodeURIComponent(q)}`),
   searchAll: (q: string) => getJSON<SearchAll>(`/api/search/all?q=${encodeURIComponent(q)}`),
+  /** Streams the one search box: calls onSource as each source answers, fast ones first. */
+  searchEverything: async (q: string, signal: AbortSignal, onSource: (source: SearchSourceName, data: unknown | null) => void) => {
+    const res = await fetch(`/api/search/everything?q=${encodeURIComponent(q)}`, { signal });
+    if (!res.ok || !res.body) throw new Error(`Search failed (${res.status})`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const line = (text: string) => { if (!text.trim()) return; const r = JSON.parse(text) as { source: SearchSourceName; ok: boolean; data?: unknown }; onSource(r.source, r.ok ? r.data ?? null : null); };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      lines.forEach(line);
+    }
+    line(buffer);
+  },
   searchCover: (q: string) => getJSON<{ query: string; cover: string }>(`/api/search/cover?q=${encodeURIComponent(q)}`),
   suggestions: (q: string) => getJSON<{ suggestions: SearchSuggestion[] }>(`/api/search/suggestions?q=${encodeURIComponent(q)}`),
   downloads: () => getJSON<DownloadItem[]>('/api/downloads'),

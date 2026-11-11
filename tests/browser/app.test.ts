@@ -506,6 +506,11 @@ describe('pick a release by hand', () => {
   });
 });
 
+/** The one search box streams one JSON line per source; this answers it with the sources given (others fail quietly). */
+function streamedSearch(sources: Record<string, unknown>) {
+  return { status: 200, contentType: 'application/x-ndjson', body: Object.entries(sources).map(([source, data]) => JSON.stringify({ source, ok: true, data })).join('\n') + '\n' };
+}
+
 describe('request quality does not carry over between unrelated requests', () => {
   it('applies a chosen quality to the request it was made for, then starts the next one back at the default', async () => {
     const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
@@ -517,14 +522,14 @@ describe('request quality does not carry over between unrelated requests', () =>
       return r.fulfill(json({ ok: true, message: `Requested "${body.title}".`, request: { id: `request-${posted.length}`, title: body.title, status: 'searching' } }));
     });
 
-    await page.route('**/api/search/all**', r => {
+    await page.route('**/api/search/everything**', r => {
       const q = new URL(r.request().url()).searchParams.get('q') ?? '';
       const title = q === 'metallica' ? 'Metallica' : 'Juice WRLD';
-      return r.fulfill(json({ query: q, library: [], movies: [], series: [], artists: [{ provider: 'musicbrainz', providerId: q, title, type: 'artist' }], tracks: [] }));
+      return r.fulfill(streamedSearch({ request: { movies: [], series: [], artists: [{ provider: 'musicbrainz', providerId: q, title, type: 'artist' }], tracks: [] } }));
     });
 
     await page.goto(base + '/search?q=metallica');
-    await page.getByRole('radio', { name: 'Artists' }).click();
+    await page.getByRole('radio', { name: /Available to request/ }).click();
     await page.locator('.result-card').getByText('Metallica').waitFor();
     await page.getByLabel('Download quality').selectOption('Lossless');
     await page.locator('.result-card').getByRole('button', { name: 'Add to Music', exact: true }).click();
@@ -536,6 +541,7 @@ describe('request quality does not carry over between unrelated requests', () =>
     // A second, unrelated artist request must not inherit Metallica's Lossless choice.
     await page.getByPlaceholder(/Search movies/i).fill('juice wrld');
     await page.keyboard.press('Enter');
+    await page.getByRole('radio', { name: /Available to request/ }).click();
     await page.locator('.result-card').getByText('Juice WRLD').waitFor();
     expect(await page.getByLabel('Download quality').inputValue()).toBe('');
     await page.locator('.result-card').getByRole('button', { name: 'Add to Music', exact: true }).click();
@@ -746,13 +752,13 @@ describe('search, requests and downloads agree', () => {
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
   it('search marks what is already requested and links to the request instead of offering it again', async () => {
-    await page.route('**/api/search/all**', r => r.fulfill(json({
-      query: 'dune', library: [], series: [], artists: [], tracks: [],
+    await page.route('**/api/search/everything**', r => r.fulfill(streamedSearch({ request: {
+      series: [], artists: [], tracks: [],
       movies: [
         { provider: 'tmdb', providerId: '1', title: 'Dune', year: 2021, type: 'movie', requestId: 'request-1', requestStatus: 'downloading' },
         { provider: 'tmdb', providerId: '2', title: 'Dune', year: 1984, type: 'movie' }
       ]
-    })));
+    } })));
     await page.goto(base + '/search?q=dune');
     await page.waitForSelector('.result-card');
     const cards = page.locator('.result-card');
@@ -1408,7 +1414,6 @@ describe('install as an app and voice search', () => {
     Object.defineProperty(window, 'SpeechRecognition', { value: undefined, configurable: true, writable: true });
     Object.defineProperty(window, 'webkitSpeechRecognition', { value: undefined, configurable: true, writable: true });
   };
-  const emptySearch = { library: [], movies: [], series: [], artists: [], tracks: [] };
 
   it('links the install manifest, and the manifest is valid JSON with the app name', async () => {
     await page.goto(base + '/');
@@ -1435,9 +1440,9 @@ describe('install as an app and voice search', () => {
     const p = await ctx.newPage();
     await p.addInitScript(fakeRecognizer);
     const searched: string[] = [];
-    await p.route('**/api/search/all**', r => {
+    await p.route('**/api/search/everything**', r => {
       searched.push(new URL(r.request().url()).searchParams.get('q') ?? '');
-      return r.fulfill(json(emptySearch));
+      return r.fulfill(streamedSearch({ library: { library: [] } }));
     });
     await p.route('**/api/search/suggestions**', r => r.fulfill(json({ suggestions: [] })));
     await p.goto(base + '/search');
@@ -2104,5 +2109,51 @@ describe('remote control: guide, password and page changes', () => {
     await page.waitForURL('**/movies/radarr-5');
     await page.waitForFunction(() => document.activeElement && document.activeElement !== document.body && !!document.activeElement.closest('main'));
     await page.evaluate(() => document.documentElement.classList.remove('tv'));
+  });
+});
+
+describe('one search box finds everything', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const film = { id: 'radarr-7', title: 'Heat', year: 1995, type: 'movie', status: 'available' };
+  afterEach(async () => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
+
+  it('groups results into sections with counts, library first, and keys walk across them', async () => {
+    await page.route('**/api/search/everything**', r => r.fulfill(streamedSearch({
+      library: { library: [film, { id: 'lidarr-2', title: 'Heat Band', type: 'artist', status: 'available' }] },
+      people: { people: [] },
+      live: { channels: [{ id: 'c1', name: 'Heat TV' }], total: 1 },
+      radio: { stations: [] },
+      videos: { videos: [{ id: 'v1', title: 'Heat trailer', channel: 'Studio', durationSeconds: 60, views: 1 }] },
+      channels: { channels: [] },
+      request: { movies: [{ provider: 'tmdb', providerId: '9', title: 'Heat 2', year: 2030, type: 'movie' }], series: [], artists: [], tracks: [] }
+    })));
+    await page.goto(base + '/search');
+    await page.locator('.search-input').fill('heat');
+    await page.getByRole('region', { name: 'Available to request' }).waitFor();
+    const names = await page.locator('.search-section[aria-label]').evaluateAll(els => els.map(e => e.getAttribute('aria-label')));
+    expect(names).toEqual(['In your library', 'Music', 'Live TV', 'Videos', 'Available to request']);
+    expect(await page.getByRole('region', { name: 'Videos' }).locator('.sx-count').innerText()).toBe('1');
+    // Down from the box lands on the first result, then moves through the next section.
+    await page.keyboard.press('ArrowDown');
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('href'))).toBe('/movies/radarr-7');
+    await page.keyboard.press('ArrowDown');
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('href'))).toBe('/music/lidarr-2');
+    await page.keyboard.press('Escape');
+    expect(await page.locator('.search-input').inputValue()).toBe('');
+    expect(errors).toEqual([]);
+  });
+
+  it('a person query shows the person under People and their titles in your library', async () => {
+    await page.route('**/api/search/everything**', r => r.fulfill(streamedSearch({
+      library: { library: [] },
+      people: { people: [{ name: 'Al Pacino', titles: [film, { id: 'radarr-8', title: 'Scarface', year: 1983, type: 'movie' }] }] }
+    })));
+    await page.goto(base + '/search?q=pacino');
+    await page.getByRole('region', { name: 'People' }).getByRole('link', { name: /Al Pacino/ }).waitFor();
+    expect(await page.getByRole('region', { name: 'People' }).getByRole('link').getAttribute('href')).toBe('/people/Al%20Pacino');
+    const library = page.getByRole('region', { name: 'In your library' });
+    await library.getByText('Scarface').waitFor();
+    expect(await library.getByText('Heat').count()).toBeGreaterThan(0);
+    expect(errors).toEqual([]);
   });
 });

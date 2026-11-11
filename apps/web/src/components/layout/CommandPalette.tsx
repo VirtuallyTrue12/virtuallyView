@@ -43,7 +43,7 @@ export default function CommandPalette() {
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {
     const hits = q ? commands.filter(c => `${c.label} ${c.keywords ?? ''}`.toLowerCase().includes(q)) : commands;
-    return q ? [...hits, { group: 'Search', label: `Search the library for “${query.trim()}”`, action: () => navigate(`/search?q=${encodeURIComponent(query.trim())}`) }] : hits;
+    return q ? [...hits, { group: 'Search', label: `Search everything for “${query.trim()}”`, action: () => navigate(`/search?q=${encodeURIComponent(query.trim())}`) }] : hits;
   }, [commands, q, query, navigate]);
 
   useEffect(() => {

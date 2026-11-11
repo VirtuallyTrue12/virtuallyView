@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { detectMediaKind, searchAll } from '../services/search-detect.js';
 import { fetchWebCover } from '../services/web-covers.js';
+import { everythingSources, fanOut } from '../services/search-everything.js';
 import { getRequests, normalizeTitle } from '../services/requests.js';
 
 /**
@@ -49,6 +50,23 @@ export default async function searchRoutes(server: FastifyInstance) {
     } catch (error) {
       return reply.code(502).send({ error: 'search_failed', message: error instanceof Error ? error.message : 'Search failed.' });
     }
+  });
+
+  // The one search box: every source at once, streamed as lines of JSON so quick sources show before slow ones.
+  server.get<{ Querystring: { q?: string } }>('/api/search/everything', async (request, reply) => {
+    const query = (request.query.q ?? '').trim().slice(0, 200);
+    if (query.length < 2) return reply.code(400).send({ error: 'bad_request', message: 'A search query is required.' });
+    reply.hijack();
+    const raw = reply.raw;
+    raw.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+    let closed = false;
+    request.raw.on('close', () => { closed = true; });
+    await fanOut(everythingSources(query), r => {
+      if (closed) return;
+      const out = r.source === 'request' && r.ok ? { ...r, data: annotateWithRequests(r.data as Parameters<typeof annotateWithRequests>[0], getRequests()) } : r;
+      raw.write(`${JSON.stringify(out)}\n`);
+    });
+    raw.end();
   });
 
   server.get<{ Querystring: { q?: string } }>('/api/search/cover', async (request, reply) => {

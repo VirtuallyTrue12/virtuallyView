@@ -359,13 +359,9 @@ async function searchTracks(query: string): Promise<SearchTrackHit[]> {
 const searchAllCache = new Map<string, { at: number; value: SearchAllResult }>();
 export const clearSearchCache = (): void => searchAllCache.clear();
 
-export async function searchAll(rawQuery: string): Promise<SearchAllResult> {
-  const query = rawQuery.trim();
-  const cacheKey = query.toLowerCase();
-  const hit = searchAllCache.get(cacheKey);
-  if (hit && Date.now() - hit.at < 60_000) return hit.value;
-
-  const q = normalize(query);
+/** Titles in your own library that match, best matches first; also the set of titles you already own. */
+export async function searchLibrary(query: string) {
+  const q = normalize(query.trim());
   const libraries = await Promise.all((['radarr', 'sonarr', 'lidarr'] as const).map(async key => {
     try { return await libraryItemsOf(getAdapter<Adapter>(key)); } catch { return []; }
   }));
@@ -382,6 +378,16 @@ export async function searchAll(rawQuery: string): Promise<SearchAllResult> {
       ...(typeof i.rating === 'number' ? { rating: i.rating } : {})
     }));
   const owned = new Set(all.map(i => `${normalize(i.title)}|${i.year ?? ''}`));
+  return { library, owned };
+}
+
+export async function searchAll(rawQuery: string): Promise<SearchAllResult> {
+  const query = rawQuery.trim();
+  const cacheKey = query.toLowerCase();
+  const hit = searchAllCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < 60_000) return hit.value;
+
+  const { library, owned } = await searchLibrary(query);
   const fresh = (list: MetadataCandidate[]) => list.filter(c => !owned.has(`${normalize(c.title)}|${c.year ?? ''}`)).slice(0, 8);
 
   const [movies, series, artists, tracks] = query.length >= 2

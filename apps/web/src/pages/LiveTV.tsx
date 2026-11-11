@@ -113,6 +113,7 @@ export default function LiveTV() {
   const digitTimer = useRef<number | null>(null);
 
   const requested = params.get('v');
+  const wantedChannel = params.get('ch');
   const load = useCallback(async () => {
     try {
       const { playlists: list } = await api.livePlaylists();
@@ -131,6 +132,8 @@ export default function LiveTV() {
   }, [recordings, loadRecordings]);
 
   const byId = useMemo(() => new Map(channels.map(c => [c.id, c])), [channels]);
+  // A link from Search (?ch=id) tunes straight to that channel.
+  useEffect(() => { const c = wantedChannel && channels.find(x => x.id === wantedChannel); if (c) setCurrent(c); }, [wantedChannel, channels]);
   const view: View = (['favorites', 'recent', 'channels', 'guide', 'recordings'].includes(requested ?? '') ? requested : favs.size ? 'favorites' : 'channels') as View;
   const groups = useMemo(() => {
     const counts = new Map<string, number>();
