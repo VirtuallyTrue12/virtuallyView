@@ -83,19 +83,32 @@ const clean = (value: string | undefined, max = 120) => (value ?? '').replace(/[
 const PLAYLIST_HOSTS = /(^|\.)(zeno\.fm|fastcast4u\.com|rcast\.net|caster\.fm|radiojar\.com|myradiostream\.com|listen2myradio\.com|radionomy\.com|live365\.com|radioca\.st|epichosts\.co\.uk|streamakaci\.com|onlineradiobox\.com|shoutcast\.com|radio12345\.com|streeemer\.com|mixlr\.com|radioking\.com|uber\.radio)$|azuracast|autodj/i;
 // Content delivery used by broadcasters themselves for their on-air signal.
 const BROADCASTER_HOSTS = /(^|\.)(bitgravity\.com|akamaized\.net|akamaihd\.net|streamtheworld\.com|musicradio\.com|ihrhls\.com|radiofrance\.fr|rtl\.fr|sharp-stream\.com|streamguys1\.com|dradio\.de|deutschlandradio\.de|swr\.de|wdr\.de|ndr\.de|br\.de|mdr\.de|hr\.de|rbb-online\.de|orf\.at|srf\.ch|rai\.it|rtve\.es|abc\.net\.au|cbc\.ca|radio-canada\.ca|npr\.org|rte\.ie|yle\.fi|nrk\.no|sr\.se|dr\.dk|vrt\.be|rtbf\.be|nporadio\.nl|nhk\.or\.jp|kbs\.co\.kr|bbc\.co\.uk|bbci\.co\.uk|infomaniak\.ch|lagardere\.cloud|europe1\.fr|ice\.radio|tdf-cdn\.com|newsonair\.gov\.in|prasarbharati\.gov\.in)$/i;
-const LIVE_TAGS = /^(news|talk|public radio|public|sport|sports|community|government|information|news talk|talk radio|current affairs|fm)$/i;
+const LIVE_TAGS = /^(news|talk|public radio|sport|sports|news talk|talk radio|political talk|current affairs|business news|information)$/i;
 const PLAYLIST_NAMES = /non-?stop|24\s*[/x*]\s*7|\bhits of\b|\bsongs\b|\bauto ?dj\b/i;
+// More delivery networks that only real broadcasters (public and big commercial) use.
+const BROADCASTER_MORE_HOSTS = /(^|\.)(revma\.com|amperwave\.net|hellorayo\.co\.uk|planetradio\.co\.uk|bbcmedia\.co\.uk|publicradio\.org|wnyc\.org|talksport\.com|kcrw\.com|kexp\.org|gbnews\.com|intoday\.in|radiocity\.in|radiomirchi\.com|redfmindia\.in|bigfmindia\.com|zdf\.de|ard\.de|rnz\.co\.nz|rts\.ch|rsi\.ch|rtl\.de|rmf\.fm|polskieradio\.pl|ert\.gr)$/i;
+const BROADCASTER_HOMEPAGES = /(^|\.)(allindiaradio\.gov\.in|newsonair\.gov\.in|prasarbharati\.gov\.in|bbc\.co\.uk|bbc\.com|iheart\.com|globalplayer\.com|hellorayo\.co\.uk|radiocity\.in|radiomirchi\.com|redfmindia\.in|bigfmindia\.com|npr\.org|wnyc\.org|abc\.net\.au|cbc\.ca|radio-canada\.ca|radiofrance\.fr|rnz\.co\.nz|ndr\.de|wdr\.de|br\.de|swr\.de|hr\.de|mdr\.de|srf\.ch|rai\.it|rte\.ie|nrk\.no|sverigesradio\.se|dr\.dk|vrt\.be)$|\.gov(\.[a-z]{2})?$/i;
+// "98.3 FM", "FM 93.5", "AM 1010": a real over-the-air frequency in the name.
+const FREQUENCY = /\b\d{2,3}(\.\d{1,2})?\s*(fm|mhz)\b|\b(fm|am)\s*\d{2,4}(\.\d)?\b|\b\d{3,4}\s*am\b/i;
 
-/** Live broadcast or automatic playlist, from where the stream is hosted, its name and its tags. Unsure: no label. */
-export function stationKind(raw: { url?: string; url_resolved?: string; name?: string; tags?: string }): 'live' | 'playlist' | undefined {
-  let host = '';
-  try { host = new URL(raw.url_resolved || raw.url || '').hostname; } catch { return undefined; }
+// Big Indian FM brands and AIR: real broadcasters, but only trusted off a bare IP address (fan relays use those).
+const BRAND_NAMES = /\b(radio mirchi|radio city|red fm|big fm|all india radio|akashvani|vividh bharati|air fm)\b|^air\b/i;
+
+const hostOf = (value?: string) => { try { return new URL(value ?? '').hostname; } catch { return ''; } };
+
+/**
+ * "live" only with positive evidence of a real broadcaster: its delivery network or homepage, a news/talk/sport tag,
+ * or an over-the-air frequency in the name. Everything else is "playlist" when it looks automatic, or unlabelled.
+ */
+export function stationKind(raw: { url?: string; url_resolved?: string; name?: string; tags?: string; homepage?: string }): 'live' | 'playlist' | undefined {
+  const host = hostOf(raw.url_resolved || raw.url);
+  if (!host) return undefined;
   if (PLAYLIST_HOSTS.test(host)) return 'playlist';
   // A broadcaster's own delivery network wins over the name: "Raagam AIR 24*7" is All India Radio itself.
-  if (BROADCASTER_HOSTS.test(host)) return 'live';
+  if (BROADCASTER_HOSTS.test(host) || BROADCASTER_MORE_HOSTS.test(host) || BROADCASTER_HOMEPAGES.test(hostOf(raw.homepage))) return 'live';
   if (PLAYLIST_NAMES.test(raw.name ?? '')) return 'playlist';
-  const tags = (raw.tags ?? '').split(',').map(t => t.trim());
-  if (tags.some(t => LIVE_TAGS.test(t))) return 'live';
+  if (BRAND_NAMES.test(raw.name ?? '') && !/^[\d.]+$/.test(host)) return 'live';
+  if ((raw.tags ?? '').split(',').some(t => LIVE_TAGS.test(t.trim())) || FREQUENCY.test(raw.name ?? '')) return 'live';
   return undefined;
 }
 
@@ -105,6 +118,7 @@ function toStation(raw: RawStation): Station | null {
   if (!id || !/^[0-9a-f-]{36}$/i.test(id) || !/^https?:\/\//i.test(url ?? '')) return null;
   streams.set(id, { url, favicon: /^https?:\/\//i.test(raw.favicon ?? '') ? raw.favicon : undefined, name: clean(raw.name), hls: raw.hls === 1 });
   if (streams.size > 5000) streams.delete(streams.keys().next().value as string);
+  const kind = stationKind(raw);
   const homepage = /^https?:\/\//i.test(raw.homepage ?? '') ? clean(raw.homepage, 200) : undefined;
   return {
     id, name: clean(raw.name) || 'Unnamed station', country: clean(raw.country, 60), countryCode: clean(raw.countrycode, 2).toUpperCase(),
@@ -112,7 +126,7 @@ function toStation(raw: RawStation): Station | null {
     tags: clean(raw.tags, 200).split(',').map(t => t.trim()).filter(Boolean).slice(0, 4),
     ...(raw.codec ? { codec: clean(raw.codec, 12) } : {}), ...(raw.bitrate ? { bitrate: raw.bitrate } : {}), ...(homepage ? { homepage } : {}),
     votes: raw.votes ?? 0, logo: !!streams.get(id)?.favicon, ...(raw.hls === 1 ? { hls: true } : {}),
-    ...(stationKind(raw) ? { kind: stationKind(raw) } : {})
+    ...(kind ? { kind } : {})
   };
 }
 
@@ -146,11 +160,15 @@ export async function radioTags(code?: string): Promise<RadioTag[]> {
   return rows.filter(r => r.name && /^[\p{L}\p{N} &'+-]{2,30}$/u.test(r.name)).map(r => ({ name: r.name, stations: r.stationcount }));
 }
 
-export interface StationQuery { country?: string; region?: string; tag?: string; q?: string; language?: string; limit?: number; offset?: number }
+export interface StationQuery { country?: string; region?: string; tag?: string; q?: string; language?: string; limit?: number; offset?: number; liveOnly?: boolean }
 
 export async function searchStations(query: StationQuery): Promise<{ stations: Station[]; more: boolean }> {
   const limit = Math.min(Math.max(query.limit ?? 40, 1), 100);
-  const params = new URLSearchParams({ hidebroken: 'true', order: 'clickcount', reverse: 'true', limit: String(limit + 1), offset: String(Math.max(query.offset ?? 0, 0)) });
+  const offset = Math.max(query.offset ?? 0, 0);
+  // Live only: most of the popular list is automatic playlists, so read a deep slice of it (by clicks) and page
+  // through just the real broadcasts, in the same popularity order.
+  const deep = !!query.liveOnly;
+  const params = new URLSearchParams({ hidebroken: 'true', order: 'clickcount', reverse: 'true', limit: String(deep ? 500 : limit + 1), offset: String(deep ? 0 : offset) });
   if (query.country && /^[A-Za-z]{2}$/.test(query.country)) params.set('countrycode', query.country.toUpperCase());
   if (query.region) params.set('state', clean(query.region, 60));
   if (query.tag) { params.set('tag', clean(query.tag, 40)); params.set('tagExact', 'true'); }
@@ -158,6 +176,10 @@ export async function searchStations(query: StationQuery): Promise<{ stations: S
   if (query.language) params.set('language', clean(query.language, 40));
   const rows = await directory<RawStation[]>(`/json/stations/search?${params}`, 5 * 60_000);
   const stations = rows.map(toStation).filter((s): s is Station => !!s);
+  if (deep) {
+    const live = stations.filter(s => s.kind === 'live');
+    return { stations: live.slice(offset, offset + limit), more: live.length > offset + limit };
+  }
   // Real broadcasts first, fan playlists last, otherwise in order of popularity.
   const rank = (s: Station) => (s.kind === 'live' ? 0 : s.kind === 'playlist' ? 2 : 1);
   const page = stations.slice(0, limit).map((s, i) => ({ s, i })).sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i).map(x => x.s);

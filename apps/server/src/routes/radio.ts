@@ -15,10 +15,10 @@ export default async function radioRoutes(server: FastifyInstance) {
   server.get<{ Querystring: { country?: string } }>('/api/radio/regions', async request => ({ regions: await radioRegions(request.query.country ?? '').catch(() => []) }));
   server.get('/api/radio/tags', async () => ({ tags: await radioTags().catch(() => []) }));
 
-  server.get<{ Querystring: { country?: string; region?: string; tag?: string; q?: string; language?: string; offset?: string } }>('/api/radio/stations', async (request, reply) => {
+  server.get<{ Querystring: { country?: string; region?: string; tag?: string; q?: string; language?: string; offset?: string; live?: string } }>('/api/radio/stations', async (request, reply) => {
     try {
       const { country, region, tag, q, language } = request.query;
-      return await searchStations({ country, region, tag, q, language, offset: Number(request.query.offset) || 0 });
+      return await searchStations({ country, region, tag, q, language, offset: Number(request.query.offset) || 0, liveOnly: request.query.live === '1' });
     } catch (e) { return reply.code(502).send({ message: fail(e) }); }
   });
 

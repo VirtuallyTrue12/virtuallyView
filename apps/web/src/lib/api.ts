@@ -748,7 +748,7 @@ export const api = {
   radioCountries: () => getJSON<{ countries: RadioPlace[] }>('/api/radio/countries'),
   radioRegions: (country: string) => getJSON<{ regions: RadioPlace[] }>(`/api/radio/regions?country=${encodeURIComponent(country)}`),
   radioTags: () => getJSON<{ tags: Array<{ name: string; stations: number }> }>('/api/radio/tags'),
-  radioStations: (p: { country?: string; region?: string; tag?: string; q?: string; offset?: number }) => {
+  radioStations: (p: { country?: string; region?: string; tag?: string; q?: string; offset?: number; live?: '1' }) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(p)) if (v !== undefined && v !== '') qs.set(k, String(v));
     return getJSON<{ stations: RadioStation[]; more: boolean }>(`/api/radio/stations?${qs}`);

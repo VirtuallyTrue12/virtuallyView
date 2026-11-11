@@ -78,7 +78,7 @@ export default function Radio() {
   const [regions, setRegions] = useState<RadioPlace[]>([]);
   const [tags, setTags] = useState<Array<{ name: string; stations: number }>>([]);
   const [tag, setTag] = useState('');
-  // Fan-made playlists sound pre-recorded (no hosts, no news): hidden unless asked for.
+  // Automatic playlists sound pre-recorded (no hosts, no news): only stations with evidence of a real broadcaster show.
   const [liveOnly, setLiveOnly] = useState(() => { try { return localStorage.getItem('vv-radio-live-only') !== '0'; } catch { return true; } });
   useEffect(() => { try { localStorage.setItem('vv-radio-live-only', liveOnly ? '1' : '0'); } catch { /* fine */ } }, [liveOnly]);
   const [query, setQuery] = useState('');
@@ -109,17 +109,17 @@ export default function Radio() {
     if (view !== 'browse') return;
     let alive = true;
     setLoading(true); setError(null);
-    api.radioStations({ country: place.country, region: place.region, tag, q: query })
+    api.radioStations({ country: place.country, region: place.region, tag, q: query, live: liveOnly ? '1' : undefined })
       .then(r => { if (alive) { setStations(r.stations); setMore(r.more); } })
       .catch(err => { if (alive) { setError((err as Error).message); setStations([]); setMore(false); } })
       .finally(() => { if (alive) setLoading(false); });
     // Leaving Browse mid-load cancels the answer, so the spinner must stop here too or it never does.
     return () => { alive = false; setLoading(false); };
-  }, [view, place, tag, query]);
+  }, [view, place, tag, query, liveOnly]);
 
   const loadMore = () => {
     setLoading(true);
-    api.radioStations({ country: place.country, region: place.region, tag, q: query, offset: stations.length })
+    api.radioStations({ country: place.country, region: place.region, tag, q: query, offset: stations.length, live: liveOnly ? '1' : undefined })
       .then(r => { setStations(prev => [...prev, ...r.stations.filter(s => !prev.some(p => p.id === s.id))]); setMore(r.more); })
       .catch(err => setError((err as Error).message)).finally(() => setLoading(false));
   };
@@ -132,8 +132,7 @@ export default function Radio() {
   };
 
   const listed = view === 'browse' ? stations : view === 'favorites' ? mine.favorites : mine.recent;
-  const hiddenPlaylists = view === 'browse' && liveOnly ? listed.filter(s => s.kind === 'playlist').length : 0;
-  const shown = hiddenPlaylists ? listed.filter(s => s.kind !== 'playlist') : listed;
+  const shown = listed;
   const countryName = countries.find(c => c.code === place.country)?.name ?? '';
   const playingId = radio.state !== 'idle' ? radio.station?.id : undefined;
   const sounding = radio.state === 'playing';
@@ -175,9 +174,9 @@ export default function Radio() {
                 </select>
               </label>
             )}
-            <button type="button" role="switch" aria-checked={liveOnly} className={`toggle rd-live${liveOnly ? ' is-on' : ''}`} onClick={() => setLiveOnly(v => !v)} title="Hide fan-made automatic playlists that sound pre-recorded">
+            <button type="button" role="switch" aria-checked={liveOnly} className={`toggle rd-live${liveOnly ? ' is-on' : ''}`} onClick={() => setLiveOnly(v => !v)} title="Only stations run by real broadcasters, with presenters and news. Turn off to also see automatic playlists.">
               <span className="toggle-knob" aria-hidden="true" />
-              <span>Real broadcasts only{hiddenPlaylists > 0 && <small>{hiddenPlaylists} fan playlists hidden</small>}</span>
+              <span>Live radio only<small>Real broadcasters, with presenters and news</small></span>
             </button>
             <label className="rd-field rd-search">
               <span>Search</span>
