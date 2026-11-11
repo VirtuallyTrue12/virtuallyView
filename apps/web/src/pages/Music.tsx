@@ -27,10 +27,10 @@ function reviewYearNow(): number | null {
 
 export default function Music() {
   const navigate = useNavigate();
-  const [items, setItems] = useState<MediaItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<MediaItem[]>(() => api.cached.artists() ?? []);
+  const [loading, setLoading] = useState(() => !api.cached.artists());
   const [error, setError] = useState<string | null>(null);
-  const [playlists, setPlaylists] = useState<PlaylistItem[] | null>(null);
+  const [playlists, setPlaylists] = useState<PlaylistItem[] | null>(() => api.cached.playlists() ?? null);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [playlistError, setPlaylistError] = useState<string | null>(null);

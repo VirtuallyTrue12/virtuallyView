@@ -8,7 +8,7 @@ Everything in [features](features.md) marked Built.
 
 Not started. Listed so nobody wonders whether they were forgotten. Highest impact first.
 
-- Hardware transcoding: Intel Quick Sync, VAAPI (Intel/AMD) and NVIDIA NVENC. Live conversion runs on the CPU today, which caps how many people can watch at once and causes stutter on slower machines.
+- NVIDIA hardware conversion (NVENC). VA-API (Intel/AMD) already decodes, tone maps HDR and encodes on the graphics chip; NVIDIA needs an ffmpeg built with NVENC and the card passed into the container.
 - Apps for TVs and phones (Android TV, Fire TV, Roku, iOS). First step: an installable app (PWA) and a layout that works with a TV remote.
 - A programme guide view for Live TV, alongside scheduled recording (below).
 - Offline downloads to phones, and synchronised group playback (Watch together already keeps a party roughly in step).

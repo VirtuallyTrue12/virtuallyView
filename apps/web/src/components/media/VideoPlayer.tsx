@@ -48,6 +48,8 @@ interface VideoPlayerProps {
   sourceHeight?: number | null;
   /** Chapter marks from the file; intro, recap and credits chapters get a skip button. */
   chapters?: Array<{ start: number; end: number; title: string }>;
+  /** Intro and credits the server detected; chapters, when the file has them, win. */
+  segments?: { intro?: { start: number; end: number }; credits?: { start: number } };
   /** TV episode: offer a manual skip near the start when the file has no chapters. */
   isEpisode?: boolean;
   /** Shown in the subtitle menu only while there are none; searches subtitle sources for this title. */
@@ -63,6 +65,9 @@ interface VideoPlayerProps {
 /** The person's last subtitle choice in the menu: turned off stays off for the next film. */
 const subsTurnedOff = () => { try { return localStorage.getItem('vv-subs') === 'off'; } catch { return false; } };
 const rememberSubs = (v: 'on' | 'off') => { try { localStorage.setItem('vv-subs', v); } catch { /* this visit only */ } };
+/** Skip intro / credits buttons, on unless turned off in the player settings. Saved per browser. */
+const skipButtonsOn = () => { try { return localStorage.getItem('vv-skip-buttons') !== 'off'; } catch { return true; } };
+const rememberSkipButtons = (on: boolean) => { try { localStorage.setItem('vv-skip-buttons', on ? 'on' : 'off'); } catch { /* this visit only */ } };
 
 /** How captions look. Saved per browser in localStorage 'vv-sub-style'. */
 interface SubStyle { size: 'small' | 'medium' | 'large' | 'xlarge'; color: 'white' | 'yellow'; background: 'none' | 'shadow' | 'box'; position: 'bottom' | 'raised' }
@@ -121,7 +126,7 @@ const ICONS = {
 
 export default function VideoPlayer({
   src, transcodeSrc, durationSeconds, poster, title, heading, subheading, onBack, subtitles = [], startAt = 0, autoPlay = true,
-  onProgress, onEnded, onError, next, previous, episodes, audioTracks = [], imageSubtitles = [], sourceHeight, chapters = [], isEpisode = false, party, castTranscode, onPullSubtitles,
+  onProgress, onEnded, onError, next, previous, episodes, audioTracks = [], imageSubtitles = [], sourceHeight, chapters = [], segments, isEpisode = false, party, castTranscode, onPullSubtitles,
   mediaType, mediaId, seriesId, info
 }: VideoPlayerProps) {
   const [pulling, setPulling] = useState(false);
@@ -146,6 +151,7 @@ export default function VideoPlayer({
   // Choosing another audio language in a file that plays directly switches it to live conversion.
   const [converting, setConverting] = useState(false);
   const [manualSkipUsed, setManualSkipUsed] = useState(false);
+  const [skipButtons, setSkipButtons] = useState(skipButtonsOn);
   const conversionSrc = transcodeSrc ?? castTranscode;
   const isTranscode = !!transcodeSrc || (converting && !!conversionSrc);
   const [offset, setOffset] = useState(isTranscode ? Math.floor(startAt) : 0);
@@ -258,10 +264,22 @@ export default function VideoPlayer({
   const bufPct = total > 0 ? Math.min(100, ((isTranscode ? offset + buffered : buffered) / total) * 100) : 0;
 
   const SKIP_RE = /^(intro|introduction|opening|op|recap|previously|prologue|title sequence|credits|end credits|ending|outro|ed)\b/i;
-  const skipChapter = chapters.find(c => SKIP_RE.test(c.title.trim()) && position >= c.start && position < c.end - 1);
+  const { intro, credits } = segments ?? {};
+  // Chapter marks first, then what the server detected, read as if it were a chapter.
+  const skipChapter = chapters.find(c => SKIP_RE.test(c.title.trim()) && position >= c.start && position < c.end - 1)
+    ?? (intro && position >= intro.start && position < intro.end - 1 ? { ...intro, title: 'Intro' }
+      : credits && total > credits.start && position >= credits.start && position < total - 1 ? { start: credits.start, end: total, title: 'Credits' } : undefined);
   const skipIsCredits = skipChapter ? /credit|ending|outro|^ed\b/i.test(skipChapter.title) : false;
-  // Without chapter marks the intro is a guess: offer a skip early on, once.
-  const manualSkip = !skipChapter && isEpisode && chapters.length === 0 && !manualSkipUsed && position > 5 && position < 150;
+  // Without chapter marks or a detected intro the intro is a guess: offer a skip early on, once.
+  const manualSkip = !skipChapter && !intro && isEpisode && chapters.length === 0 && !manualSkipUsed && position > 5 && position < 150;
+  const skipLabel = !skipButtons || failed || upNext !== null ? null
+    : skipChapter ? (skipIsCredits ? (next ? 'Next episode' : 'Skip credits') : /recap|previously/i.test(skipChapter.title) ? 'Skip recap' : 'Skip intro')
+    : manualSkip ? 'Skip intro' : null;
+  const skipRef = useRef<HTMLButtonElement>(null);
+  // A TV remote has no pointer: put the skip button under the remote's OK button the moment it appears.
+  useEffect(() => {
+    if (skipLabel && document.documentElement.classList.contains('tv')) skipRef.current?.focus({ preventScroll: true });
+  }, [skipLabel]);
   const currentChapter = chapters.find(c => position >= c.start && position < c.end);
 
   const wake = useCallback(() => {
@@ -768,8 +786,9 @@ export default function VideoPlayer({
         </div>
       )}
 
-      {(skipChapter || manualSkip) && !failed && upNext === null && (
+      {skipLabel && (
         <button
+          ref={skipRef}
           type="button"
           className="vp-skip"
           title={skipChapter ? undefined : 'Skips ahead 90 seconds'}
@@ -780,7 +799,7 @@ export default function VideoPlayer({
             } else { setManualSkipUsed(true); seekTo(position + 90); }
           }}
         >
-          {skipChapter ? (skipIsCredits ? (next ? 'Next episode' : 'Skip credits') : /recap|previously/i.test(skipChapter.title) ? 'Skip recap' : 'Skip intro') : 'Skip intro'}
+          {skipLabel}
         </button>
       )}
 
@@ -957,6 +976,12 @@ export default function VideoPlayer({
                   <div className="vp-speeds">
                     {SPEEDS.map(sp => (
                       <button key={sp} type="button" role="menuitem" className={`vp-chip${rate === sp ? ' is-active' : ''}`} onClick={() => setRate(sp)}>{sp === 1 ? '1×' : `${sp}×`}</button>
+                    ))}
+                  </div>
+                  <div className="vp-menu-head">Skip intro and credits buttons</div>
+                  <div className="vp-speeds">
+                    {[true, false].map(on => (
+                      <button key={String(on)} type="button" role="menuitem" className={`vp-chip${skipButtons === on ? ' is-active' : ''}`} onClick={() => { setSkipButtons(on); rememberSkipButtons(on); }}>{on ? 'On' : 'Off'}</button>
                     ))}
                   </div>
                   {audioTracks.length > 1 && !!conversionSrc && (

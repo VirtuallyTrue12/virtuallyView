@@ -275,6 +275,18 @@ function open(): DatabaseSync {
       fetched_at TEXT NOT NULL
     );
 
+    -- Skip intro / skip credits times found by the background detector, per file (size and mtime spot a replaced file).
+    CREATE TABLE IF NOT EXISTS media_segments (
+      file_path TEXT PRIMARY KEY,
+      file_size INTEGER NOT NULL,
+      file_mtime REAL NOT NULL,
+      intro_checked INTEGER NOT NULL DEFAULT 0,
+      intro_start REAL,
+      intro_end REAL,
+      credits_checked INTEGER NOT NULL DEFAULT 0,
+      credits_start REAL
+    );
+
     -- Lyrics translations per track and language.
     CREATE TABLE IF NOT EXISTS lyrics_translations (
       cache_key TEXT PRIMARY KEY,

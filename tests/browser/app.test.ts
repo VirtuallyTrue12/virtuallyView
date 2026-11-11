@@ -4,7 +4,7 @@
  * (npx playwright install chromium).
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -214,6 +214,16 @@ describe('notifications and backup', () => {
   });
 });
 
+describe('video conversion hardware', () => {
+  it('tells the administrator which chip converts video and where HDR is tone mapped', async () => {
+    await page.route('**/api/system/video', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ converter: 'Intel graphics (VA-API)', tonemap: 'gpu' }) }));
+    await page.goto(base + '/settings?cat=server');
+    await page.getByTestId('video-hardware').getByText('Video conversion: Intel graphics (VA-API). HDR tone mapping: on the graphics chip.').waitFor();
+    await page.unroute('**/api/system/video');
+    expect(errors).toEqual([]);
+  });
+});
+
 describe('empty library pages', () => {
   it('render without errors and without a wall of nothing', async () => {
     for (const path of ['/movies', '/series', '/music', '/requests', '/downloads', '/search']) {
@@ -309,6 +319,33 @@ describe('pull subtitles', () => {
     await page.getByRole('button', { name: 'Subtitles', exact: true }).click();
     await page.getByText('No subtitle files found for this title').waitFor();
     expect(await page.locator('.vp-menu').innerText()).not.toContain('STALE EPISODE 1 RESULT');
+    expect(errors).toEqual([]);
+  });
+});
+
+describe('skip intro', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+
+  it('shows Skip intro inside the detected intro and jumps past its end', async () => {
+    const video = readFileSync(resolve(root, 'tests/browser/fixtures/tiny-20s.webm'));
+    await page.route('**/api/movies/radarr-530', r => r.fulfill(json({ id: 'radarr-530', title: 'Skip Test', status: 'available' })));
+    await page.route('**/api/stream/radarr-530/info', r => r.fulfill(json({ playable: true, transcodingAvailable: false, durationSeconds: 20, container: 'webm', videoCodec: 'vp9', audioCodec: null, reason: null, segments: { intro: { start: 0, end: 12 } } })));
+    await page.route('**/api/progress/movie/radarr-530', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await page.route('**/api/stream/radarr-530/subtitles', r => r.fulfill(json({ subtitles: [] })));
+    await page.route('**/api/stream/radarr-530/trickplay', r => r.fulfill(json({ state: 'unavailable' })));
+    await page.route('**/api/stream/radarr-530', r => {
+      // Answer byte ranges like the real server, so the browser can seek in the clip.
+      const m = /bytes=(\d+)-(\d*)/.exec(r.request().headers()['range'] ?? '');
+      const start = m ? Number(m[1]) : 0, end = m?.[2] ? Number(m[2]) : video.length - 1;
+      return r.fulfill({ status: m ? 206 : 200, contentType: 'video/webm', headers: { 'Accept-Ranges': 'bytes', ...(m ? { 'Content-Range': `bytes ${start}-${end}/${video.length}` } : {}) }, body: video.subarray(start, end + 1) });
+    });
+
+    await page.goto(base + '/movies/radarr-530/play');
+    const skip = page.getByRole('button', { name: 'Skip intro' });
+    await skip.waitFor();
+    await skip.click();
+    await page.waitForFunction(() => (document.querySelector('video')?.currentTime ?? 0) >= 11.9);
+    await skip.waitFor({ state: 'detached' });
     expect(errors).toEqual([]);
   });
 });
@@ -1846,5 +1883,42 @@ describe('remote control in TV mode', () => {
     await page.keyboard.press('Escape');
     await page.evaluate(() => document.documentElement.classList.remove('tv'));
     await page.unroute('**/api/movies/radarr-777');
+  });
+});
+
+describe('going back to a page', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const film = { id: 'radarr-902', title: 'Instant Return', year: 2002, type: 'movie', status: 'available', runtime: 90, artwork: {} };
+  afterEach(async () => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
+
+  it('shows what it showed before at once, not a blank screen, while it refreshes', async () => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    await page.route('**/api/dashboard', r => r.fulfill(json({ hero: null, heroCandidates: [], rails: [] })));
+    await page.route('**/api/movies', r => r.fulfill(json([film])));
+    await page.goto(base + '/movies');
+    await page.getByText('Instant Return').first().waitFor();
+    // From now on the server is slow: the page must not wait for it.
+    await page.route('**/api/movies', r => setTimeout(() => void r.fulfill(json([film])).catch(() => undefined), 5000));
+    await page.locator('nav a', { hasText: 'Home' }).first().click();
+    await page.waitForURL(base + '/');
+    await page.locator('.browse-library').waitFor({ state: 'detached' });
+    await page.goBack();
+    await page.getByText('Instant Return').first().waitFor({ timeout: 1500 });
+  });
+
+  it('a page that crashes keeps the top bar and offers a way back, instead of a black screen', async () => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    // A broken answer (director should be a list of people) makes the details page throw.
+    await page.route('**/api/movies/radarr-903', r => r.fulfill(json({ id: 'radarr-903', title: 'Broken', type: 'movie', status: 'available', artwork: {}, director: [null] })));
+    await page.goto(base + '/movies/radarr-903');
+    await page.getByText('Something went wrong on this page').waitFor();
+    expect(await page.locator('nav').count()).toBeGreaterThan(0);
+    errors.length = 0;
   });
 });
