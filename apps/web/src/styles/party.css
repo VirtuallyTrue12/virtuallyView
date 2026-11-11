@@ -9,12 +9,11 @@
 .wt-reactions { display: inline-flex; gap: var(--spacing-xs); }
 .wt-reactions .icon-btn { font-size: 1.15rem; }
 
-/* Chat: a side panel on wide screens, a sheet over the bottom of the page on phones */
+/* Chat sits in the strip under the player, so it never covers the video or its controls */
 .wt-chat {
-  position: fixed; right: var(--spacing-lg); bottom: var(--spacing-lg); z-index: 40;
-  width: 320px; height: min(440px, 60vh); display: flex; flex-direction: column; gap: var(--spacing-sm);
+  width: 100%; max-width: 480px; height: 240px; display: flex; flex-direction: column; gap: var(--spacing-sm);
   padding: var(--spacing-md); background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--radius-large); box-shadow: var(--shadow-large);
+  border-radius: var(--radius-large);
   animation: wt-in 200ms var(--easing-default, ease-out);
 }
 .wt-chat-list { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--spacing-xs); overflow-wrap: anywhere; }
@@ -23,9 +22,6 @@
 .wt-chat-form .input { flex: 1; min-width: 0; }
 @keyframes wt-in { from { opacity: 0; transform: translateY(8px); } }
 
-@media (max-width: 640px) {
-  .wt-chat { left: var(--spacing-sm); right: var(--spacing-sm); bottom: var(--spacing-sm); width: auto; height: 55vh; }
-}
 
 /* "Waiting for Sam..." and reactions sit inside the player, so they show in fullscreen too */
 .vp-party-wait {

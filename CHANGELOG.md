@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Watch together now stays in step: play, pause, seek and speed reach everyone; small drift is evened out by speeding up or slowing down slightly, and big drift seeks. If one person is buffering, everyone waits ("Waiting for Sam...") and starts again together. It works for films, episodes and Videos, and adds chat, quick reactions that float over the video, a member list, handing over host, and a Leave button. Kids profiles can only join titles their rating allows.
+
 - Downloads to this device: pick Smaller (480p), Standard (720p) or High (1080p) with the expected size, and the choice is remembered; download a whole season with progress, pause and resume; "Keep the next 3 episodes" per series swaps watched episodes for the next ones while the app is open; Delete watched; a warning before a download that won't fit. The server converts one copy at a time and shares a prepared copy between devices for 24 hours.
 
 - Live TV: scheduled recording. Pick a programme in the guide to Watch now, Record, Record series (this channel or any channel); scheduled ones get a red dot. A Recordings tab lists Scheduled (with conflicts flagged before they happen; two at once by default), Series rules, Recorded and Failed or missed. Recording runs from a minute before to three minutes after, survives restarts, and will not start with under 10 GB free. Dialogs can now put focus on their main button for the TV remote.
