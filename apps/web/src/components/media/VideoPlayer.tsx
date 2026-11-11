@@ -46,6 +46,8 @@ interface VideoPlayerProps {
   imageSubtitles?: Array<{ index: number; label: string }>;
   /** Source height in pixels, to offer only lower qualities. */
   sourceHeight?: number | null;
+  /** Heights the quality menu offers instead of the steps under `sourceHeight` (a video whose versions are known). */
+  qualities?: number[];
   /** Chapter marks from the file; intro, recap and credits chapters get a skip button. */
   chapters?: Array<{ start: number; end: number; title: string }>;
   /** Intro and credits the server detected; chapters, when the file has them, win. */
@@ -126,7 +128,7 @@ const ICONS = {
 
 export default function VideoPlayer({
   src, transcodeSrc, durationSeconds, poster, title, heading, subheading, onBack, subtitles = [], startAt = 0, autoPlay = true,
-  onProgress, onEnded, onError, next, previous, episodes, audioTracks = [], imageSubtitles = [], sourceHeight, chapters = [], segments, isEpisode = false, party, castTranscode, onPullSubtitles,
+  onProgress, onEnded, onError, next, previous, episodes, audioTracks = [], imageSubtitles = [], sourceHeight, qualities, chapters = [], segments, isEpisode = false, party, castTranscode, onPullSubtitles,
   mediaType, mediaId, seriesId, info
 }: VideoPlayerProps) {
   const [pulling, setPulling] = useState(false);
@@ -229,7 +231,7 @@ export default function VideoPlayer({
   const useHls = isTranscode && canNativeHls && !cast;
   const transcodeQuery = `start=${offset}${audioIndex ? `&audio=${audioIndex}` : ''}${quality ? `&height=${quality}` : ''}${burnIndex >= 0 ? `&burn=${burnIndex}` : ''}`;
   const baseSrc = isTranscode
-    ? (useHls ? `${conversionSrc}/hls/${offset}_${audioIndex}_${quality}_${burnIndex}/index.m3u8?${transcodeQuery}` : `${conversionSrc}?${transcodeQuery}`)
+    ? (useHls ? `${conversionSrc}/hls/${offset}_${audioIndex}_${quality}_${burnIndex}/index.m3u8?${transcodeQuery}` : `${conversionSrc}${conversionSrc?.includes('?') ? '&' : '?'}${transcodeQuery}`)
     : src;
   // A cast receiver has no login cookie: it gets an absolute address with a signed, expiring token.
   const videoSrc = cast ? `${cast.origin}${baseSrc}${baseSrc.includes('?') ? '&' : '?'}st=${cast.token}` : baseSrc;
@@ -341,6 +343,13 @@ export default function VideoPlayer({
       setTime(t);
     }
   }, [isTranscode, total, emit, offset]);
+  // A page's own chapter list asks for a jump with a 'vp-seek' event, which also works while converting.
+  useEffect(() => {
+    const el = wrapRef.current;
+    const onSeek = (e: Event) => seekTo((e as CustomEvent<number>).detail);
+    el?.addEventListener('vp-seek', onSeek);
+    return () => el?.removeEventListener('vp-seek', onSeek);
+  }, [seekTo]);
 
   // Changing audio track or quality re-runs the conversion from where we are.
   const restartWith = (apply: () => void) => {
@@ -967,8 +976,8 @@ export default function VideoPlayer({
                   {(isTranscode || !!conversionSrc) && !cast && (
                     <>
                       <div className="vp-menu-head">Quality</div>
-                      {[0, ...QUALITY_STEPS].filter(q => q === 0 || !sourceHeight || q < sourceHeight).map(q => (
-                        <button key={q} type="button" role="menuitem" className={`vp-menu-item${quality === q ? ' is-active' : ''}`} onClick={() => { setMenu(null); if (q !== quality) chooseQuality(q); }}>{q === 0 ? 'Auto (original)' : `${q}p`}</button>
+                      {[0, ...(qualities ?? QUALITY_STEPS.filter(q => !sourceHeight || q < sourceHeight))].map(q => (
+                        <button key={q} type="button" role="menuitem" className={`vp-menu-item${quality === q ? ' is-active' : ''}`} onClick={() => { setMenu(null); if (q !== quality) chooseQuality(q); }}>{q === 0 ? (qualities ? 'Auto' : 'Auto (original)') : `${q}p`}</button>
                       ))}
                     </>
                   )}

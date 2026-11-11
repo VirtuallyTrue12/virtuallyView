@@ -77,17 +77,18 @@ export function parseCount(text: unknown): number {
   return Number.isFinite(n) ? Math.round(n * ({ K: 1e3, M: 1e6, B: 1e9 }[(m[2] ?? '').toUpperCase() as 'K'] ?? 1)) : 0;
 }
 
-/** A channel picture or banner (on YouTube's image hosts) as a path on this server, which fetches it through the
- * instance's own /ggpht/ proxy: the browser never talks to Google, and this server only ever talks to the instance. */
+/** A channel picture or banner (on YouTube's image hosts) as a path on this server, which fetches and caches it
+ * (see image-cache.ts): the browser never talks to Google. */
 export function imageProxyPath(url: string | undefined): string | undefined {
   const rest = /^(?:https?:)?\/\/yt3\.(?:ggpht|googleusercontent)\.com\/([\w\-=.,/]+)$/.exec(url ?? '')?.[1];
   return rest && !rest.includes('..') ? `/api/videos/image?p=${encodeURIComponent(`/ggpht/${rest}`)}` : undefined;
 }
 
-/** The upstream address for an image path given to `/api/videos/image`, or null for anything else. */
+/** The upstream address for an image path given to `/api/videos/image`, or null for anything else. The instance's
+ * own /ggpht/ proxy redirects most current pictures away, so they come from YouTube's image host (which serves
+ * both its ggpht and googleusercontent paths). */
 export function imageUpstream(p: string): string | null {
-  const base = baseUrl();
-  return base && /^\/ggpht\/[\w\-=.,/]+$/.test(p) && !p.includes('..') ? `${base}${p}` : null;
+  return /^\/ggpht\/[\w\-=.,/]+$/.test(p) && !p.includes('..') ? `https://yt3.ggpht.com${p.slice('/ggpht'.length)}` : null;
 }
 
 const pickThumb = (thumbs: RawThumb[] | undefined, width: number) =>
@@ -230,11 +231,48 @@ export interface VideoDetails extends VideoResult {
   captions: Array<{ label: string; code: string }>; chapters: Chapter[]; related: VideoResult[];
   /** The one file with sound and picture together (360p on most videos), for this app's own player. */
   hasStream: boolean;
+  /** Heights this app's player can play in HD (H.264 picture plus AAC sound, joined on the server), tallest first. */
+  hdHeights: number[];
 }
+interface RawFormat { itag?: string | number; type?: string; url?: string; qualityLabel?: string; fps?: number }
 interface RawDetails extends RawVideo {
   publishedText?: string; likeCount?: number; subCountText?: string;
   captions?: Array<{ label?: string; language_code?: string }>; recommendedVideos?: RawVideo[];
   formatStreams?: Array<{ itag?: string | number }>;
+  adaptiveFormats?: RawFormat[];
+}
+
+/** HD stops at 1080p: taller H.264 is rare and too heavy for TVs. */
+export const HD_MAX = 1080;
+const heightOf = (f: RawFormat) => Number(/^(\d+)p/.exec(f.qualityLabel ?? '')?.[1] ?? 0);
+// H.264 in MP4 only: VP9 and AV1 do not play on older TVs, and joining copies the picture as it is (no re-encode).
+const avcVideo = (formats: RawFormat[] = []) => formats.filter(f => f.url && /^video\/mp4;.*avc1/i.test(f.type ?? '') && heightOf(f) > 0);
+const aacAudio = (formats: RawFormat[] = []) => formats.find(f => f.url && String(f.itag) === '140') ?? formats.find(f => f.url && /^audio\/mp4;.*mp4a/i.test(f.type ?? ''));
+
+/** The picture (tallest H.264 at or under `maxHeight`, else the shortest there is) and sound to join, or null when
+ * the video has no H.264 or no AAC. At one height the smoother (higher frame rate) one wins. */
+export function pickFormats(formats: RawFormat[] | undefined, maxHeight: number): { video: RawFormat; audio: RawFormat; height: number } | null {
+  const cap = Math.min(HD_MAX, maxHeight > 0 ? maxHeight : HD_MAX);
+  const videos = avcVideo(formats).filter(f => heightOf(f) <= HD_MAX).sort((a, b) => heightOf(b) - heightOf(a) || (b.fps ?? 0) - (a.fps ?? 0));
+  const video = videos.find(f => heightOf(f) <= cap) ?? videos.at(-1);
+  const audio = aacAudio(formats);
+  return video && audio ? { video, audio, height: heightOf(video) } : null;
+}
+
+export const hdHeightsOf = (formats: RawFormat[] | undefined): number[] =>
+  aacAudio(formats) ? [...new Set(avcVideo(formats).map(heightOf).filter(h => h <= HD_MAX))].sort((a, b) => b - a) : [];
+
+/** Addresses (on the instance, which proxies YouTube) of the picture and sound to join for HD playback. */
+export async function hdSources(id: string, maxHeight: number): Promise<{ video: string; audio: string; height: number } | null> {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
+  const base = baseUrl();
+  if (!base) throw new NotConfigured();
+  const raw = await call<RawDetails>(`/api/v1/videos/${id}?local=true`);
+  const picked = pickFormats(raw.adaptiveFormats, maxHeight);
+  // local=true makes every address a path on the instance; anything else (a full URL elsewhere) is refused.
+  const onInstance = (url = '') => (url.startsWith('/') && !url.startsWith('//') ? `${base}${url}` : null);
+  const video = onInstance(picked?.video.url), audio = onInstance(picked?.audio.url);
+  return picked && video && audio ? { video, audio, height: picked.height } : null;
 }
 
 /** Everything the watch page shows: description, chapters, captions, related videos. */
@@ -253,7 +291,8 @@ export async function videoDetails(id: string): Promise<VideoDetails | null> {
     captions: (raw.captions ?? []).map(c => ({ label: clean(c.label, 80), code: clean(c.language_code, 20) })).filter(c => c.label).slice(0, 40),
     chapters: parseChapters(raw.description),
     related: videosOf(raw.recommendedVideos).slice(0, 20),
-    hasStream: (raw.formatStreams ?? []).some(f => String(f.itag) === '18')
+    hasStream: (raw.formatStreams ?? []).some(f => String(f.itag) === '18'),
+    hdHeights: hdHeightsOf(raw.adaptiveFormats)
   };
 }
 

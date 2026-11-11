@@ -484,6 +484,21 @@ export function startTranscode(filePath: string, startSeconds = 0, options: Tran
   return { process: child };
 }
 
+/** Joins a separate picture and sound that browsers already play (a YouTube video's H.264 and AAC, read over HTTP)
+ * into the same fragmented MP4 a conversion sends, copying both as they are: no re-encode, so it costs almost no CPU.
+ * Started part-way, both begin at the keyframe just before `startSeconds` (a copy cannot start between keyframes). */
+export function ffmpegRemuxArgs(videoUrl: string, audioUrl: string, startSeconds = 0): string[] {
+  const seek = startSeconds > 0 ? ['-ss', String(startSeconds)] : [];
+  return ['-hide_banner', '-loglevel', 'error', '-nostdin', ...seek, '-i', videoUrl, ...seek, '-i', audioUrl,
+    '-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', '-avoid_negative_ts', 'make_zero',
+    '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1'];
+}
+
+export function startRemux(videoUrl: string, audioUrl: string, startSeconds = 0): TranscodeHandle | null {
+  const ffmpeg = resolveBinary('ffmpeg');
+  return ffmpeg ? { process: spawn(ffmpeg, ffmpegRemuxArgs(videoUrl, audioUrl, startSeconds), { stdio: ['ignore', 'pipe', 'pipe'] }) } : null;
+}
+
 /** Audio only: strips any attached cover art (ffprobe sees it as a video stream) and re-encodes
  * to AAC/ADTS, a plain elementary stream any <audio> element can play progressively. */
 export function ffmpegAudioArgs(filePath: string, startSeconds = 0): string[] {

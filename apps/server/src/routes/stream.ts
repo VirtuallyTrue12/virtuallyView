@@ -7,7 +7,7 @@ import { getAdapter } from '../services/registry.js';
 import { getMediaRoots, isAllowedMediaFile } from '../services/media-roots.js';
 import { subtitleToVtt } from '../services/subtitle-text.js';
 import { resolveMusicVideoPath } from '../services/music-video-library.js';
-import { extractSubtitleVtt, ffmpegAvailable, playableFor, probeMedia, startTranscode, type ClientCodecs, type TranscodeOptions } from '../services/transcode.js';
+import { extractSubtitleVtt, ffmpegAvailable, playableFor, probeMedia, startTranscode, type ClientCodecs, type TranscodeHandle, type TranscodeOptions } from '../services/transcode.js';
 import { ensureHlsSession, HLS_SEGMENT_RE, playlistPath, segmentPath, touchHlsSession } from '../services/hls-sessions.js';
 import { ratingAllowed } from '../services/parental.js';
 import { parseByteRange } from '../lib/byte-range.js';
@@ -212,13 +212,18 @@ async function streamTranscode(
   filePath: string
 ) {
   const { start, options } = await transcodeOptionsFor(filePath, request.query);
-  const viewerKey = `${currentActor().userId}\0${filePath}`;
+  return pipeConversion(request, reply, filePath, () => startTranscode(filePath, start, options));
+}
+
+/** Streams one live ffmpeg conversion to the browser: one per viewer per `source`, within the conversion limit. */
+export async function pipeConversion(request: FastifyRequest, reply: FastifyReply, source: string, begin: () => TranscodeHandle | null) {
+  const viewerKey = `${currentActor().userId}\0${source}`;
   await stopPrevious(viewerKey);
   const release = acquireConversion(currentActor().userId);
   if (!release) {
     return reply.code(429).header('Retry-After', '30').send({ error: 'too_many_conversions', message: 'Too many videos are being converted right now. Close another player or try again in a moment.' });
   }
-  const handle = startTranscode(filePath, start, options);
+  const handle = begin();
   if (!handle) {
     release();
     return reply.code(503).header('Access-Control-Allow-Origin', '*').send({

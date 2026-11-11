@@ -12,6 +12,12 @@ import { useSubscriptions } from '../components/videos/useSubscriptions';
 import { age, channelPath, duration, views, watchPath } from '../components/videos/format';
 
 type Online = Awaited<ReturnType<typeof api.video>>;
+const QUALITIES = [1080, 720, 480, 360];
+/** Auto quality: the smallest that fills this screen's short side (where a landscape video plays full screen). */
+const autoHeight = () => {
+  const need = Math.min(window.screen.width, window.screen.height) * (window.devicePixelRatio || 1);
+  return [...QUALITIES].reverse().find(q => q >= need) ?? QUALITIES[0]!;
+};
 const SAVE_EVERY_MS = 5000;
 const busy = (s: VideoState['saved']) => !!s && ['queued', 'downloading', 'merging'].includes(s.status);
 
@@ -39,8 +45,8 @@ function useVideoProgress(id: string) {
 
 /** Its own page (not a popup) so a video can be linked to, reloaded, and left with the browser's own back button.
  * Plays the saved copy when there is one (full quality, and it works with the video service off), otherwise the
- * instance's stream in this app's own player (speed, captions, chapters, keys, remote), with the instance's own
- * player one click away for higher quality. */
+ * instance's video in this app's own player (speed, captions, chapters, keys, remote): in HD when it has an
+ * H.264 version, joined on the server, else its 360p file. The instance's own player is the fallback. */
 export default function VideoWatch() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -105,7 +111,10 @@ export default function VideoWatch() {
   }
 
   const local = state.saved?.status === 'ready';
-  const src = local ? `/api/videos/saved/${encodeURIComponent(id)}/file` : online?.stream ?? null;
+  // HD: the server joins the video's separate picture and sound; seeking and the quality menu restart it.
+  const hdHeights = local ? [] : (details?.hdHeights ?? []).filter(h => QUALITIES.includes(h));
+  const hd = hdHeights.length ? `/api/videos/${encodeURIComponent(id)}/hd` : null;
+  const src = local ? `/api/videos/saved/${encodeURIComponent(id)}/file` : hd ?? online?.stream ?? null;
   const showEmbed = !!online?.embed && (embedMode || !src);
   const subscribed = video.channelId ? subs.ids.has(video.channelId) : false;
   const related = details?.related ?? [];
@@ -116,7 +125,8 @@ export default function VideoWatch() {
 
   const seek = (t: number) => {
     const el = document.querySelector<HTMLVideoElement>('.vd-player video');
-    if (el) { el.currentTime = t; void el.play().catch(() => undefined); el.closest<HTMLElement>('.vp')?.focus(); }
+    const wrap = el?.closest<HTMLElement>('.vp');
+    if (el && wrap) { wrap.dispatchEvent(new CustomEvent('vp-seek', { detail: t })); void el.play().catch(() => undefined); wrap.focus(); }
   };
 
   const toggleLater = () => {
@@ -162,6 +172,7 @@ export default function VideoWatch() {
               <VideoPlayer
                 key={src}
                 src={src}
+                {...(hd ? { transcodeSrc: `${hd}?auto=${autoHeight()}`, durationSeconds: video.durationSeconds, sourceHeight: hdHeights[0], qualities: hdHeights } : {})}
                 title={video.title}
                 startAt={state.position > 5 && state.position < (video.durationSeconds || Infinity) - 10 ? state.position : 0}
                 subtitles={captions}
@@ -197,7 +208,7 @@ export default function VideoWatch() {
               <button type="button" className={`btn btn-secondary${state.later ? ' is-on' : ''}`} onClick={toggleLater} aria-pressed={state.later}>
                 <SvgIcon name={state.later ? 'check' : 'clock'} size={16} /> Watch later
               </button>
-              {online?.embed && src && (
+              {online?.embed && src && !hd && (
                 <button type="button" className="btn btn-ghost" onClick={() => setEmbedMode(m => !m)} aria-pressed={embedMode}
                   title={embedMode ? 'Back to this app\'s player (speed, captions, resume)' : 'The video service\'s own player can play higher quality'}>
                   <SvgIcon name="sliders-h" size={16} /> {embedMode ? 'Standard player' : 'Higher quality'}

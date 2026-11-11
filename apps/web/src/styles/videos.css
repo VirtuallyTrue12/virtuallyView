@@ -136,6 +136,13 @@ a.vd-channel:hover { color: var(--color-text-primary); }
 .vd-watch-main { min-width: 0; }
 .vd-player .vp { width: 100%; max-height: none; box-shadow: var(--shadow-large); }
 .vd-player .vp--fs { width: 100vw; height: 100vh; border-radius: 0; }
+/* In the page (not full screen) the player is short: its menus open over the title bar, not under it. */
+.vd-player .vp-controls { z-index: 6; }
+/* A phone's in-page player is too short for a menu above its button: the menu covers the controls instead and scrolls. */
+@media (max-width: 640px) {
+  .vd-player .vp:not(.vp--fs) .vp-menu-wrap { position: static; }
+  .vd-player .vp:not(.vp--fs) .vp-menu { left: var(--spacing-sm); right: var(--spacing-sm); bottom: var(--spacing-sm); min-width: 0; max-height: calc(100% - 2 * var(--spacing-sm)); }
+}
 .vd-embed { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radius-large); overflow: hidden; background: #000; box-shadow: var(--shadow-large); }
 .vd-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .vd-embed--off { display: grid; place-items: center; color: rgba(255, 255, 255, 0.82); padding: var(--spacing-lg); text-align: center; }
