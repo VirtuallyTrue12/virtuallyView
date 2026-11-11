@@ -114,9 +114,8 @@ vec3 shade(vec2 p) {
   vec2 q = vec2(fbm(uv + vec2(0.0, t)), fbm(uv + vec2(5.2, 1.3) - t));
   vec2 r = vec2(fbm(uv + 3.2 * q + vec2(1.7, 9.2) + 0.15 * t + uBass * 0.6), fbm(uv + 3.2 * q + vec2(8.3, 2.8) - 0.12 * t));
   float f = fbm(uv + 3.6 * r);
-  vec3 c = pal(f * 1.1 + length(q) * 0.6 + uHue, vec3(0.45, 0.4, 0.55), vec3(0.45, 0.4, 0.45), vec3(1.0, 1.0, 1.0), vec3(0.0, 0.33, 0.67));
-  c = mix(c, uTint, 0.15);
-  return c * (0.1 + 0.95 * f * f + uBass * 0.2 + uBeat * 0.12);
+  vec3 c = tpal(f * 0.9 + length(q) * 0.5 + uTime * 0.01);
+  return c * (0.15 + 1.3 * f + uBass * 0.25 + uBeat * 0.1) * smoothstep(0.1, 0.7, f);
 }`
 };
 
@@ -254,8 +253,8 @@ vec3 shade(vec2 p) {
   // One noise pass, warped by a cheap swirl instead of a second noise pass.
   float f = fbm(k + vec2(sin(k.y * 1.7 + uTime * 0.3), cos(k.x * 1.3 - uTime * 0.25)) * 0.7);
   float lines = smoothstep(0.03, 0.0, abs(fract(f * 6.0 + uTime * 0.2) - 0.5) - 0.44);
-  vec3 c = pal(f * 1.4 + r * 0.6 + uHue, vec3(0.45), vec3(0.38), vec3(1.0), vec3(0.0, 0.33, 0.67));
-  return c * (0.08 + f * f * 1.1 + uBeat * 0.15) + lines * c * (0.35 + uTreble);
+  vec3 c = tpal(f * 1.2 + r * 0.5 + uTime * 0.01);
+  return c * (0.06 + f * f * 1.2 + uBeat * 0.12) + lines * mix(c, vec3(1.0), 0.3) * (0.35 + uTreble);
 }`
 };
 
@@ -271,7 +270,7 @@ vec3 shade(vec2 p) {
     float fi = float(i);
     float h = 0.62 - fi * 0.11 + 0.08 * (fbm(vec2(uv.x * (2.0 + fi) + uTime * 0.05 * (fi + 1.0), fi * 7.0)) - 0.5) * (1.0 + uBass * 2.0);
     float layer = smoothstep(h + 0.02, h - 0.06, uv.y);
-    vec3 col = pal(fi * 0.12 + uHue * 0.5 + 0.5, vec3(0.4, 0.5, 0.6), vec3(0.25), vec3(1.0), vec3(0.0, 0.1, 0.2));
+    vec3 col = mix(vec3(0.45, 0.55, 0.7), tpal(fi * 0.09 + 0.1), 0.25);
     c = mix(c, col * (0.35 + fi * 0.1 + spec(0.1 + fi * 0.18) * 0.5), layer * 0.55);
   }
   return c;
@@ -311,3 +310,45 @@ vec3 shade(vec2 p) {
 }`
 };
 
+
+// ---------- Galaxy: a spiral seen at an angle ----------
+
+type GalaxyState = { spin: number; last: number };
+export const galaxyGl: GlScene & { setup: () => GalaxyState } = {
+  resolution: 0.75,
+  setup: () => ({ spin: 0, last: 0 }),
+  uniforms: (f: GlFrameInput, s: GalaxyState) => {
+    const dt = Math.min(0.1, Math.max(0, f.time - s.last)); s.last = f.time;
+    s.spin += dt * (0.06 + f.mids * 0.12);
+    return { uSpin: s.spin };
+  },
+  frag: `
+uniform float uSpin;
+vec3 shade(vec2 p) {
+  vec2 sp = (p - 0.5 * uRes) / min(uRes.x, uRes.y);
+  // Background stars, still, twinkling with the treble.
+  vec2 g = floor(p / 2.5);
+  vec3 c = vec3(step(0.996, hash(g)) * (0.35 + 0.4 * uTreble * hash(g + 3.0)));
+  vec2 uv = rot(0.35) * sp;
+  uv.y /= 0.5; // tilted disc
+  float r = length(uv) * (1.0 - uBass * 0.08), a = atan(uv.y, uv.x);
+  // Two log-spiral arms that turn with time; gas and dust from noise carried along with them.
+  float arm = a - uSpin - log(max(r, 1e-3)) * 2.4;
+  float spiral = pow(0.5 + 0.5 * cos(arm * 2.0), 3.0);
+  vec2 q = rot(uSpin + r * 2.4) * uv * 5.0;
+  float gas = fbm(q + 3.0), dust = fbm(q * 2.3 - 7.0);
+  float disc = exp(-r * 3.2);
+  float band = spec(clamp(r * 1.4, 0.0, 1.0));
+  vec3 armCol = tpal(r * 0.6 + 0.15);
+  float body = disc * (0.15 + spiral * (0.6 + gas * 0.9)) * (0.6 + band * 0.9);
+  body *= 1.0 - smoothstep(0.45, 0.7, dust) * 0.55 * spiral;
+  c += armCol * body * 1.5;
+  // Young stars sprinkled along the arms.
+  vec2 sg = floor(q * 6.0);
+  c += vec3(0.85, 0.9, 1.0) * step(0.985, hash(sg)) * spiral * disc * 3.0 * smoothstep(0.5, 0.0, length(fract(q * 6.0) - 0.5));
+  // The warm core, breathing with the bass.
+  c += vec3(1.0, 0.85, 0.65) * exp(-r * r * 60.0) * (0.8 + uBass * 0.9 + uBeat * 0.3);
+  c += vec3(1.0, 0.75, 0.5) * exp(-r * 9.0) * 0.25;
+  return c;
+}`
+};

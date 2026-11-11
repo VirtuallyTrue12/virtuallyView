@@ -43,6 +43,16 @@ float noise(vec2 p) {
 }
 float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return v; }
 mat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+// The album colour, made vivid, turned around the colour wheel by a (radians): neighbouring shades of the cover.
+vec3 hueTurn(vec3 c, float a) {
+  const vec3 k = vec3(0.57735);
+  return c * cos(a) + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - cos(a));
+}
+vec3 tpal(float t) {
+  vec3 base = uTint / max(max(uTint.r, uTint.g), max(uTint.b, 0.01));
+  base = clamp(mix(vec3(dot(base, vec3(0.3, 0.59, 0.11))), base, 1.8), 0.0, 1.0);
+  return clamp(hueTurn(base, sin(TAU * t) * 0.8), 0.0, 1.0) * (0.75 + 0.25 * cos(TAU * (t * 0.5 + 0.1)));
+}
 `;
 
 const FOOTER = `
@@ -55,6 +65,8 @@ void main() {
   // A soft vignette, and a whisper of noise so smooth gradients never band.
   vec2 q = gl_FragCoord.xy / uRes - 0.5;
   col *= 1.0 - 0.35 * dot(q, q);
+  // A soft shoulder instead of a hard clip: bright highlights glow into white rather than flatten.
+  col = mix(col, 0.8 + 0.2 * (1.0 - exp(-(col - 0.8) * 5.0)), step(0.8, col));
   col += (hash(gl_FragCoord.xy + fract(uTime)) - 0.5) / 255.0;
   outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
