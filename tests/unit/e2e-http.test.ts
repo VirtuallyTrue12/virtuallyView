@@ -116,7 +116,9 @@ beforeAll(async () => {
       TRUST_PROXY: 'loopback',
       API_RATE_LIMIT: '1000000'
     },
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe'],
+    // Its own process group: tsx runs the server as a child, and killing only tsx would leave that running.
+    detached: true
   });
   child.stdout?.on('data', d => { childLog += d.toString(); });
   child.stderr?.on('data', d => { childLog += d.toString(); });
@@ -124,7 +126,7 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  if (child && !child.killed) child.kill('SIGTERM');
+  if (child?.pid) try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ }
   await new Promise(r => setTimeout(r, 200));
   rmSync(dataDir, { recursive: true, force: true });
   rmSync(photosDir, { recursive: true, force: true });

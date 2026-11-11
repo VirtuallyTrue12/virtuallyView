@@ -42,7 +42,9 @@ beforeAll(async () => {
   server = spawn(resolve(root, 'node_modules/.bin/tsx'), ['src/index.ts'], {
     cwd: resolve(root, 'apps/server'),
     env: { ...process.env, PORT: String(port), VV_DATA_DIR: dataDir, VV_NO_RESTART: '1', NODE_ENV: 'production' },
-    stdio: 'ignore'
+    stdio: 'ignore',
+    // Its own process group: tsx runs the server as a child, and killing only tsx would leave that running.
+    detached: true
   });
   await waitFor(`${base}/api/health`);
   browser = await chromium.launch();
@@ -55,7 +57,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.close();
-  server?.kill('SIGKILL');
+  if (server?.pid) try { process.kill(-server.pid, 'SIGKILL'); } catch { /* already gone */ }
   rmSync(dataDir, { recursive: true, force: true });
 });
 
