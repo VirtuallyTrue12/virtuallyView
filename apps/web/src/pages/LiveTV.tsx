@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, type LiveChannel, type LivePlaylist, type LiveProgramme } from '../lib/api';
+import { api, type LiveChannel, type LivePlaylist, type LiveProgramme, type RecordingRule, type ScheduledRecording } from '../lib/api';
 import { EmptyState, PageHeader, Pill, Seg, Switch } from '../components/ui/Page';
 import { Dialog } from '../components/ui/Dialog';
 import { MenuItem, MoreMenu } from '../components/ui/MoreMenu';
@@ -92,6 +92,9 @@ export default function LiveTV() {
   const [channels, setChannels] = useState<LiveChannel[]>([]);
   const [problem, setProblem] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isKid, setIsKid] = useState(false);
+  const [sched, setSched] = useState<{ items: ScheduledRecording[]; series: RecordingRule[] }>({ items: [], series: [] });
+  const [prog, setProg] = useState<{ c: LiveChannel; p: LiveProgramme } | null>(null);
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [recent, setRecent] = useState<string[]>([]);
   const [dead, setDead] = useState<Set<string>>(new Set());
@@ -124,7 +127,9 @@ export default function LiveTV() {
   }, []);
   const loadMe = useCallback(() => { api.liveMe().then(r => { setFavs(new Set(r.favorites)); setRecent(r.recent); setDead(new Set(r.dead)); }).catch(() => {}); }, []);
   const loadRecordings = useCallback(async () => { try { setRecordings((await recJSON<{ recordings: Recording[] }>('/api/live/recordings')).recordings); } catch { /* offline */ } }, []);
-  useEffect(() => { void load(); loadMe(); void loadRecordings(); api.authStatus().then(s => setIsAdmin(s.user?.role === 'admin' || !s.enabled)).catch(() => {}); }, [load, loadMe, loadRecordings]);
+  const loadSchedule = useCallback(async () => { try { const r = await api.liveSchedule(); setSched(r); return r; } catch { return null; } }, []);
+  useEffect(() => { void load(); loadMe(); void loadRecordings(); void loadSchedule(); api.authStatus().then(s => { setIsAdmin(s.user?.role === 'admin' || !s.enabled); setIsKid(!!s.user?.isKid); }).catch(() => {}); }, [load, loadMe, loadRecordings, loadSchedule]);
+  useEffect(() => { const t = window.setInterval(() => { void loadSchedule(); void loadRecordings(); }, 30_000); return () => window.clearInterval(t); }, [loadSchedule, loadRecordings]);
   useEffect(() => {
     if (!recordings.some(r => r.state === 'recording')) return;
     const t = window.setInterval(() => void loadRecordings(), 5000);
@@ -159,6 +164,25 @@ export default function LiveTV() {
   const guide = useGuide([...new Set([...guideIds, ...currentGuide, ...featured.map(c => c.id)])], view === 'guide' ? 6 : 3, view !== 'recordings');
   const onNow = featured.flatMap(c => { const n = nowNext(guide[c.id]).now; return n ? [{ channel: c, now: n }] : []; }).slice(0, 12);
   const hasAnyGuide = channels.some(c => c.guide);
+
+  // Scheduled recordings: red dots in the guide, and the programme dialog's choices.
+  const waiting = sched.items.filter(i => i.state === 'scheduled');
+  const problems = sched.items.filter(i => i.state === 'failed' || i.state === 'missed' || i.state === 'conflict');
+  const scheduledKeys = useMemo(() => new Set(sched.items.filter(i => ['scheduled', 'recording'].includes(i.state)).map(i => `${i.channel_id}|${i.prog_start}`)), [sched.items]);
+  const progItem = prog ? sched.items.find(i => i.channel_id === prog.c.id && i.prog_start === prog.p.start && ['scheduled', 'recording'].includes(i.state)) : undefined;
+  const clockOf = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const scheduleProg = async (series?: boolean | 'any') => {
+    if (!prog) return;
+    const { c, p } = prog;
+    setProg(null);
+    try {
+      await api.liveScheduleAdd({ channelId: c.id, start: p.start, stop: p.stop, title: p.title, sub: p.sub, ...(series ? { series } : {}) });
+      const r = await loadSchedule();
+      const clash = r?.items.find(i => i.channel_id === c.id && i.prog_start === p.start)?.conflict;
+      setNote(clash ? { tone: 'err', text: `"${p.title}" overlaps other recordings and will not record unless one of them is cancelled.` } : { tone: 'ok', text: series ? `Recording every "${p.title}"${series === 'any' ? '' : ` on ${c.name}`}. See Recordings.` : `Scheduled "${p.title}" at ${clockOf(p.start)}. See Recordings.` });
+    } catch (err) { setNote({ tone: 'err', text: (err as Error).message }); }
+  };
+  const cancelItem = async (call: () => Promise<unknown>) => { setProg(null); await call().catch(err => setNote({ tone: 'err', text: (err as Error).message })); await loadSchedule(); };
 
   const play = useCallback((c: LiveChannel) => { setCurrent(c); }, []);
   const zap = useCallback((by: number) => {
@@ -265,7 +289,7 @@ export default function LiveTV() {
             <div className="rq-toolbar">
               <Seg<View> label="Live TV views" value={view} onChange={setView} options={[
                 { value: 'favorites', label: 'Favorites', count: favs.size }, { value: 'recent', label: 'Recent' }, { value: 'channels', label: 'All channels' },
-                { value: 'guide', label: 'Guide' }, ...(recordings.length ? [{ value: 'recordings' as View, label: 'Recordings', count: recordings.length }] : [])
+                { value: 'guide', label: 'Guide' }, { value: 'recordings', label: 'Recordings', count: recordings.length + waiting.length }
               ]} />
               {view !== 'recordings' && <input className="settings-input ph-search" type="search" placeholder="Find a channel" value={query} onChange={e => setQuery(e.target.value)} aria-label="Find a channel" />}
             </div>
@@ -281,7 +305,7 @@ export default function LiveTV() {
             )}
 
             {view === 'guide' && (hasAnyGuide
-              ? <GuideGrid channels={filtered.slice(0, 40)} guide={guide} playingId={current?.id} onPlay={play} favorites={favs} />
+              ? <GuideGrid channels={filtered.slice(0, 40)} guide={guide} playingId={current?.id} onPlay={play} favorites={favs} scheduled={scheduledKeys} onProgramme={isKid ? undefined : (c, p) => setProg({ c, p })} />
               : <EmptyState icon="calendar" title="No program guide yet" text={<>The guide needs an XMLTV file. Many playlists include one; if yours does not, add its guide address under <strong>Sources</strong>. Until then you still see every channel in the other tabs.</>} action={isAdmin ? <button className="btn btn-primary" type="button" onClick={() => setSources(true)}>Open sources</button> : undefined} />)}
 
             {(view === 'favorites' || view === 'recent' || view === 'channels') && (
@@ -298,7 +322,38 @@ export default function LiveTV() {
             {view === 'recordings' && (
               <div className="lv-recs">
                 {watching && <video className="lv-video lv-video--rec" controls autoPlay playsInline src={`/api/live/recordings/${watching.id}/file`} />}
-                {recordings.length === 0 && <EmptyState icon="radio" title="No recordings" text="Press Record while watching a channel." />}
+                {recordings.length + waiting.length + problems.length + sched.series.length === 0 && <EmptyState icon="radio" title="No recordings" text="Pick a programme in the guide to record it, or press Record while watching a channel." action={<button type="button" className="btn btn-primary" onClick={() => setView('guide')}>Open the guide</button>} />}
+                {waiting.length > 0 && <h2 className="lv-sec">Scheduled</h2>}
+                <ul className="dl-list">
+                  {waiting.map(i => (
+                    <li key={i.id} className="dl">
+                      <div className="rq-poster dl-art"><span className="lv-rec"><SvgIcon name="film" size={22} /></span></div>
+                      <div className="dl-main"><div className="rq-title-row"><h3 className="rq-title">{i.title}{i.sub ? `: ${i.sub}` : ''}</h3>{i.conflict && <Pill tone="bad">Will not record</Pill>}</div>
+                        <p className="dl-line">{i.channel}<span>{new Date(i.prog_start).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>{i.conflict && <span>Overlaps other recordings</span>}</p></div>
+                      <div className="rq-actions"><button type="button" className="btn btn-secondary" aria-label={`Cancel ${i.title}`} onClick={() => void cancelItem(() => api.liveScheduleCancel(i.id))}>Cancel</button></div>
+                    </li>
+                  ))}
+                </ul>
+                {sched.series.length > 0 && <h2 className="lv-sec">Series rules</h2>}
+                <ul className="dl-list">
+                  {sched.series.map(s => (
+                    <li key={s.id} className="dl">
+                      <div className="dl-main"><div className="rq-title-row"><h3 className="rq-title">{s.title}</h3></div><p className="dl-line">{s.channel ?? 'Any channel'}</p></div>
+                      <div className="rq-actions"><button type="button" className="btn btn-secondary" aria-label={`Delete rule for ${s.title}`} onClick={() => void cancelItem(() => api.liveSeriesDelete(s.id))}>Delete rule</button></div>
+                    </li>
+                  ))}
+                </ul>
+                {problems.length > 0 && <h2 className="lv-sec">Failed or missed</h2>}
+                <ul className="dl-list">
+                  {problems.map(i => (
+                    <li key={i.id} className="dl">
+                      <div className="dl-main"><div className="rq-title-row"><h3 className="rq-title">{i.title}{i.sub ? `: ${i.sub}` : ''}</h3><Pill tone="bad">{i.state === 'missed' ? 'Missed' : i.state === 'conflict' ? 'Conflict' : 'Failed'}</Pill></div>
+                        <p className="dl-line">{i.channel}<span>{new Date(i.prog_start).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>{i.message ? <span>{i.message}</span> : null}</p></div>
+                      <div className="rq-actions"><button type="button" className="btn btn-secondary" aria-label={`Dismiss ${i.title}`} onClick={() => void cancelItem(() => api.liveScheduleCancel(i.id))}>Dismiss</button></div>
+                    </li>
+                  ))}
+                </ul>
+                {recordings.length > 0 && <h2 className="lv-sec">Recorded</h2>}
                 <ul className="dl-list">
                   {recordings.map(r => (
                     <li key={r.id} className="dl">
@@ -308,7 +363,7 @@ export default function LiveTV() {
                       <div className="rq-actions">
                         {r.sizeBytes > 0 && r.state !== 'failed' && <button type="button" className="btn btn-primary" onClick={() => setWatching(r)}><SvgIcon name="play" size={16} /> Watch</button>}
                         {r.state === 'recording' && <button type="button" className="btn btn-secondary" onClick={() => void recAction(`/api/live/record/${r.id}/stop`, 'POST')}>Stop</button>}
-                        <MoreMenu label={`More for ${r.title}`}><MenuItem icon="trash" label="Delete recording" danger onSelect={() => void recAction(`/api/live/recordings/${r.id}`, 'DELETE')} /></MoreMenu>
+                        {isAdmin && <MoreMenu label={`More for ${r.title}`}><MenuItem icon="trash" label="Delete recording" danger onSelect={() => void recAction(`/api/live/recordings/${r.id}`, 'DELETE')} /></MoreMenu>}
                       </div>
                     </li>
                   ))}
@@ -336,6 +391,23 @@ export default function LiveTV() {
           </select>
         </label>
         <div className="dlg-actions"><button type="button" className="btn btn-primary" onClick={() => void record()}><span className="lv-rec" aria-hidden="true" /> Start recording</button><button type="button" className="btn btn-secondary" onClick={() => setRecDialog(false)}>Cancel</button></div>
+      </Dialog>
+
+      <Dialog open={!!prog} onClose={() => setProg(null)} title={prog?.p.title ?? ''}>
+        {prog && <>
+          <p className="dlg-help">{prog.c.name} · {clockOf(prog.p.start)}–{clockOf(prog.p.stop)}{prog.p.sub ? ` · ${prog.p.sub}` : ''}</p>
+          {prog.p.desc && <p className="dlg-help">{prog.p.desc}</p>}
+          {progItem?.conflict && <p className="dlg-help">This overlaps other recordings and will not record unless one of them is cancelled.</p>}
+          <div className="dlg-actions lv-prog-actions">
+            {prog.p.start <= Date.now() && prog.p.stop > Date.now() && <button type="button" className="btn btn-primary" onClick={() => { play(prog.c); setProg(null); }}><SvgIcon name="play" size={16} /> Watch now</button>}
+            {prog.p.stop > Date.now() && (progItem
+              ? <button type="button" className="btn btn-secondary" onClick={() => void cancelItem(() => api.liveScheduleCancel(progItem.id))}>Cancel recording</button>
+              : <button type="button" className="btn btn-secondary" onClick={() => void scheduleProg()}><span className="lv-rec" aria-hidden="true" /> Record</button>)}
+            {prog.p.stop > Date.now() && <button type="button" className="btn btn-secondary" onClick={() => void scheduleProg(true)}>Record series</button>}
+            {prog.p.stop > Date.now() && <button type="button" className="btn btn-secondary" onClick={() => void scheduleProg('any')}>Record series, any channel</button>}
+            <button type="button" className="btn btn-secondary" onClick={() => setProg(null)}>Close</button>
+          </div>
+        </>}
       </Dialog>
 
       <SourcesDialog open={sources} onClose={() => setSources(false)} playlists={playlists ?? []} onChanged={() => void load()} />

@@ -675,7 +675,9 @@ export interface LiveHighlight {
   id: string; title: string; sport: string; league: string; start: number; end: number; live: boolean; thumb?: string;
   channels: Array<{ id: string; name: string; logo?: string }>; elsewhere: string[]; score: number;
 }
-export interface LiveProgramme { start: number; stop: number; title: string; desc?: string }
+export interface LiveProgramme { start: number; stop: number; title: string; sub?: string; desc?: string }
+export interface ScheduledRecording { id: string; channel_id: string; channel: string; title: string; sub: string | null; prog_start: number; prog_stop: number; series_id: string | null; state: 'scheduled' | 'recording' | 'done' | 'failed' | 'missed' | 'conflict'; message: string | null; conflict: boolean }
+export interface RecordingRule { id: string; title: string; channel_id: string | null; channel: string | null }
 export interface LivePlaylist { id: string; name: string; url: string; epgUrl?: string }
 export interface DoctorEntry { id: string; title: string; kind: 'stalled' | 'metadata' | 'import' | 'other'; since: string; fixAt: string | null; gaveUp: boolean; needsYou: string | null }
 export interface ImportCandidate { provider: string; providerId: string; title: string; year?: number; overview?: string; poster?: string }
@@ -751,6 +753,10 @@ export const api = {
   liveChannels: () => getJSON<{ channels: LiveChannel[]; problems: string[] }>('/api/live/channels'),
   liveGuide: (ids: string[], hours = 3) => getJSON<{ ready: boolean; now: number; programmes: Record<string, LiveProgramme[]> }>(`/api/live/guide?channels=${ids.join(',')}&hours=${hours}`),
   liveHighlights: (country?: string) => getJSON<{ highlights: LiveHighlight[]; now: number }>(`/api/live/highlights${country ? `?country=${encodeURIComponent(country)}` : ''}`),
+  liveSchedule: () => getJSON<{ items: ScheduledRecording[]; series: RecordingRule[]; max: number }>('/api/live/schedule'),
+  liveScheduleAdd: (p: { channelId: string; start: number; stop: number; title: string; sub?: string | undefined; series?: boolean | 'any' }) => postJSON<{ ok: boolean }>('/api/live/schedule', p),
+  liveScheduleCancel: (id: string) => deleteJSON<{ ok: boolean }>(`/api/live/schedule/${id}`),
+  liveSeriesDelete: (id: string) => deleteJSON<{ ok: boolean }>(`/api/live/series/${id}`),
   liveMe: () => getJSON<{ favorites: string[]; recent: string[]; dead: string[] }>('/api/live/me'),
   liveFavorite: (channelId: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/live/favorite', { channelId, favorite }),
   liveWatched: (channelId: string) => postJSON<{ ok: boolean }>('/api/live/watched', { channelId }),

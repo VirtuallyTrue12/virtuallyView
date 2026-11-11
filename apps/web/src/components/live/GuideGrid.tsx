@@ -6,7 +6,7 @@ const HOURS = 6;
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 /** Channels down the side, the next few hours across: click any programme to watch that channel. */
-export function GuideGrid({ channels, guide, playingId, onPlay, favorites }: { channels: LiveChannel[]; guide: Record<string, LiveProgramme[]>; playingId?: string | undefined; onPlay: (c: LiveChannel) => void; favorites: Set<string> }) {
+export function GuideGrid({ channels, guide, playingId, onPlay, favorites, scheduled, onProgramme }: { scheduled?: Set<string>; onProgramme?: ((c: LiveChannel, p: LiveProgramme) => void) | undefined; channels: LiveChannel[]; guide: Record<string, LiveProgramme[]>; playingId?: string | undefined; onPlay: (c: LiveChannel) => void; favorites: Set<string> }) {
   const scroller = useRef<HTMLDivElement>(null);
   const t0 = useMemo(() => { const d = new Date(); d.setMinutes(d.getMinutes() < 30 ? 0 : 30, 0, 0); return d.getTime(); }, []);
   const width = HOURS * 60 * PX_PER_MIN;
@@ -43,8 +43,9 @@ export function GuideGrid({ channels, guide, playingId, onPlay, favorites }: { c
                     const live = p.start <= at && p.stop > at;
                     const past = p.stop <= at;
                     return (
-                      <button type="button" key={`${p.start}-${p.title}`} className={`gg-prog${live ? ' is-live' : ''}${past ? ' is-past' : ''}`} style={{ left, width: right - left - 4 }} onClick={() => onPlay(c)}
+                      <button type="button" key={`${p.start}-${p.title}`} className={`gg-prog${live ? ' is-live' : ''}${past ? ' is-past' : ''}`} style={{ left, width: right - left - 4 }} onClick={() => (onProgramme ? onProgramme(c, p) : onPlay(c))}
                         title={`${p.title} · ${clock(p.start)}–${clock(p.stop)}${p.desc ? `\n${p.desc}` : ''}`}>
+                        {scheduled?.has(`${c.id}|${p.start}`) && <i className="gg-rec" role="img" aria-label="Recording scheduled" />}
                         <strong>{p.title}</strong>
                         <span>{live ? `Now · ${Math.max(1, Math.round((p.stop - at) / 60_000))} min left` : `${clock(p.start)}–${clock(p.stop)}`}</span>
                         {live && <i className="gg-prog-bar" style={{ width: `${((at - p.start) / (p.stop - p.start)) * 100}%` }} aria-hidden="true" />}

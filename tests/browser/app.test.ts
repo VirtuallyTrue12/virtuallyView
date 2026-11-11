@@ -1026,6 +1026,7 @@ describe('settings, photos, live tv and requests', () => {
     await page.getByRole('table', { name: 'Program guide' }).waitFor();
     expect(await page.locator('.gg-prog').count()).toBeGreaterThanOrEqual(3);
     await page.getByRole('button', { name: /Evening Bulletin/ }).click();
+    await page.getByRole('button', { name: 'Watch now' }).click();
     await page.getByRole('region', { name: 'Playing News One' }).waitFor();
     expect(errors).toEqual([]);
   });
@@ -1216,6 +1217,7 @@ describe('radio, one-press repair and live highlights', () => {
     await page.route('**/api/live/playlists', r => r.request().method() === 'GET' ? r.fulfill(json({ playlists: [{ id: 'p', name: 'Test', url: 'http://x/list.m3u' }] })) : r.continue());
     await page.route('**/api/live/channels', r => r.fulfill(json({ channels: [{ id: '000000000001', name: 'Sky Sports F1', group: 'Sports', playlist: 'p' }], problems: [] })));
     await page.route('**/api/live/me', r => r.fulfill(json({ favorites: [], recent: [], dead: [] })));
+    await page.route('**/api/live/highlights**', r => r.fulfill(json({ highlights: [], now })));
     await page.route('**/api/live/recordings', r => r.fulfill(json({ recordings: [] })));
     await page.route('**/api/live/highlights**', r => r.fulfill(json({ now, highlights: [
       { id: 'e1', title: 'Azerbaijan Grand Prix', sport: 'Motorsport', league: 'Formula 1', start: now - 600_000, end: now + 5_400_000, live: true, channels: [{ id: '000000000001', name: 'Sky Sports F1' }], elsewhere: [], score: 20 },
@@ -2207,5 +2209,47 @@ describe('details pages and theme preview', () => {
     await page.getByText('Previewing Synthwave Light').waitFor({ state: 'detached' });
     expect(await bg()).not.toBe('#f3edff');
     expect(await page.evaluate(() => localStorage.getItem('vv-appearance') ?? '')).not.toContain('synthwave-light');
+  });
+});
+
+describe('scheduled recording from the guide', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  afterEach(async () => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
+
+  it('record a programme: red dot in the guide, listed under Scheduled, cancel removes both', async () => {
+    const now = Date.now();
+    const start = now + 40 * 60_000;
+    let items: Array<Record<string, unknown>> = [];
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: { id: 'u-parent', username: 'Parent', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid: false, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } } })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    await page.route('**/api/live/playlists', r => r.fulfill(json({ playlists: [{ id: 'p', name: 'P', url: 'http://x' }] })));
+    await page.route('**/api/live/channels', r => r.fulfill(json({ channels: [{ id: 'c1', name: 'Alpha TV', playlist: 'p', guide: true }], problems: [] })));
+    await page.route('**/api/live/me', r => r.fulfill(json({ favorites: [], recent: [], dead: [] })));
+    await page.route('**/api/live/highlights**', r => r.fulfill(json({ highlights: [], now })));
+    await page.route('**/api/live/recordings', r => r.fulfill(json({ recordings: [] })));
+    await page.route('**/api/live/guide**', r => r.fulfill(json({ ready: true, now, programmes: { c1: [{ start: now - 600_000, stop: start, title: 'Alpha show' }, { start, stop: start + 3_600_000, title: 'Late film' }] } })));
+    await page.route('**/api/live/schedule', r => {
+      if (r.request().method() === 'POST') {
+        const b = r.request().postDataJSON() as { channelId: string; start: number; stop: number; title: string };
+        items = [{ id: 's1', channel_id: b.channelId, channel: 'Alpha TV', title: b.title, sub: null, prog_start: b.start, prog_stop: b.stop, series_id: null, state: 'scheduled', message: null, conflict: false }];
+        return r.fulfill(json({ ok: true }));
+      }
+      return r.fulfill(json({ items, series: [], max: 2 }));
+    });
+    await page.route('**/api/live/schedule/s1', r => { items = []; return r.fulfill(json({ ok: true })); });
+    await page.goto(base + '/live');
+    await page.getByRole('radio', { name: 'Guide' }).click();
+    await page.locator('.gg-prog', { hasText: 'Late film' }).click();
+    await page.getByRole('button', { name: 'Record', exact: true }).click();
+    await page.locator('.gg-prog', { hasText: 'Late film' }).locator('.gg-rec').waitFor();
+    await page.getByRole('radio', { name: /Recordings/ }).click();
+    await page.getByRole('heading', { name: 'Scheduled' }).waitFor();
+    await page.getByText('Late film').first().waitFor();
+    await page.getByRole('button', { name: 'Cancel Late film' }).click();
+    await page.getByRole('heading', { name: 'Scheduled' }).waitFor({ state: 'detached' });
+    await page.getByRole('radio', { name: 'Guide' }).click();
+    expect(await page.locator('.gg-rec').count()).toBe(0);
   });
 });

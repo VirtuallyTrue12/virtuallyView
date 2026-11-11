@@ -1,0 +1,5 @@
+/* Scheduled recordings: the red dot in the guide and the Recordings sections. */
+.lv-page .gg-rec { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--color-danger); z-index: 1; }
+.lv-page .lv-sec { margin: var(--spacing-lg) 0 var(--spacing-sm); font-size: var(--text-lg); color: var(--color-text-primary); }
+.lv-page .lv-sec:first-child { margin-top: 0; }
+.lv-prog-actions { flex-wrap: wrap; }
