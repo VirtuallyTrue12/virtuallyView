@@ -291,6 +291,9 @@ function open(): DatabaseSync {
       PRIMARY KEY (user_id, media_type, media_id)
     );
 
+    CREATE INDEX IF NOT EXISTS watch_finished_user_time ON watch_finished (user_id, finished_at);
+    CREATE INDEX IF NOT EXISTS video_history_user_time ON video_history (user_id, at);
+
     -- MusicBrainz credits per release, so each album is asked for once.
     CREATE TABLE IF NOT EXISTS musicbrainz_credits (
       release_id TEXT PRIMARY KEY,

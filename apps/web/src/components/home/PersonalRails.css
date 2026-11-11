@@ -151,3 +151,20 @@
   .home-switch-knob,
   .home-editor-row { transition: none; }
 }
+
+/* December and January: the year-in-review entry on Home. */
+.home-year-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-large);
+  border: 1px solid var(--color-border);
+  background: linear-gradient(120deg, var(--color-accent-soft), var(--color-surface));
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+.home-year-card strong { font-size: 1.4rem; }
+.home-year-card span { color: var(--color-text-secondary); }
+.home-year-card .home-year-kicker { color: var(--color-accent); font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
+.home-year-card:focus-visible { outline: 3px solid var(--color-border-focus, var(--color-accent)); outline-offset: 2px; }

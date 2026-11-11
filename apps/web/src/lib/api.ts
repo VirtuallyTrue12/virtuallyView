@@ -475,16 +475,24 @@ export interface PromptedPlaylist {
   tracks: LibraryTrack[];
 }
 
+export interface ReviewMoment { kind: 'song' | 'film' | 'episode' | 'video'; title: string; at: string }
 export interface YearReview {
   year: number;
-  totals: { plays: number; films: number; episodes: number };
-  minutesListened: number;
-  topArtists: Array<{ name: string; plays: number }>;
+  empty: boolean;
+  totals: { plays: number; films: number; episodes: number; videos: number };
+  hours: { listened: number; watched: number; videos: number; total: number };
+  topArtists: Array<{ name: string; plays: number; image: string | null }>;
   topSongs: Array<{ title: string; artist: string; plays: number }>;
-  topGenre: { name: string; plays: number } | null;
-  topFilms: Array<{ title: string; finishedAt: string }>;
-  topShows: Array<{ title: string; episodes: number }>;
-  firstPlay: { title: string; artist: string; playedAt: string } | null;
+  musicGenres: Array<{ name: string; plays: number }>;
+  topFilms: Array<{ title: string; poster: string | null; finishedAt: string }>;
+  topShows: Array<{ title: string; poster: string | null; episodes: number }>;
+  topChannels: Array<{ name: string; image: string | null; videos: number }>;
+  watchGenres: Array<{ name: string; count: number }>;
+  busiest: { weekday: number; hour: number; weekdays: number[]; hours: number[] } | null;
+  binge: { title: string; episodes: number; day: string } | null;
+  first: ReviewMoment | null;
+  last: ReviewMoment | null;
+  previous: { year: number; hours: number } | null;
 }
 
 export interface CreditList { writers: string[]; producers: string[]; performers: string[] }
@@ -895,7 +903,7 @@ export const api = {
     postJSON<{ ok: boolean }>('/api/music/plays', play),
   musicMixes: () => getJSON<{ week: string; mixes: MusicMix[]; message?: string }>('/api/music/mixes'),
   promptPlaylist: (prompt: string) => postJSON<PromptedPlaylist>('/api/music/playlist-prompt', { prompt }),
-  yearReview: (year: number) => getJSON<{ review: YearReview }>(`/api/review/${year}`),
+  yearReview: (year: number) => getJSON<{ review: YearReview; years: number[] }>(`/api/review/${year}?tz=${-new Date().getTimezoneOffset()}`),
   albumCredits: (id: string) => getJSON<AlbumCredits>(`/api/albums/${encodeURIComponent(id)}/credits`),
   translateLyrics: (body: { artist: string; title: string; album?: string; language: string; lines: string[] }) =>
     postJSON<{ language: string; lines: string[]; cached: boolean }>('/api/lyrics/translate', body),

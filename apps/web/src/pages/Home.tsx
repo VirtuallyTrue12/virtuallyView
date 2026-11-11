@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Hero } from '../components/media/Hero';
 import { MediaRail } from '../components/media/MediaRail';
 import { api, type Dashboard, type Rail } from '../lib/api';
@@ -8,6 +9,9 @@ import { Dialog } from '../components/ui/Dialog';
 import '../components/home/PersonalRails.css';
 import KidsHome from '../components/kids/KidsHome';
 import { LoadError, SkeletonGrid, SkeletonRail } from '../components/home/Skeletons';
+
+/** December and January: the year that just ended, or the one that is ending. */
+const reviewYear = (now = new Date()) => (now.getMonth() === 11 ? now.getFullYear() : now.getMonth() === 0 ? now.getFullYear() - 1 : null);
 
 export default function Home() {
   const [data, setData] = useState<Dashboard | null>(() => api.cached.dashboard() ?? null);
@@ -82,6 +86,13 @@ export default function Home() {
           <Hero items={data.heroCandidates ?? [data.hero]} />
           <main className="page home-rails">
             <SetupChecklist />
+            {reviewYear() !== null && (
+              <Link to={`/music/year/${reviewYear()}`} className="home-year-card">
+                <span className="home-year-kicker">Look back</span>
+                <strong>Your {reviewYear()} in review</strong>
+                <span>Hours, favourites and your longest binge.</span>
+              </Link>
+            )}
             {rails.filter(rail => !rail.hidden).map(rail => (
               <MediaRail key={rail.id} rail={rail} />
             ))}

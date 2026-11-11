@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { LidarrAdapter, RadarrAdapter, SonarrAdapter } from '@virtuallyview/integrations';
+import type { LidarrAdapter } from '@virtuallyview/integrations';
 import { all as dbAll, get as dbGet, run as dbRun } from '../db/app-db.js';
 import { currentUserId } from '../services/user-context.js';
 import { getAdapter } from '../services/registry.js';
@@ -7,9 +7,8 @@ import { OllamaProvider } from '../services/ollama-provider.js';
 import { libraryCatalog } from '../services/music-catalog.js';
 import { buildWeeklyMixes, isoWeekKey, type CatalogTrack, type PlayRecord } from '../services/music-mixes.js';
 import { candidateLines, keywordPlaylist, MAX_CANDIDATES, parsePlaylistReply, playlistMessages, sampleCandidates } from '../services/prompted-playlist.js';
-import { yearInReview, type ReviewEpisode, type ReviewFilm, type ReviewPlay } from '../services/year-review.js';
+import { reviewFor } from '../services/year-review-data.js';
 import { CreditsUnavailable, fetchReleaseCredits } from '../services/musicbrainz-credits.js';
-import { filterByRating } from '../services/parental.js';
 import { parseTranslation } from '../services/lyrics-translate.js';
 
 export const ASSISTANT_OFF_SENTENCE = 'Prompted playlists need the assistant, which is switched off right now.';
@@ -104,66 +103,14 @@ export default async function musicDiscoveryRoutes(server: FastifyInstance) {
     return { source: 'keywords', assistant: 'on', name: fallback.name, message: 'The assistant did not find a good match, so these are keyword matches.', tracks: toTracks(fallback.trackIds) };
   });
 
-  // One scrolling year: minutes, top artists, songs, genre, films and shows, and the first play.
-  server.get<{ Params: { year: string } }>('/api/review/:year', async (request, reply) => {
+  // The year in review for the signed-in viewer only (the same per-user rule as plays and progress).
+  server.get<{ Params: { year: string }; Querystring: { tz?: string } }>('/api/review/:year', async (request, reply) => {
     const year = Number(request.params.year);
     if (!/^\d{4}$/.test(request.params.year) || year < 2000 || year > 2100) {
       return reply.code(400).send({ error: 'bad_request', message: 'Pick a year from 2000 to 2100.' });
     }
-    const from = `${year}-01-01T00:00:00.000Z`;
-    const to = `${year + 1}-01-01T00:00:00.000Z`;
-    const uid = currentUserId();
-    const plays = dbAll<ReviewPlay>(
-      `SELECT track_id AS trackId, title, artist, genre, duration_ms AS durationMs, played_at AS playedAt
-       FROM music_plays WHERE user_id = ? AND played_at >= ? AND played_at < ?`,
-      uid, from, to
-    );
-
-    // Titles come from the video services. A title they no longer have is left out.
-    const [films, series] = await Promise.all([
-      (async () => {
-        try { return filterByRating(await getAdapter<RadarrAdapter>('radarr').getItems()); } catch { return []; }
-      })(),
-      (async () => {
-        try { return filterByRating(await getAdapter<SonarrAdapter>('sonarr').getItems()); } catch { return []; }
-      })()
-    ]);
-    const filmTitles = new Map(films.map(f => [f.id, f]));
-    const seriesTitles = new Map(series.map(s => [s.id, s]));
-
-    const filmRows = [
-      ...dbAll<{ mediaId: string; finishedAt: string }>(
-        `SELECT media_id AS mediaId, finished_at AS finishedAt FROM watch_finished
-         WHERE user_id = ? AND media_type = 'movie' AND finished_at >= ? AND finished_at < ?`,
-        uid, from, to
-      ),
-      ...dbAll<{ mediaId: string; finishedAt: string }>(
-        `SELECT media_id AS mediaId, updated_at AS finishedAt FROM user_flags
-         WHERE user_id = ? AND media_type = 'movie' AND watched = 1 AND updated_at >= ? AND updated_at < ?`,
-        uid, from, to
-      )
-    ];
-    const seenFilm = new Set<string>();
-    const filmList: ReviewFilm[] = [];
-    for (const row of filmRows) {
-      const film = filmTitles.get(row.mediaId);
-      if (!film || seenFilm.has(row.mediaId)) continue;
-      seenFilm.add(row.mediaId);
-      filmList.push({ id: row.mediaId, title: film.title, finishedAt: row.finishedAt, ...(typeof film.rating === 'number' ? { rating: film.rating } : {}) });
-    }
-
-    const episodes = dbAll<{ seriesId: string; finishedAt: string }>(
-      `SELECT series_id AS seriesId, finished_at AS finishedAt FROM watch_finished
-       WHERE user_id = ? AND media_type = 'episode' AND series_id IS NOT NULL AND finished_at >= ? AND finished_at < ?`,
-      uid, from, to
-    );
-    const episodeList: ReviewEpisode[] = [];
-    for (const row of episodes) {
-      const show = seriesTitles.get(row.seriesId);
-      if (show) episodeList.push({ seriesId: row.seriesId, seriesTitle: show.title, finishedAt: row.finishedAt });
-    }
-
-    return { review: yearInReview({ year, plays, films: filmList, episodes: episodeList }) };
+    const tzMin = Math.max(-840, Math.min(840, Math.trunc(Number(request.query.tz) || 0)));
+    return reviewFor(currentUserId(), year, tzMin);
   });
 
   // Writers, producers and performers for an album, from MusicBrainz via the release Lidarr follows.
