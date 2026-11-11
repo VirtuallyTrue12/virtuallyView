@@ -1922,3 +1922,63 @@ describe('going back to a page', () => {
     errors.length = 0;
   });
 });
+
+describe('remote control: guide, password and page changes', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const tv = () => page.evaluate(() => document.documentElement.classList.add('tv'));
+  const label = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute('aria-label') ?? (document.activeElement as HTMLElement | null)?.textContent?.trim() ?? 'BODY');
+
+  it('Left from the first programme goes to its channel cell, not the page tabs', async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    const now = Date.now();
+    await page.route('**/api/live/playlists', r => r.fulfill(json({ playlists: [{ id: 'p', name: 'P', url: 'http://x' }] })));
+    await page.route('**/api/live/channels', r => r.fulfill(json({ channels: [{ id: 'c1', name: 'Alpha TV', playlist: 'p', guide: true }, { id: 'c2', name: 'Beta TV', playlist: 'p', guide: true }], problems: [] })));
+    await page.route('**/api/live/me', r => r.fulfill(json({ favorites: [], recent: [], dead: [] })));
+    await page.route('**/api/live/guide**', r => r.fulfill(json({ ready: true, now, programmes: {
+      c1: [{ start: now - 600_000, stop: now + 3_000_000, title: 'Alpha show' }],
+      c2: [{ start: now - 600_000, stop: now + 3_000_000, title: 'Beta show' }]
+    } })));
+    await page.goto(base + '/live');
+    await page.getByRole('radio', { name: 'Guide' }).click();
+    await page.locator('.gg-prog').first().waitFor();
+    await tv();
+    await page.locator('.gg-row').nth(1).locator('.gg-prog').first().focus();
+    await page.keyboard.press('ArrowLeft');
+    expect(await page.evaluate(() => (document.activeElement as HTMLElement).closest('.gg-row')?.querySelector('.gg-chan') === document.activeElement)).toBe(true);
+    expect(await label()).toContain('Beta TV');
+    await page.evaluate(() => document.documentElement.classList.remove('tv'));
+  });
+
+  it('the password Show button is reachable with Right from the box, even while typing', async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    const ctx2 = await page.context().browser()!.newContext();
+    const anon = await ctx2.newPage();
+    try {
+      await anon.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, authenticated: false })));
+      await anon.goto(base + '/');
+      await anon.locator('.password-toggle').first().waitFor();
+      await anon.evaluate(() => document.documentElement.classList.add('tv'));
+      const pw = anon.locator('.password-field input').first();
+      await pw.focus();
+      await anon.keyboard.press('Enter'); // OK opens it for typing
+      await anon.keyboard.type('abc');
+      await anon.keyboard.press('ArrowRight'); // caret is at the end: Right leaves the box
+      expect(await anon.evaluate(() => (document.activeElement as HTMLElement).className)).toContain('password-toggle');
+    } finally { await ctx2.close(); }
+  });
+
+  it('after a page change focus lands on the new page, not on <body>', async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await page.route('**/api/dashboard', r => r.fulfill(json({ kids: false, hero: null, heroCandidates: [], rails: [
+      { id: 'a', title: 'Rail', items: [{ id: 'radarr-5', title: 'Opens next', type: 'movie', year: 2014, artwork: {} }] }] })));
+    await page.route('**/api/movies/radarr-5', r => r.fulfill(json({ id: 'radarr-5', title: 'Opens next', status: 'available', year: 2020 })));
+    await page.goto(base + '/');
+    await page.locator('a.media-card-link').first().waitFor();
+    await tv();
+    await page.locator('a.media-card-link').first().focus();
+    await page.keyboard.press('Enter');
+    await page.waitForURL('**/movies/radarr-5');
+    await page.waitForFunction(() => document.activeElement && document.activeElement !== document.body && !!document.activeElement.closest('main'));
+    await page.evaluate(() => document.documentElement.classList.remove('tv'));
+  });
+});
