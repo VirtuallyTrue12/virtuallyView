@@ -176,7 +176,8 @@ async function transcodeOptionsFor(filePath: string, query: TranscodeQuery): Pro
     // to the keyframe gap (10 s in some Blu-ray files, confirmed by matching frames). Any other start converts.
     copyVideo: probe.videoCopyOk === true && start === 0,
     ...(probe.height ? { sourceHeight: probe.height } : {}),
-    ...(probe.bitrate ? { sourceBitrate: probe.bitrate } : {})
+    ...(probe.bitrate ? { sourceBitrate: probe.bitrate } : {}),
+    ...(probe.hdr ? { hdr: probe.hdr, hdrMastering: probe.hdrMastering } : {})
   };
   const burn = Number(query.burn);
   if (query.burn !== undefined && Number.isInteger(burn) && probe.subtitleStreams?.[burn] && !probe.subtitleStreams[burn]?.text) {

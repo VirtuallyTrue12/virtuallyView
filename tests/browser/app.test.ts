@@ -214,6 +214,16 @@ describe('notifications and backup', () => {
   });
 });
 
+describe('video conversion hardware', () => {
+  it('tells the administrator which chip converts video and where HDR is tone mapped', async () => {
+    await page.route('**/api/system/video', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ converter: 'Intel graphics (VA-API)', tonemap: 'gpu' }) }));
+    await page.goto(base + '/settings?cat=server');
+    await page.getByTestId('video-hardware').getByText('Video conversion: Intel graphics (VA-API). HDR tone mapping: on the graphics chip.').waitFor();
+    await page.unroute('**/api/system/video');
+    expect(errors).toEqual([]);
+  });
+});
+
 describe('empty library pages', () => {
   it('render without errors and without a wall of nothing', async () => {
     for (const path of ['/movies', '/series', '/music', '/requests', '/downloads', '/search']) {
