@@ -102,9 +102,9 @@ export default function MovieDetails() {
   if (error) {
     return (
       <main className="page">
-        <div className="loading-state">
-          <Link to="/movies" className="btn btn-secondary">Back to Movies</Link>
+        <div className="error-state" role="alert">
           <p>Could not load this movie: {error}</p>
+          <Link to="/movies" className="btn btn-secondary" style={{ alignSelf: 'flex-start', marginTop: 'var(--spacing-md)' }}>Back to Movies</Link>
         </div>
       </main>
     );

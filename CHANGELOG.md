@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Details pages: Watch next lists the other films in a collection in order; a series shows where you left off ("S2 E5 · 23 min left", "Next: S2 E6") as its main button; a person page lists what is in your library first, then the rest with Request; the hero shows a blurred poster while the backdrop loads, then fades it in. Error messages on details pages no longer show a spinning loader. Themes: a Preview button tries a theme across the whole app with Keep and Cancel, and a new Synthwave Light theme.
+
 - Search: one box finds everything, grouped into In your library, Music, People, Live TV, Radio, Videos, Channels and Available to request, filled in as each source answers (results appear as you type). Searching an actor or director lists them and their films in your library. Arrow keys move through every result; Live TV results tune straight to the channel.
 
 - Home: a "For you" row that mixes movies, shows, music and videos from what this profile watches, listens to and subscribes to, each with a reason ("Because you watched...", "New from..."); hideable in the layout editor, not shown to Kids. "Who's watching?" now opens the app once per browser session when there are two or more profiles (focus on the last one used); shared links still open where they point.

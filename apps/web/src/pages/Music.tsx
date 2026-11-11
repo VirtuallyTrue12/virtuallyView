@@ -132,7 +132,7 @@ export default function Music() {
       {isAdmin && <PendingMusicVideos onFiled={() => { api.artists().then(res => setItems(res ?? [])).catch(() => {}); }} />}
 
       {loading && <div className="loading-state">Loading music...</div>}
-      {error && <div className="loading-state">Music unavailable: {error}</div>}
+      {error && <div className="error-state" role="alert">Music unavailable: {error}</div>}
       {!loading && items.length === 0 && !error && <div className="empty-state">No music here yet. Connect your Music service and your library will appear.</div>}
       {!loading && items.length > 0 && (
         <section aria-label="Artists">

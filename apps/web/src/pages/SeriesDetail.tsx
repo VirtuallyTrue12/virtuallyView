@@ -99,9 +99,9 @@ export default function SeriesDetail() {
   if (error) {
     return (
       <main className="page">
-        <div className="loading-state">
-          <Link to="/series" className="btn btn-secondary">Back to TV Shows</Link>
+        <div className="error-state" role="alert">
           <p>Could not load this series: {error}</p>
+          <Link to="/series" className="btn btn-secondary" style={{ alignSelf: 'flex-start', marginTop: 'var(--spacing-md)' }}>Back to TV Shows</Link>
         </div>
       </main>
     );
@@ -246,7 +246,7 @@ export default function SeriesDetail() {
             <h2 className="rail-title">Episodes</h2>
             {playable.length > 0 && <span className="page-count">{playable.length} of {ordered.length} ready to play</span>}
           </div>
-          {episodesError && <div className="loading-state">Could not load episodes: {episodesError}</div>}
+          {episodesError && <div className="error-state" role="alert">Could not load episodes: {episodesError}</div>}
           <div className="season-tabs" role="tablist" aria-label="Seasons">
             {seasonNumbers.map(n => (
               <button
