@@ -53,6 +53,7 @@ import { api, type AuthUser } from './lib/api';
 
 type AuthState = { enabled: boolean; setupRequired: boolean; authenticated: boolean; user?: AuthUser | null };
 import { paintCachedTheme, syncTheme } from './lib/appearance';
+import { settleFocus } from './lib/dpad';
 import { MusicProvider } from './components/media/MusicProvider';
 import { RadioProvider } from './components/radio/RadioProvider';
 
@@ -81,6 +82,8 @@ export default function App() {
       setAuthLoading(false);
     }
   };
+  // Remote: after a page change, focus must not be left on nothing.
+  useEffect(() => { settleFocus(); }, [pathname]);
   useEffect(() => { const tip = accelerationTip(); if (tip) window.setTimeout(() => toast(tip, { tone: 'info', ms: 15000 }), 3000); }, []);
   useEffect(() => {
     void loadAuth();
