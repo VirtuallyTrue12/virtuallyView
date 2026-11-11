@@ -43,7 +43,8 @@ export function nearestInDirection<T>(from: Box, candidates: Candidate<T>[], dir
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 // Links and buttons marked tabindex=-1 are duplicates of another control (a card's title link): not remote stops.
-const SKIP = '[tabindex="-1"]';
+// The row scroll arrows are skipped too: focus already scrolls a row as the remote moves along it.
+const SKIP = '[tabindex="-1"], .sr-arrow';
 const TEXT_ENTRY = 'input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="password"], input[type="number"], input[type="tel"], textarea, select, [contenteditable="true"]';
 
 const isTv = () => document.documentElement.classList.contains('tv');

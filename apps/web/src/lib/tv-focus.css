@@ -19,6 +19,11 @@ html.tv [tabindex]:focus-visible {
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 22%, transparent), 0 0 36px color-mix(in srgb, var(--color-accent) 38%, transparent);
 }
 
+/* Keep a focused control clear of the sticky top bar and the bottom edge when it scrolls into view. */
+html.tv a, html.tv button, html.tv input, html.tv select, html.tv textarea, html.tv [tabindex] {
+  scroll-margin: 110px 24px 48px;
+}
+
 /* Text boxes keep a plain ring: they do not need to grow. */
 html.tv input:focus-visible,
 html.tv textarea:focus-visible,
