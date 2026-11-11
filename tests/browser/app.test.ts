@@ -333,7 +333,12 @@ describe('skip intro', () => {
     await page.route('**/api/progress/movie/radarr-530', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
     await page.route('**/api/stream/radarr-530/subtitles', r => r.fulfill(json({ subtitles: [] })));
     await page.route('**/api/stream/radarr-530/trickplay', r => r.fulfill(json({ state: 'unavailable' })));
-    await page.route('**/api/stream/radarr-530', r => r.fulfill({ status: 200, contentType: 'video/webm', body: video }));
+    await page.route('**/api/stream/radarr-530', r => {
+      // Answer byte ranges like the real server, so the browser can seek in the clip.
+      const m = /bytes=(\d+)-(\d*)/.exec(r.request().headers()['range'] ?? '');
+      const start = m ? Number(m[1]) : 0, end = m?.[2] ? Number(m[2]) : video.length - 1;
+      return r.fulfill({ status: m ? 206 : 200, contentType: 'video/webm', headers: { 'Accept-Ranges': 'bytes', ...(m ? { 'Content-Range': `bytes ${start}-${end}/${video.length}` } : {}) }, body: video.subarray(start, end + 1) });
+    });
 
     await page.goto(base + '/movies/radarr-530/play');
     const skip = page.getByRole('button', { name: 'Skip intro' });
