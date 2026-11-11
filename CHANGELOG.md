@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Video conversion runs fully on the graphics chip (decode, resize and encode with VA-API), falling back to the processor per file for codecs the chip can't decode. HDR10 and HLG films are tone mapped to normal colour instead of looking washed out. Settings > Server shows which chip converts video.
+
 - No more black screens while moving around: going back to Home, Movies, TV shows, Music or a details page shows what was there at once while it refreshes, and a page that crashes now shows "Something went wrong" with Try again and Go back, with the top bar still there.
 
 - Videos: only an administrator can save a video to the server (it uses disk); others keep Watch later and subscriptions, and can still delete what they saved before.
