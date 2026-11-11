@@ -35,7 +35,7 @@
 .offline-album.is-busy { opacity: 0.75; }
 
 /* Quality choice, season download and queue progress. */
-.offline-quality { display: flex; flex-direction: column; gap: var(--spacing-xs, 6px); margin-top: var(--spacing-xs, 6px); max-width: 100%; }
+.offline-quality { display: flex; flex-direction: column; gap: var(--spacing-xs, 6px); margin-top: var(--spacing-xs, 6px); width: 100%; max-width: 420px; }
 .offline-quality .btn { justify-content: flex-start; text-align: left; white-space: normal; }
 .offline-season { display: flex; flex-direction: column; gap: var(--spacing-sm, 8px); margin: var(--spacing-sm, 8px) 0; }
 .offline-season-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm, 8px); }

@@ -1941,6 +1941,7 @@ describe('downloading a whole season', () => {
     await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
     await page.route('**/api/series', r => r.fulfill(json([show])));
     await page.route('**/api/series/sonarr-7', r => r.fulfill(json(show)));
+    await page.route('**/api/series/sonarr-7/cast', r => r.fulfill(json({ cast: [] })));
     await page.route('**/api/series/sonarr-7/episodes', r => r.fulfill(json({ seriesId: 'sonarr-7', episodes })));
     const asked: string[] = [];
     await page.route('**/api/offline/prepare', r => {
