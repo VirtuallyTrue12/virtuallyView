@@ -145,6 +145,8 @@ export default function App() {
       if (sessionStorage.getItem(PICKED_KEY)) return;
       sessionStorage.setItem(PICKED_KEY, '1');
     } catch { return; }
+    // A shared link (a party invite, a title) opens where it points; only opening the app itself asks.
+    if (window.location.pathname !== '/') return;
     api.profiles()
       .then(result => { if (result.profiles.length >= 2) navigate('/profiles', { replace: true }); })
       .catch(() => { /* no picker: the home page still works */ });

@@ -1772,6 +1772,14 @@ describe('For you rail and the opening profile picker (mocked APIs)', () => {
     await open([profile('u-parent', 'Parent')]);
     await page.getByRole('region', { name: 'For you' }).waitFor();
     expect(await page.getByRole('heading', { name: /who.s watching/i }).count()).toBe(0);
+    // A shared link opens where it points, even with two profiles.
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await open([profile('u-parent', 'Parent'), profile('u-sam', 'Sam')]);
+    await page.goto(base + '/movies');
+    await page.evaluate(() => sessionStorage.removeItem('vv-profile-picked'));
+    await page.goto(base + '/movies');
+    await page.waitForTimeout(800);
+    expect(new URL(page.url()).pathname).toBe('/movies');
   });
 });
 
