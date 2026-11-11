@@ -464,7 +464,7 @@ export default function VideoPlayer({
     const remote = p?.remote;
     const v = videoRef.current;
     if (!p || !remote || !v) return;
-    applyingUntil.current = Date.now() + 1500;
+    applyingUntil.current = Date.now() + 700;
     if (remote.rate !== rateRef.current) setRate(remote.rate);
     const target = p.expected() ?? remote.position;
     if (Math.abs(target - positionRef.current) > 1.5) seekTo(target);
@@ -485,7 +485,7 @@ export default function VideoPlayer({
       if (!v || want == null || v.paused || waiting || Date.now() < applyingUntil.current) return;
       const act = driftAction(positionRef.current - want, rateRef.current);
       if (act.kind === 'none') return;
-      applyingUntil.current = Date.now() + 1500;
+      applyingUntil.current = Date.now() + 700;
       if (act.kind === 'seek') { seekTo(want); return; }
       v.playbackRate = act.rate;
       window.clearTimeout(restore);

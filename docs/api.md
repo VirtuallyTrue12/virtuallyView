@@ -140,7 +140,7 @@ The list below is generated from the route definitions in `apps/server/src`. Rea
 
 - `POST /api/movies/:id/search`, `POST /api/series/:id/search` (optional `episodeId`), `POST /api/artists/:id/search`, `POST /api/downloads/:id/retry` (administrator)
 - `GET /api/subtitles/languages`, `POST /api/movies/:id/subtitles/search`, `POST /api/movies/:id/subtitles/upload`, and the same under `/api/series/:id/episodes/:episodeId/subtitles/`
-- `POST /api/watch-party`, `GET /api/watch-party/:code`, `POST /api/watch-party/:code/state`, `GET /api/watch-party/:code/events` (server-sent events)
+- `POST /api/watch-party`, `GET /api/watch-party/:code`, `POST /api/watch-party/:code/state`, `GET /api/watch-party/:code/events` (server-sent events: state, members, chat, reactions), `POST /api/watch-party/:code/buffering`, `/chat`, `/host`, `GET /api/party-clock`
 - `GET /api/people/:name`
 
 ## Casting, live TV, photos, books

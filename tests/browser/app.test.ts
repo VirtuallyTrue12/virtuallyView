@@ -397,9 +397,10 @@ describe('watch together', () => {
       await page.evaluate(() => document.querySelector('video')!.pause());
       await other.waitForFunction(() => document.querySelector('video')!.paused === true);
 
-      // The member seeks: the host follows.
-      await other.evaluate(() => { document.querySelector('video')!.currentTime = 15; });
-      await page.waitForFunction(() => Math.abs(document.querySelector('video')!.currentTime - 15) < 1.5);
+      // The member seeks: the host follows. (A person acts a moment after the last change arrives; right after it counts as an echo.)
+      await other.waitForTimeout(900);
+      await other.locator('.vp-center-btn[aria-label="Back 10 seconds"]').click();
+      await page.waitForFunction(() => Math.abs(document.querySelector('video')!.currentTime - 10) < 1.5);
 
       // Chat reaches both.
       await page.getByRole('button', { name: 'Chat' }).click();

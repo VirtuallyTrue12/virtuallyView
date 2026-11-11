@@ -49,7 +49,7 @@ virtuallyView is an interface over Radarr, Sonarr, Lidarr and friends, so it doe
 | Chapters, Skip intro, Skip credits | Built |
 | TV: next and previous episode, episode picker, auto-advance | Built |
 | Media info panel for movies and episodes | Built |
-| Watching together in sync | Built (Watch together under the player, then share the invite link; play, pause and seeking are shared) |
+| Watching together in sync | Built (Watch together under the player: shared play, pause, seek and speed, drift correction, waits when someone buffers, chat and reactions; films, episodes and Videos) |
 | Casting to a TV | Built: Chromecast and AirPlay from the browser, and DLNA TVs found by the server ([casting](casting.md)) |
 
 ## Music
