@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Videos play in HD (up to 1080p, H.264 + AAC joined by the server without re-encoding) in the app's own player, with a quality picker (Auto, 1080p, 720p, 480p, 360p) and working seek; the instance's player is only a fallback. Channel pictures load: the server fetches them from YouTube's image hosts itself (allow-listed hosts, images only, 2 MB cap, cached for a week).
+
 - Storage planner (Settings > Storage, admins): free space per folder, what is using it, the 20 biggest titles, and titles everyone has finished and left alone for a while, with Delete files (through Radarr/Sonarr, after a confirm). Manual grabs that would not fit are refused, requests are refused when the disk is nearly full, and admins get a low-space alert at most once a day.
 
 - TV remote: Left from the first programme in the Live TV guide goes to its channel; the password Show button and Radio genre chips are reachable; Videos and Radio rows no longer stop on scroll arrows or duplicate links; Back closes a dialog or menu before leaving the page; after a page change focus lands on the page instead of nowhere. A quiet tick and soft glow on each move (Settings > Appearance > Remote sounds; silent while something plays).
