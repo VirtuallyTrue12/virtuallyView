@@ -1,0 +1,14 @@
+{
+  "name": "Synthwave Light",
+  "id": "synthwave-light",
+  "version": "1.0.0",
+  "author": "VirtuallyView",
+  "description": "Synthwave by day: pale lavender, deep purple text, an orange accent and a faint sunset glow.",
+  "engine": "1.x",
+  "license": "MIT",
+  "categories": [
+    "light",
+    "neon",
+    "synthwave"
+  ]
+}

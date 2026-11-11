@@ -17,6 +17,8 @@ import { TitleQuality } from '../components/media/TitleQuality';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import DownloadButton from '../components/offline/DownloadButton';
 import { ScoreChips, ThumbRating } from '../components/media/RatingControls';
+import { HeroBackdrop } from '../components/media/HeroBackdrop';
+import { collectionParts } from '../lib/details';
 import { RelatedVideos } from '../components/videos/RelatedVideos';
 
 const fmtClock = (sec: number) => {
@@ -116,6 +118,7 @@ export default function MovieDetails() {
     .filter(m => m.id !== movie.id)
     .filter(m => m.genres?.some(g => movie.genres?.includes(g)) ?? false)
     .slice(0, 8);
+  const parts = collectionParts(movie, library);
   const sharedGenres = movie.genres?.length ? (movie.genres.length > 3 ? movie.genres.slice(0, 3) : movie.genres) : [];
   const inLibrary = movie.status === 'available' || movie.status === 'downloading';
   const isRadarr = /^radarr-/.test(movie.id);
@@ -171,11 +174,7 @@ export default function MovieDetails() {
   return (
     <main className="detail">
       <section className="detail-hero">
-        {movie.artwork?.backdrop ? (
-          <img className="detail-backdrop" src={movie.artwork.backdrop} alt="" />
-        ) : (
-          <div className="detail-backdrop detail-backdrop--placeholder" />
-        )}
+        <HeroBackdrop backdrop={movie.artwork?.backdrop} poster={movie.artwork?.poster} />
         <div className="detail-overlay" aria-hidden="true" />
 
         <div className="detail-body">
@@ -297,6 +296,15 @@ export default function MovieDetails() {
             {movie.language && <div><dt>Language</dt><dd>{movie.language}</dd></div>}
           </dl>
           {movie.status === 'available' && <MediaInfoPanel load={loadInfo} />}
+        </section>
+      )}
+
+      {parts.length > 0 && (
+        <section className="page">
+          <div className="rail-head"><h2 className="rail-title">Watch next</h2><span className="page-count">{movie.collection}</span></div>
+          <div className="rail-scroll">
+            {parts.map(m => <MediaCard key={m.id} item={m} showStatus to={`/movies/${m.id}`} />)}
+          </div>
         </section>
       )}
 

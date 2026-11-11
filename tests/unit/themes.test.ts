@@ -8,6 +8,11 @@ describe('theme system', () => {
     expect(ids).toEqual(expect.arrayContaining(['default', 'oled', 'light', 'midnight', 'paper', 'mono']));
   });
 
+  test('Synthwave Light is a valid light theme', () => {
+    const t = listThemes().find(x => x.manifest.id === 'synthwave-light');
+    expect(t?.manifest.categories).toContain('light');
+  });
+
   test('rejects activating an unknown theme id', () => {
     expect(() => setActiveThemeId('not-a-real-theme')).toThrow(/no theme/i);
   });

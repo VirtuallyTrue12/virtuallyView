@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type ThemeSummary } from '../lib/api';
-import { effectiveMode, loadAppearance, saveAppearance, type Appearance } from '../lib/appearance';
+import { effectiveMode, endPreview, loadAppearance, previewTheme, saveAppearance, type Appearance } from '../lib/appearance';
 import { PageHeader, Seg } from '../components/ui/Page';
 import { SvgIcon } from '../components/ui/SvgIcon';
 import { ModeSwitch } from '../components/settings/ModeSwitch';
@@ -16,6 +16,7 @@ export default function Themes() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [note, setNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState<ThemeSummary | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => { api.themes().then(setThemes).catch(() => setThemes([])); }, []);
@@ -27,9 +28,15 @@ export default function Themes() {
     return () => window.removeEventListener('vv-appearance', sync);
   }, [load]);
 
+  // Leaving the page puts the real theme back.
+  useEffect(() => () => endPreview(), []);
+  const preview = (theme: ThemeSummary) => { previewTheme(theme.mode, theme.cssVars); setPreviewing(theme); };
+  const cancelPreview = () => { endPreview(); setPreviewing(null); };
+  const keepPreview = () => { if (previewing) choose(previewing); endPreview(); setPreviewing(null); };
+
   const flash = (tone: 'ok' | 'err', text: string) => { setNote({ tone, text }); window.setTimeout(() => setNote(null), 4000); };
 
-  const use = (theme: ThemeSummary) => {
+  const choose = (theme: ThemeSummary) => {
     const a = loadAppearance();
     const next: Appearance = theme.mode === 'dark' ? { ...a, dark: theme.id } : { ...a, light: theme.id };
     // Choosing a theme shows it now: keep "System" only when the device already matches its brightness.
@@ -125,9 +132,10 @@ export default function Themes() {
                 </div>
                 <p>{theme.description}</p>
                 <div className="theme-tile-actions">
-                  <button className="btn btn-primary btn-sm" type="button" disabled={inUse && effectiveMode(appearance) === theme.mode && (theme.id === (theme.mode === 'dark' ? appearance.dark : appearance.light))} onClick={() => use(theme)}>
+                  <button className="btn btn-primary btn-sm" type="button" disabled={inUse && effectiveMode(appearance) === theme.mode && (theme.id === (theme.mode === 'dark' ? appearance.dark : appearance.light))} onClick={() => choose(theme)}>
                     {inUse ? 'Use now' : 'Use'}
                   </button>
+                  <button className="btn btn-secondary btn-sm" type="button" onClick={() => preview(theme)}>Preview</button>
                   {isAdmin && !theme.active && <button className="btn btn-secondary btn-sm" type="button" disabled={busy === theme.id} onClick={() => void makeDefault(theme)}>Set as default</button>}
                   {isAdmin && theme.custom && <button className="btn btn-secondary btn-sm" type="button" disabled={busy === theme.id} onClick={() => void remove(theme)}>Remove</button>}
                 </div>
@@ -136,6 +144,13 @@ export default function Themes() {
           );
         })}
       </div>
+      {previewing && (
+        <div className="preview-bar" role="status">
+          <span>Previewing {previewing.name}</span>
+          <button className="btn btn-primary btn-sm" type="button" onClick={keepPreview}>Keep</button>
+          <button className="btn btn-secondary btn-sm" type="button" onClick={cancelPreview}>Cancel</button>
+        </div>
+      )}
     </main>
   );
 }
