@@ -2,6 +2,10 @@
 
 ## 0.4.0
 
+- Videos: only an administrator can save a video to the server (it uses disk); others keep Watch later and subscriptions, and can still delete what they saved before.
+
+- Synthwave theme: recoloured to a purple night with an orange and magenta sunset glow and gold focus rings.
+
 - Downloads: the "Standard" movie and TV quality profile no longer takes Remux releases (25-80 GB disc copies that once filled the disk); a 1080p encode is picked instead.
 
 - Videos: a YouTube-style home (Saved, Continue watching, Subscriptions, Your channels, Watch later, Trending, Popular, History), search with a Channels tab, channel pages with Subscribe, a watch page with chapters, captions, Up next and resume, and Save to library (downloads through the yt-dlp worker into a Videos folder; refuses below 5 GB free). Movie and series pages show their trailers and reviews. Everything goes through your own Invidious server.

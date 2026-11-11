@@ -13,6 +13,7 @@ import { cancelYoutubeJob, saveToVideosLibrary, WorkerOff, youtubeJobs, type You
 import { getAdapter } from '../services/registry.js';
 import { filterByRating } from '../services/parental.js';
 import { statfs } from 'node:fs/promises';
+import { currentActor } from '../services/user-context.js';
 import { serveMediaFile } from './stream.js';
 
 // A full disk once stopped every service, so saving refuses to start below this much free space.
@@ -137,6 +138,8 @@ export default async function invidiousRoutes(server: FastifyInstance) {
     return { videos: listVideos('saved').map(v => ({ ...v, saved: savedState(v.id, jobs) })) };
   });
   server.post<{ Body: { id?: string } }>('/api/videos/saved', async (request, reply) => {
+    // Saving uses server disk, so only an administrator may start one.
+    if (currentActor().role === 'user') return reply.code(403).send({ message: 'Only an administrator can save videos.' });
     const id = String(request.body?.id ?? '');
     if (!VIDEO_ID.test(id)) return reply.code(400).send({ message: 'That is not a video.' });
     try {

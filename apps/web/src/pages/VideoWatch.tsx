@@ -51,6 +51,8 @@ export default function VideoWatch() {
   const [attempt, setAttempt] = useState(0);
   const [embedMode, setEmbedMode] = useState(false);
   const [openDesc, setOpenDesc] = useState(false);
+  const [canSave, setCanSave] = useState(false);
+  useEffect(() => { api.authStatus().then(s => setCanSave(!s.enabled || s.user?.role === 'admin')).catch(() => undefined); }, []);
   const subs = useSubscriptions();
   const onProgress = useVideoProgress(id);
 
@@ -188,10 +190,10 @@ export default function VideoWatch() {
               {online?.library && (
                 <Link to={online.library.href} className="btn btn-secondary vd-lib-chip"><SvgIcon name="film-tab" size={16} /> In your library</Link>
               )}
-              <button type="button" className={`btn btn-secondary${state.saved?.status === 'ready' ? ' is-on' : ''}`} onClick={save} disabled={!online && !state.saved}
+              {(canSave || state.saved) && <button type="button" className={`btn btn-secondary${state.saved?.status === 'ready' ? ' is-on' : ''}`} onClick={save} disabled={!online && !state.saved}
                 aria-label={state.saved?.status === 'ready' ? 'Delete saved copy' : busy(state.saved) ? `Stop saving (${state.saved!.percent}%)` : 'Save to library'}>
                 <SvgIcon name={state.saved?.status === 'ready' ? 'check' : 'download'} size={16} /> {saveLabel}
-              </button>
+              </button>}
               <button type="button" className={`btn btn-secondary${state.later ? ' is-on' : ''}`} onClick={toggleLater} aria-pressed={state.later}>
                 <SvgIcon name={state.later ? 'check' : 'clock'} size={16} /> Watch later
               </button>
