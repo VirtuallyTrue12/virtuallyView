@@ -58,12 +58,12 @@ function buildCards(r: YearReview, onSave: () => void): CardDef[] {
   }
   if (r.topArtists.length) cards.push({ id: 'artists', label: 'Top artists', body: (
     <ol className="yr-list">{r.topArtists.map((a, i) => (
-      <li key={a.name}><span className="yr-rank">{i + 1}</span><Thumb src={a.image} name={a.name} round /><span className="yr-item">{a.name}</span><span className="yr-count">{a.plays} plays</span></li>
+      <li key={a.name}><span className="yr-rank">{i + 1}</span><Thumb src={a.image} name={a.name} round /><span className="yr-item">{a.name}</span><span className="yr-count">{a.plays} {a.plays === 1 ? 'play' : 'plays'}</span></li>
     ))}</ol>
   ) });
   if (r.topSongs.length) cards.push({ id: 'songs', label: 'Top songs', body: (
     <ol className="yr-list">{r.topSongs.map((s, i) => (
-      <li key={`${s.title}-${s.artist}`}><span className="yr-rank">{i + 1}</span><span className="yr-item">{s.title}<span className="yr-by">{s.artist}</span></span><span className="yr-count">{s.plays} plays</span></li>
+      <li key={`${s.title}-${s.artist}`}><span className="yr-rank">{i + 1}</span><span className="yr-item">{s.title}<span className="yr-by">{s.artist}</span></span><span className="yr-count">{s.plays} {s.plays === 1 ? 'play' : 'plays'}</span></li>
     ))}</ol>
   ) });
   if (r.topFilms.length) cards.push({ id: 'films', label: `Films (${totals.films})`, body: (

@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Year in review is now a full-screen story: hours watched and listened, how that compares with last year, top artists, songs, films, series and video channels with pictures, genres, your busiest day and hour, your longest binge, and the first and last thing of the year. Move through it by tapping, swiping, with the arrow keys or with the TV remote; pick any year that has data; cards with nothing to show are hidden. Save as image makes a picture of the summary on your device. A Home card appears in December and January.
+
 - Watch together now stays in step: play, pause, seek and speed reach everyone; small drift is evened out by speeding up or slowing down slightly, and big drift seeks. If one person is buffering, everyone waits ("Waiting for Sam...") and starts again together. It works for films, episodes and Videos, and adds chat, quick reactions that float over the video, a member list, handing over host, and a Leave button. Kids profiles can only join titles their rating allows.
 
 - Downloads to this device: pick Smaller (480p), Standard (720p) or High (1080p) with the expected size, and the choice is remembered; download a whole season with progress, pause and resume; "Keep the next 3 episodes" per series swaps watched episodes for the next ones while the app is open; Delete watched; a warning before a download that won't fit. The server converts one copy at a time and shares a prepared copy between devices for 24 hours.
