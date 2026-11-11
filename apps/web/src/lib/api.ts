@@ -678,7 +678,7 @@ export type RecapResult = { available: true; bullets: string[] } | { available: 
 export interface PhotoEntry { path: string; name: string; size: number; modified: number }
 export interface PhotoAlbum { id: string; name: string; count: number; cover: string | null; updatedAt: string }
 export interface PhotoFolder { path: string; folders: string[]; files: Array<{ name: string; size: number; modified?: number }> }
-export interface LiveChannel { id: string; name: string; logo?: string; group?: string; playlist: string; guide?: boolean }
+export interface LiveChannel { id: string; name: string; logo?: string; group?: string; playlist: string; guide?: boolean; country?: string; lists?: string[]; working?: boolean }
 export interface LiveHighlight {
   id: string; title: string; sport: string; league: string; start: number; end: number; live: boolean; thumb?: string;
   channels: Array<{ id: string; name: string; logo?: string }>; elsewhere: string[]; score: number;
@@ -686,7 +686,7 @@ export interface LiveHighlight {
 export interface LiveProgramme { start: number; stop: number; title: string; sub?: string; desc?: string }
 export interface ScheduledRecording { id: string; channel_id: string; channel: string; title: string; sub: string | null; prog_start: number; prog_stop: number; series_id: string | null; state: 'scheduled' | 'recording' | 'done' | 'failed' | 'missed' | 'conflict'; message: string | null; conflict: boolean }
 export interface RecordingRule { id: string; title: string; channel_id: string | null; channel: string | null }
-export interface LivePlaylist { id: string; name: string; url: string; epgUrl?: string }
+export interface LivePlaylist { id: string; name: string; url: string; epgUrl?: string; only?: string }
 export interface DoctorEntry { id: string; title: string; kind: 'stalled' | 'metadata' | 'import' | 'other'; since: string; fixAt: string | null; gaveUp: boolean; needsYou: string | null }
 export interface ImportCandidate { provider: string; providerId: string; title: string; year?: number; overview?: string; poster?: string }
 export interface UnmappedFolder { folder: string; path: string; term: string; year?: number; best: ImportCandidate | null; options: ImportCandidate[] }
@@ -769,7 +769,7 @@ export const api = {
   liveFavorite: (channelId: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/live/favorite', { channelId, favorite }),
   liveWatched: (channelId: string) => postJSON<{ ok: boolean }>('/api/live/watched', { channelId }),
   liveHealth: (channelIds: string[]) => postJSON<{ checked: number; dead: string[]; alive: string[] }>('/api/live/health', { channelIds }),
-  addLivePlaylist: (name: string, url: string, epgUrl = '') => postJSON<LivePlaylist>('/api/live/playlists', { name, url, ...(epgUrl ? { epgUrl } : {}) }),
+  addLivePlaylist: (name: string, url: string, epgUrl = '', only = '') => postJSON<LivePlaylist>('/api/live/playlists', { name, url, ...(epgUrl ? { epgUrl } : {}), ...(only ? { only } : {}) }),
   removeLivePlaylist: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/live/playlists/${encodeURIComponent(id)}`),
   booksAll: () => getJSON<{ items: PhotoEntry[]; truncated: boolean }>('/api/books/all'),
   booksFolder: (dir: string) => getJSON<PhotoFolder>(`/api/books?dir=${encodeURIComponent(dir)}`),

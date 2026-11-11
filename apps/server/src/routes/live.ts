@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { addSeries, cancelSchedule, deleteSeries, listSchedule, listSeries, matchSeries, MAX_PARALLEL, schedule, startScheduler, tick } from '../services/recording-scheduler.js';
 import { Readable } from 'node:stream';
-import { addPlaylist, channelById, channelsFor, guideSources, knownChannel, listPlaylists, removePlaylist, rewriteHls, verifyRelay } from '../services/live-tv.js';
+import { addPlaylist, channelById, channelsFor, guideSources, knownChannel, listPlaylists, removePlaylist, rewriteHls, uniqueChannels, verifyRelay, type Channel } from '../services/live-tv.js';
+import { healthOf, scheduleProbes } from '../services/live-probe.js';
 import { liveHighlights } from '../services/live-highlights.js';
 import { ensureGuide, fallbackGuide, programmesFor, type Programme } from '../services/epg.js';
 import { checkChannels, deadChannels, favoriteChannels, recentChannels, setChannelFavorite, touchRecent } from '../services/live-user.js';
@@ -17,8 +18,8 @@ const isPlaylistType = (type: string | null, url: string) => /mpegurl/i.test(typ
 export default async function liveRoutes(server: FastifyInstance) {
   server.get('/api/live/playlists', async () => ({ playlists: listPlaylists() }));
 
-  server.post<{ Body: { name?: string; url?: string; epgUrl?: string } }>('/api/live/playlists', async (request, reply) => {
-    const result = addPlaylist(request.body?.name ?? '', (request.body?.url ?? '').trim(), request.body?.epgUrl ?? '');
+  server.post<{ Body: { name?: string; url?: string; epgUrl?: string; only?: string } }>('/api/live/playlists', async (request, reply) => {
+    const result = addPlaylist(request.body?.name ?? '', (request.body?.url ?? '').trim(), request.body?.epgUrl ?? '', request.body?.only ?? '');
     return result.ok ? result.playlist : reply.code(400).send({ message: result.message });
   });
 
@@ -27,17 +28,21 @@ export default async function liveRoutes(server: FastifyInstance) {
 
   server.get<{ Querystring: { playlist?: string } }>('/api/live/channels', async (request, reply) => {
     const lists = listPlaylists().filter(p => !request.query.playlist || p.id === request.query.playlist);
-    const channels = [];
+    const found: Channel[] = [];
     const problems: string[] = [];
+    const guided = new Set<string>();
     for (const playlist of lists) {
       try {
-        // The address of a stream stays on the server; the page gets an id.
-        const hasGuide = guideSources(playlist.id).length > 0 || !!playlist.epgUrl;
-        for (const { url: _hidden, tvgId, ...channel } of await channelsFor(playlist)) channels.push({ ...channel, ...((hasGuide && tvgId) || fallbackGuide(tvgId) ? { guide: true } : {}) });
+        found.push(...await channelsFor(playlist));
+        if (guideSources(playlist.id).length > 0 || playlist.epgUrl) guided.add(playlist.id);
       } catch (error) {
         problems.push(`${playlist.name}: ${error instanceof Error ? error.message : 'could not be loaded'}`);
       }
     }
+    const unique = uniqueChannels(found);
+    scheduleProbes(unique);
+    // The address of a stream stays on the server; the page gets an id.
+    const channels = unique.map(({ url: _hidden, tvgId, ...channel }) => ({ ...channel, ...(healthOf(channel.id)?.ok ? { working: true } : {}), ...(((guided.has(channel.playlist) && tvgId) || fallbackGuide(tvgId)) ? { guide: true } : {}) }));
     if (!channels.length && problems.length) return reply.code(502).send({ message: problems.join(' ') });
     return { channels, problems };
   });

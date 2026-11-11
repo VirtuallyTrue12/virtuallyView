@@ -13,18 +13,25 @@ import { Skeleton } from '../components/ui/Skeleton';
 
 interface Recording { id: string; title: string; channel: string; startedAt: string; endsAt: string; state: 'recording' | 'done' | 'failed' | 'stopped'; message?: string; sizeBytes: number }
 type View = 'favorites' | 'recent' | 'channels' | 'guide' | 'recordings';
-const PUBLIC_LIST = 'https://iptv-org.github.io/iptv/index.m3u';
-// Smaller, category-scoped mirrors of the same free public project: adding one of these instead of (or
-// alongside) the full combined list gives a more curated set, since the combined list mixes in every
-// geo-blocked and dead stream from every country and category at once.
-const SUGGESTED_LISTS: { name: string; url: string }[] = [
-  { name: 'Free public: News', url: 'https://iptv-org.github.io/iptv/categories/news.m3u' },
-  { name: 'Free public: Sports', url: 'https://iptv-org.github.io/iptv/categories/sports.m3u' },
-  { name: 'Free public: Movies', url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
-  { name: 'Free public: Music', url: 'https://iptv-org.github.io/iptv/categories/music.m3u' },
-  { name: 'Free public: Kids', url: 'https://iptv-org.github.io/iptv/categories/kids.m3u' },
-  { name: 'Free public: Documentary', url: 'https://iptv-org.github.io/iptv/categories/documentary.m3u' }
+const BASE = 'https://iptv-org.github.io/iptv';
+interface Preset { name: string; url: string; only?: string }
+// Free public lists from the iptv-org project. The combined list holds everything (and every dead or
+// geo-blocked stream); these smaller ones are easier to browse. Channels in several lists show once.
+const PRESET_GROUPS: { title: string; items: Preset[] }[] = [
+  { title: 'Everything', items: [{ name: 'Free public: Everything', url: `${BASE}/index.m3u` }] },
+  { title: 'India and its languages', items: [
+    { name: 'India', url: `${BASE}/countries/in.m3u` },
+    ...([['Hindi', 'hin'], ['Tamil', 'tam'], ['Telugu', 'tel'], ['Malayalam', 'mal'], ['Kannada', 'kan'], ['Bengali', 'ben'], ['Marathi', 'mar'], ['Gujarati', 'guj'], ['Punjabi', 'pan']] as const).map(([name, code]) => ({ name, url: `${BASE}/languages/${code}.m3u` }))
+  ] },
+  { title: 'English', items: [{ name: 'English news', url: `${BASE}/languages/eng.m3u`, only: 'News' }] },
+  { title: 'Topics', items: [
+    ...['News', 'Sports', 'Movies', 'Music', 'Kids', 'Documentary'].map(t => ({ name: `Free public: ${t}`, url: `${BASE}/categories/${t.toLowerCase()}.m3u` })),
+    ...['Science', 'Education', 'Entertainment', 'General', 'Family', 'Lifestyle', 'Travel', 'Animation', 'Classic', 'Comedy', 'Outdoor', 'Culture', 'Weather', 'Legislative'].map(t => ({ name: t, url: `${BASE}/categories/${t.toLowerCase()}.m3u` }))
+  ] }
 ];
+// Space has no list of its own: it is a word search across the channels you already have.
+const SPACE = /nasa|space|cosmos|astronom|\besa\b|universe/i;
+const regionName = (code: string) => { try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase()) ?? code.toUpperCase(); } catch { return code.toUpperCase(); } };
 const mb = (b: number) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : `${Math.max(1, Math.round(b / 1024 ** 2))} MB`);
 const PAGE = 120;
 
@@ -66,18 +73,19 @@ const nowNext = (list: LiveProgramme[] | undefined, at = Date.now()) => {
 };
 
 function ChannelRow({ c, index, now, playing, fav, dead, onPlay, onFavorite }: { c: LiveChannel; index: number; now?: LiveProgramme | undefined; playing: boolean; fav: boolean; dead: boolean; onPlay: () => void; onFavorite: () => void }) {
+  const [logoBad, setLogoBad] = useState(false);
   const pct = now ? Math.min(100, Math.max(0, ((Date.now() - now.start) / (now.stop - now.start)) * 100)) : 0;
   return (
     <li className={`lv-row${playing ? ' is-playing' : ''}${dead ? ' is-dead' : ''}`}>
       <button type="button" className="lv-row-main" onClick={onPlay} aria-label={`Watch ${c.name}`} aria-current={playing || undefined}>
         <span className="lv-idx">{index + 1}</span>
-        <span className="lv-logo">{c.logo ? <img src={c.logo} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span>{c.name.charAt(0)}</span>}</span>
+        <span className="lv-logo">{c.logo && !logoBad ? <img src={c.logo} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setLogoBad(true)} /> : <span>{c.name.charAt(0)}</span>}</span>
         <span className="lv-text">
           <strong>{c.name}</strong>
           <span>{now ? <>{now.title}<em> · {Math.max(1, Math.round((now.stop - Date.now()) / 60_000))} min left</em></> : c.group?.split(';')[0] ?? 'Live'}</span>
           {now && <span className="lv-mini"><span style={{ width: `${pct}%` }} /></span>}
         </span>
-        {dead && <Pill tone="bad">Offline</Pill>}
+        {dead ? <Pill tone="bad">May not work</Pill> : c.working && !playing ? <span className="lv-ok" role="img" aria-label="Working" title="Checked: this stream answers" /> : null}
         {playing && <Pill tone="ok">Playing</Pill>}
       </button>
       <button type="button" className={`lv-heart${fav ? ' is-on' : ''}`} onClick={onFavorite} aria-pressed={fav} aria-label={fav ? `Remove ${c.name} from favorites` : `Favorite ${c.name}`}><SvgIcon name={fav ? 'heart' : 'heart-outline'} size={17} /></button>
@@ -102,6 +110,7 @@ export default function LiveTV() {
   const [current, setCurrent] = useState<LiveChannel | null>(null);
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState('');
+  const [place, setPlace] = useState('');
   const [shown, setShown] = useState(PAGE);
   const [sources, setSources] = useState(false);
   const [recDialog, setRecDialog] = useState(false);
@@ -129,6 +138,7 @@ export default function LiveTV() {
   const loadRecordings = useCallback(async () => { try { setRecordings((await recJSON<{ recordings: Recording[] }>('/api/live/recordings')).recordings); } catch { /* offline */ } }, []);
   const loadSchedule = useCallback(async () => { try { const r = await api.liveSchedule(); setSched(r); return r; } catch { return null; } }, []);
   useEffect(() => { void load(); loadMe(); void loadRecordings(); void loadSchedule(); api.authStatus().then(s => { setIsAdmin(s.user?.role === 'admin' || !s.enabled); setIsKid(!!s.user?.isKid); }).catch(() => {}); }, [load, loadMe, loadRecordings, loadSchedule]);
+  useEffect(() => { const t = window.setInterval(loadMe, 120_000); return () => window.clearInterval(t); }, [loadMe]);
   useEffect(() => { const t = window.setInterval(() => { void loadSchedule(); void loadRecordings(); }, 30_000); return () => window.clearInterval(t); }, [loadSchedule, loadRecordings]);
   useEffect(() => {
     if (!recordings.some(r => r.state === 'recording')) return;
@@ -145,13 +155,22 @@ export default function LiveTV() {
     for (const c of channels) if (c.group) for (const g of c.group.split(';')) counts.set(g.trim(), (counts.get(g.trim()) ?? 0) + 1);
     return [...counts].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([g]) => g);
   }, [channels]);
+  // Where and in what language: India first, the biggest countries, the language lists you added, and Space.
+  const places = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of channels) if (c.country) counts.set(c.country, (counts.get(c.country) ?? 0) + 1);
+    const top = [...counts].sort((a, b) => (b[0] === 'in' ? 1 : 0) - (a[0] === 'in' ? 1 : 0) || b[1] - a[1]).slice(0, 10).map(([code]) => ({ key: `c:${code}`, label: regionName(code) }));
+    const langs = (playlists ?? []).filter(p => p.url.includes('/languages/') && !p.only).map(p => ({ key: `l:${p.id}`, label: p.name }));
+    return [...top, ...langs, ...(channels.some(c => SPACE.test(c.name)) ? [{ key: 'space', label: 'Space' }] : [])];
+  }, [channels, playlists]);
+  const inPlace = useCallback((c: LiveChannel) => !place || (place === 'space' ? SPACE.test(c.name) : place.startsWith('c:') ? c.country === place.slice(2) : (c.lists ?? [c.playlist]).includes(place.slice(2))), [place]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const base = view === 'favorites' ? channels.filter(c => favs.has(c.id)) : view === 'recent' ? recent.map(id => byId.get(id)).filter((c): c is LiveChannel => !!c) : channels;
-    return base.filter(c => (!group || (c.group ?? '').split(';').map(g => g.trim()).includes(group)) && (!q || c.name.toLowerCase().includes(q)) && !(hideDead && dead.has(c.id) && view !== 'favorites'));
-  }, [channels, favs, recent, byId, view, group, query, hideDead, dead]);
-  useEffect(() => { setShown(PAGE); }, [view, group, query]);
+    return base.filter(c => inPlace(c) && (!group || (c.group ?? '').split(';').map(g => g.trim()).includes(group)) && (!q || c.name.toLowerCase().includes(q)) && !(hideDead && dead.has(c.id) && view !== 'favorites'));
+  }, [channels, favs, recent, byId, view, group, query, hideDead, dead, inPlace]);
+  useEffect(() => { setShown(PAGE); }, [view, group, place, query]);
   const visible = filtered.slice(0, shown);
 
   const guideIds = (view === 'guide' ? filtered.slice(0, 40) : visible.slice(0, 60)).filter(c => c.guide).map(c => c.id);
@@ -244,7 +263,7 @@ export default function LiveTV() {
         setDead(prev => { const n = new Set(prev); r.dead.forEach(id => n.add(id)); r.alive.forEach(id => n.delete(id)); return n; });
         setChecking({ done: Math.min(list.length, i + 40), total: list.length });
       }
-      setNote({ tone: 'ok', text: `Checked ${list.length} channels: ${deadFound} did not answer${deadFound ? ' and are hidden now (turn on "Show offline channels" to see them)' : ''}.` });
+      setNote({ tone: 'ok', text: `Checked ${list.length} channels: ${deadFound} did not answer${deadFound ? ' and are hidden now (turn on "Show channels that may not work" to see them)' : ''}.` });
     } catch (err) { setNote({ tone: 'err', text: (err as Error).message }); }
     setChecking(null);
   };
@@ -257,7 +276,7 @@ export default function LiveTV() {
     <main className={`page lv-page${current ? ' has-player' : ''}${wide ? ' lv-wide' : ''}`}>
       <PageHeader
         title="Live TV"
-        sub={channels.length ? `${channels.length.toLocaleString()} channels${favs.size ? ` · ${favs.size} favorite${favs.size === 1 ? '' : 's'}` : ''}${dead.size ? ` · ${dead.size} offline` : ''}` : undefined}
+        sub={channels.length ? `${channels.length.toLocaleString()} channels${favs.size ? ` · ${favs.size} favorite${favs.size === 1 ? '' : 's'}` : ''}${dead.size ? ` · ${dead.size} may not work` : ''}` : undefined}
         actions={isAdmin ? <>
           {!empty && playlists !== null && <button type="button" className="btn btn-secondary" onClick={() => setSources(true)}><SvgIcon name="list" size={17} /> Sources</button>}
           {!empty && playlists !== null && <MoreMenu label="More for Live TV">
@@ -294,6 +313,12 @@ export default function LiveTV() {
               {view !== 'recordings' && <input className="settings-input ph-search" type="search" placeholder="Find a channel" value={query} onChange={e => setQuery(e.target.value)} aria-label="Find a channel" />}
             </div>
 
+            {view !== 'recordings' && places.length > 0 && (
+              <ScrollRow className="lv-chips" label="countries and languages"><div className="lv-chips-inner" role="tablist" aria-label="Country or language">
+                <button type="button" role="tab" aria-selected={!place} className={`md-chip${!place ? ' is-on' : ''}`} onClick={() => setPlace('')}>Everywhere</button>
+                {places.map(p => <button key={p.key} type="button" role="tab" aria-selected={place === p.key} className={`md-chip${place === p.key ? ' is-on' : ''}`} onClick={() => setPlace(place === p.key ? '' : p.key)}>{p.label}</button>)}
+              </div></ScrollRow>
+            )}
             {view !== 'recordings' && groups.length > 0 && (
               <ScrollRow className="lv-chips" label="categories"><div className="lv-chips-inner" role="tablist" aria-label="Category">
                 <button type="button" role="tab" aria-selected={!group} className={`md-chip${!group ? ' is-on' : ''}`} onClick={() => setGroup('')}>All</button>
@@ -301,7 +326,7 @@ export default function LiveTV() {
               </div></ScrollRow>
             )}
             {view !== 'recordings' && dead.size > 0 && (
-              <label className="lv-toggle"><Switch checked={!hideDead} onChange={v => setHideDead(!v)} label="Show offline channels" /> <span>Show offline channels ({dead.size})</span></label>
+              <label className="lv-toggle"><Switch checked={!hideDead} onChange={v => setHideDead(!v)} label="Show channels that may not work" /> <span>Show channels that may not work ({dead.size})</span></label>
             )}
 
             {view === 'guide' && (hasAnyGuide
@@ -421,10 +446,10 @@ function SourcesDialog({ open, onClose, playlists, onChanged }: { open: boolean;
   const [epg, setEpg] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const add = async (event: FormEvent, preset?: { name: string; url: string }) => {
+  const add = async (event: FormEvent, preset?: Preset) => {
     event.preventDefault();
     setBusy(true); setErr('');
-    try { await api.addLivePlaylist(preset?.name ?? name, preset?.url ?? url.trim(), epg.trim()); setName(''); setUrl(''); setEpg(''); onChanged(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    try { await api.addLivePlaylist(preset?.name ?? name, preset?.url ?? url.trim(), epg.trim(), preset?.only); setName(''); setUrl(''); setEpg(''); onChanged(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
   return (
     <Dialog open={open} onClose={onClose} title="Channel sources" wide>
@@ -448,14 +473,18 @@ function SourcesDialog({ open, onClose, playlists, onChanged }: { open: boolean;
           <button className="btn btn-primary" type="submit" disabled={busy || !url.trim()}>{busy ? 'Adding…' : 'Add playlist'}</button>
         </div>
       </form>
-      <p className="dlg-help" style={{ marginTop: '1rem' }}>Or add one of these free public lists (same project, split by category so you are not pulling in every geo-blocked channel from every country at once):</p>
-      <div className="st-connect-actions">
-        {[{ name: 'Free public: Everything', url: PUBLIC_LIST }, ...SUGGESTED_LISTS]
-          .filter(s => !playlists.some(p => p.url === s.url))
-          .map(s => (
-            <button key={s.url} type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={e => void add(e as unknown as FormEvent, s)}>{s.name}</button>
-          ))}
-      </div>
+      <p className="dlg-help" style={{ marginTop: '1rem' }}>Or add free public lists with one click. A channel that is in several lists shows once, and streams that do not answer are hidden after a background check.</p>
+      {PRESET_GROUPS.map(g => {
+        const items = g.items.filter(s => !playlists.some(p => p.url === s.url));
+        return items.length > 0 && (
+          <div key={g.title}>
+            <h3 className="lv-sec">{g.title}</h3>
+            <div className="st-connect-actions">
+              {items.map(s => <button key={s.url} type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={e => void add(e as unknown as FormEvent, s)}>{s.name}</button>)}
+            </div>
+          </div>
+        );
+      })}
     </Dialog>
   );
 }

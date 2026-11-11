@@ -8,8 +8,8 @@ import { outboundFetch } from './outbound.js';
 // as TVHeadend and free public lists all use). Nothing is bundled and no
 // channel is added for you.
 
-export interface Playlist { id: string; name: string; url: string; /** A program guide (XMLTV) address, when the playlist has none of its own. */ epgUrl?: string }
-export interface Channel { id: string; name: string; logo?: string; group?: string; playlist: string; url: string; tvgId?: string }
+export interface Playlist { id: string; name: string; url: string; /** A program guide (XMLTV) address, when the playlist has none of its own. */ epgUrl?: string; /** Keep only channels whose category matches (e.g. "News" on a language list). */ only?: string }
+export interface Channel { id: string; name: string; logo?: string; group?: string; playlist: string; url: string; tvgId?: string; /** Two-letter country, from the guide id ("Name.in@SD"). */ country?: string; /** Every playlist that carries this channel (set by uniqueChannels). */ lists?: string[] }
 
 const FILE = resolve(DATA_DIR, 'live-tv.json');
 const MAX_CHANNELS = 8000;
@@ -30,18 +30,18 @@ function save(playlists: Playlist[]): void {
   writeFileSync(FILE, JSON.stringify({ playlists }), { encoding: 'utf8', mode: 0o600 });
 }
 
-export function addPlaylist(name: string, url: string, epgUrl = ''): { ok: true; playlist: Playlist } | { ok: false; message: string } {
+export function addPlaylist(name: string, url: string, epgUrl = '', only = ''): { ok: true; playlist: Playlist } | { ok: false; message: string } {
   let parsedUrl: URL;
   try { parsedUrl = new URL(url); } catch { return { ok: false, message: 'Enter a full address starting with http:// or https://.' }; }
   if (!/^https?:$/.test(parsedUrl.protocol)) return { ok: false, message: 'Only http and https addresses are supported.' };
   const list = listPlaylists();
   if (list.some(p => p.url === url)) return { ok: false, message: 'That playlist is already added.' };
-  if (list.length >= 20) return { ok: false, message: 'Twenty playlists is the limit.' };
+  if (list.length >= 60) return { ok: false, message: 'Sixty playlists is the limit.' };
   let epg = '';
   if (epgUrl.trim()) {
     try { const e = new URL(epgUrl.trim()); if (!/^https?:$/.test(e.protocol)) throw new Error('scheme'); epg = e.toString(); } catch { return { ok: false, message: 'The program guide address must start with http:// or https://.' }; }
   }
-  const playlist: Playlist = { id: shortId(url), name: name.trim().slice(0, 60) || parsedUrl.hostname, url, ...(epg ? { epgUrl: epg } : {}) };
+  const playlist: Playlist = { id: shortId(url), name: name.trim().slice(0, 60) || parsedUrl.hostname, url, ...(epg ? { epgUrl: epg } : {}), ...(only.trim() ? { only: only.trim().slice(0, 40) } : {}) };
   save([...list, playlist]);
   return { ok: true, playlist };
 }
@@ -74,7 +74,8 @@ export function parseM3u(text: string, playlist: string): Channel[] {
       const group = attr('group-title');
       // iptv-org style ids carry a feed suffix ("BBCOne.uk@HD"); guides know the channel without it.
       const tvgId = attr('tvg-id')?.replace(/@.*$/, '') || undefined;
-      pending = { name, ...(logo ? { logo } : {}), ...(group ? { group } : {}), ...(tvgId ? { tvgId } : {}) };
+      const country = /\.([a-z]{2})$/.exec(tvgId ?? '')?.[1];
+      pending = { name, ...(logo ? { logo } : {}), ...(group ? { group } : {}), ...(tvgId ? { tvgId } : {}), ...(country ? { country } : {}) };
     } else if (line && !line.startsWith('#') && pending && /^https?:\/\//i.test(line)) {
       out.push({ id: shortId(`${playlist}|${line}`), playlist, url: line, ...pending });
       pending = null;
@@ -84,13 +85,33 @@ export function parseM3u(text: string, playlist: string): Channel[] {
   return out;
 }
 
+/**
+ * One entry per channel across playlists (the full list repeats what the category lists carry): the
+ * same guide id, or the same address when there is none. The first copy wins; categories and the
+ * playlists that carry it are merged into it.
+ */
+export function uniqueChannels(all: Channel[]): Channel[] {
+  const seen = new Map<string, Channel>();
+  for (const c of all) {
+    const key = c.tvgId ? `t:${c.tvgId}` : `u:${c.url}`;
+    const first = seen.get(key);
+    if (!first) { seen.set(key, { ...c, lists: [c.playlist] }); continue; }
+    if (!first.lists!.includes(c.playlist)) first.lists!.push(c.playlist);
+    const groups = new Set([...(first.group?.split(';') ?? []), ...(c.group?.split(';') ?? [])].map(g => g.trim()).filter(Boolean));
+    if (groups.size) first.group = [...groups].join(';');
+    first.logo ??= c.logo;
+  }
+  return [...seen.values()];
+}
+
 export async function channelsFor(playlist: Playlist): Promise<Channel[]> {
   const hit = parsed.get(playlist.id);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.channels;
   const res = await outboundFetch(playlist.url, { timeoutMs: 20_000 });
   if (!res.ok) throw new Error(`The playlist answered ${res.status}.`);
   const text = await res.text();
-  const channels = parseM3u(text, playlist.id);
+  const only = playlist.only?.toLowerCase();
+  const channels = parseM3u(text, playlist.id).filter(c => !only || (c.group ?? '').toLowerCase().split(';').some(g => g.trim() === only));
   parsed.set(playlist.id, { at: Date.now(), channels, epg: playlist.epgUrl ? [playlist.epgUrl] : epgUrlsOf(text) });
   for (const channel of channels) known.set(channel.id, channel);
   return channels;

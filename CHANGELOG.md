@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Live TV: more free public lists with one click in Sources (India, Hindi, Tamil, Telugu, Malayalam, Kannada, Bengali, Marathi, Gujarati, Punjabi, English news, and science, education, entertainment, family, travel, animation and more). A channel that is in several lists now shows once. A slow background check tests each stream (playlist and a video piece) every 24 hours and hides channels that fail twice; "Show channels that may not work" brings them back, and a green dot marks channels that answered. Country, language and Space chips make India, sports, kids and the rest easy to reach with the remote.
+
 - Radio: "Live radio only" now shows real broadcasters only (stations with presenters and news, such as All India Radio, Vividh Bharati, BBC, NPR and LBC), picked from the most-played stations in each country. Fan-made automatic playlists no longer slip through.
 
 - Year in review is now a full-screen story: hours watched and listened, how that compares with last year, top artists, songs, films, series and video channels with pictures, genres, your busiest day and hour, your longest binge, and the first and last thing of the year. Move through it by tapping, swiping, with the arrow keys or with the TV remote; pick any year that has data; cards with nothing to show are hidden. Save as image makes a picture of the summary on your device. A Home card appears in December and January.

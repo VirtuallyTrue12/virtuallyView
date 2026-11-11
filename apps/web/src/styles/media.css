@@ -36,6 +36,7 @@
 }
 .lv-page .rq-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--spacing-md); margin: 0 0 var(--spacing-md); }
 .lv-page .ph-search { flex: 0 1 280px; min-width: 0; }
+.lv-page .lv-ok { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--color-success, #3ecf8e); }
 .lv-page .lv-toggle { margin: var(--spacing-xs) 0 var(--spacing-md); }
 
 /* Loading skeleton shaped like the page */

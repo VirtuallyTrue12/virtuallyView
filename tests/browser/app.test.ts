@@ -1299,6 +1299,40 @@ describe('radio, one-press repair and live highlights', () => {
     await page.getByRole('region', { name: 'Playing Sky Sports F1' }).waitFor();
     expect(errors).toEqual([]);
   });
+
+  it('live tv browse: India and category chips filter, dead channels hide until asked for, Space finds NASA', async () => {
+    await page.route('**/api/live/playlists', r => r.request().method() === 'GET' ? r.fulfill(json({ playlists: [{ id: 'p', name: 'Test', url: 'http://x/list.m3u' }] })) : r.continue());
+    await page.route('**/api/live/channels', r => r.fulfill(json({ channels: [
+      { id: '000000000001', name: 'Aaj Tak', group: 'News', playlist: 'p', country: 'in', working: true, logo: 'http://127.0.0.1:9/missing.png' },
+      { id: '000000000002', name: 'Kids Toons', group: 'Kids', playlist: 'p', country: 'us' },
+      { id: '000000000003', name: 'Broken News', group: 'News', playlist: 'p', country: 'in' },
+      { id: '000000000004', name: 'NASA TV', group: 'Science', playlist: 'p', country: 'us' }
+    ], problems: [] })));
+    await page.route('**/api/live/me', r => r.fulfill(json({ favorites: [], recent: [], dead: ['000000000003'] })));
+    await page.route('**/api/live/highlights**', r => r.fulfill(json({ highlights: [], now: Date.now() })));
+    await page.route('**/api/live/recordings', r => r.fulfill(json({ recordings: [] })));
+    await page.route('**/api/live/guide**', r => r.fulfill(json({ ready: true, now: Date.now(), programmes: {} })));
+    await page.goto(base + '/live?v=channels');
+    const list = page.locator('.lv-list');
+    await list.getByRole('button', { name: 'Watch Aaj Tak' }).waitFor();
+    expect(await list.getByRole('button', { name: 'Watch Broken News' }).count()).toBe(0);
+    await list.getByRole('img', { name: 'Working' }).waitFor();
+    // The logo failed to load: the first letter shows instead.
+    await list.locator('.lv-logo', { hasText: 'A' }).first().waitFor();
+    await page.getByRole('tab', { name: 'India' }).click();
+    expect(await list.getByRole('button', { name: 'Watch Kids Toons' }).count()).toBe(0);
+    await list.getByRole('button', { name: 'Watch Aaj Tak' }).waitFor();
+    await page.getByRole('switch', { name: 'Show channels that may not work' }).click();
+    await list.getByRole('button', { name: 'Watch Broken News' }).waitFor();
+    await page.getByRole('tab', { name: 'Everywhere' }).click();
+    await page.getByRole('tab', { name: 'Kids', exact: true }).click();
+    await list.getByRole('button', { name: 'Watch Kids Toons' }).waitFor();
+    expect(await list.getByRole('button', { name: 'Watch Aaj Tak' }).count()).toBe(0);
+    await page.getByRole('tab', { name: 'All', exact: true }).click();
+    await page.getByRole('tab', { name: 'Space' }).click();
+    await list.getByRole('button', { name: 'Watch NASA TV' }).waitFor();
+    expect(errors).toEqual([]);
+  });
 });
 
 describe('Videos (Invidious)', () => {
