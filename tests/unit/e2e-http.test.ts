@@ -1193,6 +1193,11 @@ describe('e2e: assistant rules, retries, subtitles, watch party, people', () => 
     expect(set.json.seq).toBe(1);
     expect((await req('GET', `/api/watch-party/${code}`, { cookieOverride: cookieAdmin })).json.state).toMatchObject({ playing: true, position: 42 });
     expect((await req('GET', '/api/watch-party/ZZZZZZ', { cookieOverride: cookieAdmin })).status).toBe(404);
+    expect((await req('GET', '/api/party-clock', { cookieOverride: cookieAdmin })).json.now).toBeGreaterThan(0);
+    expect((await req('POST', '/api/watch-party', { body: { title: 'A video', link: '/videos/watch/dQw4w9WgXcQ' }, cookieOverride: cookieAdmin })).status).toBe(200);
+    // Chat and handing over need someone in the room.
+    expect((await req('POST', `/api/watch-party/${code}/chat`, { body: { client: 'nobody', text: 'hi' }, cookieOverride: cookieAdmin })).status).toBe(404);
+    expect((await req('POST', `/api/watch-party/${code}/host`, { body: { to: 'nobody' }, cookieOverride: cookieAdmin })).status).toBe(404);
   }, 30_000);
 
   it('throttles guesses at a room code well below the general API budget', async () => {

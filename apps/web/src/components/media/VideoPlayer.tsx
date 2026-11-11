@@ -7,6 +7,8 @@ import type { SubtitleTrack } from './PlyrPlayer';
 import { SvgIcon } from '../ui/SvgIcon';
 import { toast } from '../ui/Toast';
 import { isLite } from '../../lib/perf';
+import type { Party } from '../../lib/useWatchParty';
+import { driftAction } from '../../lib/partySync';
 
 export interface EpisodeGroup {
   label: string;
@@ -39,7 +41,7 @@ interface VideoPlayerProps {
   /** Converted stream path used when casting to a TV, which is the safest format for any screen. */
   castTranscode?: string;
   /** Watch together: what the others did, and a way to tell them what this viewer did. */
-  party?: { remote: { playing: boolean; position: number; seq: number } | null; onLocal: (playing: boolean, position: number) => void };
+  party?: Pick<Party, 'remote' | 'onLocal' | 'onBuffering' | 'expected' | 'waitingFor' | 'reactions'>;
   /** Audio streams in the file; the menu appears only while converting. */
   audioTracks?: Array<{ index: number; label: string; english?: boolean }>;
   /** Picture-based subtitles (PGS, VobSub). They are drawn onto the video, so they need conversion. */
@@ -165,6 +167,8 @@ export default function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1);
+  const rateRef = useRef(1);
+  rateRef.current = rate;
   const [subIndex, setSubIndex] = useState(-1);
   const [menu, setMenu] = useState<null | 'settings' | 'subs' | 'episodes' | 'cast'>(null);
   const [subStyle, setSubStyle] = useState<SubStyle>(loadSubStyle);
@@ -259,7 +263,7 @@ export default function VideoPlayer({
   const emit = useCallback((playingNow: boolean, at?: number) => {
     const binding = partyRef.current;
     if (!binding || Date.now() < applyingUntil.current) return;
-    binding.onLocal(playingNow, at ?? positionRef.current);
+    binding.onLocal(playingNow, at ?? positionRef.current, rateRef.current);
   }, []);
   const shown = scrub ?? position;
   const pct = total > 0 ? Math.min(100, (shown / total) * 100) : 0;
@@ -453,18 +457,51 @@ export default function VideoPlayer({
 
   const skip = useCallback((delta: number) => seekTo(position + delta), [seekTo, position]);
 
-  // Apply what someone else in the watch party just did.
+  // Apply what someone else in the watch party just did (or the room's hold while someone buffers).
   const remoteSeq = party?.remote?.seq;
   useEffect(() => {
-    const remote = partyRef.current?.remote;
+    const p = partyRef.current;
+    const remote = p?.remote;
     const v = videoRef.current;
-    if (!remote || !v) return;
+    if (!p || !remote || !v) return;
     applyingUntil.current = Date.now() + 1500;
-    if (Math.abs(remote.position - positionRef.current) > 1.5) seekTo(remote.position);
-    if (remote.playing) { wantPlay.current = true; void v.play().catch(() => setPlaying(false)); }
-    else { wantPlay.current = false; v.pause(); }
+    if (remote.rate !== rateRef.current) setRate(remote.rate);
+    const target = p.expected() ?? remote.position;
+    if (Math.abs(target - positionRef.current) > 1.5) seekTo(target);
+    wantPlay.current = remote.playing;
+    if (remote.playing && p.waitingFor.length === 0) void v.play().catch(() => setPlaying(false));
+    else v.pause();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteSeq]);
+
+  // Every few seconds compare with the shared clock: nudge the speed for a small drift, seek for a big one.
+  const inParty = !!party;
+  useEffect(() => {
+    if (!inParty) return;
+    let restore: number | undefined;
+    const timer = window.setInterval(() => {
+      const v = videoRef.current;
+      const want = partyRef.current?.expected();
+      if (!v || want == null || v.paused || waiting || Date.now() < applyingUntil.current) return;
+      const act = driftAction(positionRef.current - want, rateRef.current);
+      if (act.kind === 'none') return;
+      applyingUntil.current = Date.now() + 1500;
+      if (act.kind === 'seek') { seekTo(want); return; }
+      v.playbackRate = act.rate;
+      window.clearTimeout(restore);
+      restore = window.setTimeout(() => { applyingUntil.current = Date.now() + 300; v.playbackRate = rateRef.current; }, act.ms);
+    }, 3000);
+    return () => { window.clearInterval(timer); window.clearTimeout(restore); };
+  }, [inParty, waiting, seekTo]);
+
+  // Tell the room when this player has been stuck loading for a moment, so the others wait for it.
+  useEffect(() => {
+    const p = partyRef.current;
+    if (!p || !waiting) return;
+    let told = false;
+    const timer = window.setTimeout(() => { told = true; p.onBuffering(true); }, 400);
+    return () => { window.clearTimeout(timer); if (told) p.onBuffering(false); };
+  }, [waiting, inParty]);
 
   // New transcode offset = new URL: reload and keep playing if it was playing.
   const firstSrc = useRef(true);
@@ -680,6 +717,7 @@ export default function VideoPlayer({
         onDoubleClick={toggleFullscreen}
         onPlay={e => { if (onTvRef.current) { e.currentTarget.pause(); return; } setPlaying(true); wake(); emit(true); }}
         onPause={() => { setPlaying(false); setVisible(true); emit(false); }}
+        onRateChange={e => { if (Date.now() >= applyingUntil.current) emit(!e.currentTarget.paused); }}
         onWaiting={() => { setWaiting(true); noteStall(); }}
         onPlaying={() => { setWaiting(false); setPlaying(true); }}
         onCanPlay={() => setWaiting(false)}
@@ -740,6 +778,12 @@ export default function VideoPlayer({
       </video>
 
       {waiting && !failed && !onTv && <div className="vp-spinner" aria-label="Loading" />}
+      {party && party.waitingFor.length > 0 && <div className="vp-party-wait" role="status">Waiting for {party.waitingFor.join(' and ')}...</div>}
+      {party && party.reactions.length > 0 && (
+        <div className="vp-reactions" aria-hidden="true">
+          {party.reactions.map(r => <span key={r.key} className="vp-reaction" style={{ left: `${8 + ((r.key * 37) % 80)}%` }}>{r.emoji}<small>{r.name}</small></span>)}
+        </div>
+      )}
       {onTv && (
         <div className="vp-fail vp-ontv" role="status" onClick={e => e.stopPropagation()}>
           <CastRemote

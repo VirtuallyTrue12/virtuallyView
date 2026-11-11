@@ -455,7 +455,8 @@ server.addHook('preHandler', async (request, reply) => {
   if (request.method === 'POST' && (path === '/api/auth/login' || path === '/api/auth/signup' || path === '/api/auth/quickconnect/start' || path === '/api/auth/quickconnect/approve' || path === '/api/profiles/switch') && bump(loginCounts) > loginRateLimit) {
     return reply.code(429).header('Retry-After', '60').send({ error: 'rate_limited', message: 'Too many sign-in attempts. Wait a minute and try again.' });
   }
-  if (/^\/api\/watch-party\/[^/]+/.test(path) && bump(partyCodeCounts) > partyCodeRateLimit) {
+  // Only code lookups and joins are guesses; state, chat and clock calls are normal party traffic.
+  if (request.method === 'GET' && /^\/api\/watch-party\/[^/]+(\/events)?$/.test(path) && bump(partyCodeCounts) > partyCodeRateLimit) {
     return reply.code(429).header('Retry-After', '60').send({ error: 'rate_limited', message: 'Too many watch-party requests. Wait a minute and try again.' });
   }
   const exempt = !path.startsWith('/api/') || path.startsWith('/api/stream/') || path.startsWith('/api/music/stream/') || path.startsWith('/api/live/relay') || path.startsWith('/api/photos/') || path.startsWith('/api/art');

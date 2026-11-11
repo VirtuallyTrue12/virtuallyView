@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type VideoDetails, type VideoResult, type VideoState } from '../lib/api';
 import { BackButton } from '../components/layout/BackButton';
 import VideoPlayer from '../components/media/VideoPlayer';
@@ -10,6 +10,8 @@ import { toast } from '../components/ui/Toast';
 import { ChannelAvatar, SubscribeButton, VideoCard } from '../components/videos/VideoCards';
 import { useSubscriptions } from '../components/videos/useSubscriptions';
 import { age, channelPath, duration, views, watchPath } from '../components/videos/format';
+import WatchTogether from '../components/media/WatchTogether';
+import { useWatchParty } from '../lib/useWatchParty';
 
 type Online = Awaited<ReturnType<typeof api.video>>;
 const QUALITIES = [1080, 720, 480, 360];
@@ -50,6 +52,8 @@ function useVideoProgress(id: string) {
 export default function VideoWatch() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const partyCode = useSearchParams()[0].get('party');
+  const party = useWatchParty(partyCode);
   const [online, setOnline] = useState<Online | null>(null);
   const [state, setState] = useState<VideoState | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -176,6 +180,7 @@ export default function VideoWatch() {
                 title={video.title}
                 startAt={state.position > 5 && state.position < (video.durationSeconds || Infinity) - 10 ? state.position : 0}
                 subtitles={captions}
+                {...(partyCode ? { party } : {})}
                 chapters={chapters}
                 onProgress={onProgress}
                 // The instance's stream can be refused upstream; its own player usually still gets through.
@@ -187,6 +192,7 @@ export default function VideoWatch() {
             )}
           </div>
 
+          <WatchTogether title={video.title} code={partyCode} party={party} />
           <h1 className="vd-watch-title">{video.title}</h1>
           {meta && <p className="vd-watch-meta">{meta}{local && <span className="vd-pill"><SvgIcon name="check" size={12} /> Playing your saved copy</span>}</p>}
 

@@ -1,0 +1,47 @@
+/* Watch together: the party strip under the player, the chat panel, and what floats over the video. */
+
+.watch-together--live { flex-direction: column; align-items: stretch; gap: var(--spacing-sm); }
+.wt-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-sm) var(--spacing-md); }
+.wt-code { letter-spacing: 0.12em; }
+.wt-members { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--spacing-sm) var(--spacing-lg); }
+.wt-member { display: flex; align-items: center; gap: var(--spacing-sm); }
+.wt-host { color: var(--color-text-muted); }
+.wt-reactions { display: inline-flex; gap: var(--spacing-xs); }
+.wt-reactions .icon-btn { font-size: 1.15rem; }
+
+/* Chat: a side panel on wide screens, a sheet over the bottom of the page on phones */
+.wt-chat {
+  position: fixed; right: var(--spacing-lg); bottom: var(--spacing-lg); z-index: 40;
+  width: 320px; height: min(440px, 60vh); display: flex; flex-direction: column; gap: var(--spacing-sm);
+  padding: var(--spacing-md); background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-large); box-shadow: var(--shadow-large);
+  animation: wt-in 200ms var(--easing-default, ease-out);
+}
+.wt-chat-list { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--spacing-xs); overflow-wrap: anywhere; }
+.wt-chat-empty { color: var(--color-text-muted); }
+.wt-chat-form { display: flex; gap: var(--spacing-sm); }
+.wt-chat-form .input { flex: 1; min-width: 0; }
+@keyframes wt-in { from { opacity: 0; transform: translateY(8px); } }
+
+@media (max-width: 640px) {
+  .wt-chat { left: var(--spacing-sm); right: var(--spacing-sm); bottom: var(--spacing-sm); width: auto; height: 55vh; }
+}
+
+/* "Waiting for Sam..." and reactions sit inside the player, so they show in fullscreen too */
+.vp-party-wait {
+  position: absolute; top: var(--spacing-lg); left: 50%; transform: translateX(-50%); z-index: 6; pointer-events: none;
+  padding: var(--spacing-xs) var(--spacing-md); border-radius: var(--radius-large); background: rgba(0, 0, 0, 0.7); color: #fff;
+}
+.vp-reactions { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 6; }
+.vp-reaction {
+  position: absolute; bottom: 12%; display: flex; flex-direction: column; align-items: center; font-size: 2.2rem;
+  animation: vp-float 3s ease-out forwards;
+}
+.vp-reaction small { font-size: 0.7rem; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
+@keyframes vp-float { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-160px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .wt-chat { animation: none; }
+  .vp-reaction { animation: vp-fade 3s forwards; }
+  @keyframes vp-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+}

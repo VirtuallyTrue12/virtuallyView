@@ -354,6 +354,68 @@ describe('skip intro', () => {
   });
 });
 
+describe('watch together', () => {
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  // Two browser windows (two contexts), the real party API, a mocked film.
+  const mockFilm = async (p: Page) => {
+    const video = readFileSync(resolve(root, 'tests/browser/fixtures/tiny-20s.webm'));
+    await p.route('**/api/movies/radarr-540', r => r.fulfill(json({ id: 'radarr-540', title: 'Party Film', status: 'available' })));
+    await p.route('**/api/stream/radarr-540/info', r => r.fulfill(json({ playable: true, transcodingAvailable: false, durationSeconds: 20, container: 'webm', videoCodec: 'vp9', audioCodec: null, reason: null })));
+    await p.route('**/api/progress/movie/radarr-540', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await p.route('**/api/stream/radarr-540/subtitles', r => r.fulfill(json({ subtitles: [] })));
+    await p.route('**/api/stream/radarr-540/trickplay', r => r.fulfill(json({ state: 'unavailable' })));
+    await p.route('**/api/stream/radarr-540', r => {
+      const m = /bytes=(\d+)-(\d*)/.exec(r.request().headers()['range'] ?? '');
+      const start = m ? Number(m[1]) : 0, end = m?.[2] ? Number(m[2]) : video.length - 1;
+      return r.fulfill({ status: m ? 206 : 200, contentType: 'video/webm', headers: { 'Accept-Ranges': 'bytes', ...(m ? { 'Content-Range': `bytes ${start}-${end}/${video.length}` } : {}) }, body: video.subarray(start, end + 1) });
+    });
+  };
+  const ready = (p: Page) => p.waitForFunction(() => { const v = document.querySelector('video'); return !!v && v.readyState >= 3; });
+
+  it('shares pause and seeking both ways and shows chat to both people', async () => {
+    const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 800 }, storageState: await ctx.storageState() });
+    try {
+      await ctx2.addInitScript(() => { try { sessionStorage.setItem('vv-profile-picked', '1'); } catch { /* no storage */ } });
+      const other = await ctx2.newPage();
+      await mockFilm(page);
+      await mockFilm(other);
+
+      await page.goto(base + '/movies/radarr-540/play');
+      await page.getByRole('button', { name: 'Watch together' }).click();
+      await page.waitForURL(/party=[0-9A-F]{6}/);
+      const code = /party=([0-9A-F]{6})/.exec(page.url())![1]!;
+      await page.getByText('Copy invite link').waitFor();
+
+      await other.goto(base + `/party/${code}`);
+      await other.waitForURL(/\/movies\/radarr-540\/play\?party=/);
+      await ready(page);
+      await ready(other);
+
+      // Host pauses: the other window pauses too.
+      await page.evaluate(() => void document.querySelector('video')!.play());
+      await other.waitForFunction(() => document.querySelector('video')!.paused === false);
+      await page.evaluate(() => document.querySelector('video')!.pause());
+      await other.waitForFunction(() => document.querySelector('video')!.paused === true);
+
+      // The member seeks: the host follows.
+      await other.evaluate(() => { document.querySelector('video')!.currentTime = 15; });
+      await page.waitForFunction(() => Math.abs(document.querySelector('video')!.currentTime - 15) < 1.5);
+
+      // Chat reaches both.
+      await page.getByRole('button', { name: 'Chat' }).click();
+      await other.getByRole('button', { name: 'Chat' }).click();
+      await other.getByLabel('Message').fill('hello <b>there</b>');
+      await other.getByRole('button', { name: 'Send' }).click();
+      await page.getByText('hello <b>there</b>').waitFor();
+      await other.getByText('hello <b>there</b>').waitFor();
+      expect(await page.locator('.wt-chat-list b').count()).toBe(0);
+    } finally {
+      await ctx2.close();
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+    }
+  });
+});
+
 describe('plays what the browser actually can, not just what the file name predicts', () => {
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 

@@ -192,7 +192,7 @@ export default function EpisodePlayer() {
             } : undefined}
             startAt={resumeStart}
             onProgress={onProgress}
-            party={partyCode ? { remote: party.remote, onLocal: party.onLocal } : undefined}
+            party={partyCode ? party : undefined}
             next={nextEp ? { label: `${code(nextEp)} ${nextEp.title}`, onSelect: () => go(nextEp) } : undefined}
             previous={prevEp ? { label: `${code(prevEp)} ${prevEp.title}`, onSelect: () => go(prevEp) } : undefined}
             episodes={{ groups, onSelect: eid => { const t = ordered.find(e => e.id === eid); if (t) go(t); } }}
@@ -208,7 +208,7 @@ export default function EpisodePlayer() {
       <div className="player-meta">
         <span className="player-hint">Space play/pause, left/right arrows skip 10s, N next episode, C subtitles, F fullscreen</span>
       </div>
-      <WatchTogether title={series?.title ?? 'An episode'} code={partyCode} watching={party.watching} />
+      <WatchTogether title={series?.title ?? 'An episode'} code={partyCode} party={party} />
       {id && episodeId && <SubtitleManager target={{ kind: 'episode', seriesId: id, episodeId }} onChanged={() => setSubTick(t => t + 1)} />}
       <EpisodeInfo episodeId={episodeId} />
     </main>

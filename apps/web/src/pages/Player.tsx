@@ -153,7 +153,7 @@ export default function Player() {
             info={{ cast: { kind: 'movie', id: movie.id }, synopsis: movie.overview }}
             startAt={resumeStart}
             onProgress={onProgress}
-            party={partyCode ? { remote: party.remote, onLocal: party.onLocal } : undefined}
+            party={partyCode ? party : undefined}
             onPullSubtitles={async () => {
               const result = await api.pullSubtitles(`/api/movies/${encodeURIComponent(movie.id)}/subtitles/search`);
               if (result.success) setSubTick(t => t + 1);
@@ -170,7 +170,7 @@ export default function Player() {
             : 'Space play/pause, left/right arrows skip 10s, up/down arrows volume, C subtitles, F fullscreen'}
         </span>
       </div>
-      <WatchTogether title={movie?.title ?? 'A film'} code={partyCode} watching={party.watching} />
+      <WatchTogether title={movie?.title ?? 'A film'} code={partyCode} party={party} />
       {id && <SubtitleManager target={{ kind: 'movie', id }} onChanged={() => setSubTick(t => t + 1)} />}
     </main>
   );
