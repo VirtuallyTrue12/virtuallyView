@@ -211,7 +211,8 @@ async function ensureStandardVideoProfile(app) {
   const template = profiles.find(p => p.name === 'HD - 720p/1080p') ?? profiles.find(p => p.name === 'HD-1080p');
   if (!template) return;
   const nameOf = i => (i.items?.length ? i.name : i.quality?.name) ?? '';
-  const isHd = i => /(720p|1080p)$/i.test(nameOf(i)) && !/remux/i.test(nameOf(i)) || /^remux-1080p$/i.test(nameOf(i));
+  // No Remux: a 25-80 GB disc copy filled the disk once; a 1080p encode looks nearly the same.
+  const isHd = i => /(720p|1080p)$/i.test(nameOf(i)) && !/remux/i.test(nameOf(i));
   const items = template.items.map(i => ({ ...i, allowed: isHd(i) }));
   const flat = items.flatMap(i => (i.items?.length ? [i, ...i.items] : [i]));
   const goal = flat.find(i => nameOf(i) === 'WEB 1080p') ?? flat.find(i => nameOf(i) === 'Bluray-1080p') ?? flat.find(i => nameOf(i) === 'HDTV-1080p');

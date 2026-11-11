@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Downloads: the "Standard" movie and TV quality profile no longer takes Remux releases (25-80 GB disc copies that once filled the disk); a 1080p encode is picked instead.
+
 - Videos: a YouTube-style home (Saved, Continue watching, Subscriptions, Your channels, Watch later, Trending, Popular, History), search with a Channels tab, channel pages with Subscribe, a watch page with chapters, captions, Up next and resume, and Save to library (downloads through the yt-dlp worker into a Videos folder; refuses below 5 GB free). Movie and series pages show their trailers and reviews. Everything goes through your own Invidious server.
 
 - Live TV: "On now" row, a guide whose channel column and time ruler stay put, a red now-line, the current programme highlighted with time left, a richer player (programme, up next, channel up/down) and remote navigation through the guide. Radio: station tiles with artwork or initials, favourites and recently played rows, the playing station highlighted, and its bars only move while sound plays.
