@@ -791,6 +791,7 @@ export const api = {
   },
   systemStorage: () => getJSON<StorageReport>('/api/system/storage'),
   hostAddresses: () => getJSON<HostAddresses>('/api/system/addresses'),
+  videoHardware: () => getJSON<{ converter: string; tonemap: 'gpu' | 'cpu' | null }>('/api/system/video'),
   mediaInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/${encodeURIComponent(id)}/info${codecQuery()}`),
   episodeInfo: (id: string) => getJSON<MediaPlaybackInfo>(`/api/stream/episode/${encodeURIComponent(id)}/info${codecQuery()}`),
   dashboard: () => getJSON<Dashboard>('/api/dashboard'),

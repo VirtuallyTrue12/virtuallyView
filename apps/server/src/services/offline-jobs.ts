@@ -288,7 +288,7 @@ async function runJob(job: OfflineJob, input: OfflineInput): Promise<void> {
     const audioIndex = pickAudioIndex(input.probe.audioTracks ?? [], job.audio);
     const args = isTrack
       ? ffmpegFileArgs(input.path, partial, { kind: 'audio', audioCodec: input.probe.audioCodec })
-      : ffmpegFileArgs(input.path, partial, { kind: 'video', quality: job.quality, audio: audioIndex, sourceHeight: input.probe.height ?? null, vaapi: vaapiDevice() });
+      : ffmpegFileArgs(input.path, partial, { kind: 'video', quality: job.quality, audio: audioIndex, sourceHeight: input.probe.height ?? null, vaapi: vaapiDevice(), hdr: input.probe.hdr, hdrMastering: input.probe.hdrMastering });
     const child: ChildProcess = spawn(ffmpeg, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     const limit = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* already exited */ } }, CONVERSION_MAX_MS);
     limit.unref();
