@@ -138,7 +138,7 @@ describe('first run and accounts', () => {
 describe('appearance', () => {
   it('applies a theme instantly and keeps it after a reload', async () => {
     await page.goto(base + '/themes');
-    await page.locator('.theme-tile', { hasText: 'Synthwave' }).getByRole('button', { name: /^Use/ }).click();
+    await page.locator('.theme-tile', { has: page.getByRole('heading', { name: 'Synthwave', exact: true }) }).getByRole('button', { name: /^Use/ }).click();
     await page.waitForFunction(() => document.documentElement.dataset.theme === 'cyberpunk');
     await page.reload();
     await page.waitForSelector('.theme-tile');
@@ -2172,6 +2172,7 @@ describe('details pages and theme preview', () => {
 
   it('the series page puts "where you left off" first, with Resume', async () => {
     await baseRoutes();
+    await page.route('**/api/series', r => r.fulfill(json([])));
     await page.route('**/api/series/sonarr-1', r => r.fulfill(json({ id: 'sonarr-1', title: 'Long Show', type: 'series', status: 'available', artwork: {}, seasons: [] })));
     await page.route('**/api/series/sonarr-1/cast', r => r.fulfill(json({ cast: [] })));
     await page.route('**/api/series/sonarr-1/episodes', r => r.fulfill(json({ episodes: [
