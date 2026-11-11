@@ -14,7 +14,8 @@ export function Dialog({ open, onClose, title, children, wide }: { open: boolean
   useEffect(() => {
     if (!open) return;
     returnTo.current = document.activeElement;
-    panel.current?.focus({ preventScroll: true });
+    // A dialog can name its main button (data-autofocus), so a TV remote can press it straight away.
+    (panel.current?.querySelector<HTMLElement>('[data-autofocus]') ?? panel.current)?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
       if (e.key === 'Tab' && panel.current) {

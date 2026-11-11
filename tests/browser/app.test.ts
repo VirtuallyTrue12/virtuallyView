@@ -1026,6 +1026,8 @@ describe('settings, photos, live tv and requests', () => {
     await page.getByRole('table', { name: 'Program guide' }).waitFor();
     expect(await page.locator('.gg-prog').count()).toBeGreaterThanOrEqual(3);
     await page.getByRole('button', { name: /Evening Bulletin/ }).click();
+    // The main button has focus, so a TV remote's OK watches at once.
+    await expect.poll(() => page.evaluate(() => document.activeElement?.textContent?.trim())).toBe('Watch now');
     await page.getByRole('button', { name: 'Watch now' }).click();
     await page.getByRole('region', { name: 'Playing News One' }).waitFor();
     expect(errors).toEqual([]);

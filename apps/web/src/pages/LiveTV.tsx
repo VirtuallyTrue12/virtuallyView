@@ -399,10 +399,10 @@ export default function LiveTV() {
           {prog.p.desc && <p className="dlg-help">{prog.p.desc}</p>}
           {progItem?.conflict && <p className="dlg-help">This overlaps other recordings and will not record unless one of them is cancelled.</p>}
           <div className="dlg-actions lv-prog-actions">
-            {prog.p.start <= Date.now() && prog.p.stop > Date.now() && <button type="button" className="btn btn-primary" onClick={() => { play(prog.c); setProg(null); }}><SvgIcon name="play" size={16} /> Watch now</button>}
+            {prog.p.start <= Date.now() && prog.p.stop > Date.now() && <button type="button" className="btn btn-primary" data-autofocus onClick={() => { play(prog.c); setProg(null); }}><SvgIcon name="play" size={16} /> Watch now</button>}
             {prog.p.stop > Date.now() && (progItem
-              ? <button type="button" className="btn btn-secondary" onClick={() => void cancelItem(() => api.liveScheduleCancel(progItem.id))}>Cancel recording</button>
-              : <button type="button" className="btn btn-secondary" onClick={() => void scheduleProg()}><span className="lv-rec" aria-hidden="true" /> Record</button>)}
+              ? <button type="button" className="btn btn-secondary" data-autofocus onClick={() => void cancelItem(() => api.liveScheduleCancel(progItem.id))}>Cancel recording</button>
+              : <button type="button" className="btn btn-secondary" data-autofocus onClick={() => void scheduleProg()}><span className="lv-rec" aria-hidden="true" /> Record</button>)}
             {prog.p.stop > Date.now() && <button type="button" className="btn btn-secondary" onClick={() => void scheduleProg(true)}>Record series</button>}
             {prog.p.stop > Date.now() && <button type="button" className="btn btn-secondary" onClick={() => void scheduleProg('any')}>Record series, any channel</button>}
             <button type="button" className="btn btn-secondary" onClick={() => setProg(null)}>Close</button>

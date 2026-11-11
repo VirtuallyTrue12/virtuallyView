@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Live TV: scheduled recording. Pick a programme in the guide to Watch now, Record, Record series (this channel or any channel); scheduled ones get a red dot. A Recordings tab lists Scheduled (with conflicts flagged before they happen; two at once by default), Series rules, Recorded and Failed or missed. Recording runs from a minute before to three minutes after, survives restarts, and will not start with under 10 GB free. Dialogs can now put focus on their main button for the TV remote.
+
 - Details pages: Watch next lists the other films in a collection in order; a series shows where you left off ("S2 E5 · 23 min left", "Next: S2 E6") as its main button; a person page lists what is in your library first, then the rest with Request; the hero shows a blurred poster while the backdrop loads, then fades it in. Error messages on details pages no longer show a spinning loader. Themes: a Preview button tries a theme across the whole app with Keep and Cancel, and a new Synthwave Light theme.
 
 - Search: one box finds everything, grouped into In your library, Music, People, Live TV, Radio, Videos, Channels and Available to request, filled in as each source answers (results appear as you type). Searching an actor or director lists them and their films in your library. Arrow keys move through every result; Live TV results tune straight to the channel.
