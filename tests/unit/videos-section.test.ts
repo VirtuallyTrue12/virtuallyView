@@ -35,13 +35,13 @@ describe('Videos section: reading what the video service sends', () => {
     expect(inv.parseCount(undefined)).toBe(0);
   });
 
-  it('turns channel pictures into addresses on this server, and the image proxy only ever reaches the instance', () => {
+  it('turns channel pictures into addresses on this server, and the image route only ever reaches YouTube\'s image host', () => {
     process.env.INVIDIOUS_URL = 'http://invidious:3000';
     const path = inv.imageProxyPath('https://yt3.ggpht.com/abc-DEF=s88-c-k');
     expect(path).toBe(`/api/videos/image?p=${encodeURIComponent('/ggpht/abc-DEF=s88-c-k')}`);
     expect(inv.imageProxyPath('//yt3.googleusercontent.com/xyz=w1280')).toContain(encodeURIComponent('/ggpht/xyz=w1280'));
     expect(inv.imageProxyPath('https://evil.example/a.png')).toBeUndefined();
-    expect(inv.imageUpstream('/ggpht/abc-DEF=s88-c-k')).toBe('http://invidious:3000/ggpht/abc-DEF=s88-c-k');
+    expect(inv.imageUpstream('/ggpht/abc-DEF=s88-c-k')).toBe('https://yt3.ggpht.com/abc-DEF=s88-c-k');
     for (const bad of ['/ggpht/../api/v1/stats', 'http://evil/x', '/api/v1/videos/x', '/ggpht/a?b=c']) expect(inv.imageUpstream(bad)).toBeNull();
   });
 

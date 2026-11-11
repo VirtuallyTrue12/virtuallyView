@@ -56,7 +56,7 @@ const HTTP_STATUS_RE = /^HTTP\/\S+\s+(\d{3})/m;
  */
 export async function outboundFetch(
   url: string,
-  init: { headers?: Record<string, string>; method?: string; body?: string; timeoutMs?: number } = {}
+  init: { headers?: Record<string, string>; method?: string; body?: string; timeoutMs?: number; redirect?: RequestRedirect } = {}
 ): Promise<Response> {
   const proxy = activeProxy();
 
@@ -65,6 +65,7 @@ export async function outboundFetch(
       method: init.method,
       headers: init.headers,
       body: init.body,
+      redirect: init.redirect,
       signal: AbortSignal.timeout(init.timeoutMs ?? 8000)
     });
   }
@@ -78,10 +79,16 @@ export async function outboundFetch(
   args.push(url);
 
   try {
-    const { stdout } = await execFileAsync('curl', args, { maxBuffer: 16 * 1024 * 1024 });
-    const headers = readFileSync(headerFile, 'utf8');
-    const status = Number(HTTP_STATUS_RE.exec(headers)?.[1] ?? 200);
-    return new Response(stdout, { status });
+    // Bytes, not text, so images survive; curl follows no redirects here, so this is the one response's headers.
+    const { stdout } = await execFileAsync('curl', args, { maxBuffer: 16 * 1024 * 1024, encoding: 'buffer' });
+    const raw = readFileSync(headerFile, 'utf8');
+    const status = Number(HTTP_STATUS_RE.exec(raw)?.[1] ?? 200);
+    const headers = new Headers();
+    for (const line of raw.split(/\r?\n/).slice(1)) {
+      const at = line.indexOf(':');
+      if (at > 0) { try { headers.append(line.slice(0, at).trim(), line.slice(at + 1).trim()); } catch { /* malformed header */ } }
+    }
+    return new Response(status === 204 || status === 304 ? null : new Uint8Array(stdout), { status, headers });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     throw new Error(`outbound request through ${proxy.kind} proxy failed: ${detail}`);

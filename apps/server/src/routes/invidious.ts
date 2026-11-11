@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Media } from '@virtuallyview/types';
 import {
-  captionsVtt, CHANNEL_ID, channelInfo, channelVideos, clearVideoHistory, embedUrl, imageUpstream, invidiousAvailable, matchLibraryTitle, NotConfigured,
+  captionsVtt, CHANNEL_ID, channelInfo, channelVideos, clearVideoHistory, embedUrl, hdSources, imageUpstream, invidiousAvailable, matchLibraryTitle, NotConfigured,
   popularVideos, removeFromVideoHistory, searchChannels, searchVideos, streamUrl, subscriptionFeed, thumbnailUpstream, touchVideoHistory, trendingVideos,
   videoDetails, videoFetch, videoHistory, videoInfo, videosAboutTitle, type VideoResult
 } from '../services/invidious.js';
@@ -14,7 +14,9 @@ import { getAdapter } from '../services/registry.js';
 import { filterByRating } from '../services/parental.js';
 import { statfs } from 'node:fs/promises';
 import { currentActor } from '../services/user-context.js';
-import { serveMediaFile } from './stream.js';
+import { pipeConversion, serveMediaFile } from './stream.js';
+import { startRemux } from '../services/transcode.js';
+import { cachedImage } from '../services/image-cache.js';
 
 // A full disk once stopped every service, so saving refuses to start below this much free space.
 const MIN_FREE_BYTES = 5 * 1024 ** 3;
@@ -87,8 +89,13 @@ export default async function invidiousRoutes(server: FastifyInstance) {
     } catch (error) { return reply.code(502).send({ message: fail(error) }); }
   });
 
-  // Channel pictures and banners, through the instance (never fetched by the browser from Google).
-  server.get<{ Querystring: { p?: string } }>('/api/videos/image', async (request, reply) => proxyImage(imageUpstream(request.query.p ?? ''), reply, 86400));
+  // Channel pictures and banners, cached by this server (never fetched by the browser from Google).
+  server.get<{ Querystring: { p?: string } }>('/api/videos/image', async (request, reply) => {
+    const image = await cachedImage(imageUpstream(request.query.p ?? '') ?? '');
+    return image
+      ? reply.header('Content-Type', image.type).header('Cache-Control', 'public, max-age=86400').header('X-Content-Type-Options', 'nosniff').send(image.bytes)
+      : reply.code(404).send();
+  });
 
   // ---- Followed channels and their newest uploads ----
   server.get('/api/videos/subscriptions', async () => ({ channels: subscriptions() }));
@@ -204,6 +211,20 @@ export default async function invidiousRoutes(server: FastifyInstance) {
       const vtt = await captionsVtt(request.params.id, request.query.label ?? '');
       return vtt ? reply.header('Content-Type', 'text/vtt; charset=utf-8').header('Cache-Control', 'private, max-age=3600').send(vtt) : reply.code(404).send();
     } catch { return reply.code(404).send(); }
+  });
+
+  // HD in this app's own player: the instance's separate H.264 picture and AAC sound, joined by ffmpeg without
+  // re-encoding. Seeking restarts it at ?start= like any conversion; ?height= caps the picture (Auto sends ?auto=).
+  server.get<{ Params: { id: string }; Querystring: { start?: string; height?: string; auto?: string } }>('/api/videos/:id/hd', async (request, reply) => {
+    const { id } = request.params;
+    if (!VIDEO_ID.test(id)) return reply.code(400).send({ message: 'That is not a video.' });
+    const start = Math.max(0, Math.min(7 * 86400, Number(request.query.start) || 0));
+    const height = Math.round(Number(request.query.height) || Number(request.query.auto) || 0);
+    try {
+      const sources = await hdSources(id, height);
+      if (!sources) return reply.code(404).send({ message: 'No HD version of this video.' });
+      return pipeConversion(request, reply, `video:${id}`, () => startRemux(sources.video, sources.audio, start));
+    } catch (error) { return reply.code(502).send({ message: fail(error) }); }
   });
 
   server.get<{ Params: { id: string } }>('/api/videos/:id', async (request, reply) => {
