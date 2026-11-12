@@ -32,6 +32,7 @@ function Tile({ station, hero, favorite, onFavorite }: TileProps) {
     <div className={`rt${hero ? ' rt--hero' : ''}${current ? ' is-playing' : ''}${dead ? ' is-dead' : ''}`}>
       <button type="button" className="rt-main" onClick={() => (current ? radio.setExpanded(true) : radio.play(station))} aria-label={`${current ? 'Now playing' : 'Play'} ${station.name}`}>
         <span className="rt-art">
+          {hero && station.logo && <img className="rt-blur" src={`/api/radio/logo/${station.id}`} alt="" aria-hidden="true" loading="lazy" />}
           <StationLogo station={station} />
           {hero && !dead && <span className="rt-live"><i aria-hidden="true" />LIVE</span>}
           {station.kind === 'playlist' && <span className="rt-live rt-live--quiet" title="A fan-made automatic playlist, not a live broadcast">Playlist</span>}
@@ -39,7 +40,8 @@ function Tile({ station, hero, favorite, onFavorite }: TileProps) {
         </span>
         <span className="rt-text"><strong>{station.name}</strong><span className={dead ? 'rt-dead' : undefined}>{sub}</span></span>
       </button>
-      <button type="button" className={`rt-fav${favorite ? ' is-on' : ''}`} onClick={onFavorite} aria-pressed={favorite} aria-label={favorite ? `Remove ${station.name} from favorites` : `Add ${station.name} to favorites`}>
+      {/* On a TV the remote would stop on every heart; there favourites are set from Now Playing. */}
+      <button type="button" className={`rt-fav${favorite ? ' is-on' : ''}`} onClick={onFavorite} aria-pressed={favorite} tabIndex={document.documentElement.classList.contains('tv') ? -1 : undefined} aria-label={favorite ? `Remove ${station.name} from favorites` : `Add ${station.name} to favorites`}>
         <SvgIcon name={favorite ? 'heart' : 'heart-outline'} size={16} />
       </button>
     </div>
@@ -62,6 +64,7 @@ export default function Radio() {
 
   const loadMine = useCallback(() => { api.radioMe().then(setMine).catch(() => undefined); }, []);
   useEffect(() => { loadMine(); }, [loadMine, radio.station?.id]);
+  useEffect(() => { window.addEventListener('vv-radio-favorites', loadMine); return () => window.removeEventListener('vv-radio-favorites', loadMine); }, [loadMine]);
   useEffect(() => { api.radioCountries().then(r => setCountries(r.countries)).catch(() => undefined); }, []);
   useEffect(() => {
     setRegions([]);

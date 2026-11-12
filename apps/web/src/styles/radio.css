@@ -28,7 +28,9 @@
 .radio-page .rt--hero .rt-art { aspect-ratio: 16 / 10; }
 .radio-page .rt-art .sl { width: 100%; height: 100%; border-radius: 0; border: 0; }
 .radio-page .rt-art .sl img { object-fit: contain; padding: 14px; box-sizing: border-box; }
-.radio-page .rt--hero .rt-art .sl img { padding: 20px; }
+.radio-page .rt--hero .rt-art .sl { position: relative; background: transparent; }
+.radio-page .rt--hero .rt-art .sl img { width: auto; height: auto; max-width: 62%; max-height: 68%; padding: 0; border-radius: var(--radius-medium); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+.radio-page .rt-blur { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(32px) saturate(1.6) brightness(0.6); transform: scale(1.4); }
 .radio-page .rt-art .sl-initials { font-family: var(--font-heading); font-size: clamp(1.4rem, 3vw, 2.2rem); }
 .radio-page .rt-main:hover .rt-art { transform: translateY(-2px); box-shadow: var(--shadow-medium); }
 .radio-page .rt-main:focus-visible .rt-art { box-shadow: 0 0 0 3px var(--color-background), 0 0 0 5px var(--color-border-focus); }
@@ -47,7 +49,8 @@
 .radio-page .rt-text .rt-dead { color: var(--color-warning); }
 .radio-page .rt-fav { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--color-scrim); color: #fff; opacity: 0; transition: opacity var(--duration-fast) var(--easing-default); }
 .radio-page .rt:hover .rt-fav, .radio-page .rt-fav:focus-visible, .radio-page .rt-fav.is-on, .radio-page .rt.is-playing .rt-fav { opacity: 1; }
-.radio-page .rt-fav.is-on { color: #ff6b81; }
+.radio-page .rt-fav.is-on, .rnp-fav.is-on { color: #ff6b81; }
+.rnp-fav { display: inline-flex; align-items: center; gap: 6px; }
 .radio-page .rt-fav:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
 @media (hover: none) { .radio-page .rt-fav { opacity: 1; } .radio-page .rt:not(.is-playing) .rt-play { display: none; } }
 html.tv .radio-page .rt-main:focus-visible .rt-art { transform: scale(1.05); }

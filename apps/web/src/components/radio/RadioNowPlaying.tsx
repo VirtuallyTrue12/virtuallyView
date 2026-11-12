@@ -3,6 +3,7 @@ import { useRadio } from './RadioProvider';
 import { StationLogo } from './StationLogo';
 import { SvgIcon } from '../ui/SvgIcon';
 import { kindLine, mmss, nowLines } from './info';
+import { api } from '../../lib/api';
 
 const tints = new Map<string, string>();
 
@@ -79,6 +80,21 @@ export function RadioNowPlaying() {
     }
   }, [expanded]);
 
+  // The heart lives here too: on a TV the remote skips the small hearts on the tiles.
+  const [favorite, setFavorite] = useState(false);
+  useEffect(() => {
+    if (!expanded || !station) return;
+    let alive = true;
+    api.radioMe().then(m => { if (alive) setFavorite(m.favorites.some(f => f.id === station.id)); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [expanded, station]);
+  const toggleFavorite = () => {
+    if (!station) return;
+    const next = !favorite;
+    setFavorite(next);
+    api.radioFavorite(station.id, next).then(() => window.dispatchEvent(new Event('vv-radio-favorites'))).catch(() => setFavorite(!next));
+  };
+
   useEffect(() => {
     if (!expanded) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(false); };
@@ -139,6 +155,9 @@ export function RadioNowPlaying() {
               <input className="mp-range" type="range" min={0} max={1} step={0.02} value={volume} tabIndex={onTv ? -1 : tab} style={{ ['--v' as string]: volume }} onChange={e => setVolume(Number(e.target.value))} aria-label="Radio volume" />
             </label>
             <div className="np-viz-bar rnp-extras">
+              <button type="button" className={`np-chip rnp-fav${favorite ? ' is-on' : ''}`} onClick={toggleFavorite} aria-pressed={favorite} tabIndex={tab}>
+                <SvgIcon name={favorite ? 'heart' : 'heart-outline'} size={16} />{favorite ? 'In favorites' : 'Add to favorites'}
+              </button>
               <select className="np-chip" value="" onChange={e => setSleep(e.target.value === 'hour' ? minutesToHour() : e.target.value ? Number(e.target.value) : null)} aria-label="Sleep timer" tabIndex={tab}>
                 <option value="">{sleepAt ? `Sleep in ${sleepLeft} min` : 'Sleep timer'}</option>
                 {sleepAt && <option value="0">Cancel sleep timer</option>}
