@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { SvgIcon } from '../ui/SvgIcon';
 
 /**
@@ -8,6 +9,8 @@ import { SvgIcon } from '../ui/SvgIcon';
 export function UpdateBanner() {
   const first = useRef<string | null>(null);
   const [stale, setStale] = useState(false);
+  const { pathname } = useLocation();
+  const shownAt = useRef<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -26,6 +29,13 @@ export function UpdateBanner() {
     document.addEventListener('visibilitychange', onVisible);
     return () => { alive = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
+
+  // A tab left on an old release would keep showing old pages: the next move to another page loads the new one.
+  useEffect(() => {
+    if (!stale) return;
+    if (shownAt.current === null) shownAt.current = pathname;
+    else if (pathname !== shownAt.current) window.location.reload();
+  }, [stale, pathname]);
 
   if (!stale) return null;
   return (

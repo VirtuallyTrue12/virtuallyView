@@ -88,6 +88,8 @@ export default async function lyricsRoutes(server: FastifyInstance) {
       return reply.code(502).send({ message: 'The lyrics service could not be reached.' });
     }
     cache.set(key, { at: Date.now(), value });
+    // Keys come from the request (artist and title), so keep the newest 2000 rather than everything ever asked.
+    if (cache.size > 2000) cache.delete(cache.keys().next().value!);
     return value ?? reply.code(404).send({ message: 'No lyrics found for this track.' });
   });
 }

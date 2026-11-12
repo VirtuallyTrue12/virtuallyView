@@ -246,7 +246,10 @@ export function settleFocus(): void {
     const active = document.activeElement;
     if (active && active !== document.body && document.contains(active)) return;
     const main = document.querySelector('main');
-    const first = main && reachable(main).sort((x, y) => boxOf(x).top - boxOf(y).top || boxOf(x).left - boxOf(y).left)[0];
+    // Areas that handle their own keys (the video player) count too: otherwise the first button under the player
+    // took the focus and the page scrolled the picture half off the screen.
+    const zones = main ? [...main.querySelectorAll<HTMLElement>('[data-dpad="own"][tabindex]')].filter(visible) : [];
+    const first = main && [...reachable(main), ...zones].sort((x, y) => boxOf(x).top - boxOf(y).top || boxOf(x).left - boxOf(y).left)[0];
     if (first) { first.focus({ preventScroll: true }); first.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
     if (++tries < 14) window.setTimeout(attempt, 150);
   };

@@ -77,6 +77,7 @@ export async function scrapeMovie(tmdbId?: number | string, title?: string, year
     };
 
     cache.set(key, result);
+    if (cache.size > 2000) cache.delete(cache.keys().next().value!); // newest 2000 lookups, not every title ever asked
     return result;
   } catch {
     return {};

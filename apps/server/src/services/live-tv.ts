@@ -71,7 +71,8 @@ export function parseM3u(text: string, playlist: string): Channel[] {
       const attr = (key: string) => new RegExp(`${key}="([^"]*)"`, 'i').exec(line)?.[1];
       const name = line.slice(line.lastIndexOf(',') + 1).trim() || attr('tvg-name') || 'Channel';
       const logo = attr('tvg-logo');
-      const group = attr('group-title');
+      // iptv-org files channels it has not sorted under "Undefined", which reads like a bug on screen.
+      const group = attr('group-title')?.split(';').map(g => (g.trim() === 'Undefined' ? 'Other' : g)).join(';');
       // iptv-org style ids carry a feed suffix ("BBCOne.uk@HD"); guides know the channel without it.
       const tvgId = attr('tvg-id')?.replace(/@.*$/, '') || undefined;
       const country = /\.([a-z]{2})$/.exec(tvgId ?? '')?.[1];

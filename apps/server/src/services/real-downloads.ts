@@ -132,6 +132,7 @@ async function artworkFallback(
   }
   // Cache failures too so an unreachable provider is not re-hit every poll.
   fallbackArtCache.set(key, { art, at: Date.now() });
+  if (fallbackArtCache.size > 1000) fallbackArtCache.delete(fallbackArtCache.keys().next().value!);
   return art;
 }
 

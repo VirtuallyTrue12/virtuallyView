@@ -354,7 +354,7 @@
 .lv-row.is-dead { opacity: 0.55; }
 .lv-row-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.85rem; padding: 0.55rem 0.7rem; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 14px; }
 .lv-row-main:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
-.lv-idx { width: 2.2ch; text-align: right; font-size: 0.78rem; color: var(--color-text-muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.lv-idx { min-width: 2.2ch; width: auto; text-align: right; font-size: 0.78rem; color: var(--color-text-muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 .lv-logo { display: grid; place-items: center; flex: 0 0 auto; width: 46px; height: 46px; border-radius: 10px; background: #fff; overflow: hidden; }
 .lv-logo img { width: 100%; height: 100%; object-fit: contain; padding: 4px; box-sizing: border-box; }
 .lv-logo > span { font-weight: 700; color: #333; }

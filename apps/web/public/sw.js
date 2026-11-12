@@ -3,17 +3,18 @@
 // Bump CACHE when the shell logic changes. Hashed /assets files never change, so they stay cached.
 // v2: "On this device" works offline, so /offline (any page URL) falls back to the cached app shell, and
 // the page's own code chunk is cached the first time it is visited online (hashed /assets files below).
-const CACHE = 'vv-shell-v2';
+// v3: a new worker takes over at once (no waiting for every tab to close), so a release's files replace the old ones.
+const CACHE = 'vv-shell-v3';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 
 // Remove caches from older versions so old code does not linger.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((names) => Promise.all(names.filter((n) => n !== CACHE).map((n) => caches.delete(n))))
+    caches.keys().then((names) => Promise.all(names.filter((n) => n !== CACHE).map((n) => caches.delete(n)))).then(() => self.clients.claim())
   );
 });
 

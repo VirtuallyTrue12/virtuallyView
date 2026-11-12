@@ -372,6 +372,19 @@ describe('watch together', () => {
   };
   const ready = (p: Page) => p.waitForFunction(() => { const v = document.querySelector('video'); return !!v && v.readyState >= 3; });
 
+  it('on a TV the remote starts on the player, with the picture in full, not on a button under it', async () => {
+    await mockFilm(page);
+    try {
+      await page.goto(base + '/');
+      await page.evaluate(() => { document.documentElement.classList.add('tv'); (document.activeElement as HTMLElement | null)?.blur(); history.pushState({}, '', '/movies/radarr-540/play'); dispatchEvent(new PopStateEvent('popstate')); });
+      await page.waitForFunction(() => document.activeElement?.getAttribute('data-dpad') === 'own', undefined, { timeout: 8000 });
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    } finally {
+      await page.evaluate(() => document.documentElement.classList.remove('tv'));
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+    }
+  });
+
   it('shares pause and seeking both ways and shows chat to both people', async () => {
     const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 800 }, storageState: await ctx.storageState() });
     try {

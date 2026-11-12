@@ -218,6 +218,10 @@ describe('live tv playlists', () => {
     expect(channels.map(c => c.name)).toEqual(['Channel One', 'Two']);
     expect(channels[0]).toMatchObject({ group: 'News', logo: 'http://x/l.png', url: 'http://h/one.m3u8' });
   });
+  it('shows the unsorted "Undefined" category as Other', () => {
+    const [c] = parseM3u('#EXTM3U\n#EXTINF:-1 group-title="Undefined;Kids",Odd\nhttp://h/odd.m3u8\n', 'p');
+    expect(c?.group).toBe('Other;Kids');
+  });
   it('sends every stream address back through the server, signed', () => {
     const out = rewriteHls('#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="key.bin"\n#EXTINF:4,\nseg1.ts\n', 'http://h/live/index.m3u8');
     const link = /\/api\/live\/relay\?u=([^&]+)&e=(\d+)&s=(\w+)/.exec(out.split('\n')[3] ?? '')!;

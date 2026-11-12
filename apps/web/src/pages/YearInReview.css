@@ -48,6 +48,8 @@
   outline-offset: 2px;
 }
 .yr-arrow:disabled { opacity: 0.3; cursor: default; }
+/* The card shows the focus; the TV-wide ring on the stage around it drew a second frame. */
+.yr-stage:focus-visible, html.tv .yr-stage:focus-visible { outline: none; box-shadow: none; transform: none; }
 
 .yr-stage {
   flex: 1;
