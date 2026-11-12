@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { EQ_BANDS, EQ_PRESETS, useMusicPlayer, type QueueEntry, type RepeatMode } from '../media/MusicProvider';
-import { audioEngine, say, djLine } from '../../lib/audio-engine';
+import { audioEngine } from '../../lib/audio-engine';
 import { LyricStyleToggle, LyricsOverlay, SceneTiles, VizCanvas } from './Visualizer';
 import VizStage from './VizStage';
 import { setViz, useLyricLine, useLyrics, useViz } from '../../lib/viz-store';
@@ -208,37 +208,8 @@ function EqualizerPanel() {
   );
 }
 
-type VoiceOption = { id: string; name: string; natural: boolean };
-
-/** The natural voices on this server (when the voice service runs), then the browser's English voices. */
-function useVoices(): { voices: VoiceOption[]; natural: boolean | null } {
-  const [server, setServer] = useState<{ available: boolean; voices: { id: string; name: string }[] } | null>(null);
-  const [browser, setBrowser] = useState<SpeechSynthesisVoice[]>([]);
-  useEffect(() => {
-    fetch('/api/tts/voices', { credentials: 'same-origin' }).then(r => (r.ok ? r.json() : null)).then(setServer).catch(() => setServer({ available: false, voices: [] }));
-    if (!('speechSynthesis' in window)) return;
-    const load = () => setBrowser(window.speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)));
-    load();
-    window.speechSynthesis.addEventListener('voiceschanged', load);
-    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
-  }, []);
-  const voices: VoiceOption[] = [
-    ...(server?.available ? server.voices.map(v => ({ id: v.id, name: v.name, natural: true })) : []),
-    ...browser.map(v => ({ id: `browser:${v.name}`, name: v.name, natural: false }))
-  ];
-  return { voices, natural: server ? server.available : null };
-}
-
 function MixPanel() {
-  const { crossfade, djMode, djVoice, djFrequency, entry, duration, setCrossfade, setDjMode, setDjVoice, setDjFrequency, djTryNow } = useMusicPlayer();
-  const { voices, natural } = useVoices();
-  const [testing, setTesting] = useState<string | null>(null);
-  const current = djVoice || voices[0]?.id || '';
-  const test = async (id: string) => {
-    setTesting(id);
-    await say(djLine(null, { title: entry?.track.title ?? 'your music', artist: entry?.artistTitle }), id);
-    setTesting(null);
-  };
+  const { crossfade, setCrossfade } = useMusicPlayer();
   return (
     <div className="mix">
       <div className="mix-card">
@@ -248,36 +219,6 @@ function MixPanel() {
           <span className="eq2-val">{crossfade ? `${crossfade} s` : 'Off'}</span>
         </label>
         <p className="mix-help">The end of one song blends into the start of the next, with no gap.</p>
-      </div>
-      <div className="mix-card">
-        <button type="button" role="switch" aria-checked={djMode} className={`toggle${djMode ? ' is-on' : ''}`} onClick={() => setDjMode(!djMode)}>
-          <span className="toggle-knob" aria-hidden="true" />
-          <span><strong>DJ mode</strong> <small>a host who waits a few songs, then talks over intros and outros, never over the singing</small></span>
-        </button>
-        <button type="button" className="btn btn-secondary btn-sm mix-try" onClick={djTryNow} disabled={!(duration >= 60)} title="Jumps near the end of this song so you hear the host at the change">Hear the DJ now</button>
-        {djMode && (
-          <div className="seg" role="radiogroup" aria-label="How often the DJ talks">
-            <span className="seg-label">Talks</span>
-            {([['minimal', 'Rarely'], ['balanced', 'Every few songs'], ['chatty', 'Every song']] as const).map(([id, label]) => (
-              <button key={id} type="button" role="radio" aria-checked={djFrequency === id} className={`seg-btn${djFrequency === id ? ' is-on' : ''}`} onClick={() => setDjFrequency(id)}>{label}</button>
-            ))}
-          </div>
-        )}
-        {djMode && (
-          <div className="mix-voices" role="radiogroup" aria-label="DJ voice">
-            {voices.length === 0 && <p className="mix-help">{natural === null ? 'Looking for voices…' : 'No voice is installed. Turn on the AI profile to get natural voices (see docs). The fades still work.'}</p>}
-            {natural === false && voices.length > 0 && <p className="mix-help">Natural voices are off; using this browser's voices. Start the AI profile for a real radio-host voice.</p>}
-            {voices.slice(0, 12).map(v => (
-              <div key={v.id} className={`mix-voice${current === v.id ? ' is-on' : ''}`}>
-                <button type="button" role="radio" aria-checked={current === v.id} className="mix-voice-pick" onClick={() => setDjVoice(v.id)}>
-                  <span className="mix-voice-name">{v.name}</span>
-                  {v.natural && <span className="mix-voice-tag">Natural</span>}
-                </button>
-                <button type="button" className="chip" onClick={() => void test(v.id)} disabled={testing !== null}>{testing === v.id ? 'Playing…' : 'Preview'}</button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -336,7 +277,7 @@ const savePref = (k: string, v: string) => { try { localStorage.setItem(k, v); }
 type Tab = 'queue' | 'lyrics' | 'visuals' | 'eq' | 'mix' | 'together';
 
 function NowPlaying() {
-  const { entry, expanded, setExpanded, currentTime, duration, error, stopPlayback, getTime, playing, djTalking } = useMusicPlayer();
+  const { entry, expanded, setExpanded, currentTime, duration, error, stopPlayback, getTime, playing } = useMusicPlayer();
   const [tab, setTab] = useState<Tab>(() => loadPref('vv-np-tab', 'queue') as Tab);
   useEffect(() => savePref('vv-np-tab', tab), [tab]);
   const viz = useViz();
@@ -384,7 +325,6 @@ function NowPlaying() {
                   <LyricsOverlay line={line} style={viz.lyricStyle} state={lyrics === undefined ? 'loading' : lyrics?.synced?.length ? 'ok' : 'none'} />
                 </div>
               : <Cover src={entry.cover} label={`${entry.albumTitle ?? entry.track.title} cover`} className="mp-cover--large" />}
-            {djTalking && <span className="np-dj" role="status"><SvgIcon name="music-note" size={14} /> DJ</span>}
             <div className="np-viz-bar">
               <div className="seg" role="radiogroup" aria-label="Show">
                 <button type="button" role="radio" aria-checked={!viz.inPlayer} className={`seg-btn${!viz.inPlayer ? ' is-on' : ''}`} onClick={() => setViz({ inPlayer: false })} tabIndex={expanded ? 0 : -1}>Cover</button>
@@ -409,7 +349,7 @@ function NowPlaying() {
 
           <div className="np-panel">
             <div className="np-tabs" role="tablist" aria-label="Now playing sections">
-              {([['queue', 'Up next'], ['lyrics', 'Lyrics'], ['visuals', 'Visuals'], ['eq', 'Equalizer'], ['mix', 'Mix & DJ'], ['together', 'Together']] as const).map(([key, label]) => (
+              {([['queue', 'Up next'], ['lyrics', 'Lyrics'], ['visuals', 'Visuals'], ['eq', 'Equalizer'], ['mix', 'Mix'], ['together', 'Together']] as const).map(([key, label]) => (
                 <button key={key} type="button" role="tab" aria-selected={tab === key} className={`np-tab${tab === key ? ' is-active' : ''}`} onClick={() => setTab(key)} tabIndex={expanded ? 0 : -1}>{label}</button>
               ))}
             </div>

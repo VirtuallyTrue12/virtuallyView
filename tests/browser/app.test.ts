@@ -744,7 +744,7 @@ describe('music player', () => {
     expect(await page.locator('.eq2-band').count()).toBe(11); // preamp + ten bands
     await page.getByRole('radio', { name: 'Rock' }).click();
     expect(await page.locator('.eq2-band').nth(1).locator('.eq2-gain').textContent()).toBe('+5 dB');
-    await page.getByRole('tab', { name: 'Mix & DJ' }).click();
+    await page.getByRole('tab', { name: 'Mix' }).click();
     await page.getByLabel('Crossfade seconds').waitFor();
     await page.getByRole('tab', { name: 'Lyrics' }).click();
     await page.getByText('No lyrics found for this track.').waitFor();

@@ -15,7 +15,7 @@ const IDLE_MS = 60_000;
  * plays (a screensaver), and then any key or move closes it again.
  */
 export default function VizStage() {
-  const { entry, playing, getTime, toggle, nextTrack, prevTrack, djTalking } = useMusicPlayer();
+  const { entry, playing, getTime, toggle, nextTrack, prevTrack } = useMusicPlayer();
   const viz = useViz();
   const open = viz.stage !== 'closed';
   const tint = useArtworkTint(entry?.cover);
@@ -98,7 +98,6 @@ export default function VizStage() {
     <div ref={root} data-dpad="own" tabIndex={-1} onPointerDown={e => { if (picker && !(e.target as HTMLElement).closest('.vstage-picker, .vstage-pill')) setPicker(false); }} className={`vstage${showChrome ? '' : ' is-quiet'}${auto ? ' is-auto' : ''}`} role="dialog" aria-modal="true" aria-label="Visualizer" style={{ ['--np-tint' as string]: tint }}>
       <VizCanvas scene={viz.scene} tint={tint} className="vstage-canvas" onMood={setMoodPick} stage />
       <div className="vstage-lyrics"><LyricsOverlay line={line} style={viz.lyricStyle} size="lg" state={lyricState} /></div>
-      {djTalking && <span className="np-dj vstage-dj" role="status"><SvgIcon name="music-note" size={14} /> DJ on the mic</span>}
 
       <div className="vstage-song">
         {entry.cover && <img className="vstage-cover" src={entry.cover} alt="" />}

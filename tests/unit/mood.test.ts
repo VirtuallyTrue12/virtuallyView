@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moodFromEnergy, songMood } from '../../apps/web/src/lib/mood';
+import { moodFromEnergy, sadness, songMood } from '../../apps/web/src/lib/mood';
 
 const lines = (...l: string[]) => l;
 
@@ -24,5 +24,13 @@ describe('reading a song’s feeling', () => {
   });
   it('uses the genre as a hint', () => {
     expect(songMood({ title: 'Untitled', genres: ['Ambient'], lyrics: lines('slow and easy', 'breathe') })).toBe('calm');
+  });
+});
+
+describe('how sad a song reads', () => {
+  it('scores sad lyrics high and happy ones low', () => {
+    expect(sadness({ title: 'x', lyrics: ['I cry alone at night', 'all this pain, I am broken', 'tears on the grave'] })).toBeGreaterThan(0.45);
+    expect(sadness({ title: 'x', lyrics: ['dance all night', 'sun is shining, feeling good', 'party with my friends'] })).toBeLessThan(0.2);
+    expect(sadness({ title: 'Lonely' })).toBeGreaterThan(0.45);
   });
 });

@@ -8,7 +8,7 @@ import { MOOD_LABEL } from '../../lib/mood';
 
 /** The top of the Music page while something plays: the live visualizer behind the song and its lyrics. */
 export default function MusicHero() {
-  const { entry, playing, getTime, toggle, nextTrack, setExpanded, djTalking, djMode } = useMusicPlayer();
+  const { entry, playing, getTime, toggle, nextTrack, setExpanded } = useMusicPlayer();
   const viz = useViz();
   const tint = useArtworkTint(entry?.cover);
   const length = entry?.track.durationMs ? entry.track.durationMs / 1000 : undefined;
@@ -25,7 +25,7 @@ export default function MusicHero() {
           ? <img className="mhero-cover" src={entry.cover} alt="" />
           : <span className="mhero-cover mhero-cover--empty" aria-hidden="true"><SvgIcon name="music-note" size={34} /></span>}
         <div className="mhero-text">
-          <p className="mhero-kicker">{djTalking ? 'DJ on the mic' : playing ? (djMode ? 'Now playing · DJ mode' : 'Now playing') : 'Paused'}{viz.scene === 'mood' && moodPick ? ` · feels ${MOOD_LABEL[moodPick.mood].toLowerCase()}` : ''}</p>
+          <p className="mhero-kicker">{playing ? 'Now playing' : 'Paused'}{viz.scene === 'mood' && moodPick ? ` · feels ${MOOD_LABEL[moodPick.mood].toLowerCase()}` : ''}</p>
           <h2 className="mhero-title">{entry.track.title}</h2>
           <p className="mhero-artist">{[entry.artistTitle, entry.albumTitle].filter(Boolean).join(' · ')}</p>
           <div className="mhero-lyric"><LyricsOverlay line={line} style={viz.lyricStyle === 'off' ? 'off' : 'karaoke'} state={lyrics === undefined ? 'loading' : lyrics?.synced?.length ? 'ok' : 'none'} /></div>

@@ -2,10 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { ReactNode } from 'react';
 import type { TrackItem } from '../../lib/api';
 import MusicPlayerUI from '../music/MusicPlayerUI';
-import { audioEngine, EQ_BANDS, EQ_PRESETS, lineSeconds, prepareLine, say } from '../../lib/audio-engine';
-import { DjBrain, type DjBreak, type DjFrequency, type DjSong } from '../../lib/dj-brain';
-import { fetchLyrics } from '../../lib/viz-store';
-import type { Lyrics } from '../../lib/api';
+import { audioEngine, EQ_BANDS, EQ_PRESETS } from '../../lib/audio-engine';
 import { api } from '../../lib/api';
 import { call, isListenView, defaultDeviceName, deviceId, loadDeviceName, saveDeviceName, useDeviceHeartbeat, useDeviceStream, useListenStream, type DeviceCommand, type DeviceInfo, type DeviceState, type ListenRow, type ListenView } from '../../lib/music-together';
 import { toast } from '../ui/Toast';
@@ -22,7 +19,7 @@ export interface QueueEntry {
   artistTitle?: string;
   albumId?: string;
   cover?: string;
-  /** The artist's genres, for the DJ (a long run of one genre gets a mention). */
+  /** The artist's genres, recorded with each play. */
   genres?: string[];
   /** Library artist id (lidarr-<n>), recorded with each play. */
   artistId?: string;
@@ -62,13 +59,6 @@ interface MusicContextValue {
   customPresets: CustomPreset[];
   /** Seconds two tracks overlap when one ends (0 = straight cut). */
   crossfade: number;
-  /** A voice says what is coming up between tracks. */
-  djMode: boolean;
-  djVoice: string;
-  /** How often the DJ talks: every few songs (balanced), rarely, or every song. */
-  djFrequency: DjFrequency;
-  /** The DJ is talking right now. */
-  djTalking: boolean;
   playQueue: (queue: QueueEntry[], startIndex?: number) => void;
   /** Play these in a shuffled order that never puts the same artist twice in a row when it can avoid it. */
   shufflePlay: (tracks: QueueEntry[]) => void;
@@ -91,11 +81,6 @@ interface MusicContextValue {
   saveCustomPreset: (name: string) => void;
   deleteCustomPreset: (name: string) => void;
   setCrossfade: (seconds: number) => void;
-  setDjMode: (on: boolean) => void;
-  setDjVoice: (name: string) => void;
-  setDjFrequency: (f: DjFrequency) => void;
-  /** Try DJ mode without waiting: jump near the end of this song and have the host talk at the change. */
-  djTryNow: () => void;
   /** The browser refused to start audio without a tap: show a "Tap to start" button. */
   blocked: boolean;
   resumePlayback: () => void;
@@ -176,13 +161,6 @@ export function spreadShuffle<T extends { artistTitle?: string }>(items: T[], ra
   return out;
 }
 
-/** A queue row as the DJ sees it. */
-const songOf = (e: QueueEntry, lyrics?: Lyrics | null): DjSong => ({
-  title: e.track.title, artist: e.artistTitle, album: e.albumTitle, genres: e.genres,
-  lyrics: lyrics?.synced?.map(l => l.text) ?? lyrics?.plain?.split('\n')
-});
-const lyricsOf = (e: QueueEntry) => (e.artistTitle ? fetchLyrics(e.artistTitle, e.track.title, e.albumTitle, e.track.durationMs ? e.track.durationMs / 1000 : undefined) : Promise.resolve(null));
-
 const SESSION_KEY = 'vv-music-session';
 const SESSION_MS = 24 * 3600 * 1000;
 type SavedSession = { queue: QueueEntry[]; index: number; time: number; at: number; shuffle: boolean };
@@ -222,10 +200,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [leveller, setLevellerState] = useState(() => load('vv-eq-leveller') === '1');
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>(() => loadJson('vv-eq-custom', (v): v is CustomPreset[] => Array.isArray(v), []));
   const [crossfade, setCrossfadeState] = useState(() => Math.max(0, Math.min(12, Number(load('vv-crossfade') ?? 0) || 0)));
-  const [djMode, setDjModeState] = useState(() => load('vv-dj') === '1');
-  const [djVoice, setDjVoiceState] = useState(() => load('vv-dj-voice') ?? '');
-  const [djTalking, setDjTalking] = useState(false);
-  const [djFrequency, setDjFrequencyState] = useState<DjFrequency>(() => { const f = load('vv-dj-freq'); return f === 'minimal' || f === 'chatty' ? f : 'balanced'; });
   const [blocked, setBlocked] = useState(false);
   const [listen, setListen] = useState<ListenView | null>(null);
   // The session code is read back on a reload (see the restore effect below), so it starts empty.
@@ -253,7 +227,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const shuffleRef = useRef(shuffle); shuffleRef.current = shuffle;
   const repeatRef = useRef(repeat); repeatRef.current = repeat;
   const crossfadeRef = useRef(crossfade); crossfadeRef.current = crossfade;
-  const djRef = useRef({ on: djMode, voice: djVoice }); djRef.current = { on: djMode, voice: djVoice };
   const shuffleOrder = useRef<number[]>([]);
   // True once a shuffled pass has been dealt: when it runs out, repeat decides between a new pass and stopping.
   const shuffleBuilt = useRef(false);
@@ -266,16 +239,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const resumeAt = useRef(restored.current.time);
   // What was played before, so Previous in shuffle goes back to the song you actually heard.
   const history = useRef<number[]>([]);
-  // The DJ: what it remembers of the session, and the break planned for the next change (written, voiced and
-  // placed half a minute ahead: over the next song's intro, over this one's outro, or over a dipped mix).
-  const brain = useRef<DjBrain | null>(null);
-  if (!brain.current) brain.current = new DjBrain(djFrequency);
-  type DjPlan = { index: number; brk: DjBreak | null; mode: 'intro' | 'outro' | 'over' | 'none'; talkAt: number; speed: number; started: boolean };
-  const djPlan = useRef<DjPlan | null>(null);
-  const djPreparing = useRef<number | null>(null);
-  const djSpeaking = useRef(false);
-  const outroBreak = useRef<DjBreak | null>(null);
-  const songLyrics = useRef<{ index: number; lyrics: Lyrics | null } | null>(null);
   // The song that has already counted as played, so each one is recorded once.
   const playCounted = useRef<string | null>(null);
 
@@ -316,7 +279,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setQueue(nextQueue);
     setIndex(target);
     shuffleOrder.current = []; shuffleBuilt.current = false;
-    history.current = []; djPlan.current = null; djPreparing.current = null;
+    history.current = [];
     setError(null);
     if (nextQueue.length) {
       wantPlay.current = true;
@@ -345,7 +308,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (!audio.src) return;
     wantPlay.current = audio.paused;
     if (audio.paused) void audio.play().catch(() => setError('Could not play this track. Check that the file exists on the server.'));
-    else { audio.pause(); other()?.pause(); window.speechSynthesis?.cancel(); }
+    else { audio.pause(); other()?.pause(); }
   }, [ensureGraph, startOn]);
 
   // Close the player: stop audio, drop the queue, hide the bar.
@@ -356,11 +319,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       el.removeAttribute('src');
       el.load();
     }
-    try { window.speechSynthesis?.cancel(); } catch { /* none */ }
-    setDjTalking(false);
     rawSrc.current = '';
     mixing.current = false;
-    history.current = []; djPlan.current = null; djPreparing.current = null;
+    history.current = [];
     shuffleOrder.current = []; shuffleBuilt.current = false;
     wantPlay.current = false;
     setQueue([]);
@@ -395,27 +356,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   const consume = (next: number) => { if (shuffleRef.current && shuffleOrder.current[0] === next) shuffleOrder.current.shift(); };
 
-  /** The song that just finished, for the DJ's memory (with its lyrics when they were looked up). */
-  const noteFinished = useCallback((i: number) => {
-    const e = queueRef.current[i];
-    if (!e || !djRef.current.on) return;
-    brain.current!.noteSong(songOf(e, songLyrics.current?.index === i ? songLyrics.current.lyrics : null));
-  }, []);
-
-  const talk = useCallback(async (plan: DjPlan) => {
-    if (!plan.brk) return;
-    plan.started = true;
-    djSpeaking.current = true;
-    setDjTalking(true);
-    // Over an outro the song is still playing: it counts as heard before the break, so the break is recorded
-    // when the song is (see mixIntoNext), or the next break would come one song early.
-    if (plan.mode === 'outro') outroBreak.current = plan.brk; else brain.current!.commit(plan.brk);
-    // Never let a slow or missing voice hold the music up.
-    await Promise.race([say(plan.brk.text, djRef.current.voice || undefined, undefined, plan.speed), new Promise(r => window.setTimeout(r, 20000))]);
-    djSpeaking.current = false;
-    setDjTalking(false);
-  }, []);
-
   const goNext = useCallback((auto: boolean) => {
     const next = peekNext(auto);
     if (next === null) {
@@ -430,33 +370,26 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       return;
     }
     consume(next);
-    if (auto) noteFinished(indexRef.current);
-    if (outroBreak.current) { brain.current!.commit(outroBreak.current); outroBreak.current = null; }
     history.current = [...history.current.slice(-200), indexRef.current];
     setIndex(next);
-  }, [peekNext, noteFinished]);
+  }, [peekNext]);
 
   /**
-   * DJ mode and crossfade: start the next track on the other deck before this one ends, fade one out and the other
-   * in, and (in DJ mode) say what is coming up over a dipped mix. Without Web Audio it is an ordinary cut.
+   * Crossfade: start the next track on the other deck before this one ends, fade one out and the other in.
+   * Without Web Audio it is an ordinary cut.
    */
   const mixIntoNext = useCallback(async () => {
     const out = live();
     const inc = other();
-    const dj = djRef.current;
-    const fade = crossfadeRef.current || (dj.on ? 5 : 0);
+    const fade = crossfadeRef.current;
     if (!out || !inc || mixing.current || !fade || !audioEngine.ready) return;
     const next = peekNext(true);
     if (next === null || next === indexRef.current) return;
     const q = queueRef.current;
     const to = q[next];
     if (!to) return;
-    const plan = dj.on && djPlan.current?.index === next && !djPlan.current.started && djPlan.current.brk ? djPlan.current : null;
-    djPlan.current = null;
     mixing.current = true;
     consume(next);
-    noteFinished(indexRef.current);
-    if (outroBreak.current) { brain.current!.commit(outroBreak.current); outroBreak.current = null; }
     history.current = [...history.current.slice(-200), indexRef.current];
     audioEngine.level(inc, 0);
     rawSrc.current = urlFor(to);
@@ -470,64 +403,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       if (audioRef.current !== out) { out.pause(); out.removeAttribute('src'); out.load(); }
       mixing.current = false;
     }, after);
-    if (plan && plan.mode === 'intro') {
-      // Over the next song's intro: it comes in low, the last one fades as usual, and the line ends before the
-      // first sung word. Then the new song comes up to full.
-      audioEngine.fade(inc, plan.brk!.soft ? 0.45 : 0.32, 1.2);
-      audioEngine.fade(out, 0, fade);
-      finish((fade + 0.5) * 1000);
-      await talk(plan);
-      audioEngine.fade(inc, 1, 1.5);
-      return;
-    }
-    if (plan && plan.mode === 'over') {
-      audioEngine.fade(out, plan.brk!.soft ? 0.45 : 0.3, 1.5);
-      audioEngine.fade(inc, 0.16, 1.5);
-      await talk(plan);
-      audioEngine.fade(inc, 1, 2.5);
-      audioEngine.fade(out, 0, 2.5);
-      finish(3000);
-      return;
-    }
     audioEngine.fade(inc, 1, fade);
     audioEngine.fade(out, 0, fade);
     finish((fade + 0.5) * 1000);
-  }, [peekNext, noteFinished, talk]);
-
-  /**
-   * In DJ mode, well before the change: decide whether the host talks, voice the line, and find where it fits
-   * without covering singing (the timed lyrics say where the vocals start and stop).
-   */
-  const prepareDj = useCallback(async () => {
-    const cur = indexRef.current;
-    const next = peekNext(true);
-    if (next === null || next === cur || djPlan.current?.index === next || djPreparing.current === next) return;
-    djPreparing.current = next;
-    const q = queueRef.current;
-    const from = q[cur], to = q[next];
-    if (!from || !to) return;
-    const [curL, nextL] = await Promise.all([lyricsOf(from), lyricsOf(to)]);
-    songLyrics.current = { index: cur, lyrics: curL };
-    const after = (shuffleRef.current ? shuffleOrder.current.slice(1, 3) : [next + 1, next + 2]).map(i => q[i]).filter((e): e is QueueEntry => !!e);
-    const brk = brain.current!.plan(songOf(to, nextL), after.map(e => songOf(e)), new Date(), songOf(from, curL));
-    const empty = { index: next, brk: null, mode: 'none' as const, talkAt: 0, speed: 1, started: false };
-    if (!brk) { djPlan.current = empty; return; }
-    const speed = brk.soft ? 0.88 : 1;
-    const voice = djRef.current.voice || undefined;
-    const data = voice?.startsWith('browser:') ? null : await prepareLine(brk.text, voice, speed);
-    const secs = lineSeconds(data, brk.text);
-    const fade = crossfadeRef.current || 5;
-    const firstVocal = nextL?.synced?.find(l => l.text.trim())?.time;
-    const lastVocal = [...(curL?.synced ?? [])].reverse().find(l => l.text.trim())?.time;
-    const length = live()?.duration ?? 0;
-    const outroRoom = lastVocal !== undefined && Number.isFinite(length) ? length - (lastVocal + 3) : -1;
-    let mode: DjPlan['mode'] = 'none';
-    if (firstVocal !== undefined && firstVocal >= secs + 0.8) mode = 'intro';
-    else if (outroRoom >= secs + fade + 1) mode = 'outro';
-    // No lyrics for either: no way to see the singing, so talk over a dipped mix. A kind word or the hour is
-    // worth saying even when both songs are wall-to-wall vocals; anything else waits for a better moment.
-    else if ((firstVocal === undefined && lastVocal === undefined) || brk.reason === 'mood' || brk.reason === 'hour' || brain.current!.force) mode = 'over';
-    djPlan.current = mode === 'none' ? empty : { index: next, brk, mode, talkAt: fade + secs + 1.2, speed, started: false };
   }, [peekNext]);
 
   const nextTrack = useCallback(() => goNext(false), [goNext]);
@@ -630,19 +508,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [eqBands, preamp]);
   const deleteCustomPreset = useCallback((name: string) => setCustomPresets(prev => prev.filter(p => p.name !== name)), []);
   const setCrossfade = useCallback((s: number) => setCrossfadeState(Math.max(0, Math.min(12, Math.round(s)))), []);
-  const setDjMode = useCallback((on: boolean) => { setDjModeState(on); if (on) ensureGraph(); }, [ensureGraph]);
-  const setDjVoice = useCallback((name: string) => setDjVoiceState(name), []);
-  const setDjFrequency = useCallback((f: DjFrequency) => { setDjFrequencyState(f); brain.current!.frequency = f; djPlan.current = null; djPreparing.current = null; }, []);
-  useEffect(() => store('vv-dj-freq', djFrequency), [djFrequency]);
-  const djTryNow = useCallback(() => {
-    const a = live();
-    if (!a || !Number.isFinite(a.duration) || a.duration < 60) return;
-    setDjModeState(true);
-    brain.current!.force = true;
-    djPlan.current = null; djPreparing.current = null;
-    a.currentTime = Math.max(0, a.duration - 45);
-    if (a.paused) { wantPlay.current = true; void a.play().catch(() => undefined); }
-  }, []);
 
   // Volume and mute apply to both decks (the fades live in the audio graph, not on the element).
   useEffect(() => {
@@ -668,8 +533,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   useEffect(() => store('vv-eq-leveller', leveller ? '1' : '0'), [leveller]);
   useEffect(() => store('vv-eq-custom', JSON.stringify(customPresets)), [customPresets]);
   useEffect(() => store('vv-crossfade', String(crossfade)), [crossfade]);
-  useEffect(() => store('vv-dj', djMode ? '1' : '0'), [djMode]);
-  useEffect(() => store('vv-dj-voice', djVoice), [djVoice]);
 
   // The queue and position survive a reload for a day (like a streaming app), then are forgotten.
   useEffect(() => {
@@ -1085,11 +948,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     buffered, buffering: remote ? false : buffering,
     expanded, setExpanded, getTime: remote ? remotePosition : getTime, removeFromQueue: removeR, clearUpcoming: clearUpcomingR,
     eqEnabled, eqPreset, eqBands, preamp, balance,
-    leveller, customPresets, crossfade, djMode, djVoice, djFrequency, djTalking, playQueue: playQueueR, shufflePlay: shufflePlayR,
+    leveller, customPresets, crossfade, playQueue: playQueueR, shufflePlay: shufflePlayR,
     toggle: toggleR, stopPlayback: stopR,
     nextTrack: nextR, prevTrack: prevR, skipTo: skipToR, seek: seekR, setVolume: setVolumeR, toggleMute, toggleShuffle, toggleRepeat,
     setEqEnabled, setEqPreset, setEqBand, setPreamp, setBalance, setLeveller, saveCustomPreset, deleteCustomPreset,
-    setCrossfade, setDjMode, setDjVoice, setDjFrequency, djTryNow,
+    setCrossfade,
     blocked, resumePlayback,
     listen, startListen, joinListen, leaveListen, setEveryoneControl, addToQueue: addToQueueR,
     devices, refreshDevices, deviceName, renameDevice, remote, playOn, endRemote
@@ -1127,21 +990,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       if (!isLive(a)) return;
       setCurrentTime(a.currentTime);
       notePlay(a);
-      const fade = crossfadeRef.current || (djRef.current.on ? 5 : 0);
-      const left = a.duration - a.currentTime;
-      // Crossfade and DJ mode change tracks on their own, so they stay off while the session or another device sets the pace.
+      const fade = crossfadeRef.current;
+      // Crossfade changes tracks on its own, so it stays off while the session or another device sets the pace.
       if (fade && !mixing.current && !listenRef.current && !remoteRef.current && Number.isFinite(a.duration) && a.duration > 30) {
-        if (djRef.current.on) {
-          if (left <= 40) void prepareDj();
-          const plan = djPlan.current;
-          // Over this song's outro: after its last sung line, the music dips and the host talks, then the blend.
-          if (plan?.mode === 'outro' && plan.brk && !plan.started && plan.index === peekNext(true) && left <= plan.talkAt) {
-            audioEngine.fade(a, plan.brk.soft ? 0.5 : 0.35, 1.2);
-            void talk(plan).then(() => { if (audioRef.current === a) audioEngine.fade(a, 0.7, 0.8); });
-          }
-          const lead = plan?.mode === 'over' && !plan.started ? fade + 4 : fade;
-          if (left <= lead && !(djSpeaking.current && left > 1)) void mixIntoNext();
-        } else if (left <= fade) void mixIntoNext();
+        if (a.duration - a.currentTime <= fade) void mixIntoNext();
       }
     },
     onDurationChange: (e: React.SyntheticEvent<HTMLAudioElement>) => { if (isLive(e.currentTarget)) setDuration(e.currentTarget.duration); },

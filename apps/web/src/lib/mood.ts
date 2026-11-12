@@ -1,11 +1,24 @@
-import { sadness, type DjSong } from './dj-brain';
-
 /**
  * The feeling of a song, read from its title, lyrics and genres, for the "By mood" visualizer: rain for a sad
  * song, rose petals for a love song, a sunrise for an uplifting one, fireworks for a party, fireflies for a calm one.
  * Null when the words do not say; the visualizer then goes by how energetic the sound is.
  */
 export type Mood = 'sad' | 'romantic' | 'uplifting' | 'energetic' | 'calm';
+export type Song = { title: string; artist?: string; album?: string; genres?: string[]; lyrics?: string[] };
+
+const SAD = /\b(cry|cryin|crying|cried|tears|alone|lonely|sad|sadness|die|dyin|dying|death|dead|gone|goodbye|broken|break|pain|hurt|hurts|empty|lost|numb|depress\w*|suicid\w*|heartbreak|heartbroken|bleed|bleeding|grave|sorrow|hopeless|drown\w*|demons|anxiety|scared|lonely|miss you|missing you|let me go|without you|over dose|overdose|pills|funeral|rip)\b/g;
+const SAD_GENRES = /sad|emo|blues|ballad|melanchol|grief|slowcore|dark/i;
+
+/** How sad a song reads, from its title, lyrics and genres: 0 (not at all) to 1. */
+export function sadness(song: Song): number {
+  const text = `${song.title} ${(song.lyrics ?? []).join(' ')}`.toLowerCase();
+  const words = Math.max(1, text.split(/\s+/).length);
+  const hits = (text.match(SAD) ?? []).length;
+  const genre = (song.genres ?? []).some(g => SAD_GENRES.test(g)) ? 0.35 : 0;
+  // Lyrics: about one sad word in 40 is a heavy song. Title only: one hit is a strong hint.
+  const fromWords = song.lyrics?.length ? Math.min(1, (hits / words) * 40) : Math.min(1, hits * 0.6);
+  return Math.min(1, fromWords + genre);
+}
 
 const ROMANTIC = /\b(love|lovin|loving|lover|kiss|kisses|darling|forever|beautiful|hold you|hold me|together|you and me|romance|valentine|honey|sweetheart|my heart|your heart|my girl|my baby|in love|fall for|falling for|my love|cuddle|ring|marry|wedding)\b/g;
 const ENERGETIC = /\b(party|dance|dancin|club|turn up|turnt|lit|jump|hype|bounce|wild|let's go|lets go|go hard|rage|mosh|shake it|move it|work it|tonight we|all night|celebrate|pop off|turn it up|loud)\b/g;
@@ -23,7 +36,7 @@ function density(text: string, re: RegExp, words: number): number {
   return ((text.match(re) ?? []).length / words) * 40;
 }
 
-export function songMood(song: DjSong): Mood | null {
+export function songMood(song: Song): Mood | null {
   const text = `${song.title} ${(song.lyrics ?? []).join(' ')}`.toLowerCase();
   const words = Math.max(1, text.split(/\s+/).length);
   const lyricsKnown = (song.lyrics?.length ?? 0) > 3;

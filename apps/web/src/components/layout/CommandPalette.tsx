@@ -30,7 +30,6 @@ export default function CommandPalette() {
       list.push({ group: 'Playing', label: music.playing ? 'Pause music' : 'Resume music', keywords: 'play pause', action: music.toggle });
       list.push({ group: 'Playing', label: 'Next track', keywords: 'skip', action: music.nextTrack });
       list.push({ group: 'Playing', label: 'Previous track', keywords: 'back', action: music.prevTrack });
-      list.push({ group: 'Playing', label: music.djMode ? 'Turn DJ mode off' : 'Turn DJ mode on', keywords: 'voice narration', action: () => music.setDjMode(!music.djMode) });
     }
     if (radio.station) list.push({ group: 'Playing', label: `Stop radio (${radio.station.name})`, action: radio.stop });
     for (const [label, path, keywords] of PAGES) list.push({ group: 'Go to', label, keywords, action: () => navigate(path) });

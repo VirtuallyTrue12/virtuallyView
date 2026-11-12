@@ -1,5 +1,5 @@
 /**
- * The music player's sound path, shared by the equalizer, the visualizers and DJ mode.
+ * The music player's sound path, shared by the equalizer and the visualizers.
  *
  *   deck A ─ gain ─┐
  *                  ├─ preamp ─ 10 EQ bands ─ balance ─ leveller ─ analyser ─ speakers
@@ -58,35 +58,6 @@ class AudioEngine {
   private leveller: DynamicsCompressorNode | null = null;
   private state: EqState = { enabled: false, gains: EQ_PRESETS.flat!.gains, preamp: 0, balance: 0, leveller: false };
   private failed = false;
-  private voiceBus: GainNode | null = null;
-
-  /** A context for the voice even when no music has played yet (radio announcements). */
-  private context(): AudioContext | null {
-    if (this.ctx) return this.ctx;
-    if (this.failed) return null;
-    try { this.attach([]); } catch { /* no Web Audio */ }
-    return this.ctx;
-  }
-
-  /**
-   * Plays a spoken line over the music, on its own path so the equalizer never colours it. Resolves when the line
-   * ends. Returns false when the line could not be played this way.
-   */
-  async playVoice(data: ArrayBuffer, onStart?: (seconds: number) => void): Promise<boolean> {
-    const ctx = this.context();
-    if (!ctx) return false;
-    try {
-      await this.resume();
-      const buffer = await ctx.decodeAudioData(data);
-      if (!this.voiceBus) { this.voiceBus = ctx.createGain(); this.voiceBus.gain.value = 1.15; this.voiceBus.connect(ctx.destination); }
-      const src = ctx.createBufferSource();
-      src.buffer = buffer;
-      src.connect(this.voiceBus);
-      onStart?.(buffer.duration);
-      await new Promise<void>(resolve => { src.onended = () => resolve(); src.start(); });
-      return true;
-    } catch { return false; }
-  }
 
   /** Builds the graph (once) and connects these elements. Returns false when Web Audio is not available. */
   attach(elements: HTMLAudioElement[]): boolean {
@@ -197,92 +168,3 @@ class AudioEngine {
 }
 
 export const audioEngine = new AudioEngine();
-
-/** The voice chosen in Mix & DJ: a server voice id (Piper) or a browser voice name. */
-const voiceCache = new Map<string, Promise<ArrayBuffer | null>>();
-
-/** Fetches (and keeps) the spoken line, so it can be ready before the moment it is needed. */
-export function prepareLine(text: string, voice?: string, speed = 1): Promise<ArrayBuffer | null> {
-  const key = `${voice ?? ''}|${speed}|${text}`;
-  let hit = voiceCache.get(key);
-  if (!hit) {
-    const params = new URLSearchParams({ text, ...(voice && !voice.startsWith('browser:') ? { voice } : {}), ...(speed !== 1 ? { speed: String(speed) } : {}) });
-    hit = fetch(`/api/tts?${params}`, { credentials: 'same-origin' }).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
-    voiceCache.set(key, hit);
-    if (voiceCache.size > 30) voiceCache.delete(voiceCache.keys().next().value!);
-  }
-  return hit;
-}
-
-/**
- * Says a line: the natural server voice when it is installed, otherwise the browser's own voice, otherwise
- * nothing (and quickly, so the music never waits on a voice that will not come).
- */
-export async function say(text: string, voice?: string, onStart?: (seconds: number) => void, speed = 1): Promise<void> {
-  if (!voice?.startsWith('browser:')) {
-    const data = await prepareLine(text, voice, speed);
-    // decodeAudioData detaches the buffer it is given: hand it a copy so a cached line can be said again.
-    if (data && await audioEngine.playVoice(data.slice(0), onStart)) return;
-  }
-  const hasVoices = typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0;
-  if (!hasVoices) return;
-  onStart?.(Math.max(2, text.split(' ').length / 2.6));
-  await speak(text, voice?.replace(/^browser:/, ''), speed < 1 ? 0.9 : 1.02);
-}
-
-/** How long a prepared line lasts, from its WAV header; an estimate from the words when there is no file. */
-export function lineSeconds(data: ArrayBuffer | null, text: string): number {
-  if (data && data.byteLength > 44) {
-    const v = new DataView(data);
-    const rate = v.getUint32(24, true), bytesPerSec = v.getUint32(28, true);
-    if (rate > 0 && bytesPerSec > 0) return (data.byteLength - 44) / bytesPerSec;
-  }
-  return Math.max(2, text.split(/\s+/).length / 2.6);
-}
-
-/** Speaks a line with the browser's own voices. Resolves when done (or at once when speech is not available). */
-export function speak(text: string, voiceName?: string, rate = 1.02): Promise<void> {
-  return new Promise(resolve => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) { resolve(); return; }
-    try {
-      const u = new SpeechSynthesisUtterance(text);
-      const voices = window.speechSynthesis.getVoices();
-      const voice = voices.find(v => v.name === voiceName) ?? voices.find(v => /en[-_](US|GB)/i.test(v.lang) && /natural|neural|google|samantha|daniel/i.test(v.name)) ?? voices.find(v => /^en/i.test(v.lang));
-      if (voice) u.voice = voice;
-      u.rate = rate;
-      u.pitch = 1;
-      const done = () => { clearTimeout(guard); resolve(); };
-      // Some engines never fire "end": never let a narration hold up the music.
-      const guard = setTimeout(done, 12000);
-      u.onend = done;
-      u.onerror = done;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-    } catch { resolve(); }
-  });
-}
-
-const pick = <T,>(list: T[]): T => list[Math.floor(Math.random() * list.length)]!;
-
-/** What the DJ says between two tracks. Varied so it does not sound like a loop. */
-export function djLine(prev: { title: string; artist?: string } | null, next: { title: string; artist?: string }): string {
-  const by = (t: { title: string; artist?: string }) => (t.artist ? `${t.title} by ${t.artist}` : t.title);
-  const hour = new Date().getHours();
-  const timeOfDay = hour < 5 ? 'late night' : hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : hour < 21 ? 'evening' : 'night';
-  const intros = [
-    `Up next, ${by(next)}.`,
-    `Here's ${by(next)}.`,
-    `Keeping it going with ${by(next)}.`,
-    `Coming up for your ${timeOfDay}: ${by(next)}.`,
-    `Let's switch it up. This is ${by(next)}.`,
-    `You're listening to virtually View. Next, ${by(next)}.`
-  ];
-  if (!prev || Math.random() < 0.35) return pick(intros);
-  const outros = [`That was ${by(prev)}.`, `${by(prev)}, nice.`, `You just heard ${by(prev)}.`];
-  return `${pick(outros)} ${pick(intros)}`;
-}
-
-export function radioLine(name: string, extra?: string): string {
-  const intros = [`Tuning in to ${name}.`, `Now playing: ${name}.`, `Switching over to ${name}.`, `You're now listening to ${name}.`];
-  return `${pick(intros)}${extra ? ` ${extra}.` : ''}`;
-}

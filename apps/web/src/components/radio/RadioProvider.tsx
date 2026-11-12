@@ -2,7 +2,6 @@ import Hls from 'hls.js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, type RadioStation } from '../../lib/api';
 import { useMusicPlayer } from '../media/MusicProvider';
-import { radioLine, say } from '../../lib/audio-engine';
 import { RadioBar } from './RadioBar';
 import { RadioNowPlaying } from './RadioNowPlaying';
 
@@ -21,29 +20,18 @@ interface RadioContextValue {
   toggle: () => void;
   stop: () => void;
   setVolume: (v: number) => void;
-  /** A voice says the station's name when you switch. */
-  announce: boolean;
-  setAnnounce: (on: boolean) => void;
   /** When the sleep timer stops the radio (ms since epoch), or null. */
   sleepAt: number | null;
   setSleep: (minutes: number | null) => void;
 }
 
 const RadioContext = createContext<RadioContextValue | null>(null);
-/** Station lists use official names; say what a person would. */
-function spokenCountry(name: string): string {
-  const short: Record<string, string> = { 'the united kingdom of great britain and northern ireland': 'the UK', 'the united states of america': 'the US', 'united states': 'the US', 'the russian federation': 'Russia', 'the netherlands': 'the Netherlands', 'republic of korea': 'South Korea', 'the islamic republic of iran': 'Iran' };
-  return short[name.toLowerCase()] ?? name;
-}
 
 export function useRadio(): RadioContextValue {
   const value = useContext(RadioContext);
   if (!value) throw new Error('useRadio must be used inside RadioProvider.');
   return value;
 }
-
-/** The voice picked for DJ mode also announces stations. */
-const readVoice = (): string | undefined => { try { return localStorage.getItem('vv-dj-voice') || undefined; } catch { return undefined; } };
 
 const readVolume = (): number => { try { const v = Number(localStorage.getItem('vv-radio-volume') ?? '1'); return v >= 0 && v <= 1 ? v : 1; } catch { return 1; } };
 
@@ -59,10 +47,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   const [volume, setVolumeState] = useState(readVolume);
   const [expanded, setExpanded] = useState(false);
   const retried = useRef(false);
-  const [announce, setAnnounceState] = useState(() => { try { return localStorage.getItem('vv-radio-announce') !== '0'; } catch { return true; } });
   const [sleepAt, setSleepAt] = useState<number | null>(null);
   const volumeRef = useRef(volume); volumeRef.current = volume;
-  const announceRef = useRef(announce); announceRef.current = announce;
 
   const release = useCallback(() => {
     hls.current?.destroy(); hls.current = null;
@@ -88,21 +74,9 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     music.stopPlayback();
     retried.current = false;
     setStation(s); setState('loading'); setError(null); setNowTitle(null);
-    const el = audio.current;
-    if (announceRef.current && el) {
-      // Like a real dial: the new station comes in low under a short announcement, then up to full volume.
-      el.volume = volumeRef.current * 0.2;
-      const extra = [s.tags[0], s.country ? `from ${spokenCountry(s.country)}` : ''].filter(Boolean).join(' ');
-      void say(radioLine(s.name, extra), readVoice()).then(() => {
-        const target = volumeRef.current;
-        let v = el.volume;
-        const id = window.setInterval(() => { v = Math.min(target, v + target / 12); el.volume = v; if (v >= target) window.clearInterval(id); }, 80);
-      });
-    }
     load(s);
     void api.radioPlayed(s.id).catch(() => undefined);
   }, [music, load]);
-  const setAnnounce = useCallback((on: boolean) => { setAnnounceState(on); try { localStorage.setItem('vv-radio-announce', on ? '1' : '0'); } catch { /* fine */ } }, []);
   const setSleep = useCallback((minutes: number | null) => setSleepAt(minutes ? Date.now() + minutes * 60000 : null), []);
 
   const stop = useCallback(() => { release(); setStation(null); setState('idle'); setError(null); setNowTitle(null); setExpanded(false); }, [release]);
@@ -168,8 +142,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
   }, [station, nowTitle, toggle, stop]);
 
   const value = useMemo<RadioContextValue>(
-    () => ({ station, state, error, nowTitle, volume, expanded, setExpanded, play, toggle, stop, setVolume, announce, setAnnounce, sleepAt, setSleep }),
-    [station, state, error, nowTitle, volume, expanded, play, toggle, stop, setVolume, announce, setAnnounce, sleepAt, setSleep]
+    () => ({ station, state, error, nowTitle, volume, expanded, setExpanded, play, toggle, stop, setVolume, sleepAt, setSleep }),
+    [station, state, error, nowTitle, volume, expanded, play, toggle, stop, setVolume, sleepAt, setSleep]
   );
   return (
     <RadioContext.Provider value={value}>
