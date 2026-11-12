@@ -980,11 +980,75 @@ const fern: Scene = {
 
 const sierpinski: Scene = { gl: sierpinskiGl, id: 'sierpinski', name: 'Sierpinski' };
 
+const pulse: Scene = {
+  id: 'pulse', name: 'Pulse',
+  draw: f => {
+    const { ctx, w, h, hue, bass } = f;
+    fade(f, 'rgba(3,4,10,0.35)');
+    const count = small(f) ? 24 : 64, bw = w / (count * 2);
+    for (let i = 0; i < count; i++) {
+      const v = f.band(i, count);
+      const bh = Math.max(2, v * h * 0.46);
+      ctx.fillStyle = `hsla(${(hue + i * 4) % 360},90%,${50 + v * 25}%,0.95)`;
+      for (const x of [w / 2 + i * bw, w / 2 - (i + 1) * bw]) ctx.fillRect(x + 1, h / 2 - bh, bw - 2, bh * 2);
+    }
+    ctx.fillStyle = `rgba(255,255,255,${0.15 + bass * 0.5})`; ctx.fillRect(0, h / 2 - 1, w, 2);
+  }
+};
+
+const spikes: Scene = {
+  id: 'spikes', name: 'Spikes',
+  draw: f => {
+    const { ctx, w, h, hue, bass } = f;
+    fade(f, 'rgba(2,2,8,0.25)');
+    const cx = w / 2, cy = h / 2, base = Math.min(w, h) * 0.12, n = small(f) ? 24 : 64;
+    ctx.save(); ctx.translate(cx, cy); ctx.globalCompositeOperation = 'lighter';
+    for (const [dir, scale, shift] of [[1, 1, 0], [-1, 0.6, 120]] as const) {
+      ctx.save(); ctx.rotate(dir * f.t * 0.006); ctx.scale(scale, scale);
+      ctx.beginPath();
+      for (let i = 0; i <= n * 2; i++) {
+        const a = (i / (n * 2)) * TAU;
+        const r = i % 2 ? base * (1 + bass) : base + f.ring(i / 2, n) * Math.min(w, h) * 0.42;
+        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath();
+      const g = ctx.createRadialGradient(0, 0, base * 0.5, 0, 0, Math.min(w, h) * 0.5);
+      g.addColorStop(0, `hsla(${(hue + shift) % 360},95%,55%,0.18)`); g.addColorStop(0.5, `hsla(${(hue + shift + 40) % 360},95%,60%,0.3)`); g.addColorStop(1, `hsla(${(hue + shift + 80) % 360},95%,50%,0.08)`);
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = `hsla(${(hue + shift) % 360},100%,75%,0.7)`; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore(); ctx.globalCompositeOperation = 'source-over';
+  }
+};
+
+const lissajous: Scene = {
+  id: 'lissajous', name: 'Lissajous',
+  draw: f => {
+    const { ctx, w, h, hue, wave, t } = f;
+    fade(f, 'rgba(2,3,8,0.1)');
+    const R = Math.min(w, h) * 0.42, lag = 96;
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.rotate(t * 0.003);
+    ctx.beginPath();
+    // One moment of the waveform against itself a little later: the figures of an X-Y oscilloscope.
+    // Averaged over a few samples, so the line draws curves instead of jitter.
+    const at = (i: number) => (wave[i - 2]! + wave[i - 1]! + wave[i]! + wave[i + 1]! + wave[i + 2]! - 640) / 640;
+    for (let i = 2; i + lag + 2 < wave.length; i += 3) {
+      const x = at(i) * R * 1.8, y = at(i + lag) * R * 1.8;
+      if (i === 2) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = `hsla(${hue % 360},95%,65%,0.45)`; ctx.lineWidth = small(f) ? 1 : 1.3;
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+
 /** In picker order, grouped: feelings, spectrum, waves, space, geometry, fractals, fields. */
 export const SCENE_LIST: Scene[] = [
   rain, petals, sunrise, fireworks, fireflies, snow,
-  bars, led, radial, vu, waterfall,
-  mist, waves, aurora, scope, terrain,
+  bars, led, radial, pulse, spikes, vu, waterfall,
+  mist, waves, aurora, scope, lissajous, terrain,
   alchemy, plenoptic, starfield, galaxy, fountain, bubbles,
   tunnel, ripples, kaleidoscope, battery, lightning, colors, matrix,
   mandelbrot, julia, fractalTree, fern, sierpinski,

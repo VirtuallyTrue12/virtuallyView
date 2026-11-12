@@ -51,7 +51,11 @@ vec3 hueTurn(vec3 c, float a) {
 vec3 tpal(float t) {
   vec3 base = uTint / max(max(uTint.r, uTint.g), max(uTint.b, 0.01));
   base = clamp(mix(vec3(dot(base, vec3(0.3, 0.59, 0.11))), base, 1.8), 0.0, 1.0);
-  return clamp(hueTurn(base, sin(TAU * t) * 0.8), 0.0, 1.0) * (0.75 + 0.25 * cos(TAU * (t * 0.5 + 0.1)));
+  // A grey or missing cover would turn into grey everywhere: start from a vivid colour instead.
+  float sat = max(max(base.r, base.g), base.b) - min(min(base.r, base.g), base.b);
+  base = mix(vec3(1.0, 0.35, 0.6), base, smoothstep(0.15, 0.4, sat));
+  // The whole colour wheel, starting from the cover colour: a narrow swing around one hue looked washed out.
+  return clamp(hueTurn(base, TAU * t), 0.0, 1.0) * (0.8 + 0.2 * cos(TAU * (t * 0.5 + 0.1)));
 }
 `;
 

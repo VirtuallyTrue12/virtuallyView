@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Visualizers get their life back: they react to the music at once again instead of drifting, loud hits stand out, colours travel the whole wheel (starting from the album cover's colour), the glow is stronger, and Pulse, Spikes and Lissajous are back. Reduced-motion settings now only slow them a little.
+
 - Visualizers: smoother and lighter. Music is read once per frame for every visualizer on screen and split into log-spaced bands, so bass, mids and highs each move their own part of the picture, rising fast and falling gently instead of flickering. Colours follow the album cover. A soft glow layer replaces costly canvas shadows; Galaxy is now drawn on the GPU (a spiral with gas, dust and young stars). Pixel density is capped (1.5, 1 on a TV) and the resolution lowers by itself when frames run late, then recovers. With reduced motion turned on in the system, scenes run calmly at less than half speed with no beat flashes. Alchemy, Fountain, Plenoptic, Fern, Fireworks and the tree use a fraction of the CPU they did. Pulse, Spikes and Lissajous were removed (Bars, Radial and Scope do the same, better).
 
 - Live TV: more free public lists with one click in Sources (India, Hindi, Tamil, Telugu, Malayalam, Kannada, Bengali, Marathi, Gujarati, Punjabi, English news, and science, education, entertainment, family, travel, animation and more). A channel that is in several lists now shows once. A slow background check tests each stream (playlist and a video piece) every 24 hours and hides channels that fail twice; "Show channels that may not work" brings them back, and a green dot marks channels that answered. Country, language and Space chips make India, sports, kids and the rest easy to reach with the remote.

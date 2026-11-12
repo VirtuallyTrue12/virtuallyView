@@ -26,7 +26,8 @@ export function logBands(freq: ArrayLike<number>, rate: number, out: Float32Arra
       m = (freq[k] ?? 0) * (1 - fr) + (freq[k + 1] ?? 0) * fr;
     } else for (let b = Math.floor(b0); b < Math.ceil(b1) && b < bins; b++) m = Math.max(m, freq[b] ?? 0);
     // Treble carries less energy in music: tilt it up a little so the high end is not always flat.
-    out[i] = Math.min(1, (m / 255) * (0.92 + (i / out.length) * 0.3));
+    // Expanded (power curve) so loud peaks stand out from the quieter bands instead of everything sitting level.
+    out[i] = Math.min(1, Math.pow((m / 255) * (0.92 + (i / out.length) * 0.35), 1.35) * 1.2);
   }
   return out;
 }
@@ -84,8 +85,8 @@ export function readAudio(ts: number, calm = false): Audio {
   const an = audioEngine.analyser;
   if (an) { an.getByteFrequencyData(audio.freq); an.getByteTimeDomainData(audio.wave); } else { audio.freq.fill(0); audio.wave.fill(128); }
   logBands(audio.freq, audioEngine.ctx?.sampleRate ?? 48000, raw);
-  // Calm (reduced motion): everything moves at a third of the speed.
-  const atk = calm ? 0.15 : 0.6, rel = calm ? 0.04 : 0.1;
+  // The analyser already smooths; on top of it rise at once and fall fast, so hits land with their full punch.
+  const atk = calm ? 0.5 : 1, rel = calm ? 0.12 : 0.3;
   for (let i = 0; i < BANDS; i++) audio.bands[i] = follow(audio.bands[i]!, raw[i]!, step, atk, rel);
   const bassNow = range(raw, 35, 250);
   audio.bass = follow(audio.bass, bassNow, step, atk, rel * 0.8);
@@ -95,7 +96,7 @@ export function readAudio(ts: number, calm = false): Audio {
   // A beat: the bass jumps well above its running average (and not twice within a quarter of a second).
   bassAvg += (bassNow - bassAvg) * (1 - Math.pow(0.95, step));
   beatCool -= step;
-  if (!calm && beatCool <= 0 && bassNow > 0.3 && bassNow > bassAvg * 1.3) { audio.beats++; beatCool = 14; }
+  if (!calm && beatCool <= 0 && bassNow > 0.22 && bassNow > bassAvg * 1.3) { audio.beats++; beatCool = 14; }
   return audio;
 }
 

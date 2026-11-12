@@ -75,7 +75,7 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       cv.width = Math.max(1, Math.round(f.w * scale)); cv.height = Math.max(1, Math.round(f.h * scale));
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
       const bl = bloomCanvas.current;
-      if (bl) { bl.width = Math.max(1, Math.round(f.w / 8)); bl.height = Math.max(1, Math.round(f.h / 8)); }
+      if (bl) { bl.width = Math.max(1, Math.round(f.w / 4)); bl.height = Math.max(1, Math.round(f.h / 4)); }
     };
     resize();
     const ro = new ResizeObserver(resize); ro.observe(cv);
@@ -155,17 +155,18 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       if (due && ts < due - 4) return;
       due = Math.max((due || ts) + interval, ts - interval);
       const realStep = lastDraw ? Math.min(4, (ts - lastDraw) / (1000 / 60)) : 1;
-      // Calm (reduced motion): the same scenes at less than half the speed, no beat flashes.
-      f.step = calm ? realStep * 0.4 : realStep;
+      // Calm (reduced motion): a little slower and no beat flashes; the visualizer is something people turn on to watch.
+      f.step = calm ? realStep * 0.75 : realStep;
       f.t += f.step;
       glTime += f.step / 60;
       lastDraw = ts;
       audio = readAudio(ts, calm);
       f.freq = audio.freq; f.wave = audio.wave;
-      const damp = calm ? 0.6 : 1;
+      const damp = calm ? 0.85 : 1;
       f.bass = audio.bass * damp; f.mids = audio.mids * damp; f.treble = audio.treble * damp; f.level = audio.level * damp;
       f.hue = tintSat > 0.15
-        ? (tintHue + 32 * Math.sin(f.t * 0.0025) + f.bass * 28 + 360) % 360
+        // Starts from the cover's colour, then travels the whole wheel as before: one hue all song looked flat.
+        ? (tintHue + f.t * 0.2 + f.bass * 70) % 360
         : (f.t * 0.2 + f.bass * 70) % 360;
       f.beat = audio.beats !== seenBeats;
       seenBeats = audio.beats;
@@ -178,7 +179,7 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
         ctx.setTransform(scale, 0, 0, scale, 0, 0);
         ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.shadowBlur = 0;
         ctx.fillStyle = '#000'; ctx.fillRect(0, 0, f.w, f.h);
-        showGl(!!next.gl, next.glow ?? 0.55);
+        showGl(!!next.gl, next.glow ?? 0.9);
       }
       if (next.gl && gpu) {
         for (let i = 0; i < 128; i++) spectrum[i] = Math.round(f.band(i, 128) * 255);
@@ -195,7 +196,7 @@ export function VizCanvas({ scene, tint = '120, 128, 160', variant = 'full', cla
       if (bloomOn && bloom) {
         const bc = bloom.canvas;
         bloom.globalCompositeOperation = 'copy';
-        bloom.filter = 'blur(1.5px)';
+        bloom.filter = 'blur(3px) brightness(1.3)';
         bloom.drawImage(cv, 0, 0, bc.width, bc.height);
       }
     };
