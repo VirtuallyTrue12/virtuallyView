@@ -1226,45 +1226,117 @@ describe('stuck downloads, menus and the theme creator', () => {
 
 describe('radio, one-press repair and live highlights', () => {
   const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-  it('radio: pick a country and region, play a station from the bar, keep a favorite', async () => {
-    const hearts: unknown[] = [];
-    const station = { id: '6b36ba4f-6d29-4272-b3c0-9aeeb64e61ec', name: 'Mirchi Top 20', country: 'India', countryCode: 'IN', state: 'Delhi', tags: ['bollywood'], codec: 'MP3', bitrate: 128, votes: 5, logo: false };
-    const asked: string[] = [];
+  // Radio tests: the server's /api/radio routes are mocked; the audio is a short silent WAV so playback really starts.
+  const silentWav = () => {
+    const rate = 8000, seconds = 60, data = Buffer.alloc(rate * seconds, 128);
+    const head = Buffer.alloc(44);
+    head.write('RIFF', 0); head.writeUInt32LE(36 + data.length, 4); head.write('WAVEfmt ', 8); head.writeUInt32LE(16, 16);
+    head.writeUInt16LE(1, 20); head.writeUInt16LE(1, 22); head.writeUInt32LE(rate, 24); head.writeUInt32LE(rate, 28);
+    head.writeUInt16LE(1, 32); head.writeUInt16LE(8, 34); head.write('data', 36); head.writeUInt32LE(data.length, 40);
+    return Buffer.concat([head, data]);
+  };
+  const radioStation = (n: number, extra: Record<string, unknown> = {}) => ({
+    id: `6b36ba4f-6d29-4272-b3c0-9aeeb64e${String(n).padStart(4, '0')}`, name: `Test FM ${n}`, country: 'India', countryCode: 'IN', state: 'Delhi', language: 'hindi',
+    tags: ['news'], topics: ['news'], codec: 'MP3', bitrate: 128, votes: 5, logo: false, kind: 'live', health: 'ok', ...extra
+  });
+  const mockRadio = async (home: Record<string, unknown>, opts: { live?: number } = {}) => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    const seen: string[] = [];
     await page.route('**/api/radio/countries', r => r.fulfill(json({ countries: [{ name: 'India', code: 'IN', stations: 900 }, { name: 'Norway', code: 'NO', stations: 300 }] })));
-    await page.route('**/api/radio/regions**', r => r.fulfill(json({ regions: r.request().url().includes('country=IN') ? [{ name: 'Delhi', code: 'Delhi', stations: 6 }] : [] })));
-    await page.route('**/api/radio/tags', r => r.fulfill(json({ tags: [{ name: 'news', stations: 10 }] })));
-    await page.route('**/api/radio/stations**', r => { asked.push(new URL(r.request().url()).search); return r.fulfill(json({ stations: [station], more: false })); });
+    await page.route('**/api/radio/regions**', r => r.fulfill(json({ regions: [{ name: 'Delhi', code: 'Delhi', stations: 6 }] })));
     await page.route('**/api/radio/me', r => r.fulfill(json({ favorites: [], recent: [] })));
-    await page.route('**/api/radio/favorite', r => { hearts.push(r.request().postDataJSON()); return r.fulfill(json({ ok: true })); });
+    await page.route('**/api/radio/home**', r => { seen.push(new URL(r.request().url()).search); return r.fulfill(json(home)); });
+    await page.route('**/api/radio/favorite', r => r.fulfill(json({ ok: true })));
     await page.route('**/api/radio/played', r => r.fulfill(json({ ok: true })));
-    await page.route('**/api/radio/now/**', r => r.fulfill(json({ title: 'Artist - Song' })));
-    await page.route('**/api/radio/stream/**', r => r.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"off in a test"}' }));
+    await page.route('**/api/radio/now/**', r => r.fulfill(json({ title: 'Artist - Song', artist: 'Artist', song: 'Song' })));
+    await page.route('**/api/radio/live/**', r => { seen.push(new URL(r.request().url()).pathname); return r.fulfill({ status: opts.live ?? 503, contentType: 'application/json', body: '{"message":"The rewind buffer is busy. The station plays live instead."}' }); });
+    await page.route('**/api/radio/stream/**', r => { seen.push(new URL(r.request().url()).pathname); return r.fulfill({ status: 200, contentType: 'audio/wav', body: silentWav() }); });
+    return seen;
+  };
+  const rowOf = (n: number, count: number) => Array.from({ length: count }, (_, i) => radioStation(n + i));
+
+  it('radio: rows by topic, hidden stations behind Show all, favorite hearts', async () => {
+    const dead = radioStation(99, { health: 'dead' });
+    const hearts: unknown[] = [];
+    const seen = await mockRadio({ featured: rowOf(1, 3), hidden: 2, rows: [{ id: 'news', title: 'News', stations: rowOf(10, 4) }, { id: 'lang-hindi', title: 'Hindi', stations: rowOf(20, 3) }, { id: 'devotional', title: 'Devotional', stations: rowOf(30, 2) }] });
+    await page.route('**/api/radio/home?*all=1*', r => { seen.push('all'); return r.fulfill(json({ featured: [], hidden: 0, rows: [{ id: 'news', title: 'News', stations: [...rowOf(10, 3), dead] }] })); });
+    await page.route('**/api/radio/favorite', r => { hearts.push(r.request().postDataJSON()); return r.fulfill(json({ ok: true })); });
     await page.goto(base + '/radio');
-    await page.getByRole('heading', { name: 'Radio' }).waitFor();
-    await page.getByRole('button', { name: 'Play Mirchi Top 20' }).waitFor();
-    await page.getByLabel('Country').selectOption('IN');
-    await page.getByLabel('Region').selectOption('Delhi');
-    await page.waitForTimeout(300);
-    expect(asked.some(q => q.includes('country=IN') && q.includes('region=Delhi'))).toBe(true);
-    await page.getByRole('button', { name: 'Add Mirchi Top 20 to favorites' }).click();
+    await page.getByRole('heading', { name: 'Radio', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'On air now' }).waitFor();
+    await page.getByRole('heading', { name: 'News', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Hindi', exact: true }).waitFor();
+    // A two-station row is folded into one tidy row instead of showing alone.
+    expect(await page.getByRole('heading', { name: 'Devotional' }).count()).toBe(0);
+    await page.getByRole('heading', { name: 'More to explore' }).waitFor();
+    await page.getByRole('button', { name: 'Play Test FM 1', exact: true }).first().waitFor();
+    await page.getByText(/^News · Hindi$/).first().waitFor();
+    await page.getByText('2 not answering.').waitFor();
+    await page.getByRole('button', { name: 'Add Test FM 1 to favorites' }).first().click();
     await page.waitForTimeout(150);
-    expect(hearts).toEqual([{ id: station.id, favorite: true }]);
-    await page.getByRole('button', { name: 'Play Mirchi Top 20' }).click();
+    expect(hearts).toEqual([{ id: radioStation(1).id, favorite: true }]);
+    await page.getByRole('button', { name: 'Show all' }).click();
+    await page.getByText('Not answering', { exact: true }).waitFor();
+    expect(seen).toContain('all');
+    await page.getByRole('button', { name: 'Hide them' }).waitFor();
+    expect(errors).toEqual([]);
+  });
+
+  it('radio: tries the rewind buffer first, falls back to the plain stream, pauses for real', async () => {
+    const seen = await mockRadio({ featured: rowOf(1, 3), hidden: 0, rows: [{ id: 'news', title: 'News', stations: rowOf(10, 3) }] });
+    await page.goto(base + '/radio');
+    await page.getByRole('button', { name: 'Play Test FM 1', exact: true }).first().click();
     const bar = page.getByRole('region', { name: 'Radio player' });
     await bar.waitFor();
-    await bar.getByText('Mirchi Top 20').waitFor();
-    // The bar opens a full Now Playing view, the same idea as the music player's.
+    // The buffer answers 503 (all slots busy): the plain stream takes over, and rewind is not offered.
+    await page.waitForFunction(() => performance.getEntriesByType('resource').some(e => e.name.includes('/api/radio/stream/')), undefined, { timeout: 30_000 });
+    expect(seen.some(p => p.endsWith('/index.m3u8'))).toBe(true);
+    await bar.getByText('Song', { exact: true }).waitFor();
+    await bar.getByText('Artist · Test FM 1').waitFor();
+    await bar.getByRole('button', { name: 'Pause radio' }).waitFor();
     await bar.getByRole('button', { name: 'Open Now Playing' }).first().click();
     const nowPlaying = page.getByRole('dialog', { name: 'Now playing' });
-    await nowPlaying.getByText('Mirchi Top 20').waitFor();
     await nowPlaying.getByText('LIVE').waitFor();
-    await nowPlaying.getByRole('button', { name: 'Close Now Playing' }).click();
+    expect(await nowPlaying.getByRole('button', { name: 'Back 30 seconds' }).count()).toBe(0);
+    await nowPlaying.getByRole('button', { name: 'Pause radio' }).click();
+    await nowPlaying.getByRole('button', { name: 'Play radio' }).waitFor();
+    expect(await page.evaluate(() => (document.querySelector('audio') as HTMLAudioElement).paused)).toBe(true);
+    // Back closes the sheet; the bar stays through page changes until it is closed.
+    await nowPlaying.getByRole('button', { name: 'Close', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('.np')?.getAttribute('aria-hidden') === 'true');
-    // Navigating away keeps the player; closing it removes it.
     await page.getByRole('link', { name: 'Movies' }).first().click();
     await bar.waitFor();
     await bar.getByRole('button', { name: 'Close radio' }).click();
     await bar.waitFor({ state: 'detached' });
+    expect(errors).toEqual([]);
+  });
+
+  it('radio: record posts the request and the Recordings list shows it; the wake alarm is saved', async () => {
+    await mockRadio({ featured: rowOf(1, 3), hidden: 0, rows: [{ id: 'news', title: 'News', stations: rowOf(10, 3) }] });
+    const posted: unknown[] = [];
+    const item = { id: 'rec1', stationId: radioStation(1).id, station: 'Test FM 1', title: 'Test FM 1 2026-11-13 07:00', startedAt: new Date().toISOString(), endsAt: new Date(Date.now() + 1800_000).toISOString(), state: 'recording', sizeBytes: 0 };
+    let created = false;
+    await page.route('**/api/radio/recordings', r => r.fulfill(json({ recordings: created ? [item] : [] })));
+    await page.route('**/api/radio/record', r => { posted.push(r.request().postDataJSON()); created = true; return r.fulfill(json(item)); });
+    await page.goto(base + '/radio');
+    await page.getByRole('button', { name: 'Play Test FM 1', exact: true }).first().click();
+    await page.getByRole('region', { name: 'Radio player' }).getByRole('button', { name: 'Open Now Playing' }).first().click();
+    const nowPlaying = page.getByRole('dialog', { name: 'Now playing' });
+    await nowPlaying.getByLabel('Record this station').selectOption('30');
+    await page.waitForFunction(() => document.body.innerText.includes('Recording Test FM 1 for 30 minutes.'));
+    expect(posted).toEqual([{ id: radioStation(1).id, minutes: 30 }]);
+    await nowPlaying.getByRole('button', { name: 'Close', exact: true }).click();
+    const list = page.getByRole('region', { name: 'Recordings' });
+    await list.getByText('Test FM 1 2026-11-13 07:00').waitFor();
+    await list.getByText(/^Recording until/).waitFor();
+    await list.getByRole('button', { name: /^Stop recording/ }).waitFor();
+    // The wake alarm: a time and a station, kept in this browser, shown while it waits.
+    await page.getByLabel('Alarm time').fill('07:00');
+    await page.getByRole('button', { name: 'Set alarm' }).click();
+    await page.getByText('Alarm 7:00 · Test FM 1').first().waitFor();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('vv-radio-alarm') ?? 'null')?.time)).toBe('07:00');
+    await page.getByRole('button', { name: 'Clear alarm' }).click();
+    expect(await page.evaluate(() => localStorage.getItem('vv-radio-alarm'))).toBeNull();
     expect(errors).toEqual([]);
   });
 

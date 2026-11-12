@@ -129,6 +129,16 @@ export interface RadioStation {
   codec?: string; bitrate?: number; homepage?: string; votes: number; logo: boolean; hls?: boolean;
   /** "live": a broadcaster's on-air stream; "playlist": a fan-made automatic playlist. */
   kind?: 'live' | 'playlist';
+  /** The first one is the main topic ("News · Hindi" = topics[0] + language). */
+  topics?: Array<'news' | 'talk' | 'sports' | 'devotional' | 'music'>;
+  /** The server's background check; 'dead' only comes with all=1. */
+  health?: 'ok' | 'dead' | 'unknown';
+}
+export interface RadioHome { featured: RadioStation[]; rows: Array<{ id: string; title: string; stations: RadioStation[] }>; hidden: number }
+export interface RadioNow { title: string | null; artist?: string; song?: string; art?: string }
+export interface RadioRecording {
+  id: string; stationId: string; station: string; title: string; startedAt: string; endsAt: string;
+  state: 'recording' | 'done' | 'failed' | 'stopped'; message?: string; sizeBytes: number;
 }
 export interface RadioPlace { name: string; code: string; stations: number }
 
@@ -748,7 +758,7 @@ export const api = {
   radioCountries: () => getJSON<{ countries: RadioPlace[] }>('/api/radio/countries'),
   radioRegions: (country: string) => getJSON<{ regions: RadioPlace[] }>(`/api/radio/regions?country=${encodeURIComponent(country)}`),
   radioTags: () => getJSON<{ tags: Array<{ name: string; stations: number }> }>('/api/radio/tags'),
-  radioStations: (p: { country?: string; region?: string; tag?: string; q?: string; offset?: number; live?: '1' }) => {
+  radioStations: (p: { country?: string; region?: string; tag?: string; q?: string; offset?: number; live?: '1'; all?: '1' }) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(p)) if (v !== undefined && v !== '') qs.set(k, String(v));
     return getJSON<{ stations: RadioStation[]; more: boolean }>(`/api/radio/stations?${qs}`);
@@ -756,7 +766,17 @@ export const api = {
   radioMe: () => getJSON<{ favorites: RadioStation[]; recent: RadioStation[] }>('/api/radio/me'),
   radioFavorite: (id: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/radio/favorite', { id, favorite }),
   radioPlayed: (id: string) => postJSON<{ ok: boolean }>('/api/radio/played', { id }),
-  radioNow: (id: string) => getJSON<{ title: string | null }>(`/api/radio/now/${id}`),
+  radioNow: (id: string) => getJSON<RadioNow>(`/api/radio/now/${id}`),
+  radioHome: (country: string, region: string, all: boolean) => {
+    const qs = new URLSearchParams({ country });
+    if (region) qs.set('region', region);
+    if (all) qs.set('all', '1');
+    return getJSON<RadioHome>(`/api/radio/home?${qs}`);
+  },
+  radioRecord: (id: string, minutes: number) => postJSON<RadioRecording>('/api/radio/record', { id, minutes }),
+  radioRecordings: () => getJSON<{ recordings: RadioRecording[] }>('/api/radio/recordings'),
+  radioStopRecording: (id: string) => postJSON<{ ok: boolean }>(`/api/radio/record/${id}/stop`),
+  radioDeleteRecording: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/radio/recordings/${id}`),
   livePlaylists: () => getJSON<{ playlists: LivePlaylist[] }>('/api/live/playlists'),
   liveChannels: () => getJSON<{ channels: LiveChannel[]; problems: string[] }>('/api/live/channels'),
   liveGuide: (ids: string[], hours = 3) => getJSON<{ ready: boolean; now: number; programmes: Record<string, LiveProgramme[]> }>(`/api/live/guide?channels=${ids.join(',')}&hours=${hours}`),

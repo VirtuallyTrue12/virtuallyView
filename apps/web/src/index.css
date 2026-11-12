@@ -6083,11 +6083,7 @@ body.has-viz-stage { overflow: hidden; }
   .mhero-cover { width: 112px; height: 112px; }
   .mhero-shade { background: linear-gradient(180deg, rgba(5,7,13,0.55), rgba(5,7,13,0.92)); }
 }
-.rs-kind { display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 6px; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; vertical-align: 2px; color: var(--color-text-muted); border: 1px solid var(--color-border); }
-.rs-kind--live { color: #fff; border-color: transparent; background: #d93a3a; }
-.rs-kind--live::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: #fff; vertical-align: 1px; }
 @keyframes live-dot { 50% { opacity: 0.3; } }
-.rd-live { align-self: end; padding-bottom: 6px; }
 
 .vstage-picker .viz-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 640px) { .vstage-picker .viz-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
