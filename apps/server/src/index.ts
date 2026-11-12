@@ -1,4 +1,5 @@
 import './lib/env-files.js';
+import { setDefaultAutoSelectFamilyAttemptTimeout } from 'node:net';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -100,6 +101,10 @@ import {
 } from './services/auth.js';
 import { verifyStreamToken, signStreamPath, isStreamPath, shareOrigin } from './services/stream-token.js';
 import { startQuickConnect, pollQuickConnect, approveQuickConnect } from './services/quick-connect.js';
+
+// Node gives each address of a host 250 ms to connect before trying the next. Far-away servers (a US radio
+// station seen from India answers in ~275 ms) never got through. One second each still falls back quickly.
+setDefaultAutoSelectFamilyAttemptTimeout(1000);
 
 /**
  * Whether to believe X-Forwarded-For. Off by default: with it on and no proxy in
