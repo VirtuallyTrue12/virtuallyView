@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Radio, rebuilt: stations in sideways rows by topic (news, music, talk, sports, devotional, your language) with a row of what is on air now, stations that stopped answering tucked away behind "Show all", a big Now Playing screen with the song and album cover, pause and rewind live radio up to half an hour (Go live to jump back), a sleep timer with fade-out, a wake alarm with a slow fade-in (the page has to stay open), and recording a show to listen to or download later. Works with the TV remote. The station announcer voice is gone.
+
 - Fixes from a full check of every page on phone, tablet, laptop, desktop and TV: a tab left open across an update now switches to the new version by itself (old copies of pages no longer linger, which is how an album's tracks could show on two lines); on a TV the player opens with the picture in full instead of scrolled half off the screen; the year recap shows one frame instead of two; Live TV channel numbers past 99 fit; iptv-org's "Undefined" category is called Other; long words in an artist's bio wrap. Server caches filled from requests (lyrics, artwork lookups) keep only their newest entries, and dependency security fixes are applied.
 
 - Visualizers get their life back: they react to the music at once again instead of drifting, loud hits stand out, colours travel the whole wheel (starting from the album cover's colour), the glow is stronger, and Pulse, Spikes and Lissajous are back. Reduced-motion settings now only slow them a little.

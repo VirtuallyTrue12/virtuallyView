@@ -60,7 +60,7 @@ class AudioEngine {
   private failed = false;
   private voiceBus: GainNode | null = null;
 
-  /** A context for the voice even when no music has played yet (radio announcements). */
+  /** A context for the voice even when no music has played yet. */
   private context(): AudioContext | null {
     if (this.ctx) return this.ctx;
     if (this.failed) return null;
@@ -280,9 +280,4 @@ export function djLine(prev: { title: string; artist?: string } | null, next: { 
   if (!prev || Math.random() < 0.35) return pick(intros);
   const outros = [`That was ${by(prev)}.`, `${by(prev)}, nice.`, `You just heard ${by(prev)}.`];
   return `${pick(outros)} ${pick(intros)}`;
-}
-
-export function radioLine(name: string, extra?: string): string {
-  const intros = [`Tuning in to ${name}.`, `Now playing: ${name}.`, `Switching over to ${name}.`, `You're now listening to ${name}.`];
-  return `${pick(intros)}${extra ? ` ${extra}.` : ''}`;
 }

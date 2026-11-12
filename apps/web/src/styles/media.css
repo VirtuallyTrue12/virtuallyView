@@ -18,7 +18,7 @@
 }
 .page .md-chip:hover { color: var(--color-text-primary); border-color: color-mix(in srgb, var(--color-text-primary) 24%, transparent); }
 .page .md-chip.is-on { background: var(--color-text-primary); border-color: var(--color-text-primary); color: var(--color-background); }
-.lv-page .lv-chips-inner, .radio-page .rd-tags { gap: var(--spacing-sm); }
+.lv-page .lv-chips-inner { gap: var(--spacing-sm); }
 .lv-page .lv-chips-inner { padding: 2px 2px var(--spacing-xs); }
 
 /* ---------- Live TV: layout ---------- */
@@ -47,7 +47,7 @@
 
 /* ---------- On now (featured row) ---------- */
 .lv-page .on-now { margin: 0 0 var(--spacing-xl); }
-.lv-page .on-now-title, .lv-page .hl-title, .radio-page .rd-row-title { margin: 0 0 var(--spacing-md); font-family: var(--font-heading); font-weight: var(--heading-weight); font-size: var(--text-xl); line-height: 1.2; color: var(--color-text-primary); }
+.lv-page .on-now-title, .lv-page .hl-title { margin: 0 0 var(--spacing-md); font-family: var(--font-heading); font-weight: var(--heading-weight); font-size: var(--text-xl); line-height: 1.2; color: var(--color-text-primary); }
 .lv-page .on-now-cards { display: flex; gap: var(--spacing-md); padding: 4px 2px var(--spacing-sm); }
 .lv-page .on-now-card {
   flex: 0 0 auto;
@@ -120,7 +120,7 @@
 .lv-page .lv-text em { font-style: normal; color: var(--color-text-muted); }
 .lv-page .lv-mini { height: 3px; margin-top: 6px; background: var(--color-surface-elevated); }
 .lv-page .lv-heart { color: var(--color-text-muted); }
-.lv-page .lv-heart.is-on, .lv-page .lv-controls .icon-btn.is-on, .radio-page .rs-fav.is-on { color: var(--color-danger); }
+.lv-page .lv-heart.is-on, .lv-page .lv-controls .icon-btn.is-on { color: var(--color-danger); }
 
 /* ---------- Guide ---------- */
 .lv-page .gg { --gg-chan: 208px; border-radius: var(--radius-large); background: var(--color-surface); border-color: var(--color-border); }
@@ -203,52 +203,6 @@
 .lv-page .lv-hint { border-radius: var(--radius-medium); font-size: var(--text-xs); }
 .lv-page .lv-digits { background: var(--color-scrim); border-radius: var(--radius-medium); }
 
-/* ---------- Radio ---------- */
-.radio-page .rd-filters { gap: var(--spacing-md); margin-bottom: var(--spacing-md); padding: var(--spacing-md); border: 1px solid var(--color-border); border-radius: var(--radius-large); background: var(--color-surface); }
-.radio-page .rd-field { font-size: var(--text-xs); color: var(--color-text-secondary); }
-.radio-page .rd-field select, .radio-page .rd-field input { min-height: 40px; border-radius: var(--radius-small); background: var(--color-background); color: var(--color-text-primary); border-color: var(--color-border); }
-.radio-page .rd-tags { margin-bottom: var(--spacing-xl); }
-.radio-page .rd-row { margin-bottom: var(--spacing-xl); }
-.radio-page .rd-row-track { display: flex; gap: var(--spacing-md); padding: 4px 2px var(--spacing-sm); }
-.radio-page .rd-mini { flex: 0 0 auto; width: 128px; display: grid; gap: var(--spacing-sm); padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.radio-page .rd-mini-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); font-weight: 600; color: var(--color-text-primary); }
-.radio-page .rd-mini.is-playing .rd-mini-name { color: var(--color-accent); }
-.radio-page .rd-error { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); flex-wrap: wrap; }
-
-.radio-page .rs-grid { grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: var(--spacing-xl) var(--spacing-lg); }
-.radio-page .rs { position: relative; flex-direction: column; border: 0; border-radius: 0; background: none; overflow: visible; min-width: 0; }
-.radio-page .rs.is-playing { border: 0; }
-.radio-page .rs-main { flex-direction: column; align-items: stretch; gap: var(--spacing-sm); padding: 0; border-radius: var(--radius-large); }
-.radio-page .rs-main:focus-visible, .radio-page .rd-mini:focus-visible { outline: none; }
-.radio-page .rs-art { position: relative; display: block; aspect-ratio: 1; border-radius: var(--radius-large); overflow: hidden; border: 1px solid var(--color-border); background: var(--color-surface-elevated); transition: transform var(--duration-normal) var(--easing-default), box-shadow var(--duration-normal) var(--easing-default); }
-.radio-page .rs-art .sl { width: 100%; height: 100%; border-radius: 0; background: none; }
-.radio-page .rs-art .sl img { object-fit: contain; padding: 14%; box-sizing: border-box; }
-.radio-page .rs-art .sl-initials { font-family: var(--font-heading); font-size: clamp(1.4rem, 3vw, 2.2rem); }
-.radio-page .rs-main:hover .rs-art, .radio-page .rd-mini:hover .rs-art { transform: translateY(-2px); box-shadow: var(--shadow-medium); }
-.radio-page .rs-main:focus-visible .rs-art, .radio-page .rd-mini:focus-visible .rs-art { box-shadow: 0 0 0 3px var(--color-background), 0 0 0 5px var(--color-border-focus), var(--shadow-medium); }
-.radio-page .rs.is-playing .rs-art, .radio-page .rd-mini.is-playing .rs-art { border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-accent); }
-/* Round play button over the artwork: shows on hover or focus, stays while the station is on. */
-.radio-page .rs-play { position: absolute; right: 10px; bottom: 10px; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--color-accent); color: var(--color-on-accent); box-shadow: var(--shadow-medium); opacity: 0; transform: translateY(4px); transition: opacity var(--duration-fast) var(--easing-default), transform var(--duration-fast) var(--easing-default); }
-.radio-page .rs-main:hover .rs-play, .radio-page .rs-main:focus-visible .rs-play, .radio-page .rs.is-playing .rs-play, .radio-page .rd-mini.is-playing .rs-play { opacity: 1; transform: none; }
-.radio-page .rs-kind { position: absolute; left: 8px; top: 8px; margin: 0; background: var(--color-scrim); color: #fff; border: 0; }
-.radio-page .rs-text { gap: 2px; padding: 0 2px; }
-.radio-page .rs-text strong { font-size: var(--text-sm); font-weight: 600; color: var(--color-text-primary); }
-.radio-page .rs.is-playing .rs-text strong { color: var(--color-accent); }
-.radio-page .rs-text span { font-size: var(--text-xs); color: var(--color-text-secondary); }
-.radio-page .rs-text .rs-tags { color: var(--color-text-muted); }
-.radio-page .rs-fav { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--color-scrim); color: #fff; opacity: 0; transition: opacity var(--duration-fast) var(--easing-default); }
-.radio-page .rs:hover .rs-fav, .radio-page .rs-fav:focus-visible, .radio-page .rs-fav.is-on, .radio-page .rs.is-playing .rs-fav { opacity: 1; }
-.radio-page .rs-fav.is-on { color: #ff6b81; }
-.radio-page .rs-fav:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
-@media (hover: none) { .radio-page .rs-fav, .radio-page .rs-play { opacity: 1; transform: none; }.radio-page .rs:not(.is-playing) .rs-play { display: none; } }
-.radio-page .rs--skel { display: block; }
-.radio-page .rs-skel-art { aspect-ratio: 1; border-radius: var(--radius-large); }
-
-/* Equalizer bars: still unless sound is actually playing. */
-.radio-page .rs-eq { display: inline-flex; gap: 3px; align-items: flex-end; height: 16px; }
-.radio-page .rs-eq i { width: 3px; height: 8px; border-radius: 2px; background: currentColor; animation: none; }
-.radio-page .rs-eq.is-live i { animation: rs-bar 0.9s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .radio-page .rs-eq.is-live i { animation: none; height: 10px; } }
 
 /* ---------- Phone ---------- */
 @media (max-width: 860px) {
@@ -266,23 +220,16 @@
   .lv-page .gg-scroll { max-height: 62vh; }
   .lv-page .gg-now { transform: none; }
   .lv-page .lv-info { padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md); }
-  .radio-page .rd-filters { padding: var(--spacing-sm); }
-  .radio-page .rd-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--spacing-sm); }
-  .radio-page .rd-field select, .radio-page .rd-field input { min-width: 0; width: 100%; }
-  .radio-page .rd-search, .radio-page .rd-live { grid-column: 1 / -1; }
-  .radio-page .rd-field:only-of-type { grid-column: 1 / -1; }
-  .radio-page .rs-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: var(--spacing-lg) var(--spacing-md); }
-  .radio-page .rd-mini { width: 108px; }
 }
 
 /* ---------- TV ---------- */
 html.tv .lv-page .gg-prog:focus-visible, html.tv .lv-page .gg-chan:focus-visible { outline-width: 3px; }
 html.tv .lv-page .gg-prog:focus-visible { background: color-mix(in srgb, var(--color-accent) 26%, var(--color-surface-elevated)); }
-html.tv .lv-page .on-now-card:focus-visible .on-now-art, html.tv .radio-page .rs-main:focus-visible .rs-art, html.tv .radio-page .rd-mini:focus-visible .rs-art { transform: scale(1.05); }
+html.tv .lv-page .on-now-card:focus-visible .on-now-art { transform: scale(1.05); }
 
 @media (prefers-reduced-motion: reduce) {
-  .lv-page .on-now-art, .radio-page .rs-art, .radio-page .rs-play, .page .md-chip, .lv-page .gg-prog { transition: none; }
-  .lv-page .on-now-card:hover .on-now-art, .radio-page .rs-main:hover .rs-art, .radio-page .rd-mini:hover .rs-art { transform: none; }
+  .lv-page .on-now-art, .page .md-chip, .lv-page .gg-prog { transition: none; }
+  .lv-page .on-now-card:hover .on-now-art { transform: none; }
 }
 
 /* Phones: keep the programme title under the player, drop the longer text. */

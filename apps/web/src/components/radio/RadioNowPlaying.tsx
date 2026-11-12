@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRadio } from './RadioProvider';
 import { StationLogo } from './StationLogo';
 import { SvgIcon } from '../ui/SvgIcon';
+import { kindLine, mmss, nowLines } from './info';
 
 const tints = new Map<string, string>();
 
@@ -55,10 +56,14 @@ function useStationTint(hasLogo: boolean, src: string | undefined, fallbackHue: 
   return tint;
 }
 
-/** The radio's own full-screen Now Playing, the same idea as the music player's: big art, a live pill instead of
- * a seek bar (there is nothing to seek), and what the station itself says is playing. */
+const SLEEP = [['15', '15 minutes'], ['30', '30 minutes'], ['60', '1 hour'], ['90', '90 minutes'], ['hour', 'End of this hour']] as const;
+const RECORD = [15, 30, 60, 120];
+const minutesToHour = () => { const d = new Date(); return 60 - d.getMinutes() - d.getSeconds() / 60; };
+
+/** The radio's own full-screen Now Playing: big art (the album cover when the station tells the song), what is on,
+ * pause and rewind, the sleep timer and recording. */
 export function RadioNowPlaying() {
-  const { station, state, error, nowTitle, expanded, setExpanded, volume, setVolume, toggle, stop, announce, setAnnounce, sleepAt, setSleep } = useRadio();
+  const { station, state, error, now, expanded, setExpanded, volume, setVolume, toggle, stop, timeshift, skip, seekTo, goLive, sleepAt, setSleep, canRecord, record } = useRadio();
   const sleepLeft = sleepAt ? Math.max(1, Math.round((sleepAt - Date.now()) / 60000)) : 0;
   const tint = useStationTint(!!station?.logo, station ? `/api/radio/logo/${station.id}` : undefined, station ? hue(station.name) : 0);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -67,7 +72,7 @@ export function RadioNowPlaying() {
   useEffect(() => {
     if (expanded) {
       returnTo.current = document.activeElement;
-      sheetRef.current?.focus({ preventScroll: true });
+      sheetRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus({ preventScroll: true });
     } else if (returnTo.current instanceof HTMLElement) {
       returnTo.current.focus({ preventScroll: true });
       returnTo.current = null;
@@ -84,49 +89,69 @@ export function RadioNowPlaying() {
   if (!station) return null;
   const busy = state === 'loading';
   const playing = state === 'playing';
-  const place = [station.state, station.country].filter(Boolean).join(', ');
-  const spec = [station.codec, station.bitrate ? `${station.bitrate} kbps` : ''].filter(Boolean).join(' ');
+  const behind = timeshift?.behind ?? 0;
+  const lines = nowLines(station, now, behind);
+  const cover = behind === 0 ? now?.art : undefined;
+  const tab = expanded ? 0 : -1;
+  // A slider would trap the TV remote's arrows, so there the 30-second buttons do the job.
+  const onTv = document.documentElement.classList.contains('tv');
 
   return (
-    <div ref={sheetRef} tabIndex={-1} className={`np${expanded ? ' is-open' : ''}`} role="dialog" aria-label="Now playing" aria-hidden={!expanded} style={{ ['--np-tint' as string]: tint }}>
+    <div ref={sheetRef} tabIndex={-1} className={`np${expanded ? ' is-open' : ''}`} role="dialog" aria-modal={expanded || undefined} aria-label="Now playing" aria-hidden={!expanded} style={{ ['--np-tint' as string]: tint }}>
       <div className="np-glow" aria-hidden="true" />
       <div className="np-inner">
         <header className="np-top">
-          <button type="button" className="mp-icon np-collapse" onClick={() => setExpanded(false)} aria-label="Close Now Playing" tabIndex={expanded ? 0 : -1}><SvgIcon name="chevron-down" size={22} /></button>
-          <span className="np-top-title">Now playing on the radio</span>
-          <button type="button" className="mp-icon np-collapse" onClick={stop} aria-label="Stop and close player" title="Stop and close" tabIndex={expanded ? 0 : -1}><SvgIcon name="close" size={18} /></button>
+          <button type="button" className="mp-icon np-collapse" onClick={() => setExpanded(false)} aria-label="Close" title="Close" tabIndex={tab}><SvgIcon name="chevron-down" size={22} /></button>
+          <span className="np-top-title">Radio</span>
+          <button type="button" className="mp-icon np-collapse" onClick={stop} aria-label="Stop and close player" title="Stop and close" tabIndex={tab}><SvgIcon name="close" size={18} /></button>
         </header>
 
         <div className="np-body rnp-body">
-          <div className="np-art"><StationLogo station={station} className="rnp-art" /></div>
+          <div className="np-art">{cover ? <img className="rnp-cover" src={cover} alt="" /> : <StationLogo station={station} className="rnp-art" />}</div>
 
           <div className="np-main">
             <div className="np-meta">
-              <span className={`rb-pill${playing ? ' is-on' : ''}`}>{playing && <span className="rb-eq" aria-hidden="true"><i /><i /><i /><i /></span>}LIVE</span>
-              <h2 className="np-title" title={nowTitle ?? station.name}>{nowTitle ?? station.name}</h2>
-              <p className="np-sub">{nowTitle ? station.name : place}{nowTitle && place ? ` · ${place}` : ''}</p>
-              {spec && <span className="np-quality">{spec}</span>}
-              {station.tags.length > 0 && <p className="rnp-tags">{station.tags.join(' · ')}</p>}
+              <span className={`rb-pill${playing && !behind ? ' is-on' : ''}`}>{playing && !behind && <span className="rb-eq" aria-hidden="true"><i /><i /><i /><i /></span>}{behind ? `-${mmss(behind)} behind live` : 'LIVE'}</span>
+              <h2 className="np-title" title={lines.title}>{lines.title}</h2>
+              <p className="np-sub">{lines.title === station.name ? kindLine(station) || lines.sub : lines.sub}</p>
               {error && <p className="np-error" role="alert">{error}</p>}
             </div>
+
+            {timeshift && (
+              <div className="rnp-scrub">
+                <input className="mp-range" type="range" min={timeshift.start} max={Math.max(timeshift.end, timeshift.pos)} step={1} value={timeshift.pos} tabIndex={onTv ? -1 : tab}
+                  style={{ ['--v' as string]: (timeshift.pos - timeshift.start) / Math.max(1, timeshift.end - timeshift.start) }}
+                  onChange={e => seekTo(Number(e.target.value))} aria-label="Position in the last half hour" aria-valuetext={behind ? `${mmss(behind)} behind live` : 'Live'} />
+                <span className="rnp-scrub-hint">{mmss(Math.max(0, timeshift.end - timeshift.start))} you can rewind</span>
+              </div>
+            )}
             <div className="mp-transport mp-transport--large">
-              <button type="button" className={`mp-play${busy ? ' is-buffering' : ''}`} onClick={toggle} aria-label={playing || busy ? 'Pause radio' : 'Play radio'} title={playing || busy ? 'Pause' : 'Play'}>
+              {timeshift && <button type="button" className="mp-icon rnp-skip" onClick={() => skip(-30)} aria-label="Back 30 seconds" title="Back 30 seconds" tabIndex={tab}><SvgIcon name="prev" size={22} /><small>30</small></button>}
+              <button type="button" data-autofocus className={`mp-play${busy ? ' is-buffering' : ''}`} onClick={toggle} aria-label={playing || busy ? 'Pause radio' : 'Play radio'} title={playing || busy ? 'Pause' : 'Play'} tabIndex={tab}>
                 {busy ? <span className="fx-spin" /> : <SvgIcon name={playing ? 'pause' : 'play'} size={28} />}
               </button>
+              {timeshift && <button type="button" className="mp-icon rnp-skip" onClick={() => skip(30)} disabled={!behind} aria-label="Forward 30 seconds" title="Forward 30 seconds" tabIndex={tab}><SvgIcon name="next" size={22} /><small>30</small></button>}
             </div>
+            {timeshift && behind > 0 && <button type="button" className="btn btn-primary rnp-golive" onClick={goLive} tabIndex={tab}>Go live</button>}
+
             <label className="mp-volume">
-              <button type="button" className="mp-icon" onClick={() => setVolume(volume === 0 ? 1 : 0)} aria-label={volume === 0 ? 'Unmute radio' : 'Mute radio'}><SvgIcon name={volume === 0 ? 'volume-mute' : volume < 0.5 ? 'volume-low' : 'volume-high'} size={18} /></button>
-              <input className="mp-range" type="range" min={0} max={1} step={0.02} value={volume} style={{ ['--v' as string]: volume }} onChange={e => setVolume(Number(e.target.value))} aria-label="Radio volume" />
+              <button type="button" className="mp-icon" onClick={() => setVolume(volume === 0 ? 1 : 0)} aria-label={volume === 0 ? 'Unmute radio' : 'Mute radio'} tabIndex={tab}><SvgIcon name={volume === 0 ? 'volume-mute' : volume < 0.5 ? 'volume-low' : 'volume-high'} size={18} /></button>
+              <input className="mp-range" type="range" min={0} max={1} step={0.02} value={volume} tabIndex={onTv ? -1 : tab} style={{ ['--v' as string]: volume }} onChange={e => setVolume(Number(e.target.value))} aria-label="Radio volume" />
             </label>
             <div className="np-viz-bar rnp-extras">
-              <button type="button" className={`np-chip${announce ? ' is-on' : ''}`} onClick={() => setAnnounce(!announce)} aria-pressed={announce}>{announce ? 'Voice announcements on' : 'Voice announcements off'}</button>
-              <select className="np-chip" value={sleepAt ? 'on' : ''} onChange={e => setSleep(e.target.value ? Number(e.target.value) : null)} aria-label="Sleep timer">
-                <option value="">{sleepAt ? `Sleep in ${sleepLeft} min (cancel)` : 'Sleep timer'}</option>
-                {sleepAt && <option value="on" disabled>{`Stops in ${sleepLeft} min`}</option>}
-                {[15, 30, 45, 60, 90].map(m => <option key={m} value={m}>{m} minutes</option>)}
+              <select className="np-chip" value="" onChange={e => setSleep(e.target.value === 'hour' ? minutesToHour() : e.target.value ? Number(e.target.value) : null)} aria-label="Sleep timer" tabIndex={tab}>
+                <option value="">{sleepAt ? `Sleep in ${sleepLeft} min` : 'Sleep timer'}</option>
+                {sleepAt && <option value="0">Cancel sleep timer</option>}
+                {SLEEP.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
               </select>
+              {canRecord && (
+                <select className="np-chip" value="" onChange={e => { if (e.target.value) void record(Number(e.target.value)); }} aria-label="Record this station" tabIndex={tab}>
+                  <option value="">Record</option>
+                  {RECORD.map(m => <option key={m} value={m}>{m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? 's' : ''}`}</option>)}
+                </select>
+              )}
             </div>
-            {station.homepage && <a className="mp-link rnp-home" href={station.homepage} target="_blank" rel="noreferrer">Visit the station's site</a>}
+            {station.homepage && <a className="mp-link rnp-home" href={station.homepage} target="_blank" rel="noreferrer" tabIndex={tab}>Visit the station's site</a>}
           </div>
         </div>
       </div>

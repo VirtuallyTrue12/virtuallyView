@@ -2,10 +2,11 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import { useRadio } from './RadioProvider';
 import { SvgIcon } from '../ui/SvgIcon';
 import { StationLogo } from './StationLogo';
+import { mmss, nowLines } from './info';
 
-/** The bar at the bottom while a station plays: what it is, what is on, pause and stop, volume. */
+/** The bar at the bottom while a station plays: what is on, pause and stop, volume, and a reminder of any alarm. */
 export function RadioBar() {
-  const { station, state, error, nowTitle, volume, toggle, stop, setVolume, setExpanded } = useRadio();
+  const { station, state, error, now, volume, timeshift, alarm, toggle, stop, setVolume, setExpanded } = useRadio();
   const bar = useRef<HTMLDivElement>(null);
   // Floating buttons (the assistant, the requests pill) sit above whatever is docked at the bottom.
   useEffect(() => {
@@ -22,10 +23,10 @@ export function RadioBar() {
   if (!station) return null;
   const busy = state === 'loading';
   const playing = state === 'playing';
-  const place = [station.state, station.country].filter(Boolean).join(', ');
-  const spec = [station.codec, station.bitrate ? `${station.bitrate} kbps` : ''].filter(Boolean).join(' ');
-  const title = state === 'error' ? station.name : nowTitle ?? station.name;
-  const sub = state === 'error' ? error : busy ? 'Tuning in…' : state === 'paused' ? `${station.name} · Paused` : nowTitle ? station.name : place;
+  const behind = timeshift?.behind ?? 0;
+  const lines = nowLines(station, now, behind);
+  const title = state === 'error' ? station.name : lines.title;
+  const sub = state === 'error' ? error : busy ? 'Tuning in…' : state === 'paused' ? `${station.name} · Paused` : lines.sub;
   return (
     <div ref={bar} className="mp rb" role="region" aria-label="Radio player">
       <div className="mp-row">
@@ -45,8 +46,8 @@ export function RadioBar() {
             <button type="button" className="mp-icon" onClick={stop} aria-label="Close radio" title="Close radio"><SvgIcon name="close" size={16} /></button>
           </div>
           <div className="mp-center-seek rb-live-row">
-            <span className={`rb-pill${playing ? ' is-on' : ''}`}>{playing && <span className="rb-eq" aria-hidden="true"><i /><i /><i /><i /></span>}LIVE</span>
-            <span className="rb-spec">{[place, spec].filter(Boolean).join(' · ')}</span>
+            <span className={`rb-pill${playing && !behind ? ' is-on' : ''}`}>{playing && !behind && <span className="rb-eq" aria-hidden="true"><i /><i /><i /><i /></span>}{behind ? `-${mmss(behind)}` : 'LIVE'}</span>
+            {alarm && <span className="rb-spec">Alarm {alarm.time.replace(/^0/, '')} · {alarm.station.name}</span>}
           </div>
         </div>
 
