@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Radio, behind the scenes: stations that do not play are hidden (a slow background check plays a real piece of every listed station and hides one after two failures; Show all brings them back), a home made of rows (featured, near you, news, music, talk, sports, devotional and, in India, one per language), the song playing now with its album cover, pause and rewind of live radio up to 30 minutes, and recording a show (each person sees only their own). The talking voices are gone: no more station announcements on Radio, no DJ mode in Music, and the optional local voice service is removed.
+
 - Fixes from a full check of every page on phone, tablet, laptop, desktop and TV: a tab left open across an update now switches to the new version by itself (old copies of pages no longer linger, which is how an album's tracks could show on two lines); on a TV the player opens with the picture in full instead of scrolled half off the screen; the year recap shows one frame instead of two; Live TV channel numbers past 99 fit; iptv-org's "Undefined" category is called Other; long words in an artist's bio wrap. Server caches filled from requests (lyrics, artwork lookups) keep only their newest entries, and dependency security fixes are applied.
 
 - Visualizers get their life back: they react to the music at once again instead of drifting, loud hits stand out, colours travel the whole wheel (starting from the album cover's colour), the glow is stronger, and Pulse, Spikes and Lissajous are back. Reduced-motion settings now only slow them a little.

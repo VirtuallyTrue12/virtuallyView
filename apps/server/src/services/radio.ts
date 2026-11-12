@@ -431,6 +431,7 @@ export async function openSource(url: string, signal: AbortSignal): Promise<Radi
     if (/#EXT-X-KEY:METHOD=(?!NONE)/.test(text)) throw new Error('This station encrypts its stream, so it cannot be paused.');
     return { type: 'hls', chunks: hlsChunks(text, res.url || url, signal) };
   }
+  if (/^(text\/|application\/(json|xml|xhtml))/i.test(type)) { void res.body.cancel(); throw new Error('The station sent a web page instead of audio. It may be off the air.'); }
   return { type, chunks: plainChunks(res, url, signal) };
 }
 
