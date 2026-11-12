@@ -7,6 +7,7 @@ import { liveHighlights } from '../services/live-highlights.js';
 import { ensureGuide, fallbackGuide, programmesFor, type Programme } from '../services/epg.js';
 import { checkChannels, deadChannels, favoriteChannels, recentChannels, setChannelFavorite, touchRecent } from '../services/live-user.js';
 import { outboundFetch } from '../services/outbound.js';
+import { safeFetch } from '../services/radio.js';
 import { startTranscode } from '../services/transcode.js';
 import { acquireConversion, CONVERSION_MAX_MS } from '../lib/limits.js';
 import { currentActor } from '../services/user-context.js';
@@ -161,14 +162,17 @@ export default async function liveRoutes(server: FastifyInstance) {
     return reply.header('Content-Type', 'video/mp4').header('Cache-Control', 'no-store').send(child.stdout);
   });
 
-  server.get<{ Querystring: { u?: string; s?: string; e?: string } }>('/api/live/relay', async (request, reply) => {
+  server.get<{ Querystring: { u?: string; s?: string; e?: string; p?: string } }>('/api/live/relay', async (request, reply) => {
     const url = request.query.u ?? '';
-    if (!verifyRelay(url, request.query.s ?? '', request.query.e)) return reply.code(403).send({ message: 'That link is not valid.' });
+    const publicOnly = request.query.p === '1';
+    if (!verifyRelay(url, request.query.s ?? '', request.query.e, publicOnly)) return reply.code(403).send({ message: 'That link is not valid.' });
     try {
-      const upstream = await outboundFetch(url, { timeoutMs: 20_000 });
+      const upstream = publicOnly
+        ? await safeFetch(url, { signal: AbortSignal.timeout(20_000), headers: { 'User-Agent': 'virtuallyView' } })
+        : await outboundFetch(url, { timeoutMs: 20_000 });
       if (!upstream.ok) return reply.code(502).send({ message: `The stream answered ${upstream.status}.` });
       if (isPlaylistType(upstream.headers.get('content-type'), url)) {
-        return reply.header('Content-Type', 'application/vnd.apple.mpegurl').header('Cache-Control', 'no-store').send(rewriteHls(await upstream.text(), upstream.url || url));
+        return reply.header('Content-Type', 'application/vnd.apple.mpegurl').header('Cache-Control', 'no-store').send(rewriteHls(await upstream.text(), upstream.url || url, publicOnly));
       }
       return reply
         .header('Content-Type', upstream.headers.get('content-type') ?? 'video/mp2t')

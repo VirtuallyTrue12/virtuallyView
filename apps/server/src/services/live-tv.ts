@@ -148,21 +148,24 @@ function key(): Buffer {
 }
 // A relay link works for the address it names, for a limited time, and nowhere else.
 const RELAY_LIFETIME_MS = 12 * 3_600_000;
-const sign = (url: string, expires: number) => createHmac('sha256', key()).update(`relay|${expires}|${url}`).digest('hex').slice(0, 32);
-export function verifyRelay(url: string, sig: string, expires: string | number | undefined): boolean {
+// A public-only link (radio stations from the public directory) signs differently, so its flag can't be stripped.
+const sign = (url: string, expires: number, publicOnly = false) =>
+  createHmac('sha256', key()).update(`${publicOnly ? 'relay-public' : 'relay'}|${expires}|${url}`).digest('hex').slice(0, 32);
+export function verifyRelay(url: string, sig: string, expires: string | number | undefined, publicOnly = false): boolean {
   const at = Number(expires);
   if (!/^https?:\/\//i.test(url) || !Number.isFinite(at) || at < Date.now()) return false;
-  const expected = Buffer.from(sign(url, at));
+  const expected = Buffer.from(sign(url, at, publicOnly));
   const given = Buffer.from(String(sig));
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
-const relayLink = (url: string) => {
+const relayLink = (url: string, publicOnly: boolean) => {
   const expires = Date.now() + RELAY_LIFETIME_MS;
-  return `/api/live/relay?u=${encodeURIComponent(url)}&e=${expires}&s=${sign(url, expires)}`;
+  return `/api/live/relay?u=${encodeURIComponent(url)}&e=${expires}&s=${sign(url, expires, publicOnly)}${publicOnly ? '&p=1' : ''}`;
 };
 
-export function rewriteHls(body: string, base: string): string {
-  const abs = (ref: string) => relayLink(new URL(ref, base).toString());
+/** publicOnly: the playlist came from a public directory, so the relay must refuse private-network addresses. */
+export function rewriteHls(body: string, base: string, publicOnly = false): string {
+  const abs = (ref: string) => relayLink(new URL(ref, base).toString(), publicOnly);
   return body.split(/\r?\n/).map(line => {
     const trimmed = line.trim();
     if (!trimmed) return line;

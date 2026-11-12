@@ -53,4 +53,16 @@ describe('live relay links', () => {
       vi.useRealTimers();
     }
   });
+  test('a public-only link (radio) cannot be turned into an ordinary one, nor the other way round', async () => {
+    const q = new URL('http://x' + /(\/api\/live\/relay\?[^\s"]+)/.exec(rewriteHls('#EXTM3U\nseg.aac', 'http://origin.example/r/', true))![1]).searchParams;
+    expect(q.get('p')).toBe('1');
+    const url = q.get('u')!, sig = q.get('s')!, exp = q.get('e')!;
+    expect(verifyRelay(url, sig, exp, true)).toBe(true);
+    expect(verifyRelay(url, sig, exp)).toBe(false);
+    const plain = link('#EXTM3U\nseg.ts').searchParams;
+    expect(plain.get('p')).toBeNull();
+    expect(verifyRelay(plain.get('u')!, plain.get('s')!, plain.get('e')!, true)).toBe(false);
+    const { safeFetch } = await import('../../apps/server/src/services/radio.js');
+    await expect(safeFetch('http://127.0.0.1:9/seg.aac')).rejects.toThrow('not allowed');
+  });
 });

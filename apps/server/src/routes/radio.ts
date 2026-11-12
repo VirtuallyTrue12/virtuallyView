@@ -144,7 +144,7 @@ export default async function radioRoutes(server: FastifyInstance) {
       if (!upstream.ok || !upstream.body) return reply.code(502).send({ message: `The station answered ${upstream.status}. It may be off the air.` });
       const type = upstream.headers.get('content-type') ?? '';
       if (/mpegurl/i.test(type) || /\.m3u8?(\?|$)/i.test(station.url)) {
-        const body = rewriteHls(await upstream.text(), upstream.url || station.url);
+        const body = rewriteHls(await upstream.text(), upstream.url || station.url, true);
         return reply.header('Content-Type', 'application/vnd.apple.mpegurl').header('Cache-Control', 'no-store').send(body);
       }
       open.set(who, (open.get(who) ?? 0) + 1);
