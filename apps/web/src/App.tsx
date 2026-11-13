@@ -1,16 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import ProfilePicker from './components/profiles/ProfilePicker';
 import { MobileTabs } from './components/layout/MobileTabs';
 import { UpdateBanner } from './components/layout/UpdateBanner';
 import { Navigation } from './components/layout/Navigation';
 import { PageErrorBoundary } from './components/layout/PageErrorBoundary';
-import CommandPalette from './components/layout/CommandPalette';
 import { Toaster, toast } from './components/ui/Toast';
 import { accelerationTip } from './lib/perf';
-import ChatWidget from './components/ai/ChatWidget';
-import LoginScreen from './components/auth/LoginScreen';
-import OnboardingWizard from './components/onboarding/OnboardingWizard';
 import Home from './pages/Home';
 const Movies = lazy(() => import('./pages/Movies'));
 const MovieDetails = lazy(() => import('./pages/MovieDetails'));
@@ -49,6 +44,11 @@ const YearInReview = lazy(() => import('./pages/YearInReview'));
 const Diagnostics = lazy(() => import('./pages/Diagnostics'));
 const Activity = lazy(() => import('./pages/Activity'));
 const Offline = lazy(() => import('./pages/Offline'));
+const ProfilePicker = lazy(() => import('./components/profiles/ProfilePicker'));
+const CommandPalette = lazy(() => import('./components/layout/CommandPalette'));
+const ChatWidget = lazy(() => import('./components/ai/ChatWidget'));
+const LoginScreen = lazy(() => import('./components/auth/LoginScreen'));
+const OnboardingWizard = lazy(() => import('./components/onboarding/OnboardingWizard'));
 import { useOfflineMode } from './lib/offline-status';
 import { useAutoDownloads } from './lib/offline-auto';
 import { OfflineBanner } from './components/offline/OfflineBanner';
@@ -174,23 +174,16 @@ export default function App() {
       </Suspense>
     </div>
   );
-  if (!auth) return (
-    <LoginScreen
-      auth={{ enabled: true, setupRequired: false, authenticated: false, user: null }}
-      onAuthenticated={signedIn}
-      onRetry={() => void loadAuth()}
-      loading={authLoading}
-      retryError={authLoading ? undefined : error}
-    />
-  );
-  if (auth.setupRequired || (auth.enabled && !auth.authenticated)) return (
-    <LoginScreen
-      auth={auth}
-      onAuthenticated={signedIn}
-      onRetry={() => void loadAuth()}
-      loading={authLoading}
-      retryError={authLoading ? undefined : error}
-    />
+  if (!auth || auth.setupRequired || (auth.enabled && !auth.authenticated)) return (
+    <Suspense fallback={null}>
+      <LoginScreen
+        auth={auth ?? { enabled: true, setupRequired: false, authenticated: false, user: null }}
+        onAuthenticated={signedIn}
+        onRetry={() => void loadAuth()}
+        loading={authLoading}
+        retryError={authLoading ? undefined : error}
+      />
+    </Suspense>
   );
   if (auth.authenticated && onboarding.loading) {
     return (
@@ -202,11 +195,11 @@ export default function App() {
   }
   if (auth.authenticated && onboarding.required) {
     return (
-      <OnboardingWizard onDone={() => setOnboarding({ loading: false, required: false })} />
+      <Suspense fallback={null}><OnboardingWizard onDone={() => setOnboarding({ loading: false, required: false })} /></Suspense>
     );
   }
   // "Who's watching?" is full-screen, outside the app's top bar.
-  if (auth.authenticated && pathname === '/profiles') return <ProfilePicker />;
+  if (auth.authenticated && pathname === '/profiles') return <Suspense fallback={null}><ProfilePicker /></Suspense>;
 
   // Pages a Kids profile cannot use go back to Home (the server refuses their data anyway).
   const forGrownUps = (page: ReactNode) => (kid ? <Navigate to="/" replace /> : page);
@@ -270,8 +263,10 @@ export default function App() {
         <span><Link to="/requests">Requests</Link> · <Link to="/downloads">Downloads</Link> · <Link to="/settings">Settings</Link></span>
       </footer>
       {auth.authenticated && <MobileTabs kid={kid} />}
-      <ChatWidget />
-      <CommandPalette />
+      <Suspense fallback={null}>
+        <ChatWidget />
+        <CommandPalette />
+      </Suspense>
       <Toaster />
       </div>
       </RadioProvider>

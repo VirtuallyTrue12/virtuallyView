@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- Faster first load: the sign-in screen, onboarding, profile picker, assistant chat and command palette now load only when needed (the main script is about 5% smaller).
 - Behind the scenes: the movie, TV and music download lists, the subtitle routes and the sign-out code now share one copy of code that was written several times. Nothing changes for you.
 - Lighter stylesheet: about 1,800 lines of styles for screens that no longer exist were deleted (41 KB smaller). Nothing changes on screen.
 - Behind the scenes cleanup: unused code and the old manual end-to-end scripts removed. Nothing changes in how the app looks or works.
