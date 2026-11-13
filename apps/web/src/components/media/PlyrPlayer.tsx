@@ -65,7 +65,6 @@ export default function PlyrPlayer({
       video.muted = muted;
       video.autoplay = autoPlay;
       video.playsInline = true;
-      video.crossOrigin = 'anonymous';
       for (const track of subtitles) {
         const t = document.createElement('track');
         t.kind = 'subtitles';

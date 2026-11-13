@@ -727,7 +727,6 @@ export default function VideoPlayer({
         autoPlay={autoPlay}
         playsInline
         x-webkit-airplay="allow"
-        crossOrigin="anonymous"
         onClick={() => { if (menu) setMenu(null); else togglePlay(); }}
         onDoubleClick={toggleFullscreen}
         onPlay={e => { if (onTvRef.current) { e.currentTarget.pause(); return; } setPlaying(true); wake(); emit(true); }}
