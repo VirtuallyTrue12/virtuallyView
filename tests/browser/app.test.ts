@@ -1300,6 +1300,9 @@ describe('radio, one-press repair and live highlights', () => {
     await page.getByRole('heading', { name: 'On air now' }).waitFor();
     await page.getByRole('heading', { name: 'News', exact: true }).waitFor();
     await page.getByRole('heading', { name: 'Hindi', exact: true }).waitFor();
+    // Each row title sits above its stations (another page's style once pushed it to the side).
+    const [title, track] = await Promise.all(['.rd-row-title', '.rd-row-track'].map(s => page.locator(s).first().boundingBox()));
+    expect(title!.y + title!.height).toBeLessThanOrEqual(track!.y + 1);
     // A two-station row is folded into one tidy row instead of showing alone.
     expect(await page.getByRole('heading', { name: 'Devotional' }).count()).toBe(0);
     await page.getByRole('heading', { name: 'More to explore' }).waitFor();
