@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- Home, For you: new videos from channels you follow show their thumbnails (they were blank tiles), whole on a blurred backdrop instead of cropped.
 - Picture subtitles (Blu-ray and DVD) now show on films cropped to widescreen: the lines near the bottom used to fall off the picture, so they seemed missing. They also go to the TV when you cast, and subtitles picked while a film plays on the TV are sent to the TV from where it is.
 - Radio, behind the scenes: stations that do not play are hidden (a slow background check plays a real piece of every listed station and hides one after two failures; Show all brings them back), a home made of rows (featured, near you, news, music, talk, sports, devotional and, in India, one per language), the song playing now with its album cover, pause and rewind of live radio up to 30 minutes, and recording a show (each person sees only their own). The talking voices are gone: no more station announcements on Radio, no DJ mode in Music, and the optional local voice service is removed.
 - Security: radio stations that stream in segments (HLS) can no longer point the server at addresses inside your home network; their relay links are marked public-only in the signature, and every hop is checked.

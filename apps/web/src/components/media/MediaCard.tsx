@@ -89,8 +89,11 @@ export function MediaCard({ item, showStatus = false, progress, to, typeBadge }:
       onBlur={disarmPreview}
     >
       <div className="media-card-artwork">
+        {/* A video's thumbnail is wide: shown whole on a blurred copy of itself, not cropped to a sliver. */}
+        {showImage && item.type === 'video' && <img className="media-card-fill" src={item.artwork!.poster} alt="" aria-hidden="true" loading="lazy" />}
         {showImage && (
           <img
+            className={item.type === 'video' ? 'media-card-wide' : undefined}
             src={item.artwork!.poster}
             alt={`${item.title} poster`}
             loading="lazy"

@@ -76,7 +76,8 @@ async function build({ titles, artists, anchorEvents, signals, kid }: Inputs, la
       for (const v of feed?.videos ?? []) {
         if (seen.has(v.id)) continue;
         groups.video.push({
-          id: v.id, kind: 'video', title: v.title, type: 'video', artwork: { poster: v.thumbnail },
+          // Through this server: the feed's own address points at the video server, which the browser cannot reach.
+          id: v.id, kind: 'video', title: v.title, type: 'video', artwork: { poster: `/api/videos/${encodeURIComponent(v.id)}/thumbnail` },
           href: `/videos/watch/${v.id}`, reason: `New from ${v.channel}`
         });
       }

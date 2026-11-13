@@ -157,6 +157,8 @@ select option { background: var(--color-background); color: var(--color-text-pri
   transition: box-shadow var(--duration-normal) var(--easing-default);
 }
 .media-card:hover .media-card-artwork, .media-card:focus-within .media-card-artwork { box-shadow: var(--shadow-medium); }
+.media-card-artwork img.media-card-fill, .media-card:hover .media-card-artwork img.media-card-fill, .media-card:focus-within .media-card-artwork img.media-card-fill { position: absolute; inset: 0; filter: blur(16px) saturate(1.4) brightness(0.55); transform: scale(1.25); }
+.media-card-artwork img.media-card-wide { position: relative; object-fit: contain; }
 .media-card:hover .media-card-artwork img, .media-card:focus-within .media-card-artwork img { transform: none; }
 .media-card-artwork::after { box-shadow: inset 0 0 0 2px var(--color-border-focus); }
 .media-card:hover .media-card-artwork::after { opacity: 0; }
