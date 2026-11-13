@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- Pages look the same however you reach them: the shared page styles now load with the app instead of with the first page that used them (some pages, like a person's page or Home, looked slightly different when opened directly).
 - Videos: live broadcasts are left out of Trending and search (YouTube refuses them to the video service, so they spun forever); opening one from a link says so instead of loading endlessly.
 - Radio: row titles ("On air now", "News"...) sit above their stations again; a reader style with the same name had pushed them to the side.
 - Faster first load: the sign-in screen, onboarding, profile picker, assistant chat and command palette now load only when needed (the main script is about 5% smaller).

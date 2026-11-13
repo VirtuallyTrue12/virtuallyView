@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { SvgIcon, type IconName } from './SvgIcon';
-import '../../ui-kit.css';
 
 /** The header every page opens with: big title, one quiet line, and the few actions people come for. */
 export function PageHeader({ title, sub, actions, icon }: { title: string; sub?: ReactNode; actions?: ReactNode; icon?: IconName }) {

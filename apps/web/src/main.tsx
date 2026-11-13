@@ -27,6 +27,8 @@ import './styles/recordings.css';
 import './styles/radio.css';
 import './styles/party.css';
 import './styles/books.css';
+// Last, where it used to land when the first page using it loaded; now every page has it from the start.
+import './ui-kit.css';
 
 initPerformanceMode();
 initDpad();
