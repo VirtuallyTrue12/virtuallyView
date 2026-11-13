@@ -14,10 +14,6 @@ export type DownloadState = {
 
 let downloads: DownloadState[] = [];
 
-export function getDownloads(): DownloadState[] {
-  return downloads.map(d => ({ ...d }));
-}
-
 let seq = 1000;
 
 export function createDownload(input: Omit<DownloadState, 'id'> & { id?: string }): DownloadState {
@@ -43,26 +39,3 @@ export function updateDownload(id: string, patch: Partial<DownloadState>): Downl
   return downloads.find(d => d.id === id);
 }
 
-function update(id: string, patch: Partial<DownloadState>) {
-  downloads = downloads.map(d => (d.id === id ? { ...d, ...patch } : d));
-}
-
-export function pauseDownload(id: string): DownloadState | undefined {
-  const target = downloads.find(d => d.id === id);
-  if (!target || target.status === 'importing' || target.status === 'completed') return target;
-  update(id, { status: 'paused', speed: undefined, eta: undefined });
-  return downloads.find(d => d.id === id);
-}
-
-export function resumeDownload(id: string): DownloadState | undefined {
-  const target = downloads.find(d => d.id === id);
-  if (!target) return target;
-  update(id, { status: 'downloading', speed: '18.2 MB/s', eta: 'Computed on refresh' });
-  return downloads.find(d => d.id === id);
-}
-
-export function removeDownload(id: string): boolean {
-  const before = downloads.length;
-  downloads = downloads.filter(d => d.id !== id);
-  return downloads.length !== before;
-}

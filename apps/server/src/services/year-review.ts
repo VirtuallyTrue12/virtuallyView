@@ -6,7 +6,6 @@
 
 export type Query = <T>(sql: string, ...params: Array<string | number>) => T[];
 
-export interface Ranked { name: string; count: number; image?: string | null }
 export interface Moment { kind: 'song' | 'film' | 'episode' | 'video'; title: string; at: string }
 
 export interface MusicStats {

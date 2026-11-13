@@ -191,11 +191,6 @@ export async function spaceWarning(bytes: number | null): Promise<string | null>
   return bytes > free ? `This needs about ${formatBytes(bytes)} but only ${formatBytes(Math.max(0, free))} is free on this device. Delete something or pick Smaller.` : null;
 }
 
-/** Saves one item's index entry (the file and subtitles are already on the device). */
-export async function saveIndex(item: SavedItem): Promise<void> {
-  await putSaved(item);
-}
-
 /** Deletes an item's file, subtitles and index entry. */
 export async function deleteSaved(key: string): Promise<void> {
   const item = await getSaved(key);

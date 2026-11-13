@@ -1,4 +1,3 @@
-import { ToolCall } from './provider-interface.js';
 
 export interface ToolSchema {
   name: string;

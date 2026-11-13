@@ -33,7 +33,3 @@ npm run test:browser     # real browser tests, needs the build and Chromium
 ## Data folder
 
 The server keeps its state in `apps/server/data` when run from source (`app.sqlite`, `users.json`, `sessions.json`, `integrations.json`). Set `VV_DATA_DIR` to use another folder. Delete the folder to start from a clean install; you will be asked to create the first account again.
-
-## Manual scripts
-
-`tests/e2e-*.mjs` are older Playwright scripts written against a full stack with real media. They are not part of CI. Read one before running it, since some sign in and change state.

@@ -5,8 +5,6 @@ import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders
 import { TtlCache } from '../ttl-cache.js';
 import { radarrRatings } from '../arr-ratings.js';
 
-const ART ='https://image.tmdb.org/t/p/w500';
-const ART_LARGE = 'https://image.tmdb.org/t/p/w1280';
 
 export interface ReleaseInfo { status?: string | undefined; inCinemas?: string | undefined; digitalRelease?: string | undefined; physicalRelease?: string | undefined }
 

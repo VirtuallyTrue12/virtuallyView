@@ -1,5 +1,5 @@
-import { readFileSync, existsSync, readdirSync, statSync, copyFileSync, mkdirSync, rmSync } from 'node:fs';
-import { resolve, basename, dirname } from 'node:path';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ThemeManifest, ThemeTokens, validateManifest, validateTokens } from './theme-engine.js';
 

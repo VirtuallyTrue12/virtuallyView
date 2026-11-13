@@ -41,8 +41,3 @@ export function saveBookState(bookId: string, patch: StatePatch, now = Date.now(
   currentUserId(), bookId, next.position, next.percent, next.finished ? 1 : 0, next.openedAt, now);
   return { ...next, updatedAt: now };
 }
-
-export function clearBookState(bookId: string): void {
-  table();
-  run('DELETE FROM book_state WHERE user_id = ? AND book_id = ?', currentUserId(), bookId);
-}
