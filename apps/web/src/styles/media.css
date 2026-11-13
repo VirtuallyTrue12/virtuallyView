@@ -216,7 +216,7 @@
   .lv-page .gg-row { height: 56px; }
   .lv-page .gg-chan { padding: 0 var(--spacing-sm); font-size: var(--text-xs); }
   .lv-page .gg-chan .gg-logo { display: grid; width: 30px; height: 30px; }
-  .lv-page .gg-chan img, .lv-page .gg-fallback { display: block; }
+  .lv-page .gg-chan img { display: block; }
   .lv-page .gg-scroll { max-height: 62vh; }
   .lv-page .gg-now { transform: none; }
   .lv-page .lv-info { padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md); }

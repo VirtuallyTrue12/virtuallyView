@@ -319,6 +319,22 @@ function shiftVtt(vtt: string, offset: number): string {
   return kept.join('\n\n');
 }
 
+/** A subtitle file that sits next to the media file: the name is checked, the file must be an allowed media-folder file. */
+async function sendSiblingSubtitle(reply: FastifyReply, file: string, query: unknown, mediaPath: () => Promise<string | null | undefined>, missing: string) {
+  if (!/^[^/\\]+$/.test(file)) {
+    return reply.code(400).send({ error: 'bad_request', message: 'Invalid subtitle file name.' });
+  }
+  const filePath = await mediaPath();
+  if (!isServable(filePath)) {
+    return reply.code(404).send({ error: 'not_found', message: missing });
+  }
+  const candidate = path.join(path.dirname(filePath), file);
+  if (!existsSync(candidate) || !isAllowedMediaFile(candidate)) {
+    return reply.code(404).send({ error: 'not_found', message: 'Subtitle file not found.' });
+  }
+  return sendSubtitle(reply, candidate, Number((query as { offset?: string }).offset) || 0);
+}
+
 function sendSubtitle(reply: FastifyReply, candidate: string, offset = 0) {
   const ext = path.extname(candidate).toLowerCase();
   const vtt = shiftVtt(subtitleToVtt(readFileSync(candidate, 'utf8'), ext), offset);
@@ -463,18 +479,7 @@ export default async function streamRoutes(server: FastifyInstance) {
     '/api/stream/episode/:id/subtitle/:file',
     async (request, reply) => {
       const { id, file } = request.params;
-      if (!/^[^/\\]+$/.test(file)) {
-        return reply.code(400).send({ error: 'bad_request', message: 'Invalid subtitle file name.' });
-      }
-      const filePath = await resolveEpisodeFile(id);
-      if (!isServable(filePath)) {
-        return reply.code(404).send({ error: 'not_found', message: 'No media file for this episode.' });
-      }
-      const candidate = path.join(path.dirname(filePath), file);
-      if (!existsSync(candidate) || !isAllowedMediaFile(candidate)) {
-        return reply.code(404).send({ error: 'not_found', message: 'Subtitle file not found.' });
-      }
-      return sendSubtitle(reply, candidate, Number((request.query as { offset?: string }).offset) || 0);
+      return sendSiblingSubtitle(reply, file, request.query, async () => resolveEpisodeFile(id), 'No media file for this episode.');
     }
   );
 
@@ -513,19 +518,7 @@ export default async function streamRoutes(server: FastifyInstance) {
 
   server.get<{ Params: { id: string; file: string } }>('/api/stream/:id/subtitle/:file', async (request, reply) => {
     const { id, file } = request.params;
-    if (!/^[^/\\]+$/.test(file)) {
-      return reply.code(400).send({ error: 'bad_request', message: 'Invalid subtitle file name.' });
-    }
-    const item = await resolveStreamable(id);
-    const filePath = item?.fileInfo?.path;
-    if (!isServable(filePath)) {
-      return reply.code(404).send({ error: 'not_found', message: 'No media file for this item.' });
-    }
-    const candidate = path.join(path.dirname(filePath), file);
-    if (!existsSync(candidate) || !isAllowedMediaFile(candidate)) {
-      return reply.code(404).send({ error: 'not_found', message: 'Subtitle file not found.' });
-    }
-    return sendSubtitle(reply, candidate, Number((request.query as { offset?: string }).offset) || 0);
+    return sendSiblingSubtitle(reply, file, request.query, async () => (await resolveStreamable(id))?.fileInfo?.path, 'No media file for this item.');
   });
 
   // -- Playback capability and on-the-fly conversion ------------------------

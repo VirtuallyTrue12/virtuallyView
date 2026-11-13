@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
 import { SvgIcon } from '../ui/SvgIcon';
+import { useEscape } from '../../lib/useEscape';
 
 /** A film that is still in cinemas: only camera copies exist, so let the person choose. */
 export function ReleaseNotice({ title, message, busy, onChoose, onClose }: {
@@ -9,11 +9,7 @@ export function ReleaseNotice({ title, message, busy, onChoose, onClose }: {
   onChoose: (choice: 'wait' | 'now') => void;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscape(onClose);
 
   return (
     <div className="picker-backdrop" role="dialog" aria-modal="true" aria-label={`${title} is still in cinemas`} onClick={onClose}>

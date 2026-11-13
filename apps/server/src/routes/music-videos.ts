@@ -23,7 +23,7 @@ export default async function musicVideoRoutes(server: FastifyInstance) {
   server.get('/api/music-videos/pending', async () => ({ jobs: listJobs('needs_artist') }));
   server.get('/api/music-videos/recent', async () => ({ jobs: listJobs() }));
 
-  server.post('/api/music-videos/sweep', async (request, reply) => {
+  server.post('/api/music-videos/sweep', async (_request, reply) => {
     try { return { outcomes: (await sweepMusicVideos(liveFilerDeps())).map(o => ({ status: o.status, message: o.message })) }; } catch (error) {
       return reply.code(502).send({ message: error instanceof Error ? error.message : 'Could not check downloads.' });
     }

@@ -8,7 +8,6 @@
 .offline-meter { display: block; height: 6px; border-radius: 6px; overflow: hidden; background: var(--color-surface-elevated, rgba(127, 127, 127, 0.2)); }
 .offline-meter > span { display: block; height: 100%; border-radius: 6px; background: var(--color-accent, #4a8cff); transition: width 300ms var(--easing-default, ease); }
 .offline-note { margin: 0 0 var(--spacing-md, 16px); color: var(--color-text-secondary, #aeaeb2); font-size: 0.85rem; }
-.offline-empty { color: var(--color-text-secondary, #aeaeb2); padding: 32px 0; text-align: center; }
 .offline-section { font-size: 1.05rem; margin: var(--spacing-lg, 24px) 0 var(--spacing-sm, 8px); }
 
 .offline-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
@@ -28,7 +27,6 @@
 .offline-row > .offline-meta { grid-column: 2; }
 .offline-row:has(.offline-actions) { grid-template-columns: 64px minmax(0, 1fr) auto; }
 .offline-row:has(.offline-actions) > .offline-actions { grid-column: auto; justify-content: flex-end; }
-.offline-row--skeleton .offline-meta { gap: 6px; }
 .offline-delete.is-confirm { border-color: var(--color-accent, #d9534f); color: var(--color-accent, #d9534f); }
 
 .offline-songs { list-style: none; margin: 0; padding: 0; }
@@ -49,7 +47,6 @@
 .offline-audio audio { flex: 2 1 260px; max-width: 100%; }
 
 .offline-player { position: fixed; inset: 0; z-index: 1000; background: #000; }
-.offline-player .video-player { width: 100%; height: 100%; }
 
 @media (max-width: 720px) {
   .offline-space { min-width: 0; width: 100%; }

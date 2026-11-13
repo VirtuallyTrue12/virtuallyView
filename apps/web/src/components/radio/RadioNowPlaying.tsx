@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRadio } from './RadioProvider';
 import { StationLogo } from './StationLogo';
 import { SvgIcon } from '../ui/SvgIcon';
+import { useEscape } from '../../lib/useEscape';
 import { kindLine, mmss, nowLines } from './info';
 import { api } from '../../lib/api';
 
@@ -95,12 +96,7 @@ export function RadioNowPlaying() {
     api.radioFavorite(station.id, next).then(() => window.dispatchEvent(new Event('vv-radio-favorites'))).catch(() => setFavorite(!next));
   };
 
-  useEffect(() => {
-    if (!expanded) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [expanded, setExpanded]);
+  useEscape(() => setExpanded(false), expanded);
 
   if (!station) return null;
   const busy = state === 'loading';

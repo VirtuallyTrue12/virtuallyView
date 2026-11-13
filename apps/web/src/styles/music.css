@@ -45,7 +45,7 @@
 
 /* Mini bar: softer, rounder controls; sits beside the sidebar (index.css handles left offset). */
 .mp { box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.28); }
-.mp-now img, .mp-now .mp-art { border-radius: var(--radius-small); box-shadow: var(--shadow-medium); }
+.mp-now img { border-radius: var(--radius-small); box-shadow: var(--shadow-medium); }
 
 /* Now Playing: pill tabs, rounder queue rows, bigger art column. */
 .np-body { grid-template-columns: minmax(280px, 520px) minmax(0, 1fr); }
@@ -62,7 +62,7 @@
 .mix-card:hover { transform: translateY(-3px); }
 .mix-cover { border-radius: var(--radius-medium); }
 .pl-cover { border-radius: var(--radius-large); }
-.pl-card, .pl-new { width: 168px; }
+.pl-card { width: 168px; }
 @media (prefers-reduced-motion: reduce) { .mix-card { transition: none; } .mix-card:hover { transform: none; } }
 
 /* Now Playing: larger art, calmer tabs. */

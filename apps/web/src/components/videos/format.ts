@@ -21,7 +21,6 @@ export const age = (iso?: string): string => {
   return unit ? rtf.format(Math.round(secs / unit[1]), unit[0]) : 'just now';
 };
 
-export const bytes = (n: number): string => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(n / 1e6))} MB`);
 
 export const watchPath = (id: string) => `/videos/watch/${encodeURIComponent(id)}`;
 export const channelPath = (id: string) => `/videos/channel/${encodeURIComponent(id)}`;
