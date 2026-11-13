@@ -186,6 +186,8 @@ async function transcodeOptionsFor(filePath: string, query: TranscodeQuery): Pro
   const burn = Number(query.burn);
   if (query.burn !== undefined && Number.isInteger(burn) && probe.subtitleStreams?.[burn] && !probe.subtitleStreams[burn]?.text) {
     options.burn = burn;
+    const { width, height } = probe.subtitleStreams[burn]!;
+    if (width && height) options.burnCanvas = { width, height };
   }
   return { start, options };
 }

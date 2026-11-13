@@ -487,6 +487,39 @@ describe('plays what the browser actually can, not just what the file name predi
     await page.waitForFunction(() => !document.querySelector('.vp-ontv'));
     expect(stopped).toBe(true);
   });
+
+  it('sends picture subtitles to the TV, and subtitles picked while it plays there go to the TV too', async () => {
+    // A Blu-ray rip whose only subtitles are pictures (VobSub): the browser plays the conversion.
+    // Playwright tries the newest route first, so the catch-all for the video goes in before the specific ones.
+    await page.route('**/api/stream/radarr-504/**', r => r.fulfill({ status: 200, contentType: 'video/mp4', body: '' }));
+    await page.route('**/api/movies/radarr-504', r => r.fulfill(json({ id: 'radarr-504', title: 'Picture Subs', status: 'available' })));
+    await page.route('**/api/stream/radarr-504/info**', r => r.fulfill(json({ playable: false, transcodingAvailable: true, durationSeconds: 100, container: 'mkv', videoCodec: 'hevc', audioCodec: 'aac', reason: 'hevc',
+      subtitleStreams: [{ index: 0, language: 'eng', text: false }, { index: 1, language: 'fre', text: false }] })));
+    await page.route('**/api/progress/movie/radarr-504', r => r.fulfill(json({ percent: 0, positionSeconds: 0 })));
+    await page.route('**/api/stream/radarr-504/subtitles', r => r.fulfill(json({ subtitles: [] })));
+    await page.route('**/api/cast/devices**', r => r.fulfill(json({ devices: [{ id: 'tv1', name: 'Living Room TV' }] })));
+    const plays: Array<Record<string, unknown>> = [];
+    await page.route('**/api/cast/play', r => { plays.push(JSON.parse(r.request().postData() ?? '{}')); return r.fulfill(json({ ok: true, message: 'Playing on Living Room TV.' })); });
+    await page.route('**/api/cast/active', r => r.fulfill(json({ sessions: [] })));
+    await page.route('**/api/cast/status**', r => r.fulfill(json({ state: 'PLAYING', position: 42, duration: 100 })));
+    await page.route('**/api/cast/stop', r => r.fulfill(json({ ok: true, position: 42 })));
+
+    await page.goto(base + '/movies/radarr-504/play');
+    await page.waitForSelector('.vp-heading');
+    await page.click('[aria-label="Subtitles"]', { force: true });
+    await page.click('.vp-menu >> text=English', { force: true });
+    await page.click('[aria-label="Cast to a TV"]', { force: true });
+    await page.click('text=Living Room TV');
+    await page.waitForSelector('.vp-ontv');
+    expect(plays[0]?.burn).toBe(0);
+    // While it plays on the TV: a different subtitle is sent there, from the TV's own position.
+    await page.waitForFunction(() => document.querySelector('.cast-remote-bar')?.textContent?.includes('0:42'));
+    await page.click('[aria-label="Subtitles"]', { force: true });
+    await page.click('.vp-menu >> text=French', { force: true });
+    await expect.poll(() => plays.length).toBe(2);
+    expect(plays[1]).toMatchObject({ burn: 1, start: 42 });
+    await page.click('text=Stop on TV', { force: true });
+  });
 });
 
 describe('refresh button', () => {

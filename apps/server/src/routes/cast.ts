@@ -40,6 +40,8 @@ export default async function castRoutes(server: FastifyInstance) {
     subtitle?: { path?: string; label?: string; lang?: string };
     /** The audio track chosen in the player (index among the file's audio tracks). */
     audio?: number;
+    /** A picture subtitle (DVD/Blu-ray) chosen in the player: drawn onto the converted picture. */
+    burn?: number;
   } }>('/api/cast/play', async (request, reply) => {
     const device = knownDevice(String(request.body?.device ?? ''));
     if (!device) return reply.code(404).send({ message: 'That device was not found. Refresh the list and try again.' });
@@ -57,7 +59,8 @@ export default async function castRoutes(server: FastifyInstance) {
     const seriesId = body.seriesId ? String(body.seriesId) : undefined;
     const start = Math.max(0, Math.floor(Number(body.start ?? 0) || 0));
     const audio = Math.max(0, Math.floor(Number(body.audio ?? 0) || 0));
-    const audioQuery = audio ? `&audio=${audio}` : '';
+    const burn = Number.isInteger(body.burn) && Number(body.burn) >= 0 ? Number(body.burn) : -1;
+    const convertQuery = `${audio ? `&audio=${audio}` : ''}${burn >= 0 ? `&burn=${burn}` : ''}`;
     let duration = Number(body.duration ?? 0) || 0;
     const sub = body.subtitle?.path && isStreamPath(String(body.subtitle.path).split('?')[0] ?? '') ? body.subtitle : undefined;
     const subPath = sub ? String(sub.path).split('?')[0]! : '';
@@ -70,7 +73,7 @@ export default async function castRoutes(server: FastifyInstance) {
     };
 
     let mode: 'direct' | 'transcode' | null = null;
-    if (directPath) {
+    if (directPath && burn < 0) {
       // Same checks as the player's own: sign-in, age rating, which codecs the file has.
       const info = await server.inject({ method: 'GET', url: `${directPath}/info`, headers: { cookie: request.headers.cookie ?? '' } })
         .then(r => (r.statusCode === 200 ? r.json() as { container?: string; videoCodec?: string | null; audioCodec?: string | null; durationSeconds?: number | null } : null))
@@ -86,14 +89,14 @@ export default async function castRoutes(server: FastifyInstance) {
     }
     try {
       if (!mode) {
-        await playOnDevice(device, signed(transcodePath, `start=${start}${audioQuery}`), title, { ...common, subtitleUrl: sub ? signed(subPath, `offset=${start}`) : undefined });
+        await playOnDevice(device, signed(transcodePath, `start=${start}${convertQuery}`), title, { ...common, subtitleUrl: sub ? signed(subPath, `offset=${start}`) : undefined });
         mode = 'transcode';
       }
       // Track the session so progress is saved while the TV plays, and the remote can follow it.
       if (mediaType && mediaId) {
         startSession(device, {
           mediaType, mediaId, seriesId, offset: mode === 'direct' ? 0 : start, duration, title, actor, mode,
-          resend: { transcodePath, audioQuery, subtitlePath: subPath || undefined, subtitleLabel: common.subtitleLabel, subtitleLang: common.subtitleLang }
+          resend: { transcodePath, convertQuery, subtitlePath: subPath || undefined, subtitleLabel: common.subtitleLabel, subtitleLang: common.subtitleLang }
         });
       }
       return { ok: true, mode, message: `Playing on ${device.name}.` };
@@ -143,10 +146,10 @@ export default async function castRoutes(server: FastifyInstance) {
         if (session.mode === 'direct' || !session.resend) await controlDevice(device, 'SEEK', seekTo);
         else {
           // A conversion cannot seek in place: send it again, converted from the new position.
-          const { transcodePath, audioQuery, subtitlePath, subtitleLabel, subtitleLang } = session.resend;
+          const { transcodePath, convertQuery, subtitlePath, subtitleLabel, subtitleLang } = session.resend;
           const origin = shareOrigin(request.headers.host, request.protocol);
           const signed = (pathname: string, query: string) => `${origin}${pathname}?${query}&st=${signStreamPath(pathname, session.userId)}`;
-          await playOnDevice(device, signed(transcodePath, `start=${seekTo}${audioQuery ?? ''}`), session.title, {
+          await playOnDevice(device, signed(transcodePath, `start=${seekTo}${convertQuery ?? ''}`), session.title, {
             subtitleUrl: subtitlePath ? signed(subtitlePath, `offset=${seekTo}`) : undefined, subtitleLabel, subtitleLang
           });
           updateSessionOffset(deviceId, seekTo);

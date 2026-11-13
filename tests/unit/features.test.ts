@@ -50,10 +50,17 @@ describe('picture subtitles', () => {
   it('draws the chosen picture stream onto the video and re-encodes', () => {
     const args = ffmpegTranscodeArgs('/m/a.mkv', 0, { burn: 2, copyVideo: true, height: 720 });
     expect(args).toContain('-filter_complex');
-    expect(args[args.indexOf('-filter_complex') + 1]).toBe('[0:v:0][0:s:2]overlay,scale=-2:720[v]');
+    expect(args[args.indexOf('-filter_complex') + 1]).toBe('[0:v:0][0:s:2]overlay=x=(W-w)/2:y=(H-h)/2,scale=-2:720[v]');
     expect(args).toContain('[v]');
     expect(args).not.toContain('copy');
     expect(args).toContain('libx264');
+  });
+
+  it('letterboxes a cropped film back to the frame its subtitles are drawn for, so the bottom lines stay on screen', () => {
+    // The Ninth Gate: 1920x816 picture, Blu-ray subtitles drawn for 1920x1080.
+    const args = ffmpegTranscodeArgs('/m/a.mkv', 1150, { burn: 0, burnCanvas: { width: 1920, height: 1080 } });
+    expect(args[args.indexOf('-filter_complex') + 1])
+      .toBe('[0:v:0]pad=w=max(iw\\,1920):h=max(ih\\,1080):x=(ow-iw)/2:y=(oh-ih)/2[base];[base][0:s:0]overlay=x=(W-w)/2:y=(H-h)/2[v]');
   });
 
   it('leaves normal conversion untouched', () => {

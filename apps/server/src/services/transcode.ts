@@ -14,7 +14,7 @@ const BROWSER_AUDIO = new Set(['aac', 'mp3', 'opus', 'vorbis', 'flac']);
 const BROWSER_CONTAINERS = new Set(['mp4', 'm4v', 'webm', 'mov', 'ogv', 'ogg']);
 
 export interface AudioTrack { index: number; codec: string; language: string; title: string; channels: number | null }
-export interface SubtitleStream { index: number; codec: string; language: string; title: string; text: boolean }
+export interface SubtitleStream { index: number; codec: string; language: string; title: string; text: boolean; /** Picture subtitles: the frame they are drawn for. */ width?: number; height?: number }
 
 export interface Chapter { start: number; end: number; title: string }
 
@@ -235,7 +235,8 @@ function runProbe(ffprobe: string, filePath: string): Promise<ProbeStreams | nul
           })),
           subtitleStreams: subs.map((sub, index) => ({
             index, codec: sub.codec_name ?? 'unknown', language: sub.tags?.language ?? 'und',
-            title: sub.tags?.title ?? '', text: TEXT_SUBS.has(sub.codec_name ?? '')
+            title: sub.tags?.title ?? '', text: TEXT_SUBS.has(sub.codec_name ?? ''),
+            ...(sub.width && sub.height ? { width: sub.width, height: sub.height } : {})
           }))
         });
       } catch {
@@ -326,6 +327,8 @@ export interface TranscodeOptions {
   copyVideo?: boolean;
   /** Zero-based image subtitle stream (PGS, VobSub) to draw onto the picture. Forces a re-encode. */
   burn?: number;
+  /** The frame that picture subtitle is drawn for (a Blu-ray's is 1920x1080 even when the film is cropped to 1920x800). */
+  burnCanvas?: { width: number; height: number };
   /** Source height in pixels; a re-encode of anything taller than 1080p is capped to 1080p. */
   sourceHeight?: number;
   /** Source bitrate (bits a second): the re-encode needs no more than about twice it (HEVC to H.264). */
@@ -362,9 +365,14 @@ function encodeArgs(options: TranscodeOptions): string[] {
   options = { ...options, height: target || undefined };
   const { hw, tonemap, vf } = videoPlan(options);
   if (burn !== undefined) {
-    // Burned-in subtitles are drawn on the CPU; an HDR picture is tone mapped before they go on top.
-    const base = tonemap ? `[0:v:0]${cpuTonemap('yuv420p')}[base];[base]` : '[0:v:0]';
-    const overlay = `${base}[0:s:${burn}]overlay${scale ? `,scale=-2:${Math.round(options.height as number)}` : ''}[v]`;
+    // Burned-in subtitles are drawn on the CPU; an HDR picture is tone mapped before they go on top. A film cropped
+    // to 1920x800 has subtitles drawn for the full 1920x1080 frame: pasted at the top left, the lines near the bottom
+    // fell off the picture. So the picture is letterboxed back to that frame first, and the subtitles centred on it.
+    const canvas = options.burnCanvas;
+    const fit = canvas ? `pad=w=max(iw\\,${canvas.width}):h=max(ih\\,${canvas.height}):x=(ow-iw)/2:y=(oh-ih)/2` : '';
+    const prep = [tonemap ? cpuTonemap('yuv420p') : '', fit].filter(Boolean).join(',');
+    const base = prep ? `[0:v:0]${prep}[base];[base]` : '[0:v:0]';
+    const overlay = `${base}[0:s:${burn}]overlay=x=(W-w)/2:y=(H-h)/2${scale ? `,scale=-2:${Math.round(options.height as number)}` : ''}[v]`;
     args.push('-filter_complex', overlay, '-map', '[v]', '-map', `0:a:${audio}?`);
   } else {
     args.push('-map', '0:v:0', '-map', `0:a:${audio}?`);

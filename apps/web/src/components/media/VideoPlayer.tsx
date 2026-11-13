@@ -415,13 +415,14 @@ export default function VideoPlayer({
   };
 
   // DLNA / Chromecast: the server tells the TV what to play, so this page can be closed.
-  const castToDevice = async (device: { id: string; name: string }): Promise<string> => {
-    const start = Math.floor(positionRef.current);
+  const castToDevice = async (device: { id: string; name: string }, from = positionRef.current): Promise<string> => {
+    const start = Math.floor(from);
     // The original file when the TV can play it (its remote then seeks), the conversion otherwise: the server decides.
     const path = castTranscode ? `${castTranscode}?start=${start}` : src;
     const body: Record<string, unknown> = { device: device.id, path, title, start };
     if (castTranscode) body.direct = src.split('?')[0];
     if (audioIndex) body.audio = audioIndex;
+    if (burnIndex >= 0) body.burn = burnIndex;
     const sub = subtitles[subIndex];
     if (sub) body.subtitle = { path: sub.src.split('?')[0], label: sub.label, lang: sub.srclang };
     if (mediaType) body.mediaType = mediaType;
@@ -454,6 +455,20 @@ export default function VideoPlayer({
       if (here) { wantPlay.current = true; void videoRef.current?.play().catch(() => setPlaying(false)); }
     })();
   };
+
+  // Subtitles picked while the TV plays go to the TV: it is sent again, from where it is, with them.
+  const castSubs = useRef('');
+  useEffect(() => {
+    const key = `${subIndex}|${burnIndex}`;
+    if (!onTv) { castSubs.current = ''; return; }
+    if (!castSubs.current) { castSubs.current = key; return; }
+    if (castSubs.current === key) return;
+    castSubs.current = key;
+    castToDevice(onTv, tvAt.current)
+      .then(() => toast(subIndex < 0 && burnIndex < 0 ? `Subtitles off on ${onTv.name}` : `Subtitles on ${onTv.name}`))
+      .catch((err: Error) => toast(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onTv, subIndex, burnIndex]);
 
   const skip = useCallback((delta: number) => seekTo(position + delta), [seekTo, position]);
 

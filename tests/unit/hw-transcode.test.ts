@@ -51,7 +51,7 @@ describe('hardware video conversion', () => {
     expect(args).not.toContain('-hwaccel');
     expect(args).toContain('libx264');
     const graph = args[args.indexOf('-filter_complex') + 1];
-    expect(graph).toMatch(/^\[0:v:0\]zscale=t=linear.*tonemap=hable.*\[base\];\[base\]\[0:s:1\]overlay\[v\]$/);
+    expect(graph).toMatch(/^\[0:v:0\]zscale=t=linear.*tonemap=hable.*\[base\];\[base\]\[0:s:1\]overlay=x=\(W-w\)\/2:y=\(H-h\)\/2\[v\]$/);
   });
 
   it('tone maps HDR10 with mastering data on the GPU, and HLG or bare PQ on the CPU before upload', async () => {
