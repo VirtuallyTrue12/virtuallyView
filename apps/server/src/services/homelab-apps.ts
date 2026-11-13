@@ -27,6 +27,9 @@ function save(all: Record<string, Saved>): void {
   writeFileSync(FILE, JSON.stringify(all), { encoding: 'utf8', mode: 0o600 });
 }
 
+/** The saved address and key of a connected app, or undefined. */
+export const savedApp = (id: string): Saved | undefined => (load()[id]?.url ? load()[id] : undefined);
+
 export function saveApp(id: string, url: string, apiKey?: string): { ok: true } | { ok: false; message: string } {
   if (!KNOWN_APPS.some(a => a.id === id)) return { ok: false, message: 'Unknown app.' };
   const all = load();

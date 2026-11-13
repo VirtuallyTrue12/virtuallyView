@@ -396,7 +396,8 @@ services:
       - ${TV_DIR:-media-tv}:/media/tv:ro
       - ${MUSIC_DIR:-media-music}:/media/music:ro
       - ${PHOTOS_DIR:-media-photos}:/media/photos:ro
-      - ${BOOKS_DIR:-media-books}:/media/books:ro
+      # Read-write: Books pulls books and audiobooks (from free sources or your indexers) into this folder. Kavita below stays read-only.
+      - ${BOOKS_DIR:-media-books}:/media/books
       # Videos saved from the Videos section (written by the ytdlp service). Read-write so removing one deletes its file.
       - ${VIDEOS_DIR:-media-videos}:/media/videos
     healthcheck:

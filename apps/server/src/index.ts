@@ -54,6 +54,7 @@ import kiwixRoutes from './routes/kiwix.js';
 import appsRoutes from './routes/apps.js';
 import refreshRoutes from './routes/refresh.js';
 import libraryFolderRoutes from './routes/library-folders.js';
+import bookRoutes from './routes/books.js';
 import artRoutes from './routes/art.js';
 import setupRoutes from './routes/setup.js';
 import profileRoutes from './routes/profiles.js';
@@ -516,6 +517,7 @@ const start = async () => {
   await server.register(appsRoutes);
   await server.register(refreshRoutes);
   await server.register(libraryFolderRoutes);
+  await server.register(bookRoutes);
   await server.register(artRoutes);
   await server.register(setupRoutes);
   await server.register(profileRoutes);

@@ -6,7 +6,9 @@ const KIDS_BLOCKED = [
   '/api/requests', '/api/downloads', '/api/diagnostics', '/api/apps', '/api/troubleshoot',
   '/api/settings', '/api/server-settings', '/api/integrations', '/api/services', '/api/onboarding',
   '/api/setup', '/api/system', '/api/indexers', '/api/backup', '/api/kiwix/config', '/api/library', '/api/live/schedule', '/api/live/series',
-  '/api/radio/record', '/api/radio/recordings'
+  '/api/radio/record', '/api/radio/recordings',
+  // Finding and pulling books is a download: reading the library is not.
+  '/api/books/pull', '/api/books/jobs', '/api/books/search', '/api/books/discover'
 ];
 
 /** Starting a search, a specials lookup or a file replacement for a title (this is how a download is asked for),

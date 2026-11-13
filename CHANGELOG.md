@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Books, server side of the redo: a real library index (EPUB details and covers, audiobooks, PDFs), saved reading and listening positions per person, shelves and recommendations, search across Project Gutenberg, the Internet Archive, Open Library, arXiv, LibriVox and your own indexers, and Pull to bring a book or audiobook into the library (checked, filed as Author/Title, torrents through qBittorrent). The books folder is now mounted read-write for the app.
+
 - Home, For you: new videos from channels you follow show their thumbnails (they were blank tiles), whole on a blurred backdrop instead of cropped.
 - Picture subtitles (Blu-ray and DVD) now show on films cropped to widescreen: the lines near the bottom used to fall off the picture, so they seemed missing. They also go to the TV when you cast, and subtitles picked while a film plays on the TV are sent to the TV from where it is.
 - Radio, behind the scenes: stations that do not play are hidden (a slow background check plays a real piece of every listed station and hides one after two failures; Show all brings them back), a home made of rows (featured, near you, news, music, talk, sports, devotional and, in India, one per language), the song playing now with its album cover, pause and rewind of live radio up to 30 minutes, and recording a show (each person sees only their own). The talking voices are gone: no more station announcements on Radio, no DJ mode in Music, and the optional local voice service is removed.

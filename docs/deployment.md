@@ -56,7 +56,7 @@ Put the dashboard (port 3000) behind a reverse proxy for TLS: [HTTPS](https.md) 
 
 ## Photos and books
 
-The app mounts two extra folders read only: `/media/photos` and `/media/books` (volumes `media-photos` and `media-books`). To use your own folders, change those volumes in `docker-compose.yml` to bind mounts, for example `/home/you/Pictures:/media/photos:ro`.
+The app mounts two extra folders: `/media/photos` (read only) and `/media/books` (read-write, because Books pulls books and audiobooks into it as `Author/Title/`). Both are volumes (`media-photos` and `media-books`). To use your own folders, change those volumes in `docker-compose.yml` to bind mounts, for example `/home/you/Pictures:/media/photos:ro` and `/home/you/Books:/media/books`. Kavita and Audiobookshelf keep reading the books folder read only. Keep `:ro` on the books line to stop pulling (Books then only shows what is already there).
 
 ## Updating
 
