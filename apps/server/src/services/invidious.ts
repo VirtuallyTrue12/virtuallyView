@@ -67,6 +67,7 @@ interface RawThumb { url?: string; quality?: string; width?: number }
 interface RawVideo {
   type?: string; videoId?: string; title?: string; author?: string; authorId?: string; lengthSeconds?: number; viewCount?: number; viewCountText?: string;
   published?: number | string; videoThumbnails?: RawThumb[]; description?: string; authorThumbnails?: RawThumb[];
+  liveNow?: boolean; isUpcoming?: boolean;
 }
 
 /** "824M" / "1.2K" (what related videos carry instead of a number) as a number. */
@@ -117,7 +118,7 @@ export async function searchVideos(query: string, page = 1): Promise<VideoResult
   const q = clean(query, 100);
   if (!q) return [];
   const rows = await call<RawVideo[]>(`/api/v1/search?q=${encodeURIComponent(q)}&type=video&page=${Math.max(1, Math.min(page, 20))}`);
-  return rows.map(toResult).filter((v): v is VideoResult => !!v).slice(0, 30);
+  return rows.filter(playable).map(toResult).filter((v): v is VideoResult => !!v).slice(0, 30);
 }
 
 export async function videoInfo(id: string): Promise<VideoResult | null> {
@@ -126,8 +127,11 @@ export async function videoInfo(id: string): Promise<VideoResult | null> {
   return toResult(raw);
 }
 
+// Live and upcoming broadcasts cannot play through the instance (YouTube refuses their pieces): left out of every list.
+// Trending does not flag them, but a finished video always has a length.
+const playable = (r: RawVideo) => !r.liveNow && !r.isUpcoming && r.lengthSeconds !== 0;
 const videosOf = (rows: unknown): VideoResult[] =>
-  (Array.isArray(rows) ? rows as RawVideo[] : []).filter(r => !r.type || r.type === 'video' || r.type === 'shortVideo').map(toResult).filter((v): v is VideoResult => !!v);
+  (Array.isArray(rows) ? rows as RawVideo[] : []).filter(r => (!r.type || r.type === 'video' || r.type === 'shortVideo') && playable(r)).map(toResult).filter((v): v is VideoResult => !!v);
 
 /** What is trending (by country, two letters; the instance's default otherwise) and the instance's popular list. */
 export async function trendingVideos(region?: string): Promise<VideoResult[]> {
@@ -233,6 +237,7 @@ export interface VideoDetails extends VideoResult {
   hasStream: boolean;
   /** Heights this app's player can play in HD (H.264 picture plus AAC sound, joined on the server), tallest first. */
   hdHeights: number[];
+  live?: true;
 }
 interface RawFormat { itag?: string | number; type?: string; url?: string; qualityLabel?: string; fps?: number }
 interface RawDetails extends RawVideo {
@@ -268,6 +273,7 @@ export async function hdSources(id: string, maxHeight: number): Promise<{ video:
   const base = baseUrl();
   if (!base) throw new NotConfigured();
   const raw = await call<RawDetails>(`/api/v1/videos/${id}?local=true`);
+  if (raw.liveNow) return null;
   const picked = pickFormats(raw.adaptiveFormats, maxHeight);
   // local=true makes every address a path on the instance; anything else (a full URL elsewhere) is refused.
   const onInstance = (url = '') => (url.startsWith('/') && !url.startsWith('//') ? `${base}${url}` : null);
@@ -292,7 +298,8 @@ export async function videoDetails(id: string): Promise<VideoDetails | null> {
     chapters: parseChapters(raw.description),
     related: videosOf(raw.recommendedVideos).slice(0, 20),
     hasStream: (raw.formatStreams ?? []).some(f => String(f.itag) === '18'),
-    hdHeights: hdHeightsOf(raw.adaptiveFormats)
+    hdHeights: raw.liveNow ? [] : hdHeightsOf(raw.adaptiveFormats),
+    ...(raw.liveNow ? { live: true as const } : {})
   };
 }
 

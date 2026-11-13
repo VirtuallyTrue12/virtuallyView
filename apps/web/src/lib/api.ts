@@ -153,7 +153,7 @@ export interface VideoResult {
 export interface SavedState { status: 'ready' | 'queued' | 'downloading' | 'merging' | 'error' | 'cancelled' | 'missing'; percent: number; error?: string; sizeBytes?: number }
 export interface VideoChannel { id: string; name: string; avatar?: string; banner?: string; subscribers: number; description?: string; videoCount?: number; verified?: boolean }
 export interface VideoDetails extends VideoResult {
-  publishedText?: string; likes: number; subscribersText?: string; hasStream: boolean; hdHeights?: number[];
+  publishedText?: string; likes: number; subscribersText?: string; hasStream: boolean; hdHeights?: number[]; live?: boolean;
   captions: Array<{ label: string; code: string }>; chapters: Array<{ start: number; title: string }>; related: VideoResult[];
 }
 export interface VideoState { position: number; later: boolean; saved: SavedState | null; video: VideoResult | null; subscribed: boolean }

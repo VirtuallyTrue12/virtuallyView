@@ -164,7 +164,9 @@ export default function VideoWatch() {
       <div className="vd-watch-grid">
         <div className="vd-watch-main">
           <div className="vd-player">
-            {showEmbed ? (
+            {details?.live && !local ? (
+              <div className="vd-embed vd-embed--off"><p>This is a live broadcast. Live broadcasts cannot play here yet.</p></div>
+            ) : showEmbed ? (
               <div className="vd-embed">
                 <iframe
                   src={`${online!.embed}${state.position > 5 ? `&t=${Math.floor(state.position)}` : ''}`} title={video.title}

@@ -24,6 +24,17 @@ describe('Invidious (private YouTube search and playback)', () => {
     expect(results[0]).toMatchObject({ id: 'dQw4w9WgXcQ', title: 'A Song', channel: 'A Channel', channelId: 'UC123', durationSeconds: 213, views: 1_000_000_000, thumbnail: 'http://invidious.local/vi/dQw4w9WgXcQ/mq.jpg' });
   });
 
+  it('leaves out live and upcoming broadcasts, which cannot play through the instance', async () => {
+    withUrl('http://invidious.local');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify([
+      { videoId: 'dQw4w9WgXcQ', title: 'Finished', lengthSeconds: 213 },
+      { videoId: 'aaaaaaaaaaa', title: 'Live now', lengthSeconds: 0, liveNow: true },
+      { videoId: 'bbbbbbbbbbb', title: 'Premiere', lengthSeconds: 0, isUpcoming: true },
+      { videoId: 'ccccccccccc', title: 'Live, unflagged (trending)', lengthSeconds: 0 }
+    ]), { status: 200, headers: { 'content-type': 'application/json' } })));
+    expect((await searchVideos('news')).map(v => v.title)).toEqual(['Finished']);
+  });
+
   it('an empty search never reaches the network', async () => {
     withUrl('http://invidious.local');
     const fetchMock = vi.fn();
