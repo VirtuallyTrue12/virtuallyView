@@ -404,9 +404,7 @@ export function authenticate(username: string, candidate: string, stayLoggedIn =
   const token = randomBytes(32).toString('hex');
   const now = Date.now();
   loadSessions();
-  for (const [session, value] of sessions) {
-    if (value.expiresAt <= now) sessions.delete(session);
-  }
+  dropExpiredSessions(now);
   const ttl = stayLoggedIn ? PERSISTENT_LIFETIME_MS : SESSION_LIFETIME_MS;
   sessions.set(tokenKey(token), {
     expiresAt: now + ttl, userId: account?.id ?? 'env', createdAt: now,
@@ -426,9 +424,7 @@ export function issueSession(userId: string, stayLoggedIn = false, meta: Session
   const token = randomBytes(32).toString('hex');
   const now = Date.now();
   loadSessions();
-  for (const [session, value] of sessions) {
-    if (value.expiresAt <= now) sessions.delete(session);
-  }
+  dropExpiredSessions(now);
   sessions.set(tokenKey(token), {
     expiresAt: now + (stayLoggedIn ? PERSISTENT_LIFETIME_MS : SESSION_LIFETIME_MS), userId, createdAt: now,
     ...(meta.device ? { device: meta.device } : {}), ...(meta.ip ? { ip: meta.ip } : {})
@@ -515,6 +511,22 @@ export function listUsers(): PublicUser[] {
   }
 }
 
+function dropExpiredSessions(now: number): void {
+  for (const [token, value] of sessions) {
+    if (value.expiresAt <= now) sessions.delete(token);
+  }
+}
+
+/** Signs a person out everywhere (their account changed or was removed). */
+function dropUserSessions(id: string): void {
+  loadSessions();
+  let changed = false;
+  for (const [token, session] of sessions) {
+    if (session.userId === id) { sessions.delete(token); changed = true; }
+  }
+  if (changed) persistSessions();
+}
+
 /** Remove an account and every session it owns. Refuses to remove the last admin. */
 export function deleteUser(id: string): { ok: boolean; message?: string } {
   let users: StoredUser[];
@@ -533,15 +545,7 @@ export function deleteUser(id: string): { ok: boolean; message?: string } {
   } catch {
     return { ok: false, message: 'Could not write the user store.' };
   }
-  loadSessions();
-  let changed = false;
-  for (const [token, session] of sessions) {
-    if (session.userId === id) {
-      sessions.delete(token);
-      changed = true;
-    }
-  }
-  if (changed) persistSessions();
+  dropUserSessions(id);
   return { ok: true };
 }
 
@@ -595,12 +599,7 @@ export function setUserPassword(id: string, password: string): { ok: boolean; me
   } catch {
     return { ok: false, message: 'Could not write the user store.' };
   }
-  loadSessions();
-  let changed = false;
-  for (const [token, session] of sessions) {
-    if (session.userId === id) { sessions.delete(token); changed = true; }
-  }
-  if (changed) persistSessions();
+  dropUserSessions(id);
   return { ok: true };
 }
 

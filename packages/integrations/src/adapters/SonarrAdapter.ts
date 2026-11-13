@@ -1,6 +1,7 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
-import { runArrCommand, arrHealthCheck, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listRootFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { runArrCommand, arrHealthCheck, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listRootFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { getArrQueue, removeArrQueueItem, getArrHistory } from '../arr-common.js';
 import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
 import { TtlCache } from '../ttl-cache.js';
 import { sonarrRatings } from '../arr-ratings.js';
@@ -348,45 +349,11 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
 
   async getQueue(): Promise<Download[]> {
-    const { url, apiKey } = this.requireConfig();
-    const res = await fetch(`${url}/api/v3/queue?pageSize=1000`, {
-      headers: { 'X-Api-Key': apiKey },
-      signal: AbortSignal.timeout(4000)
-    });
-    if (!res.ok) throw new Error(`Sonarr returned ${res.status} while listing the queue.`);
-    const body = (await res.json()) as { records?: Array<Record<string, unknown>> };
-    return (body.records ?? []).map(q => {
-      const total = (Number(q.size) || 0) as number;
-      const left = (Number(q.sizeleft ?? total) || 0) as number;
-      const progress = total > 0
-        ? Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)))
-        : 0;
-      const p = queueProblem(q);
-      return {
-        id: `queue-${String(q.id ?? '')}`,
-        sourceClient: 'sonarr',
-        downloadId: typeof q.downloadId === 'string' ? q.downloadId : undefined,
-        mediaId: q.seriesId ? `sonarr-${String(q.seriesId)}` : undefined,
-        ...(Number.isInteger(q.episodeId) ? { episodeId: q.episodeId as number } : {}),
-        status: p.status ?? String((q.status ?? '') as string).toLowerCase(),
-        ...(p.message ? { statusMessage: p.message } : {}),
-        progress,
-        title: (q.title as string) ?? 'Unknown download',
-        size: total > 0 ? total : undefined,
-        timeleft: (q.timeleft as string) ?? undefined
-      } as Download & { title?: string; timeleft?: string };
-    }) as Download[];
+    return getArrQueue(this.requireConfig(), { service: 'sonarr', api: 'v3' }, 'seriesId', 'episodeId');
   }
 
   async removeQueueItem(queueId: string, blocklist = false): Promise<{ success: boolean; message: string }> {
-    const { url, apiKey } = this.requireConfig();
-    const res = await fetch(`${url}/api/v3/queue/${queueId}?removeFromClient=true&blocklist=${blocklist}`, {
-      method: 'DELETE',
-      headers: { 'X-Api-Key': apiKey },
-      signal: AbortSignal.timeout(4000)
-    });
-    if (!res.ok) return { success: false, message: `Sonarr could not remove that queue item (status ${res.status}).` };
-    return { success: true, message: 'Removed from the queue.' };
+    return removeArrQueueItem(this.requireConfig(), { service: 'sonarr', api: 'v3' }, queueId, blocklist);
   }
 
   /** Search for specific episodes (numeric ids or `episode-N`). */
@@ -532,19 +499,6 @@ export class SonarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
 
   async getHistory(): Promise<{ events: { timestamp: Date; service: string; message: string }[] }> {
-    const { url, apiKey } = this.requireConfig();
-    const res = await fetch(`${url}/api/v3/history?pageSize=50`, {
-      headers: { 'X-Api-Key': apiKey },
-      signal: AbortSignal.timeout(4000)
-    });
-    if (!res.ok) throw new Error(`Sonarr returned ${res.status} while listing history.`);
-    const body = (await res.json()) as { records?: Array<Record<string, unknown>> };
-    return {
-      events: (body.records ?? []).map(r => ({
-        timestamp: r.date ? new Date(r.date as string) : new Date(),
-        service: 'sonarr',
-        message: `${(r.eventType as string) ?? 'event'}: ${(r.sourceTitle as string) ?? ''}`.trim()
-      }))
-    };
+    return getArrHistory(this.requireConfig(), { service: 'sonarr', api: 'v3' });
   }
 }

@@ -1,7 +1,8 @@
 import { IntegrationAdapter } from '../adapter-interface.js';
 import { Media, MediaStatus, Download } from '@virtuallyview/types';
 import { artProxyUrl } from '../art-proxy.js';
-import { runArrCommand, arrHealthCheck, queueProblem, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listRootFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { runArrCommand, arrHealthCheck, lookupRequestCandidates, selectRequestCandidate, resolveAddTargets, listUnmappedFolders, listRootFolders, listQualityProfiles, changeQualityProfile, currentQualityProfileId, type QualityProfile, type RequestSelectionInput, type RequestAddResult } from '../request-identity.js';
+import { getArrQueue, removeArrQueueItem, getArrHistory } from '../arr-common.js';
 import { setMinimumSeeders, type MinimumSeedersResult } from '../indexer-seeders.js';
 import { TtlCache } from '../ttl-cache.js';
 
@@ -302,34 +303,7 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
 
   async getQueue(): Promise<Download[]> {
-    const { url, apiKey } = this.requireConfig();
-    const res = await fetch(`${url}/api/v1/queue?pageSize=1000`, {
-      headers: { 'X-Api-Key': apiKey },
-      signal: AbortSignal.timeout(4000)
-    });
-    if (!res.ok) throw new Error(`Lidarr returned ${res.status} while listing the queue.`);
-    const body = (await res.json()) as { records?: Array<Record<string, unknown>> };
-    return (body.records ?? []).map(q => {
-      const total = (Number(q.size) || 0) as number;
-      const left = (Number(q.sizeleft ?? total) || 0) as number;
-      const progress = total > 0
-        ? Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)))
-        : 0;
-      const p = queueProblem(q);
-      return {
-        id: `queue-${String(q.id ?? '')}`,
-        sourceClient: 'lidarr',
-        downloadId: typeof q.downloadId === 'string' ? q.downloadId : undefined,
-        mediaId: q.artistId ? `lidarr-${String(q.artistId)}` : undefined,
-        ...(Number.isInteger(q.albumId) ? { albumId: q.albumId as number } : {}),
-        status: p.status ?? String((q.status ?? '') as string).toLowerCase(),
-        ...(p.message ? { statusMessage: p.message } : {}),
-        progress,
-        title: (q.title as string) ?? 'Unknown download',
-        size: total > 0 ? total : undefined,
-        timeleft: (q.timeleft as string) ?? undefined
-      } as Download & { title?: string; timeleft?: string };
-    }) as Download[];
+    return getArrQueue(this.requireConfig(), { service: 'lidarr', api: 'v1' }, 'artistId', 'albumId');
   }
 
   /**
@@ -337,12 +311,7 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
    * links artistId -> albums -> tracks, all via the same API).
    */
   async removeQueueItem(queueId: string, blocklist = false): Promise<{ success: boolean; message: string }> {
-    const { url, apiKey } = this.requireConfig();
-    const res = await fetch(`${url}/api/v1/queue/${queueId}?removeFromClient=true&blocklist=${blocklist}`, {
-      method: 'DELETE', headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(6000)
-    });
-    if (!res.ok) return { success: false, message: `Lidarr could not remove that queue item (status ${res.status}).` };
-    return { success: true, message: 'Removed from the queue.' };
+    return removeArrQueueItem(this.requireConfig(), { service: 'lidarr', api: 'v1' }, queueId, blocklist, 6000);
   }
 
   /** A cover image stored by Lidarr itself, fetched for the artwork proxy. */
@@ -661,19 +630,6 @@ export class LidarrAdapter implements IntegrationAdapter<{ url: string; apiKey: 
   }
 
   async getHistory(): Promise<{ events: { timestamp: Date; service: string; message: string }[] }> {
-    const { url, apiKey } = this.requireConfig();
-    const res = await fetch(`${url}/api/v1/history?pageSize=50`, {
-      headers: { 'X-Api-Key': apiKey },
-      signal: AbortSignal.timeout(4000)
-    });
-    if (!res.ok) throw new Error(`Lidarr returned ${res.status} while listing history.`);
-    const body = (await res.json()) as { records?: Array<Record<string, unknown>> };
-    return {
-      events: (body.records ?? []).map(r => ({
-        timestamp: r.date ? new Date(r.date as string) : new Date(),
-        service: 'lidarr',
-        message: `${(r.eventType as string) ?? 'event'}: ${(r.sourceTitle as string) ?? ''}`.trim()
-      }))
-    };
+    return getArrHistory(this.requireConfig(), { service: 'lidarr', api: 'v1' });
   }
 }

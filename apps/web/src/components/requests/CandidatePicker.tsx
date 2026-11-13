@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { RequestCandidate } from '../../lib/request-selection';
 import { QualitySelect } from './QualitySelect';
 import { SvgIcon } from '../ui/SvgIcon';
+import { useEscape } from '../../lib/useEscape';
 
 const KIND: Record<string, string> = { movie: 'Movie', series: 'TV show', artist: 'Artist' };
 
@@ -15,11 +16,7 @@ export function CandidatePicker({ title, message, candidates, busy, initialQuali
   onClose: () => void;
 }) {
   const [quality, setQuality] = useState(initialQuality);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEscape(onClose);
 
   return (
     <div className="picker-backdrop" role="dialog" aria-modal="true" aria-label={`Choose the right match for ${title}`} onClick={onClose}>

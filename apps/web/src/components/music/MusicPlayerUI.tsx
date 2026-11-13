@@ -5,6 +5,7 @@ import { LyricStyleToggle, LyricsOverlay, SceneTiles, VizCanvas } from './Visual
 import VizStage from './VizStage';
 import { setViz, useLyricLine, useLyrics, useViz } from '../../lib/viz-store';
 import { SvgIcon } from '../ui/SvgIcon';
+import { useEscape } from '../../lib/useEscape';
 import LyricsPanel from '../media/LyricsPanel';
 import { SeekBar, formatClock } from './SeekBar';
 import { useArtworkTint } from '../../lib/artwork-tint';
@@ -299,12 +300,7 @@ function NowPlaying() {
     }
   }, [expanded]);
 
-  useEffect(() => {
-    if (!expanded) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [expanded, setExpanded]);
+  useEscape(() => setExpanded(false), expanded);
 
   if (!entry) return null;
   return (
