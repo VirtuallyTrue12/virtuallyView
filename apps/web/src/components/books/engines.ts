@@ -34,7 +34,8 @@ async function fetchBytes(url: string): Promise<ArrayBuffer> {
 export async function openEpub(el: HTMLElement, url: string, o: OpenOptions): Promise<Engine> {
   const { default: ePub } = await import('epubjs');
   const book = ePub(await fetchBytes(url));
-  const rendition = book.renderTo(el, { width: '100%', height: '100%', flow: 'paginated', spread: 'none' });
+  // Two pages side by side once there is room: one line across a whole laptop or TV screen is too long to read.
+  const rendition = book.renderTo(el, { width: '100%', height: '100%', flow: 'paginated', spread: 'auto', minSpreadWidth: 800 });
   const paint = (t: ReaderTheme) => { rendition.themes.override('color', THEMES[t].fg); rendition.themes.override('background', THEMES[t].bg); };
   paint(o.theme);
   rendition.themes.fontSize(`${o.font}%`);
@@ -64,10 +65,12 @@ export async function openEpub(el: HTMLElement, url: string, o: OpenOptions): Pr
 }
 
 export async function openPdf(el: HTMLElement, url: string, o: OpenOptions): Promise<Engine> {
-  const pdfjs = await import('pdfjs-dist');
-  const { default: workerSrc } = await import('pdfjs-dist/build/pdf.worker.min.js?url');
+  // The legacy build: TV browsers lag behind desktop ones. A PDF from a torrent is untrusted: no eval (CVE-2024-4367).
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const { default: workerSrc } = await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url');
   pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await fetchBytes(url)) }).promise;
+  const loading = pdfjs.getDocument({ data: new Uint8Array(await fetchBytes(url)), isEvalSupported: false });
+  const pdf = await loading.promise;
   const canvas = document.createElement('canvas');
   canvas.className = 'rd-pdf';
   el.replaceChildren(canvas);
@@ -109,6 +112,6 @@ export async function openPdf(el: HTMLElement, url: string, o: OpenOptions): Pro
     }).catch(() => []),
     setFont: p => { font = p; void draw(); },
     setTheme: theme,
-    destroy: () => { window.removeEventListener('resize', resize); void pdf.destroy(); }
+    destroy: () => { window.removeEventListener('resize', resize); void loading.destroy(); }
   };
 }
