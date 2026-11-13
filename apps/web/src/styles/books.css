@@ -97,9 +97,9 @@
 .rd-msg { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; text-align: center; padding: 2rem; }
 .rd-panel { position: absolute; top: 56px; right: 0.8rem; z-index: 2; display: grid; gap: 0.3rem; min-width: 240px; max-width: min(380px, calc(100vw - 1.6rem)); max-height: min(70vh, 520px); overflow-y: auto; padding: 0.6rem; border-radius: 14px; background: inherit; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px color-mix(in srgb, currentColor 18%, transparent); }
 .rd-toc button { justify-content: start; text-align: left; height: auto; min-height: 40px; padding: 0.45rem 0.7rem; }
-.rd-row { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
-.rd-row button { flex: 1; }
-.rd-row button.is-on { background: color-mix(in srgb, currentColor 16%, transparent); font-weight: 700; }
+.rd-panel .rd-row { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.rd-panel .rd-row button { flex: 1; }
+.rd-panel .rd-row button.is-on { background: color-mix(in srgb, currentColor 16%, transparent); font-weight: 700; }
 .rd-foot { font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .rd-progress { flex: 1; height: 4px; border-radius: 999px; background: color-mix(in srgb, currentColor 18%, transparent); overflow: hidden; }
 .rd-progress div { height: 100%; background: var(--color-accent); }
