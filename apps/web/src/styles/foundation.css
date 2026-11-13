@@ -78,8 +78,6 @@ a:focus-visible, button:focus-visible, [role='button']:focus-visible, summary:fo
 .btn:disabled, .btn[aria-disabled='true'] { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; filter: none; }
 .btn-danger { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 35%, transparent); }
 .btn-danger:hover { background: color-mix(in srgb, var(--color-danger) 20%, transparent); }
-.btn-danger-outline { border-color: color-mix(in srgb, var(--color-danger) 50%, transparent); }
-.btn-danger-outline:hover { background: color-mix(in srgb, var(--color-danger) 12%, transparent); transform: none; }
 
 /* Round icon-only button. Always give it an aria-label. */
 .icon-btn {
@@ -418,7 +416,12 @@ body.has-music-bar { padding-bottom: calc(var(--dock-bottom, 88px) + var(--spaci
 .back-btn:hover { background: color-mix(in srgb, var(--color-text-primary) 8%, transparent); }
 
 /* ---------- Performance: no live blur behind repeated, scrolling cards ---------- */
-.download-row, .settings-card, .settings-section, .request-card, .season-card, .download-panel, .source-check, .request-form, .notice, .search-input {
+.settings-section,
+.season-card,
+.download-panel,
+.source-check,
+.notice,
+.search-input {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }

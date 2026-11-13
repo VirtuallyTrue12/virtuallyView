@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- Lighter stylesheet: about 1,800 lines of styles for screens that no longer exist were deleted (41 KB smaller). Nothing changes on screen.
 - Behind the scenes cleanup: unused code and the old manual end-to-end scripts removed. Nothing changes in how the app looks or works.
 - Movie posters show again in the player and the home preview: the video element asked TMDB for permission it never gives.
 - Books, rebuilt: shelves like the other sections (continue, for you, because you read, recently added, favourites, more by an author, audiobooks, subjects), a Discover row with one-press Pull, a Library grid with filters, a book page (cover, description, formats, Read, Listen, Download, Favourite, Open in Kavita, more by the author, similar), and a Request tab that searches every source at once and shows each as it answers, then pulls into the library with progress and an Open button. A built-in reader for EPUB and PDF (page turns by buttons, swipe, keyboard or TV remote, contents, text size, dark/sepia/light, remembers your place) and an audiobook player (chapters, 30 second jumps, speed, sleep timer, resumes where you stopped). The old file browser is gone.

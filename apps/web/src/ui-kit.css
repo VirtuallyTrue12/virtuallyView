@@ -384,19 +384,16 @@
 .lv-title > div { display: grid; min-width: 0; flex: 1; }
 .lv-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lv-title span:not(.lv-num) { font-size: 0.82rem; color: var(--color-text-muted); }
-.lv-num { display: grid; place-items: center; min-width: 38px; height: 38px; padding: 0 6px; border-radius: 10px; background: var(--color-accent); color: var(--color-background); font-weight: 750; font-variant-numeric: tabular-nums; }
 .lv-x { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; color: var(--color-text-muted); cursor: pointer; }
 .lv-x:hover { background: var(--color-surface-elevated); color: var(--color-text-primary); }
 .lv-now { display: grid; gap: 0.4rem; }
-.lv-now-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-.lv-now-row em, .lv-next em { font-style: normal; font-size: 0.8rem; color: var(--color-text-muted); }
+.lv-next em { font-style: normal; font-size: 0.8rem; color: var(--color-text-muted); }
 .lv-now p { margin: 0; font-size: 0.86rem; color: var(--color-text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .lv-next span { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); margin-right: 0.3rem; }
 .lv-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .lv-controls .btn { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 40px; }
 .lv-controls .btn.is-on { color: #ff6b81; border-color: rgba(255, 107, 129, 0.5); }
 .lv-rec { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ff4d4d; }
-@keyframes lv-pulse { 50% { opacity: 0.35; } }
 
 /* Guide */
 .gg { border: 1px solid var(--color-border); border-radius: var(--radius-large); background: var(--color-surface); overflow: hidden; }
@@ -412,8 +409,7 @@
 .gg-row.is-playing .gg-chan { background: color-mix(in srgb, var(--color-accent) 14%, var(--color-background)); }
 .gg-chan { display: flex; align-items: center; gap: 0.6rem; padding: 0 0.7rem; border-top: 0; border-bottom: 0; border-left: 0; color: inherit; font: inherit; font-size: 0.86rem; text-align: left; cursor: pointer; }
 .gg-chan span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gg-chan img, .gg-fallback { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; background: #fff; flex: 0 0 auto; padding: 2px; box-sizing: border-box; }
-.gg-fallback { display: grid; place-items: center; color: #333; font-weight: 700; }
+.gg-chan img { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; background: #fff; flex: 0 0 auto; padding: 2px; box-sizing: border-box; }
 .gg-track { position: relative; flex: 0 0 auto; }
 .gg-none { position: absolute; inset: 0; display: flex; align-items: center; padding-left: 0.8rem; font-size: 0.8rem; color: var(--color-text-muted); }
 .gg-prog { position: absolute; top: 5px; bottom: 5px; display: grid; align-content: center; gap: 1px; padding: 0 0.6rem; overflow: hidden; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface-elevated); color: inherit; font: inherit; text-align: left; cursor: pointer; }
@@ -435,7 +431,7 @@
   .lv-idx { display: none; }
   .lv-digits { top: 70px; right: 12px; }
   .gg-corner, .gg-chan { flex-basis: 120px; width: 120px; }
-  .gg-chan img, .gg-fallback { display: none; }
+  .gg-chan img { display: none; }
 }
 @media (max-width: 720px) {
   .lv-screen { max-height: 30vh; margin: 0 auto; }
