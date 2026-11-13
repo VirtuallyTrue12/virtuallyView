@@ -14,7 +14,7 @@ import { freeBytesAt, spaceCheck } from '../storage-planner.js';
 import { listApps, savedApp } from '../homelab-apps.js';
 import { AUDIO_EXT, EBOOK_EXT, invalidateLibrary, libraryRecords, matchLibrary, sanitizeSegment } from './index.js';
 import { looksLikeEpub, readEpub } from './epub.js';
-import { isSource, resolveItem, SourceError, type BookFormat, type Resolved, type SourceId } from './sources.js';
+import { isSource, prowlarrConfig, resolveItem, SourceError, type BookFormat, type Resolved, type SourceId } from './sources.js';
 
 // Pull: bring a book from a source into /media/books. Direct downloads stream to a hidden staging folder inside the
 // books folder (so the final move is a rename), are checked by their first bytes, then filed as Author/Title/file with
@@ -297,7 +297,11 @@ async function startTorrent(job: PullJob, r: Resolved): Promise<void> {
   let hash: string | undefined;
   if (release.downloadUrl.startsWith('magnet:')) { hash = btih(release.downloadUrl); result = await qbit.addMagnet(release.downloadUrl, TORRENT_CATEGORY); }
   else {
-    const res = await fetch(release.downloadUrl, { redirect: 'manual', signal: AbortSignal.timeout(30_000) });
+    // Prowlarr's own download links are on the private network; anything else came from an indexer page and must be public.
+    const prowlarr = prowlarrConfig()?.url;
+    const fromProwlarr = !!prowlarr && new URL(release.downloadUrl).origin === new URL(prowlarr).origin;
+    const init = { signal: AbortSignal.timeout(30_000) };
+    const res = fromProwlarr ? await fetch(release.downloadUrl, { ...init, redirect: 'manual' }) : await safeFetch(release.downloadUrl, init);
     const location = res.headers.get('location');
     if (res.status >= 300 && res.status < 400 && location?.startsWith('magnet:')) { hash = btih(location); result = await qbit.addMagnet(location, TORRENT_CATEGORY); }
     else if (res.ok) {

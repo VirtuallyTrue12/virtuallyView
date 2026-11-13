@@ -263,6 +263,7 @@ async function searchIndexers(q: string): Promise<BookResult[]> {
   if (!res.ok) throw new Error(`Prowlarr answered ${res.status}.`);
   const releases = parseReleases(await res.json(), q);
   for (const r of releases) releaseCache.set(r.id, { at: Date.now(), release: r });
+  while (releaseCache.size > 2000) releaseCache.delete(releaseCache.keys().next().value!);
   return releases.map(r => ({ source: 'indexers' as const, id: r.id, title: r.title, authors: [], formats: [{ kind: 'torrent' as const, size: r.size, label: r.indexer }], media: r.audio ? 'audiobook' as const : 'ebook' as const, seeders: r.seeders }));
 }
 
