@@ -26,6 +26,7 @@ import './styles/details.css';
 import './styles/recordings.css';
 import './styles/radio.css';
 import './styles/party.css';
+import './styles/books.css';
 
 initPerformanceMode();
 initDpad();

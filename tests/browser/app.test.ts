@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { makeZip } from '../unit/fixtures/books-zip.js';
 
 const root = process.cwd();
 let server: ChildProcess;
@@ -2606,5 +2607,87 @@ describe('year in review', () => {
     } finally {
       await page.setViewportSize({ width: 1280, height: 800 });
     }
+  });
+});
+
+describe('Books (mocked APIs)', () => {
+  const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  const user = (isKid: boolean) => ({ id: 'u1', username: 'Reader', role: 'admin', createdAt: '2026-01-01T00:00:00.000Z', shown: true, isKid, hasPin: false, profileAvatar: { color: '#e50914', emoji: '' } });
+  const book = { id: 'b1', kind: 'ebook', title: 'Meditations', authors: ['Marcus Aurelius'], subjects: ['Stoics'], hasCover: false, addedAt: 1, path: 'x', favorite: false, percent: 0, finished: false, lastOpenedAt: 0, files: [{ index: 0, name: 'm.epub', size: 1000, format: 'epub', mime: 'application/epub+zip' }] };
+  const para = Array.from({ length: 300 }, (_, i) => `<p>Paragraph ${i} of the tiny test book, long enough to fill several pages of the reader.</p>`).join('');
+  const epub = makeZip({
+    mimetype: 'application/epub+zip',
+    'META-INF/container.xml': '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+    'content.opf': '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">t1</dc:identifier><dc:title>Meditations</dc:title><dc:language>en</dc:language></metadata><manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>',
+    'c1.xhtml': `<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>One</title></head><body><h1>Book One</h1>${para}</body></html>`
+  });
+
+  const mock = async (isKid: boolean) => {
+    await page.route('**/api/**', r => r.fulfill(json({})));
+    await page.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, signupOpen: false, authenticated: true, user: user(isKid) })));
+    await page.route('**/api/onboarding', r => r.fulfill(json({ required: false })));
+    await page.route('**/api/notifications', r => r.fulfill(json({ unread: 0, items: [] })));
+    await page.route('**/api/books/config', r => r.fulfill(json({ writable: true, limits: {}, sources: [{ id: 'gutenberg', label: 'Project Gutenberg', what: '', available: true }, { id: 'archive', label: 'Internet Archive', what: '', available: true }], kavita: { connected: false } })));
+    await page.route('**/api/books/shelves', r => r.fulfill(json({ shelves: [{ id: 'recent', title: 'Recently added', kind: 'recent', items: [book] }] })));
+    await page.route('**/api/books/library', r => r.fulfill(json({ items: [book], total: 1 })));
+    await page.route('**/api/books/discover', r => r.fulfill(json({ rows: [] })));
+    await page.route('**/api/books/jobs', r => r.fulfill(json({ jobs: [] })));
+  };
+  afterEach(async () => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
+
+  it('shows shelves, and a Kids profile has no Request tab', async () => {
+    await mock(true);
+    await page.goto(base + '/books');
+    await page.getByRole('region', { name: 'Recently added' }).getByRole('link', { name: 'View Meditations' }).waitFor();
+    expect(await page.getByRole('radio', { name: /Library/ }).count()).toBe(1);
+    expect(await page.getByRole('radio', { name: 'Request' }).count()).toBe(0);
+  });
+
+  it('request: each source shows as it answers, Pull sends the right body, the job shows progress then Open', async () => {
+    await mock(false);
+    const pulls: unknown[] = [];
+    let polls = 0;
+    const found = { source: 'gutenberg', id: 'g1', title: 'The Art of War', authors: ['Sun Tzu'], formats: [{ kind: 'epub', size: 5000 }, { kind: 'txt' }], media: 'ebook' };
+    await page.route('**/api/books/search**', async r => {
+      const source = new URL(r.request().url()).searchParams.get('source');
+      if (source === 'archive') { await new Promise(res => setTimeout(res, 1500)); return r.fulfill(json({ message: 'Archive is slow', code: 'timeout' }, 502)); }
+      return r.fulfill(json({ source, q: 'art', results: [found], ms: 5 }));
+    });
+    await page.route('**/api/books/pull', r => { pulls.push(r.request().postDataJSON()); return r.fulfill(json({ job: { id: 'j1', status: 'queued' } }, 202)); });
+    await page.route('**/api/books/jobs', r => {
+      polls++;
+      const job = { id: 'j1', source: 'gutenberg', sourceId: 'g1', format: 'epub', title: 'The Art of War', authors: [], percent: 40, message: 'Downloading.', bytes: 0, total: 0, createdAt: 1, updatedAt: 1 };
+      return r.fulfill(json({ jobs: [polls < 4 ? { ...job, status: 'downloading' } : { ...job, status: 'done', percent: 100, bookId: 'b1' }] }));
+    });
+    await page.goto(base + '/books?tab=request');
+    await page.getByLabel('Search for a book').fill('art of war');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('region', { name: 'Project Gutenberg' }).getByText('The Art of War').first().waitFor();
+    expect(await page.locator('.bk-spin').count()).toBe(1);
+    await page.getByRole('group', { name: 'Sources' }).getByText('Archive is slow').waitFor();
+    await page.getByLabel('Format for The Art of War').selectOption('epub');
+    await page.getByRole('button', { name: 'Pull The Art of War' }).click();
+    await page.getByRole('progressbar', { name: /The Art of War 40%/ }).first().waitFor();
+    expect(pulls).toEqual([{ source: 'gutenberg', id: 'g1', format: 'epub', title: 'The Art of War', authors: ['Sun Tzu'] }]);
+    await page.getByText('"The Art of War" is in your library.').waitFor({ timeout: 15000 });
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await page.waitForURL('**/books/b1');
+  });
+
+  it('reader: opens an EPUB, turns a page, saves the position', async () => {
+    await mock(false);
+    const puts: Array<Record<string, unknown>> = [];
+    await page.route('**/api/books/library/b1', r => r.fulfill(json({ book, state: null, moreByAuthor: [], similar: [] })));
+    await page.route('**/api/books/library/b1/file/0', r => r.fulfill({ status: 200, contentType: 'application/epub+zip', body: epub }));
+    await page.route('**/api/books/library/b1/state', r => { if (r.request().method() === 'PUT') puts.push(r.request().postDataJSON()); return r.fulfill(json({ state: {} })); });
+    await page.goto(base + '/books/b1/read?f=0');
+    const frame = page.frameLocator('.rd iframe');
+    await frame.getByText('Book One').waitFor({ timeout: 20000 });
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(800);
+    await page.getByRole('button', { name: 'Close the book' }).click();
+    await page.waitForURL('**/books/b1');
+    expect(puts[0]).toEqual({ opened: true });
+    expect(puts.some(p => String(p.position ?? '').startsWith('epubcfi('))).toBe(true);
   });
 });

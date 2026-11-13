@@ -501,23 +501,6 @@
 @media (max-width: 860px) { .ac-cols { grid-template-columns: minmax(0, 1fr); gap: 0; } }
 .st-dot--neutral { background: var(--color-text-muted); }
 
-/* Books */
-.bk-tools { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.bk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1.2rem 1rem; margin-top: var(--spacing-md); }
-.bk { display: grid; gap: 0.5rem; align-content: start; }
-.bk-cover { position: relative; display: flex; flex-direction: column; justify-content: flex-end; aspect-ratio: 2 / 3; padding: 0.9rem; border-radius: 6px 12px 12px 6px; overflow: hidden; color: #fff; text-decoration: none; box-shadow: inset 6px 0 0 rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.35); transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1); }
-.bk-cover:hover { transform: translateY(-4px) rotate(-0.6deg); }
-.bk-cover:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
-.bk-ext { position: absolute; top: 10px; right: 10px; padding: 2px 7px; border-radius: 6px; background: rgba(0, 0, 0, 0.45); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; }
-.bk-title { font-weight: 650; font-size: 1rem; line-height: 1.25; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5); display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
-.bk-meta { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.3rem; }
-.bk-meta > div { display: grid; min-width: 0; }
-.bk-meta strong { font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bk-meta span { font-size: 0.78rem; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bk-meta .lv-heart { margin-right: 0; width: 34px; height: 34px; flex: 0 0 auto; }
-.bk-open { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; }
-@media (max-width: 720px) { .bk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .bk-tools { flex: 1 1 100%; } .bk-tools .ph-search { flex: 1; } }
-
 /* Wiki */
 .wk-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
 .wk-card { position: relative; display: grid; gap: 0.7rem; align-content: start; padding: 1.4rem; border: 1px solid var(--color-border); border-radius: var(--radius-large); background: var(--color-surface); }

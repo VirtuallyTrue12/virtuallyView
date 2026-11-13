@@ -597,6 +597,30 @@ export interface NotificationList { unread: number; items: AppNotification[]; ev
 export interface NotificationChannel { id: string; name: string; kind: 'discord' | 'slack' | 'telegram' | 'ntfy' | 'gotify' | 'webhook' | 'email'; enabled: boolean; events: string[]; config: Record<string, string> }
 export interface BackupInfo { name: string; size: number; createdAt: string; kind: string }
 
+export type BookSourceId = 'gutenberg' | 'archive' | 'openlibrary' | 'arxiv' | 'librivox' | 'indexers';
+export interface BookFile { index: number; name: string; size: number; format: string; mime: string }
+export interface BookItem {
+  id: string; kind: 'ebook' | 'audiobook'; title: string; authors: string[]; year?: number; language?: string; subjects: string[]; description?: string;
+  hasCover: boolean; addedAt: number; files: BookFile[]; source?: string; sourceId?: string; path: string;
+}
+export interface BookCard extends BookItem { favorite: boolean; percent: number; finished: boolean; lastOpenedAt: number }
+export interface BookState { position: string; percent: number; finished: boolean; openedAt: number; updatedAt: number }
+export interface BookShelf { id: string; title: string; kind: string; items: BookCard[] }
+export interface BookFormat { kind: 'epub' | 'pdf' | 'txt' | 'audio' | 'torrent'; size?: number; label?: string }
+export interface BookResult {
+  source: BookSourceId; id: string; title: string; authors: string[]; year?: number; language?: string; subjects?: string[]; description?: string;
+  cover?: string; formats: BookFormat[]; media: 'ebook' | 'audiobook' | 'paper'; seeders?: number; durationSec?: number; inLibrary?: string;
+}
+export interface BookJob {
+  id: string; source: BookSourceId; sourceId: string; format: BookFormat['kind']; title: string; authors: string[];
+  status: 'queued' | 'downloading' | 'processing' | 'done' | 'failed' | 'canceled'; percent: number; message: string; bytes: number; total: number; bookId?: string; createdAt: number; updatedAt: number;
+}
+export interface BooksConfig {
+  writable: boolean; limits: { perUser: number; server: number; ebookMB: number; audioMB: number };
+  sources: { id: BookSourceId; label: string; what: string; available: boolean }[];
+  kavita: { connected: boolean; healthy: boolean; url: string | null; port: number; canScan: boolean };
+}
+
 export class ApiError extends Error {
   status: number;
   body: unknown;
@@ -791,10 +815,18 @@ export const api = {
   liveHealth: (channelIds: string[]) => postJSON<{ checked: number; dead: string[]; alive: string[] }>('/api/live/health', { channelIds }),
   addLivePlaylist: (name: string, url: string, epgUrl = '', only = '') => postJSON<LivePlaylist>('/api/live/playlists', { name, url, ...(epgUrl ? { epgUrl } : {}), ...(only ? { only } : {}) }),
   removeLivePlaylist: (id: string) => requestJSON<{ ok: boolean }>('DELETE', `/api/live/playlists/${encodeURIComponent(id)}`),
-  booksAll: () => getJSON<{ items: PhotoEntry[]; truncated: boolean }>('/api/books/all'),
-  booksFolder: (dir: string) => getJSON<PhotoFolder>(`/api/books?dir=${encodeURIComponent(dir)}`),
-  bookFavorites: () => getJSON<{ paths: string[] }>('/api/books/favorites'),
-  setBookFavorite: (path: string, favorite: boolean) => postJSON<{ ok: boolean }>('/api/books/favorite', { path, favorite }),
+  booksConfig: () => getJSON<BooksConfig>('/api/books/config'),
+  booksLibrary: () => getJSON<{ items: BookCard[]; total: number }>('/api/books/library'),
+  booksShelves: () => getJSON<{ shelves: BookShelf[] }>('/api/books/shelves'),
+  booksDiscover: () => getJSON<{ rows: { id: string; title: string; results: BookResult[] }[] }>('/api/books/discover'),
+  book: (id: string) => getJSON<{ book: BookCard; state: BookState | null; moreByAuthor: BookCard[]; similar: BookCard[] }>(`/api/books/library/${encodeURIComponent(id)}`),
+  bookState: (id: string) => getJSON<{ state: BookState | null }>(`/api/books/library/${encodeURIComponent(id)}/state`),
+  saveBookState: (id: string, body: { position?: string; percent?: number; finished?: boolean; opened?: true }) => putJSON<{ state: BookState }>(`/api/books/library/${encodeURIComponent(id)}/state`, body),
+  bookFavorite: (id: string, favorite: boolean) => postJSON<{ ok: boolean; favorite: boolean }>(`/api/books/library/${encodeURIComponent(id)}/favorite`, { favorite }),
+  bookSearch: (source: BookSourceId, q: string) => getJSON<{ source: BookSourceId; q: string; results: BookResult[]; ms: number }>(`/api/books/search?source=${source}&q=${encodeURIComponent(q)}`),
+  bookPull: (body: { source: BookSourceId; id: string; format?: BookFormat['kind']; title?: string; authors?: string[] }) => postJSON<{ job: BookJob; existing?: boolean }>('/api/books/pull', body),
+  bookJobs: () => getJSON<{ jobs: BookJob[] }>('/api/books/jobs'),
+  cancelBookJob: (id: string) => deleteJSON<{ ok: boolean }>(`/api/books/jobs/${encodeURIComponent(id)}`),
   downloadDoctor: () => getJSON<{ entries: DoctorEntry[] }>('/api/downloads/doctor'),
   repairDownloads: () => postJSON<{ fixed: string[]; message: string; skippedBecauseOffline: boolean }>('/api/downloads/repair', {}),
   searchAllMissing: () => postJSON<{ ok: boolean; message: string }>('/api/library/search-missing', {}),

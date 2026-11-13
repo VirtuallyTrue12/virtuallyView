@@ -35,6 +35,8 @@ const VideoWatch = lazy(() => import('./pages/VideoWatch'));
 const VideoChannel = lazy(() => import('./pages/VideoChannel'));
 const Photos = lazy(() => import('./pages/Photos'));
 const Books = lazy(() => import('./pages/Books'));
+const BookDetails = lazy(() => import('./pages/BookDetails'));
+const BookReader = lazy(() => import('./pages/BookReader'));
 const Wiki = lazy(() => import('./pages/Wiki'));
 const HomeLabApps = lazy(() => import('./pages/HomeLabApps'));
 const PartyJoin = lazy(() => import('./pages/PartyJoin'));
@@ -242,6 +244,8 @@ export default function App() {
         <Route path="/videos/channel/:id" element={<VideoChannel />} />
         <Route path="/photos" element={<Photos />} />
         <Route path="/books" element={<Books />} />
+        <Route path="/books/:id" element={<BookDetails />} />
+        <Route path="/books/:id/read" element={<BookReader />} />
         <Route path="/wiki" element={<Wiki />} />
         <Route path="/apps" element={forGrownUps(<HomeLabApps />)} />
         <Route path="/party/:code" element={<PartyJoin />} />

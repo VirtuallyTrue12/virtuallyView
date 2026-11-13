@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- Books, rebuilt: shelves like the other sections (continue, for you, because you read, recently added, favourites, more by an author, audiobooks, subjects), a Discover row with one-press Pull, a Library grid with filters, a book page (cover, description, formats, Read, Listen, Download, Favourite, Open in Kavita, more by the author, similar), and a Request tab that searches every source at once and shows each as it answers, then pulls into the library with progress and an Open button. A built-in reader for EPUB and PDF (page turns by buttons, swipe, keyboard or TV remote, contents, text size, dark/sepia/light, remembers your place) and an audiobook player (chapters, 30 second jumps, speed, sleep timer, resumes where you stopped). The old file browser is gone.
 - Books, server side of the redo: a real library index (EPUB details and covers, audiobooks, PDFs), saved reading and listening positions per person, shelves and recommendations, search across Project Gutenberg, the Internet Archive, Open Library, arXiv, LibriVox and your own indexers, and Pull to bring a book or audiobook into the library (checked, filed as Author/Title, torrents through qBittorrent). The books folder is now mounted read-write for the app.
 
 - Home, For you: new videos from channels you follow show their thumbnails (they were blank tiles), whole on a blurred backdrop instead of cropped.
