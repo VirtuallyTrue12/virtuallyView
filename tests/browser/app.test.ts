@@ -50,6 +50,7 @@ beforeAll(async () => {
   await waitFor(`${base}/api/health`);
   browser = await chromium.launch();
   ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['clipboard-read', 'clipboard-write'] });
+  await noFonts(ctx);
   // The test server has several profiles; "Who's watching?" counts as answered unless a test clears this.
   await ctx.addInitScript(() => { try { sessionStorage.setItem('vv-profile-picked', '1'); } catch { /* sandboxed frames (the video embed) have no storage */ } });
   page = await ctx.newPage();
@@ -61,6 +62,9 @@ afterAll(async () => {
   if (server?.pid) try { process.kill(-server.pid, 'SIGKILL'); } catch { /* already gone */ }
   rmSync(dataDir, { recursive: true, force: true });
 });
+
+// The web fonts come from Google: without them the tests do not depend on the internet (a hanging font request held every page's load).
+const noFonts = (c: BrowserContext) => c.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, r => r.abort());
 
 const signIn = async (user: string, pass: string) => {
   await page.goto(base + '/');
@@ -326,6 +330,39 @@ describe('pull subtitles', () => {
     expect(await page.locator('.vp-menu').innerText()).not.toContain('STALE EPISODE 1 RESULT');
     expect(errors).toEqual([]);
   });
+
+  it('the next episode plays in the same player, so full screen stays on, and progress lands on the right episode', async () => {
+    const video = readFileSync(resolve(root, 'tests/browser/fixtures/tiny-20s.webm'));
+    const episode = (id: string, n: number) => ({ id, seriesId: 'sonarr-502', seasonNumber: 1, episodeNumber: n, title: `Ep ${n}`, hasFile: true });
+    const saved: string[] = [];
+    await page.route('**/api/series/sonarr-502', r => r.fulfill(json({ id: 'sonarr-502', title: 'Binge Show', status: 'available' })));
+    await page.route('**/api/series/sonarr-502/episodes', r => r.fulfill(json({ episodes: [episode('ep-502a', 1), episode('ep-502b', 2)] })));
+    for (const id of ['ep-502a', 'ep-502b']) {
+      await page.route(`**/api/stream/episode/${id}/info`, async r => { if (id === 'ep-502b') await new Promise(res => setTimeout(res, 600)); await r.fulfill(json({ playable: true, transcodingAvailable: false, durationSeconds: 20, container: 'webm', videoCodec: 'vp9', audioCodec: null, reason: null })); });
+      await page.route(`**/api/progress/episode/${id}`, r => { if (r.request().method() !== 'GET') { saved.push(id); return r.fulfill(json({ ok: true })); } return r.fulfill(json({ percent: 0, positionSeconds: 0 })); });
+      await page.route(`**/api/stream/episode/${id}/subtitles`, r => r.fulfill(json({ subtitles: [] })));
+      await page.route(`**/api/stream/episode/${id}/trickplay`, r => r.fulfill(json({ state: 'unavailable' })));
+      await page.route(`**/api/stream/episode/${id}`, r => {
+        const m = /bytes=(\d+)-(\d*)/.exec(r.request().headers()['range'] ?? '');
+        const start = m ? Number(m[1]) : 0, end = m?.[2] ? Number(m[2]) : video.length - 1;
+        return r.fulfill({ status: m ? 206 : 200, contentType: 'video/webm', headers: { 'Accept-Ranges': 'bytes', ...(m ? { 'Content-Range': `bytes ${start}-${end}/${video.length}` } : {}) }, body: video.subarray(start, end + 1) });
+      });
+    }
+    await page.goto(base + '/series/sonarr-502/watch/ep-502a');
+    await page.waitForFunction(() => (document.querySelector('video')?.readyState ?? 0) >= 2);
+    await page.evaluate(() => { (document.querySelector('.vp') as HTMLElement & { mark?: boolean }).mark = true; });
+    await page.getByRole('button', { name: 'Fullscreen' }).click();
+    await page.waitForFunction(() => document.fullscreenElement?.classList.contains('vp'));
+    saved.length = 0;
+    await page.getByRole('button', { name: 'Next episode' }).click();
+    await page.waitForFunction(() => document.querySelector('.vp-heading-sub')?.textContent?.includes('Ep 2'));
+    await page.waitForFunction(() => /ep-502b$/.test(document.querySelector('video')?.getAttribute('src') ?? ''));
+    expect(await page.evaluate(() => !!(document.fullscreenElement as (Element & { mark?: boolean }) | null)?.mark)).toBe(true);
+    // While episode 2 was loading, episode 1's last moments were never saved as episode 2's place.
+    expect(saved.filter(id => id === 'ep-502b').length).toBe(0);
+    await page.evaluate(() => document.exitFullscreen());
+    expect(errors).toEqual([]);
+  });
 });
 
 describe('skip intro', () => {
@@ -386,8 +423,41 @@ describe('watch together', () => {
     }
   });
 
+  it('on a TV the remote pauses with OK, reaches the subtitles menu with the arrows, and Back closes it', async () => {
+    await mockFilm(page);
+    const label = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+    try {
+      await page.goto(base + '/');
+      await page.evaluate(() => { document.documentElement.classList.add('tv'); (document.activeElement as HTMLElement | null)?.blur(); history.pushState({}, '', '/movies/radarr-540/play'); dispatchEvent(new PopStateEvent('popstate')); });
+      await page.waitForFunction(() => document.activeElement?.getAttribute('data-dpad') === 'own', undefined, { timeout: 8000 });
+      await ready(page);
+      await page.evaluate(() => void document.querySelector('video')!.play());
+      await page.waitForFunction(() => !document.querySelector('video')!.paused);
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.querySelector('video')!.paused && document.querySelector('.vp-btn--main')?.getAttribute('aria-label') === 'Play');
+      // Down brings the buttons; right walks along them, past the volume slider, to Subtitles.
+      await page.keyboard.press('ArrowDown');
+      expect(await label()).toBe('Play');
+      for (let i = 0; i < 8 && (await label()) !== 'Subtitles'; i++) await page.keyboard.press('ArrowRight');
+      expect(await label()).toBe('Subtitles');
+      expect(await page.evaluate(() => document.querySelector('video')!.volume)).toBe(1);
+      await page.keyboard.press('Enter');
+      await page.locator('.vp-menu').waitFor();
+      await page.keyboard.press('ArrowUp');
+      expect(await page.evaluate(() => !!document.activeElement?.closest('.vp-menu'))).toBe(true);
+      await page.keyboard.press('Escape');
+      await page.locator('.vp-menu').waitFor({ state: 'detached' });
+      expect(await label()).toBe('Subtitles');
+      expect(page.url()).toContain('/movies/radarr-540/play');
+    } finally {
+      await page.evaluate(() => document.documentElement.classList.remove('tv'));
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+    }
+  });
+
   it('shares pause and seeking both ways and shows chat to both people', async () => {
     const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 800 }, storageState: await ctx.storageState() });
+    await noFonts(ctx2);
     try {
       await ctx2.addInitScript(() => { try { sessionStorage.setItem('vv-profile-picked', '1'); } catch { /* no storage */ } });
       const other = await ctx2.newPage();
@@ -1140,6 +1210,17 @@ describe('settings, photos, live tv and requests', () => {
     await expect.poll(() => page.evaluate(() => document.activeElement?.textContent?.trim())).toBe('Watch now');
     await page.getByRole('button', { name: 'Watch now' }).click();
     await page.getByRole('region', { name: 'Playing News One' }).waitFor();
+    // Full screen: the picture alone, the channel shown for a moment, and down changes channel.
+    await page.getByRole('button', { name: 'Full screen' }).click();
+    await page.waitForFunction(() => document.fullscreenElement?.classList.contains('lv-screen'));
+    expect(await page.locator('.lv-osd').innerText()).toContain('News One');
+    // (Earlier tests played radio, so its closed now-playing sheet is on the page: it must not swallow the keys.)
+    await page.keyboard.press('ArrowDown');
+    await page.waitForFunction(() => document.querySelector('.lv-player')?.getAttribute('aria-label') !== 'Playing News One');
+    const playing = (await page.locator('.lv-player').getAttribute('aria-label'))!.replace('Playing ', '');
+    expect(await page.locator('.lv-osd').innerText()).toContain(playing);
+    expect(await page.evaluate(() => document.fullscreenElement?.classList.contains('lv-screen'))).toBe(true);
+    await page.evaluate(() => document.exitFullscreen());
     expect(errors).toEqual([]);
   });
 
@@ -2369,6 +2450,7 @@ describe('remote control: guide, password and page changes', () => {
   it('the password Show button is reachable with Right from the box, even while typing', async () => {
     await page.unrouteAll({ behavior: 'ignoreErrors' });
     const ctx2 = await page.context().browser()!.newContext();
+    await noFonts(ctx2);
     const anon = await ctx2.newPage();
     try {
       await anon.route('**/api/auth/status', r => r.fulfill(json({ enabled: true, setupRequired: false, authenticated: false })));

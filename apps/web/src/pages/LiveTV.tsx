@@ -217,7 +217,8 @@ export default function LiveTV() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable)) return;
-      if (document.querySelector('[role="dialog"]')) return;
+      // Only an open dialog: the radio's now-playing sheet stays on the page, closed, once something has played.
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       if (e.key === 'ArrowUp' && current && e.altKey === false && document.activeElement?.tagName !== 'BUTTON') { e.preventDefault(); zap(-1); }
       else if (e.key === 'ArrowDown' && current && document.activeElement?.tagName !== 'BUTTON') { e.preventDefault(); zap(1); }
       else if (e.key === 'PageUp' || e.key === 'ChannelUp') { e.preventDefault(); zap(-1); }

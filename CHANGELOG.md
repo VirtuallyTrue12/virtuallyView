@@ -2,6 +2,14 @@
 
 ## 0.4.0
 
+- Film and episode player on a TV remote: OK plays and pauses, up or down brings the buttons, and the arrows walk along them (subtitles, audio, quality) instead of changing the volume; Back closes an open menu.
+- Player: Retry after a playback error carries on from where it stopped instead of jumping back; a conversion that drops more than once in a film recovers by itself each time.
+- Subtitles: after a seek only the language you chose shows (the browser sometimes switched a second one on as well).
+- TV shows: the next episode plays in the same player, so full screen stays on; the episode before can no longer save its place onto the next one.
+- Player menus stay open while you read them instead of closing with the controls.
+- Live TV: a Full screen button, where OK pauses, up and down change channel and the channel's name shows for a moment; a channel that hiccups reconnects by itself, a spinner shows while it buffers, and changing channel no longer starts a second conversion on the server.
+- Live TV: the channel keys (up and down, channel up and down, typing a number) work again after the radio has played; its closed now-playing panel counted as an open dialog.
+- Browser tests no longer wait on Google Fonts, so they pass when the internet cannot reach it.
 - Pages look the same however you reach them: the shared page styles now load with the app instead of with the first page that used them (some pages, like a person's page or Home, looked slightly different when opened directly).
 - Videos: live broadcasts are left out of Trending and search (YouTube refuses them to the video service, so they spun forever); opening one from a link says so instead of loading endlessly.
 - Radio: row titles ("On air now", "News"...) sit above their stations again; a reader style with the same name had pushed them to the side.

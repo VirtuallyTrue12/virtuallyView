@@ -4,7 +4,7 @@ export type IconName =
   | 'close' | 'check' | 'star' | 'heart' | 'heart-outline' | 'arrow-left' | 'play' | 'pause' | 'prev' | 'next' | 'stop'
   | 'shuffle' | 'repeat' | 'volume-high' | 'volume-low' | 'volume-mute' | 'sliders' | 'dice' | 'film' | 'tv' | 'mic'
   | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'plus' | 'pip' | 'chevron-up' | 'queue' | 'repeat-one' | 'music-note' | 'more' | 'image' | 'search' | 'trash' | 'sparkle' | 'youtube' | 'sliders-h' | 'users' | 'edit' | 'eye' | 'eye-off' | 'home' | 'film-tab' | 'tv-tab' | 'note-tab' | 'grid'
-  | 'download' | 'upload' | 'share' | 'clock' | 'calendar' | 'refresh' | 'folder' | 'book' | 'radio' | 'globe' | 'wrench' | 'lock' | 'key' | 'bell' | 'palette' | 'hdd' | 'activity' | 'chart' | 'info' | 'alert' | 'external' | 'list' | 'cast' | 'gear' | 'user' | 'shield' | 'cloud' | 'zap' | 'camera' | 'layers' | 'filter' | 'arrow-right' | 'sun' | 'moon' | 'history' | 'copy' | 'wifi' | 'pin' | 'flag' | 'maximize' | 'minimize' | 'tag' | 'server' | 'plug' | 'bolt';
+  | 'download' | 'upload' | 'share' | 'clock' | 'calendar' | 'refresh' | 'folder' | 'book' | 'radio' | 'globe' | 'wrench' | 'lock' | 'key' | 'bell' | 'palette' | 'hdd' | 'activity' | 'chart' | 'info' | 'alert' | 'external' | 'list' | 'cast' | 'gear' | 'user' | 'shield' | 'cloud' | 'zap' | 'camera' | 'layers' | 'filter' | 'arrow-right' | 'sun' | 'moon' | 'history' | 'copy' | 'wifi' | 'pin' | 'flag' | 'maximize' | 'widen' | 'tag' | 'server' | 'plug' | 'bolt';
 
 const speaker = <path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor" stroke="none" />;
 
@@ -95,7 +95,7 @@ const ICONS: Record<IconName, { fill?: boolean; body: ReactNode }> = {
   pin: { body: <><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></> },
   flag: { body: <path d="M5 21V4m0 0h11l-2 4 2 4H5" /> },
   maximize: { body: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /> },
-  minimize: { body: <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /> },
+  widen: { body: <path d="M8 8l-4 4 4 4M16 8l4 4-4 4M4 12h16" /> },
   tag: { body: <path d="M3 12V4h8l10 10-8 8zM7.5 8h.01" /> },
   server: { body: <><rect x="3" y="4" width="18" height="7" rx="2" /><rect x="3" y="13" width="18" height="7" rx="2" /><path d="M7 7.5h.01M7 16.5h.01" /></> },
   plug: { body: <path d="M9 2v6m6-6v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5" /> },

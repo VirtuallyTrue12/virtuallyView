@@ -97,6 +97,21 @@ function scopeRoot(): ParentNode {
   return openDialog() ?? document;
 }
 
+/** Inside an area with its own keys (the video player): focus its nearest control in `dir`. True when focus moved. */
+export function moveFocusWithin(scope: HTMLElement, dir: Direction): boolean {
+  const active = document.activeElement as HTMLElement | null;
+  if (!active) return false;
+  const from = boxOf(active);
+  const all = [...scope.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(el => el !== active && visible(el) && !el.matches(SKIP)).map(el => ({ item: el, box: boxOf(el) }));
+  // Left and right stay in the same row when there is something there (the seek bar above is not "to the right").
+  const row = dir === 'left' || dir === 'right' ? all.filter(c => c.box.top < from.bottom && c.box.bottom > from.top) : [];
+  const target = nearestInDirection(from, row, dir) ?? nearestInDirection(from, all, dir);
+  if (!target) return false;
+  tick();
+  target.focus({ preventScroll: true });
+  return true;
+}
+
 /** Focus the control nearest in `dir` from the current focus. True when focus moved. */
 export function moveFocus(dir: Direction): boolean {
   const scope = scopeRoot();

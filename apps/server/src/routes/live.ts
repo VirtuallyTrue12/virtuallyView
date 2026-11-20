@@ -150,6 +150,8 @@ export default async function liveRoutes(server: FastifyInstance) {
     } catch (error) {
       return reply.code(502).send({ message: error instanceof Error ? error.message : 'The channel could not be reached.' });
     }
+    // The player's first look (one byte) only needs the type: no conversion for it, or every channel change started two.
+    if (request.headers.range === 'bytes=0-0') return reply.header('Content-Type', 'video/mp4').header('Cache-Control', 'no-store').send();
     const release = acquireConversion(currentActor().userId);
     if (!release) return reply.code(429).header('Retry-After', '30').send({ message: 'Too many videos are being converted right now. Try again in a moment.' });
     const handle = startTranscode(channel.url, 0, {});

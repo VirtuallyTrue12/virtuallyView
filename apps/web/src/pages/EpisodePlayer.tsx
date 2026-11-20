@@ -29,10 +29,13 @@ export default function EpisodePlayer() {
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [playback, setPlayback] = useState<MediaPlaybackInfo | null>(null);
-  const [infoDone, setInfoDone] = useState(false);
-  const [resumeStart, setResumeStart] = useState<number | null>(null);
+  const [resumeStart, setResumeStart] = useState(0);
+  // The episode whose details are loaded. It keeps playing (and full screen stays on) until the next one's are in.
+  const [shownId, setShownId] = useState<string | null>(null);
+  // Saved against the episode on screen: the one before keeps playing for a moment while the next loads.
+  const { onProgress } = useProgressSaver('episode', shownId ?? undefined, id);
   const [subtitles, setSubtitles] = useState<SubtitleTrack[]>([]);
-  const { onProgress } = useProgressSaver('episode', episodeId, id);
+
   const partyCode = useSearchParams()[0].get('party');
   const party = useWatchParty(partyCode);
   const [subTick, setSubTick] = useState(0);
@@ -54,14 +57,14 @@ export default function EpisodePlayer() {
   useEffect(() => {
     if (!episodeId) return;
     let cancelled = false;
-    setPlayback(null); setInfoDone(false); setResumeStart(null); setSubtitles([]);
-    api.episodeInfo(episodeId).then(i => { if (!cancelled) setPlayback(i); }).catch(() => {}).finally(() => { if (!cancelled) setInfoDone(true); });
-    api.progress('episode', episodeId)
-      .then(p => { if (!cancelled) setResumeStart(p.percent > 0 && p.percent < 96 ? p.positionSeconds : 0); })
-      .catch(() => { if (!cancelled) setResumeStart(0); });
-    api.subtitles(`/api/stream/episode/${encodeURIComponent(episodeId)}`)
-      .then(res => { if (!cancelled) setSubtitles(res.subtitles ?? []); })
-      .catch(() => {});
+    void Promise.all([
+      api.episodeInfo(episodeId).catch(() => null),
+      api.progress('episode', episodeId).then(p => (p.percent > 0 && p.percent < 96 ? p.positionSeconds : 0)).catch(() => 0),
+      api.subtitles(`/api/stream/episode/${encodeURIComponent(episodeId)}`).then(res => res.subtitles ?? []).catch(() => [])
+    ]).then(([info, resume, subs]) => {
+      if (cancelled) return;
+      setPlayback(info); setResumeStart(resume); setSubtitles(subs); setShownId(episodeId);
+    });
     return () => { cancelled = true; };
   }, [episodeId]);
 
@@ -70,8 +73,8 @@ export default function EpisodePlayer() {
     [episodes]
   );
   const playable = ordered.filter(e => e.hasFile);
-  const current = ordered.find(e => e.id === episodeId);
-  const at = playable.findIndex(e => e.id === episodeId);
+  const current = ordered.find(e => e.id === shownId);
+  const at = playable.findIndex(e => e.id === shownId);
   const nextEp = at >= 0 ? playable[at + 1] : undefined;
   const prevEp = at > 0 ? playable[at - 1] : undefined;
 
@@ -102,7 +105,7 @@ export default function EpisodePlayer() {
       </main>
     );
   }
-  if (!episodeId || !infoDone || resumeStart === null || (episodes.length > 0 && !current)) {
+  if (!episodeId || !shownId || (episodes.length > 0 && !current)) {
     return <main className="page"><div className="loading-state">Loading episode...</div></main>;
   }
   if (current && !current.hasFile) {
@@ -119,21 +122,21 @@ export default function EpisodePlayer() {
   const transcodeAvailable = playback?.transcodingAvailable ?? false;
   const title = current ? `${series?.title ?? ''} · ${code(current)} · ${current.title}` : series?.title;
   // Inside the Android TV app the episode plays in the TV's own player instead.
-  if (inTvApp() && current && episodeId) {
+  if (inTvApp() && current && shownId) {
     return (
       <TvAppHandoff
         backTo={`/series/${id ?? ''}`}
         backLabel="Back"
         request={{
-          path: `/api/stream/episode/${encodeURIComponent(episodeId)}`,
-          transcodePath: `/api/stream/episode/${encodeURIComponent(episodeId)}/transcode`,
+          path: `/api/stream/episode/${encodeURIComponent(shownId)}`,
+          transcodePath: `/api/stream/episode/${encodeURIComponent(shownId)}/transcode`,
           title: title ?? '',
           subtitle: `${code(current)} · ${current.title}`,
           startSeconds: resumeStart,
           durationSeconds: playback?.durationSeconds ?? 0,
           subtitles,
           mediaType: 'episode',
-          mediaId: episodeId,
+          mediaId: shownId,
           seriesId: id,
           returnPath: `/series/${id ?? ''}`,
         }}
@@ -169,11 +172,11 @@ export default function EpisodePlayer() {
             heading={series?.title}
             subheading={current ? `Season ${current.seasonNumber} · Episode ${current.episodeNumber} · ${current.title}` : undefined}
             onBack={() => navigate(back)}
-            src={`/api/stream/episode/${encodeURIComponent(episodeId)}`}
-            transcodeSrc={needsTranscode ? `/api/stream/episode/${encodeURIComponent(episodeId)}/transcode` : undefined}
-            castTranscode={`/api/stream/episode/${encodeURIComponent(episodeId)}/transcode`}
+            src={`/api/stream/episode/${encodeURIComponent(shownId)}`}
+            transcodeSrc={needsTranscode ? `/api/stream/episode/${encodeURIComponent(shownId)}/transcode` : undefined}
+            castTranscode={`/api/stream/episode/${encodeURIComponent(shownId)}/transcode`}
             mediaType="episode"
-            mediaId={episodeId ?? ''}
+            mediaId={shownId ?? ''}
             seriesId={id}
             durationSeconds={playback?.durationSeconds ?? null}
             audioTracks={audioLabels(playback)}
@@ -197,7 +200,7 @@ export default function EpisodePlayer() {
             previous={prevEp ? { label: `${code(prevEp)} ${prevEp.title}`, onSelect: () => go(prevEp) } : undefined}
             episodes={{ groups, onSelect: eid => { const t = ordered.find(e => e.id === eid); if (t) go(t); } }}
             onPullSubtitles={async () => {
-              const result = await api.pullSubtitles(`/api/series/${encodeURIComponent(id ?? '')}/episodes/${encodeURIComponent(episodeId)}/subtitles/search`);
+              const result = await api.pullSubtitles(`/api/series/${encodeURIComponent(id ?? '')}/episodes/${encodeURIComponent(shownId)}/subtitles/search`);
               if (result.success) setSubTick(t => t + 1);
               return result;
             }}

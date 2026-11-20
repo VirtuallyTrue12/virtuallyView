@@ -7,6 +7,7 @@ import type { SubtitleTrack } from './PlyrPlayer';
 import { SvgIcon } from '../ui/SvgIcon';
 import { toast } from '../ui/Toast';
 import { isLite } from '../../lib/perf';
+import { moveFocusWithin, type Direction } from '../../lib/dpad';
 import type { Party } from '../../lib/useWatchParty';
 import { driftAction } from '../../lib/partySync';
 
@@ -100,6 +101,7 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const QUALITY_STEPS = [1080, 720, 480, 360];
 const HIDE_AFTER_MS = 3200;
 const UP_NEXT_SECONDS = 8;
+const ARROWS: Record<string, Direction> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
 
 const fmt = (seconds: number) => {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -189,6 +191,7 @@ export default function VideoPlayer({
   const [qualityNote, setQualityNote] = useState<string | null>(null);
   const [burnIndex, setBurnIndex] = useState(-1);
   const [visible, setVisible] = useState(true);
+  const shownRef = useRef(true);
   const [fullscreen, setFullscreen] = useState(false);
   const [scrub, setScrub] = useState<number | null>(null);
   const [hover, setHover] = useState<{ x: number; t: number } | null>(null);
@@ -292,7 +295,7 @@ export default function VideoPlayer({
     setVisible(true);
     if (hideTimer.current) window.clearTimeout(hideTimer.current);
     hideTimer.current = window.setTimeout(() => {
-      if (videoRef.current && !videoRef.current.paused) { setVisible(false); setMenu(null); }
+      if (videoRef.current && !videoRef.current.paused) setVisible(false);
     }, HIDE_AFTER_MS);
   }, []);
 
@@ -531,10 +534,17 @@ export default function VideoPlayer({
     if (wantPlay.current) void v.play().catch(() => setPlaying(false));
   }, [videoSrc]);
 
-  // Reset when the item itself changes (next episode).
-  useEffect(() => {
+  // Reset when the item itself changes (the next episode, in the same player so full screen stays on). Done while
+  // rendering, so the new item's address is right from the start instead of first asking for it at the old place.
+  const item = `${src}|${transcodeSrc ?? ''}`;
+  const [itemShown, setItemShown] = useState(item);
+  if (itemShown !== item) {
+    setItemShown(item);
     resumeApplied.current = false;
     wantPlay.current = autoPlay;
+    pullToken.current++;
+    pullStarted.current = false;
+    setMenu(null);
     setFailed(null);
     setUpNext(null);
     setSubIndex(-1);
@@ -543,14 +553,12 @@ export default function VideoPlayer({
     setManualSkipUsed(false);
     setQuality(0);
     setBurnIndex(-1);
-    setOffset(isTranscode ? Math.floor(startAt) : 0);
+    setOffset(transcodeSrc ? Math.floor(startAt) : 0);
     setTime(0);
     setWaiting(true);
     setPulling(false);
     setPullNote(null);
-    pullToken.current++;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, transcodeSrc]);
+  }
 
   useEffect(() => {
     const v = videoRef.current;
@@ -610,9 +618,17 @@ export default function VideoPlayer({
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    for (let i = 0; i < v.textTracks.length; i++) {
-      v.textTracks[i].mode = i === subIndex ? 'showing' : 'disabled';
-    }
+    // After a seek the tracks are replaced and the browser may switch another language on by itself: only the chosen one shows.
+    const apply = () => {
+      for (let i = 0; i < v.textTracks.length; i++) {
+        const want = i === subIndex ? 'showing' : 'disabled';
+        if (v.textTracks[i].mode !== want) v.textTracks[i].mode = want;
+      }
+    };
+    apply();
+    v.textTracks.addEventListener('change', apply);
+    v.textTracks.addEventListener('addtrack', apply);
+    return () => { v.textTracks.removeEventListener('change', apply); v.textTracks.removeEventListener('addtrack', apply); };
   }, [subIndex, subKey, videoSrc]);
 
   useEffect(() => {
@@ -640,7 +656,32 @@ export default function VideoPlayer({
       // While the Info panel is open the film stays paused; its own Escape handler closes it.
       if (infoOpenRef.current) return;
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const tv = document.documentElement.classList.contains('tv');
+      // On a TV the volume slider is just another stop (the TV has its own volume), so the remote cannot get stuck on it.
+      const slider = tv && t instanceof HTMLInputElement && t.type === 'range';
+      if (t && ((t.tagName === 'INPUT' && !slider) || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const wrap = wrapRef.current;
+      // A TV remote: on a button, the arrows move between the player's buttons and OK presses it; on the picture,
+      // OK plays or pauses, left and right skip, and up or down brings the buttons.
+      if (wrap && tv) {
+        const dir = ARROWS[e.key];
+        // The seek bar keeps left and right for skipping.
+        const onButton = !!t && t !== wrap && wrap.contains(t) && !(t.matches('[role="slider"]') && (dir === 'left' || dir === 'right'));
+        if (onButton) {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            const opener = menu ? t.closest('.vp-menu-wrap')?.querySelector<HTMLElement>(':scope > button') : null;
+            setMenu(null);
+            (opener ?? wrap).focus({ preventScroll: true });
+          } else if (!shownRef.current && (dir || e.key === 'Enter' || e.key === ' ')) e.preventDefault(); // hidden: the first press only shows them
+          else if (dir) { e.preventDefault(); if (!moveFocusWithin(wrap, dir) && dir === 'up') wrap.focus({ preventScroll: true }); }
+          else return;
+          wake();
+          return;
+        }
+        if (e.key === 'Enter' && (!t || t === wrap || t === document.body)) { e.preventDefault(); togglePlay(); wake(); return; }
+        if (dir === 'up' || dir === 'down') { e.preventDefault(); wake(); wrap.querySelector<HTMLElement>('.vp-controls .vp-btn--main')?.focus({ preventScroll: true }); return; }
+      }
       switch (e.key) {
         case ' ': case 'k': e.preventDefault(); togglePlay(); break;
         case 'ArrowLeft': e.preventDefault(); skip(-10); break;
@@ -657,12 +698,12 @@ export default function VideoPlayer({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [togglePlay, skip, toggleFullscreen, wake, next, subtitles.length]);
+  }, [togglePlay, skip, toggleFullscreen, wake, next, subtitles.length, menu]);
 
   // Up-next countdown after an episode ends.
   useEffect(() => {
     if (upNext === null) return;
-    if (upNext <= 0) { next?.onSelect(); return; }
+    if (upNext <= 0) { setUpNext(null); next?.onSelect(); return; }
     const id = window.setTimeout(() => setUpNext(n => (n === null ? null : n - 1)), 1000);
     return () => window.clearTimeout(id);
   }, [upNext, next]);
@@ -694,6 +735,19 @@ export default function VideoPlayer({
     seekTo(target);
   };
 
+  // Start again from where it stopped (not from where this conversion began, nor from the top of the file).
+  const retry = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    setFailed(null);
+    sessionRetried.current = false;
+    const at = position;
+    if (isTranscode) { restartWith(() => undefined); if (Math.floor(at) !== offset) return; }
+    else { setWaiting(true); v.addEventListener('loadedmetadata', () => { v.currentTime = at; }, { once: true }); }
+    v.load();
+    void v.play().catch(() => setPlaying(false));
+  };
+
   const reportError = (message: string) => {
     setFailed(message);
     setWaiting(false);
@@ -701,6 +755,7 @@ export default function VideoPlayer({
   };
 
   const shown_ = visible || !playing || !!menu || infoOpen;
+  shownRef.current = shown_;
   // The pointer hides only while a film plays untouched; any movement brings it back at once.
   const cls = `vp${shown_ ? ' vp--show' : ' vp--idle'}${fullscreen ? ' vp--fs' : ''}`;
 
@@ -733,7 +788,7 @@ export default function VideoPlayer({
         onPause={() => { setPlaying(false); setVisible(true); emit(false); }}
         onRateChange={e => { if (Date.now() >= applyingUntil.current) emit(!e.currentTarget.paused); }}
         onWaiting={() => { setWaiting(true); noteStall(); }}
-        onPlaying={() => { setWaiting(false); setPlaying(true); }}
+        onPlaying={() => { setWaiting(false); setPlaying(true); sessionRetried.current = false; }}
         onCanPlay={() => setWaiting(false)}
         onLoadedMetadata={e => {
           const v = e.currentTarget;
@@ -811,10 +866,11 @@ export default function VideoPlayer({
         </div>
       )}
       {!onTv && !waiting && !failed && upNext === null && (
+        // Same as the buttons below, so not a separate stop for the keyboard or a remote.
         <div className={`vp-center${playing ? '' : ' is-paused'}`} onClick={e => e.stopPropagation()}>
-          <button className="vp-center-btn" type="button" onClick={() => skip(-10)} aria-label="Back 10 seconds"><Icon d={ICONS.back10} size={30} /></button>
-          <button className="vp-center-btn vp-center-btn--main" type="button" onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}><Icon d={playing ? ICONS.pause : ICONS.play} size={42} /></button>
-          <button className="vp-center-btn" type="button" onClick={() => skip(10)} aria-label="Forward 10 seconds"><Icon d={ICONS.fwd10} size={30} /></button>
+          <button className="vp-center-btn" type="button" tabIndex={-1} onClick={() => skip(-10)} aria-label="Back 10 seconds"><Icon d={ICONS.back10} size={30} /></button>
+          <button className="vp-center-btn vp-center-btn--main" type="button" tabIndex={-1} onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}><Icon d={playing ? ICONS.pause : ICONS.play} size={42} /></button>
+          <button className="vp-center-btn" type="button" tabIndex={-1} onClick={() => skip(10)} aria-label="Forward 10 seconds"><Icon d={ICONS.fwd10} size={30} /></button>
         </div>
       )}
 
@@ -837,7 +893,7 @@ export default function VideoPlayer({
       {failed && (
         <div className="vp-fail" role="alert">
           <p>{failed}</p>
-          <button className="btn btn-secondary btn-sm" type="button" onClick={() => { setFailed(null); setWaiting(true); videoRef.current?.load(); void videoRef.current?.play().catch(() => {}); }}>
+          <button className="btn btn-secondary btn-sm" type="button" onClick={retry}>
             Retry
           </button>
         </div>
